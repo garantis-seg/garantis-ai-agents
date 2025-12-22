@@ -1,0 +1,23 @@
+{
+  "timing_analysis": {
+    "active_version": "v3",
+    "versions": [
+      {
+        "id": "v1",
+        "name": "V1 - Simple Timing",
+        "description": "Prompt original do gemini-timing com saída JSON direta",
+        "file": "v1_simple.md",
+        "created_at": "2025-01-01T00:00:00Z",
+        "deprecated": true
+      },
+      {
+        "id": "v3",
+        "name": "V3 - Decision Tree + Backend Scoring",
+        "description": "5-node decision tree com extração de fatos e scoring determinístico no backend",
+        "file": "v3_decision_tree.md",
+        "created_at": "2025-12-18T00:00:00Z",
+        "deprecated": false
+      }
+    ]
+  }
+}

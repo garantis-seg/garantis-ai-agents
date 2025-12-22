@@ -1,0 +1,1 @@
+"""Utils module - Utilitários compartilhados."""
