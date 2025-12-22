@@ -29,8 +29,12 @@ class AnalyzeRequest(BaseModel):
     """Request para análise de timing."""
     case_data: CaseData = Field(description="Dados do processo")
     movements: List[Movement] = Field(default=[], description="Lista de movimentações")
-    model: Optional[str] = Field(default=None, description="Modelo a usar (default: gemini-2.0-flash)")
+    model: Optional[str] = Field(default=None, description="Modelo a usar (default: provider default)")
     prompt_version: Optional[str] = Field(default=None, description="Versão do prompt (default: v3)")
+    provider: Optional[str] = Field(
+        default=None,
+        description="LLM provider a usar (gemini, openai, groq, openrouter). Default: gemini"
+    )
     force_refresh: bool = Field(default=False, description="Forçar nova análise mesmo se cacheada")
 
 
@@ -39,3 +43,7 @@ class AnalyzeBatchRequest(BaseModel):
     items: List[AnalyzeRequest] = Field(description="Lista de processos para analisar")
     model: Optional[str] = Field(default=None, description="Modelo a usar para todos")
     prompt_version: Optional[str] = Field(default=None, description="Versão do prompt para todos")
+    provider: Optional[str] = Field(
+        default=None,
+        description="LLM provider a usar para todos (gemini, openai, groq, openrouter)"
+    )

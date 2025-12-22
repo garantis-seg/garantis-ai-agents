@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException
 from ...agents.timing_analysis.agent import analyze_timing
 from ...agents.timing_analysis.schemas import LLMResponseV3
 from ...models.config import calculate_cost, DEFAULT_MODEL
+from ...providers import create_provider
 from ...scoring.calculator import calculate_score_v3
 from ...scoring.types import TimingBase
 from ..schemas.requests import AnalyzeRequest, AnalyzeBatchRequest, CaseData, Movement
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/timing", tags=["timing"])
 
 DEFAULT_PROMPT_VERSION = os.getenv("DEFAULT_PROMPT_VERSION", "v3")
+DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 
 def format_case_data(case_data: CaseData, movements: List[Movement]) -> str:
@@ -134,22 +136,33 @@ async def analyze_process(request: AnalyzeRequest):
 
     Flow:
     1. Formata dados do processo
-    2. Chama o agente com o modelo/prompt especificado
+    2. Chama o agente com o modelo/prompt/provider especificado
     3. Calcula score usando lógica de backend
     4. Retorna resposta combinada (V3 + legado)
     """
-    model = request.model or DEFAULT_MODEL
+    provider = request.provider or DEFAULT_PROVIDER
     prompt_version = request.prompt_version or DEFAULT_PROMPT_VERSION
+
+    # Se modelo não especificado, usar default do provider
+    if request.model:
+        model = request.model
+    else:
+        try:
+            llm_provider = create_provider(provider)
+            model = llm_provider.get_default_model()
+        except Exception:
+            model = DEFAULT_MODEL
 
     # Formatar dados do processo
     process_data = format_case_data(request.case_data, request.movements)
 
     try:
-        # Chamar agente
+        # Chamar agente com provider configurado
         result = await analyze_timing(
             process_data=process_data,
             model=model,
             prompt_version=prompt_version,
+            provider=provider,
         )
 
         # Verificar se temos resposta válida
@@ -169,12 +182,15 @@ async def analyze_process(request: AnalyzeRequest):
                 detail="Falha no cálculo de score"
             )
 
-        # Calcular custo
+        # Extrair usage metadata
         usage = result.get("usage", {})
         input_tokens = usage.get("prompt_tokens", 0)
-        output_tokens = usage.get("candidates_tokens", 0)
+        output_tokens = usage.get("completion_tokens", usage.get("candidates_tokens", 0))
         total_tokens = usage.get("total_tokens", input_tokens + output_tokens)
-        cost = calculate_cost(model, input_tokens, output_tokens)
+        # Usar custo já calculado pelo provider, ou calcular para Gemini
+        cost = usage.get("cost_usd", 0.0)
+        if cost == 0.0 and provider == "gemini":
+            cost = calculate_cost(model, input_tokens, output_tokens)
 
         # Montar resposta
         return AnalyzeResponse(
@@ -217,13 +233,16 @@ async def analyze_batch(request: AnalyzeBatchRequest):
     success_count = 0
     error_count = 0
 
-    model = request.model or DEFAULT_MODEL
-    prompt_version = request.prompt_version or DEFAULT_PROMPT_VERSION
+    # Defaults do batch
+    batch_provider = request.provider or DEFAULT_PROVIDER
+    batch_prompt_version = request.prompt_version or DEFAULT_PROMPT_VERSION
+    batch_model = request.model  # Pode ser None
 
     for item in request.items:
-        # Usar modelo/prompt do batch se não especificado no item
-        item.model = item.model or model
-        item.prompt_version = item.prompt_version or prompt_version
+        # Usar valores do batch se não especificado no item
+        item.provider = item.provider or batch_provider
+        item.prompt_version = item.prompt_version or batch_prompt_version
+        item.model = item.model or batch_model
 
         try:
             response = await analyze_process(item)

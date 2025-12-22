@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import health, prompts, timing
+from .routes import health, prompts, providers, timing
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifecycle management da aplicação."""
     logger.info("Iniciando garantis-ai-agents...")
+    logger.info(f"Provider padrão: {os.getenv('DEFAULT_PROVIDER', 'gemini')}")
     logger.info(f"Modelo padrão: {os.getenv('DEFAULT_MODEL', 'gemini-2.0-flash')}")
     logger.info(f"Prompt padrão: {os.getenv('DEFAULT_PROMPT_VERSION', 'v3')}")
 
@@ -38,8 +39,8 @@ async def lifespan(app: FastAPI):
 # Criar aplicação
 app = FastAPI(
     title="Garantis AI Agents",
-    description="API centralizada de AI Agents usando Google ADK",
-    version="0.1.0",
+    description="API centralizada de AI Agents com suporte a múltiplos LLM providers",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -55,6 +56,7 @@ app.add_middleware(
 # Registrar routers
 app.include_router(health.router)
 app.include_router(prompts.router)
+app.include_router(providers.router)
 app.include_router(timing.router)
 
 
@@ -63,8 +65,14 @@ async def root():
     """Endpoint raiz."""
     return {
         "service": "garantis-ai-agents",
-        "version": "0.1.0",
+        "version": "0.2.0",
         "docs": "/docs",
+        "endpoints": {
+            "timing": "/timing",
+            "prompts": "/prompts",
+            "providers": "/providers",
+            "health": "/health",
+        },
     }
 
 
