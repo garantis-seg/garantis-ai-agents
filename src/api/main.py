@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import categorization, health, prompts, providers, timing, validation
+from .routes import categorization, health, prompts, providers, text, timing, validation
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Garantis AI Agents",
     description="API centralizada de AI Agents com suporte a múltiplos LLM providers",
-    version="0.2.0",
+    version="0.5.0",
     lifespan=lifespan,
 )
 
@@ -60,6 +60,7 @@ app.include_router(providers.router)
 app.include_router(timing.router)
 app.include_router(categorization.router)
 app.include_router(validation.router)
+app.include_router(text.router)
 
 
 @app.get("/")
@@ -67,12 +68,13 @@ async def root():
     """Endpoint raiz."""
     return {
         "service": "garantis-ai-agents",
-        "version": "0.4.0",
+        "version": "0.5.0",
         "docs": "/docs",
         "endpoints": {
             "timing": "/timing",
             "categorization": "/categorization",
             "validation": "/validation",
+            "text": "/text",
             "prompts": "/prompts",
             "providers": "/providers",
             "health": "/health",
