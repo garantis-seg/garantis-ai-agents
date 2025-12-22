@@ -1,6 +1,6 @@
 [project]
 name = "garantis-ai-agents"
-version = "0.5.0"
+version = "0.6.0"
 description = "Repositório centralizado de AI Agents com suporte a múltiplos LLM providers"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -22,10 +22,14 @@ dependencies = [
 openai = ["openai>=1.0.0"]
 groq = ["groq>=0.4.0"]
 
-# All providers
+# HTTP client for external integrations
+client = ["httpx>=0.28.0"]
+
+# All providers + client
 all = [
     "openai>=1.0.0",
     "groq>=0.4.0",
+    "httpx>=0.28.0",
 ]
 
 dev = [
