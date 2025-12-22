@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import categorization, health, prompts, providers, timing
+from .routes import categorization, health, prompts, providers, timing, validation
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -59,6 +59,7 @@ app.include_router(prompts.router)
 app.include_router(providers.router)
 app.include_router(timing.router)
 app.include_router(categorization.router)
+app.include_router(validation.router)
 
 
 @app.get("/")
@@ -66,11 +67,12 @@ async def root():
     """Endpoint raiz."""
     return {
         "service": "garantis-ai-agents",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "docs": "/docs",
         "endpoints": {
             "timing": "/timing",
             "categorization": "/categorization",
+            "validation": "/validation",
             "prompts": "/prompts",
             "providers": "/providers",
             "health": "/health",
