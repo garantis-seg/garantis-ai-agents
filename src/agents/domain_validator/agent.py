@@ -50,52 +50,42 @@ async def validate_domain(
 
         logger.info(f"Validating domain '{domain}' for firm '{law_firm_name}'")
 
-        response = await llm.generate_async(
+        response = await llm.agenerate(
             prompt=prompt,
             model=model,
             response_schema=LLMValidationResponse,
         )
 
-        if response.structured_output:
-            result = response.structured_output
-            return DomainValidationResult(
-                domain=domain,
-                valid=result.valid,
-                confidence=result.confidence,
-                reason=result.reason,
-                success=True,
-            )
-        else:
-            # Fallback: try to parse from text
-            import json
-            import re
+        # Parse JSON from response text (Gemini returns JSON as text when using response_schema)
+        import json
+        import re
 
-            text = response.text.strip()
+        text = response.text.strip()
 
-            # Remove markdown code blocks if present
-            if text.startswith("```"):
-                lines = text.split("\n")
-                text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
-                if text.startswith("json"):
-                    text = text[4:].strip()
+        # Remove markdown code blocks if present
+        if text.startswith("```"):
+            lines = text.split("\n")
+            text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
+            if text.startswith("json"):
+                text = text[4:].strip()
 
-            # Try to parse JSON
-            try:
-                data = json.loads(text)
-            except json.JSONDecodeError:
-                json_match = re.search(r"\{[^}]+\}", text)
-                if json_match:
-                    data = json.loads(json_match.group())
-                else:
-                    raise ValueError(f"Could not parse JSON from: {text[:200]}")
+        # Try to parse JSON
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            json_match = re.search(r"\{[^}]+\}", text)
+            if json_match:
+                data = json.loads(json_match.group())
+            else:
+                raise ValueError(f"Could not parse JSON from: {text[:200]}")
 
-            return DomainValidationResult(
-                domain=domain,
-                valid=data.get("valid", True),
-                confidence=data.get("confidence", 50),
-                reason=data.get("reason", "Sem explicação"),
-                success=True,
-            )
+        return DomainValidationResult(
+            domain=domain,
+            valid=data.get("valid", True),
+            confidence=data.get("confidence", 50),
+            reason=data.get("reason", "Sem explicação"),
+            success=True,
+        )
 
     except Exception as e:
         logger.error(f"Domain validation failed for '{domain}': {e}")
