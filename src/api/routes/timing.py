@@ -129,6 +129,36 @@ def generate_recomendacao(timing: TimingBase) -> str:
         return "Encerrar acompanhamento - timing passou"
 
 
+def generate_analise_tecnica(llm_response: LLMResponseV3) -> str:
+    """Gera análise técnica detalhada a partir da resposta do LLM."""
+    parts = []
+
+    # Node 1 - Plausibilidade
+    if llm_response.node_1_plausibilidade:
+        parts.append(f"Plausibilidade: {llm_response.node_1_plausibilidade.reasoning}")
+
+    # Node 2 - Materialização
+    if llm_response.node_2_materializacao:
+        parts.append(f"Materialização: {llm_response.node_2_materializacao.reasoning}")
+
+    # Node 3 - Marcos Temporais (resumo)
+    if llm_response.node_3_marcos_temporais and llm_response.node_3_marcos_temporais.resumo:
+        parts.append(f"Contexto temporal: {llm_response.node_3_marcos_temporais.resumo}")
+
+    # Node 4 - Garantia Existente
+    if llm_response.node_4_garantia_existente:
+        parts.append(f"Garantia existente: {llm_response.node_4_garantia_existente.reasoning}")
+
+    # Node 5 - Análise Específica
+    if llm_response.node_5_analise_especifica:
+        if llm_response.node_5_analise_especifica.details_5a:
+            parts.append(f"Análise de substituição: {llm_response.node_5_analise_especifica.details_5a.reasoning}")
+        elif llm_response.node_5_analise_especifica.details_5b:
+            parts.append(f"Análise de constituição: {llm_response.node_5_analise_especifica.details_5b.reasoning}")
+
+    return " | ".join(parts) if parts else "Análise técnica não disponível"
+
+
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze_process(request: AnalyzeRequest):
     """
@@ -210,6 +240,7 @@ async def analyze_process(request: AnalyzeRequest):
             diagnostico_timing=timing_base_to_legacy(scoring_result.score_breakdown.timing_base),
             score_oportunidade=float(scoring_result.score_breakdown.final),
             justificativa_curta=generate_justificativa(llm_response),
+            analise_tecnica=generate_analise_tecnica(llm_response),
             recomendacao_final=generate_recomendacao(scoring_result.score_breakdown.timing_base),
         )
 

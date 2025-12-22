@@ -43,6 +43,7 @@ class AnalyzeResponse(BaseModel):
     )
     score_oportunidade: float = Field(description="Score como float (legado)")
     justificativa_curta: str = Field(description="Justificativa curta (legado)")
+    analise_tecnica: str = Field(description="Análise técnica detalhada (legado)")
     recomendacao_final: str = Field(description="Recomendação final (legado)")
 
 
