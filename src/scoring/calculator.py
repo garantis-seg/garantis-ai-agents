@@ -341,11 +341,37 @@ def calculate_score_v3(
     # Calcular dados temporais
     temporal_data = calculate_temporal_data(response, today)
     if not temporal_data:
-        return None
+        # Fallback: sem dados temporais válidos → ACOMPANHAR
+        return ScoringResult(
+            score_breakdown=ScoreBreakdown(
+                timing_base=TimingBase.ACOMPANHAR,
+                base=BASE_SCORES[TimingBase.ACOMPANHAR],
+                penalties=0,
+                penalty_details=["Sem dados temporais válidos"],
+                bonus=0,
+                bonus_details=[],
+                grave_multiplier=1.0,
+                final=BASE_SCORES[TimingBase.ACOMPANHAR],
+            ),
+            temporal_data=None,
+        )
 
     # Determinar caminho (5A ou 5B)
     if not response.node_5_analise_especifica:
-        return None
+        # Fallback: sem análise específica (node 5) → ACOMPANHAR
+        return ScoringResult(
+            score_breakdown=ScoreBreakdown(
+                timing_base=TimingBase.ACOMPANHAR,
+                base=BASE_SCORES[TimingBase.ACOMPANHAR],
+                penalties=0,
+                penalty_details=["Sem análise específica (node 5)"],
+                bonus=0,
+                bonus_details=[],
+                grave_multiplier=1.0,
+                final=BASE_SCORES[TimingBase.ACOMPANHAR],
+            ),
+            temporal_data=temporal_data,
+        )
 
     type_active = response.node_5_analise_especifica.type_active
 
@@ -354,7 +380,20 @@ def calculate_score_v3(
     elif type_active == "5B_CONSTITUICAO":
         scoring_result = calculate_5b_scoring(response, temporal_data)
     else:
-        return None
+        # Fallback: type_active inválido → ACOMPANHAR
+        return ScoringResult(
+            score_breakdown=ScoreBreakdown(
+                timing_base=TimingBase.ACOMPANHAR,
+                base=BASE_SCORES[TimingBase.ACOMPANHAR],
+                penalties=0,
+                penalty_details=[f"Tipo de análise inválido: {type_active}"],
+                bonus=0,
+                bonus_details=[],
+                grave_multiplier=1.0,
+                final=BASE_SCORES[TimingBase.ACOMPANHAR],
+            ),
+            temporal_data=temporal_data,
+        )
 
     # Calcular score final
     base = BASE_SCORES[scoring_result.timing]
