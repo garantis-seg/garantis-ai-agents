@@ -113,3 +113,38 @@ class PromptLoader:
             Lista de nomes de agentes.
         """
         return list(self._index.keys())
+
+    def get_raw_prompt(self, agent_name: str, version: Optional[str] = None) -> str:
+        """
+        Retorna o conteúdo raw do prompt sem substituir placeholders.
+
+        Args:
+            agent_name: Nome do agente (ex: "timing_analysis")
+            version: Versão do prompt. Se None, usa a versão ativa.
+
+        Returns:
+            Conteúdo bruto do prompt.
+
+        Raises:
+            ValueError: Se o agente ou versão não existir.
+        """
+        agent_config = self._index.get(agent_name)
+        if not agent_config:
+            raise ValueError(f"Agente desconhecido: {agent_name}")
+
+        version = version or agent_config.get("active_version")
+        if not version:
+            raise ValueError(f"Nenhuma versão ativa definida para o agente: {agent_name}")
+
+        version_info = next(
+            (v for v in agent_config.get("versions", []) if v["id"] == version),
+            None,
+        )
+        if not version_info:
+            raise ValueError(f"Versão desconhecida {version} para o agente {agent_name}")
+
+        prompt_path = self.prompts_dir / agent_name / version_info["file"]
+        if not prompt_path.exists():
+            raise ValueError(f"Arquivo de prompt não encontrado: {prompt_path}")
+
+        return prompt_path.read_text(encoding="utf-8")
