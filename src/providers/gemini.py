@@ -41,13 +41,13 @@ class GeminiProvider(BaseLLMProvider):
         Initialize Gemini provider.
 
         Args:
-            api_key: Google API key. If None, reads from GOOGLE_API_KEY env var.
+            api_key: Gemini API key. If None, reads from GEMINI_API_KEY env var.
         """
         super().__init__()
 
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
+        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
-            raise ValueError("No GOOGLE_API_KEY provided or found in environment")
+            raise ValueError("No GEMINI_API_KEY provided or found in environment")
 
         # Import here to avoid issues if not installed
         try:
