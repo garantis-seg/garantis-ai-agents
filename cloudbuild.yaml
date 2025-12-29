@@ -28,7 +28,7 @@ steps:
       - '--set-env-vars'
       - 'DEFAULT_MODEL=gemini-2.0-flash,DEFAULT_PROMPT_VERSION=v3'
       - '--set-secrets'
-      - 'GOOGLE_API_KEY=gemini-api-key:latest'
+      - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
 
 images:
   - 'us-central1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:$COMMIT_SHA'
