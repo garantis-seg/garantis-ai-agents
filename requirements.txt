@@ -1,6 +1,3 @@
-# Garantis Shared (install with: pip install -e ../garantis-shared)
-# garantis-shared is installed from local path during Docker build
-
 # Core dependencies
 google-genai>=0.8.0
 fastapi>=0.115.0
@@ -12,6 +9,10 @@ python-dotenv>=1.0.0
 # Optional LLM providers (uncomment as needed)
 openai>=1.0.0
 groq>=0.4.0
+
+# Shared utilities (from Artifact Registry)
+--extra-index-url https://southamerica-east1-python.pkg.dev/neqsti/python-packages/simple/
+garantis-shared>=1.0.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0

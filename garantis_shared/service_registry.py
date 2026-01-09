@@ -68,7 +68,7 @@ SERVICES: Dict[str, str] = {
     ),
     "esaj-pdf-api": os.getenv(
         "ESAJ_PDF_API_URL",
-        "f"https://esaj-pdf-api-{GCP_PROJECT_ID}.{GCP_REGION}.run.app""
+        f"https://esaj-pdf-api-{GCP_PROJECT_ID}.{GCP_REGION}.run.app"
     ),
 }
 
