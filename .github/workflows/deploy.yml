@@ -7,7 +7,7 @@ on:
 
 env:
   PROJECT_ID: neqsti
-  REGION: us-central1
+  REGION: southamerica-east1
   SERVICE_NAME: garantis-ai-agents
   REPOSITORY: garantis-ai-agents
 

@@ -23,9 +23,9 @@ from typing import Dict
 
 # GCP Project ID
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "394302633873")
-GCP_REGION = os.getenv("GCP_REGION", "us-central1")
+GCP_REGION = os.getenv("GCP_REGION", "southamerica-east1")
 
-# Service URLs - Cloud Run (us-central1)
+# Service URLs - Cloud Run (southamerica-east1)
 SERVICES: Dict[str, str] = {
     # AI & Analysis Services
     "garantis-ai-agents": os.getenv(
@@ -68,7 +68,7 @@ SERVICES: Dict[str, str] = {
     ),
     "esaj-pdf-api": os.getenv(
         "ESAJ_PDF_API_URL",
-        "https://esaj-pdf-api-34pal47ocq-uc.a.run.app"
+        "f"https://esaj-pdf-api-{GCP_PROJECT_ID}.{GCP_REGION}.run.app""
     ),
 }
 
@@ -89,7 +89,7 @@ def get_service_url(service_name: str) -> str:
     Example:
         >>> url = get_service_url("garantis-ai-agents")
         >>> print(url)
-        https://garantis-ai-agents-394302633873.us-central1.run.app
+        https://garantis-ai-agents-394302633873.southamerica-east1.run.app
     """
     if service_name not in SERVICES:
         raise KeyError(

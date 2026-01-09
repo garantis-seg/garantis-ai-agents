@@ -43,7 +43,7 @@ class BaseServiceConfig(BaseSettings):
 
     # GCP Configuration
     gcp_project_id: str = "394302633873"
-    gcp_region: str = "us-central1"
+    gcp_region: str = "southamerica-east1"
 
     # Logging
     log_level: str = "INFO"
