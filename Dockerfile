@@ -15,12 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Copy requirements and install dependencies
 COPY pyproject.toml README.md ./
-
-# Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install .
+
+# Copy garantis_shared module (shared utilities)
+COPY garantis_shared/ ./garantis_shared/
 
 # Copy application code
 COPY src/ ./src/

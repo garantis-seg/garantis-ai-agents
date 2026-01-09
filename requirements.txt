@@ -1,8 +1,12 @@
+# Garantis Shared (install with: pip install -e ../garantis-shared)
+# garantis-shared is installed from local path during Docker build
+
 # Core dependencies
 google-genai>=0.8.0
 fastapi>=0.115.0
 uvicorn[standard]>=0.32.0
 pydantic>=2.10.0
+pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 
 # Optional LLM providers (uncomment as needed)

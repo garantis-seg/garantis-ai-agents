@@ -10,50 +10,15 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from garantis_shared.logging_setup import setup_logging
+
 from .routes import categorization, health, prompts, providers, text, timing, validation
 
 # Carregar variáveis de ambiente
 load_dotenv()
 
-# Configurar logging estruturado (JSON para produção)
-_env = os.getenv("ENVIRONMENT", "development").lower()
-_use_json = _env in ("production", "prod", "staging")
-
-if _use_json:
-    import json
-    from datetime import datetime, timezone
-
-    class JSONFormatter(logging.Formatter):
-        def format(self, record):
-            log_data = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "severity": record.levelname,
-                "logger": record.name,
-                "message": record.getMessage(),
-                "service": "garantis-ai-agents",
-            }
-            if record.exc_info:
-                log_data["exception"] = self.formatException(record.exc_info)
-            # Add extra context fields
-            for key, value in record.__dict__.items():
-                if key not in {"name", "msg", "args", "levelname", "levelno", "exc_info", "exc_text", "message"}:
-                    if not key.startswith("_"):
-                        log_data[key] = value
-            return json.dumps(log_data, default=str, ensure_ascii=False)
-
-    handler = logging.StreamHandler()
-    handler.setFormatter(JSONFormatter())
-    logging.basicConfig(
-        level=os.getenv("LOG_LEVEL", "INFO"),
-        handlers=[handler]
-    )
-else:
-    # Human-readable para desenvolvimento
-    logging.basicConfig(
-        level=os.getenv("LOG_LEVEL", "INFO"),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-
+# Configurar logging estruturado (usa garantis-shared)
+setup_logging("garantis-ai-agents")
 logger = logging.getLogger(__name__)
 
 
