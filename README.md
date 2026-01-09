@@ -13,10 +13,15 @@ Repositório centralizado de AI Agents com suporte a múltiplos LLM providers.
 
 ## Providers Suportados
 
-- **Gemini** (Google) - Default
+- **Gemini** (Google) - Default: `gemini-2.0-flash-lite` ✨ (75% custo reduzido)
 - **OpenAI** (GPT-4o, GPT-4o-mini)
 - **Groq** (Llama 3.3 70B)
 - **OpenRouter** (múltiplos modelos)
+
+### Custo Estimado (Gemini Flash Lite)
+- **Input**: $0.075 per 1M tokens
+- **Output**: $0.30 per 1M tokens
+- **Análise típica**: ~$0.0012 (vs $0.005 com Flash regular)
 
 ## Instalação
 

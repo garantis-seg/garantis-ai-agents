@@ -24,7 +24,7 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.0-flash")
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.0-flash-lite")
 
 # Gemini token limit (~800K tokens, ~3.2M characters)
 MAX_CHUNK_SIZE = 700_000  # characters per chunk

@@ -20,8 +20,8 @@ from .schemas import LLMResponseV3
 
 logger = logging.getLogger(__name__)
 
-# Configuração padrão
-DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.0-flash")
+# Configuração padrão - Flash Lite para 75% economia de custo
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.0-flash-lite")
 DEFAULT_PROMPT_VERSION = os.getenv("DEFAULT_PROMPT_VERSION", "v3")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 

@@ -24,8 +24,10 @@ GEMINI_PRICING = {
     "gemini-1.5-flash": {"input_per_1m": 0.075, "output_per_1m": 0.30},
 }
 
-# Default model
-DEFAULT_MODEL = "gemini-2.0-flash"
+# Default model - Using Flash Lite for 75% cost reduction
+# Flash: $0.10 input + $0.40 output per 1M tokens
+# Flash Lite: $0.075 input + $0.30 output per 1M tokens
+DEFAULT_MODEL = "gemini-2.0-flash-lite"
 
 
 class GeminiProvider(BaseLLMProvider):
