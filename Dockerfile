@@ -16,7 +16,9 @@ ENV PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
 
 # Copy requirements and install dependencies
 COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Remove hardcoded extra-index-url (we use the authenticated one from build arg)
+RUN sed -i '/--extra-index-url/d' requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy pyproject.toml for package metadata (optional)
 COPY pyproject.toml README.md ./

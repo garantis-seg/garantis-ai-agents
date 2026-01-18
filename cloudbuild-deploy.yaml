@@ -1,0 +1,55 @@
+steps:
+  # Get pip credentials for Artifact Registry
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud auth print-access-token > /workspace/token.txt
+
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        ACCESS_TOKEN=$(cat /workspace/token.txt)
+        docker build \
+          --build-arg PIP_EXTRA_INDEX_URL="https://oauth2accesstoken:$${ACCESS_TOKEN}@southamerica-east1-python.pkg.dev/neqsti/python-packages/simple/" \
+          -t southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest .
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest']
+
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'garantis-ai-agents'
+      - '--image'
+      - 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest'
+      - '--region'
+      - 'southamerica-east1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '100'
+      - '--memory'
+      - '1Gi'
+      - '--cpu'
+      - '1'
+      - '--timeout'
+      - '300'
+      - '--set-env-vars'
+      - 'DEFAULT_MODEL=gemini-2.0-flash,DEFAULT_PROMPT_VERSION=v3'
+      - '--set-secrets'
+      - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
+
+images:
+  - 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
