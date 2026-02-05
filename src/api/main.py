@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from garantis_shared.logging_setup import setup_logging
 
-from .routes import categorization, health, prompts, providers, text, timing, validation
+from .routes import categorization, health, pdf, prompts, providers, text, timing, validation
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -60,6 +60,7 @@ app.include_router(timing.router)
 app.include_router(categorization.router)
 app.include_router(validation.router)
 app.include_router(text.router)
+app.include_router(pdf.router)
 
 
 @app.get("/")
@@ -74,6 +75,7 @@ async def root():
             "categorization": "/categorization",
             "validation": "/validation",
             "text": "/text",
+            "pdf": "/pdf",
             "prompts": "/prompts",
             "providers": "/providers",
             "health": "/health",

@@ -45,6 +45,7 @@ class GarantisAIClient:
         self._categorization: Optional["CategorizationClient"] = None
         self._validation: Optional["ValidationClient"] = None
         self._text: Optional["TextClient"] = None
+        self._pdf: Optional["PdfClient"] = None
 
     def _get_headers(self) -> dict:
         """Get request headers."""
@@ -92,6 +93,14 @@ class GarantisAIClient:
             from .text import TextClient
             self._text = TextClient(self)
         return self._text
+
+    @property
+    def pdf(self) -> "PdfClient":
+        """Get PDF processing client."""
+        if self._pdf is None:
+            from .pdf import PdfClient
+            self._pdf = PdfClient(self)
+        return self._pdf
 
     async def health(self) -> dict:
         """Check service health."""
