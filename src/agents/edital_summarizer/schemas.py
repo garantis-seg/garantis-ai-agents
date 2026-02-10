@@ -210,6 +210,28 @@ class EditalSummaryLLMResponse(BaseModel):
     )
 
 
+# --- Map-Reduce schemas ---
+
+
+class ChunkSummary(BaseModel):
+    """Simplified summary extracted from a single document chunk (MAP pass)."""
+
+    objeto: Optional[str] = Field(default=None, description="Object description found in chunk")
+    garantia_proposta: Optional[str] = Field(default=None, description="Bid guarantee info found")
+    garantia_contratual: Optional[str] = Field(default=None, description="Contract guarantee info found")
+    valor_estimado: Optional[str] = Field(default=None, description="Estimated value found")
+    prazo_entrega: Optional[str] = Field(default=None, description="Delivery term found")
+    prazo_vigencia: Optional[str] = Field(default=None, description="Contract duration found")
+    sessao_publica: Optional[str] = Field(default=None, description="Public session info found")
+    orgao_contato: Optional[str] = Field(default=None, description="Contact info found")
+    habilitacao: List[str] = Field(default=[], description="Qualification requirements found")
+    penalidades: Optional[str] = Field(default=None, description="Penalties found")
+    condicoes_pagamento: Optional[str] = Field(default=None, description="Payment conditions found")
+    riscos_identificados: List[str] = Field(default=[], description="Risks identified")
+    oportunidades_identificadas: List[str] = Field(default=[], description="Opportunities identified")
+    informacoes_relevantes: List[str] = Field(default=[], description="Other relevant information")
+
+
 # --- API response schemas ---
 
 
@@ -224,3 +246,5 @@ class SummarizationResponse(BaseModel):
     cost_usd: float = Field(default=0.0, description="Estimated cost in USD")
     success: bool = Field(default=True)
     error: Optional[str] = Field(default=None)
+    strategy: str = Field(default="direct", description="Strategy used: direct or map_reduce")
+    chunks_processed: int = Field(default=0, description="Number of chunks processed (map-reduce)")
