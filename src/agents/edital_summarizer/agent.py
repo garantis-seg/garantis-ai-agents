@@ -44,20 +44,129 @@ CHUNK_SIZE = 50_000
 MAX_RETRIES = 2
 
 
+def _escape_control_chars_in_strings(text: str) -> str:
+    """
+    Walk through JSON text character by character and escape control characters
+    (newlines, tabs, etc.) that appear inside string values.
+
+    This handles the most common Gemini bug: literal newlines inside JSON strings
+    which cause "Unterminated string" errors.
+    """
+    result = []
+    in_string = False
+    i = 0
+    length = len(text)
+
+    while i < length:
+        ch = text[i]
+
+        if in_string:
+            if ch == '\\' and i + 1 < length:
+                # Already escaped sequence — keep as-is
+                result.append(ch)
+                result.append(text[i + 1])
+                i += 2
+                continue
+            elif ch == '"':
+                # End of string
+                in_string = False
+                result.append(ch)
+            elif ch == '\n':
+                result.append('\\n')
+            elif ch == '\r':
+                result.append('\\r')
+            elif ch == '\t':
+                result.append('\\t')
+            elif ord(ch) < 0x20:
+                # Other control characters
+                result.append(f'\\u{ord(ch):04x}')
+            else:
+                result.append(ch)
+        else:
+            if ch == '"':
+                in_string = True
+            result.append(ch)
+
+        i += 1
+
+    return ''.join(result)
+
+
+def _close_truncated_json(text: str) -> str:
+    """
+    Attempt to close truncated JSON by balancing braces/brackets.
+
+    When Gemini hits max_output_tokens, JSON is cut mid-string or mid-object.
+    This detects the truncation and closes the structure so json.loads() can parse it.
+    """
+    # If it already ends with } and parses, no fix needed
+    stripped = text.rstrip()
+    if stripped.endswith("}"):
+        return text
+
+    # Find if we're inside a string (odd number of unescaped quotes)
+    in_string = False
+    i = 0
+    while i < len(stripped):
+        ch = stripped[i]
+        if ch == '\\' and in_string:
+            i += 2  # skip escaped char
+            continue
+        if ch == '"':
+            in_string = not in_string
+        i += 1
+
+    # If truncated inside a string, close the string first
+    if in_string:
+        stripped += '"'
+
+    # Remove any trailing comma or colon (incomplete key-value)
+    stripped = re.sub(r'[,:\s]+$', '', stripped)
+
+    # Count unclosed braces/brackets and close them
+    open_braces = 0
+    open_brackets = 0
+    in_str = False
+    j = 0
+    while j < len(stripped):
+        ch = stripped[j]
+        if ch == '\\' and in_str:
+            j += 2
+            continue
+        if ch == '"':
+            in_str = not in_str
+        elif not in_str:
+            if ch == '{':
+                open_braces += 1
+            elif ch == '}':
+                open_braces -= 1
+            elif ch == '[':
+                open_brackets += 1
+            elif ch == ']':
+                open_brackets -= 1
+        j += 1
+
+    # Close in reverse order (brackets first, then braces)
+    stripped += ']' * max(0, open_brackets)
+    stripped += '}' * max(0, open_braces)
+
+    return stripped
+
+
 def _repair_json(text: str) -> str:
     """Attempt to repair common JSON issues from LLM output."""
-    # Remove trailing commas: ,} or ,]
+    # Step 1: Escape control characters inside string values
+    text = _escape_control_chars_in_strings(text)
+
+    # Step 2: Remove trailing commas: ,} or ,]
     text = re.sub(r",\s*}", "}", text)
     text = re.sub(r",\s*]", "]", text)
-    # Fix missing commas between key-value pairs: }"key → },"key
-    text = re.sub(r'}\s*"', '}, "', text)
-    text = re.sub(r']\s*"', '], "', text)
-    # Fix Python literals
+
+    # Step 3: Fix Python literals (outside of strings — safe because values are after : )
     text = text.replace(": None", ": null")
     text = text.replace(": True", ": true")
     text = text.replace(": False", ": false")
-    # Fix unescaped control characters in strings
-    text = re.sub(r'(?<=": ")([^"]*?)(?=")', lambda m: m.group(0).replace("\n", "\\n").replace("\t", "\\t"), text)
+
     return text
 
 
@@ -88,12 +197,21 @@ def _extract_json_from_text(text: str) -> dict:
     except json.JSONDecodeError:
         pass
 
-    # Try 2: Repair then parse
+    # Try 2: Escape control chars then parse
     repaired = _repair_json(raw)
     try:
         return json.loads(repaired)
+    except json.JSONDecodeError:
+        pass
+
+    # Try 3: Close truncated JSON (when Gemini hits max_tokens mid-output)
+    closed = _close_truncated_json(repaired)
+    try:
+        result = json.loads(closed)
+        logger.warning(f"JSON recovered via truncation repair (closed incomplete braces/strings)")
+        return result
     except json.JSONDecodeError as e:
-        logger.error(f"JSON parse failed after repair. Error: {e}. First 500 chars: {raw[:500]}")
+        logger.error(f"JSON parse failed after all repairs. Error: {e}. First 500 chars: {raw[:500]}")
         raise
 
 
@@ -164,9 +282,13 @@ async def _call_llm_with_retry(
     """
     Call LLM with retry and temperature fallback.
 
+    On JSON parse failure, retries with lower temperature and higher max_tokens
+    to handle truncation caused by hitting the token limit.
+
     Returns (parsed_dict, raw_response).
     """
     last_error = None
+    current_max_tokens = max_tokens
 
     for attempt in range(max_retries + 1):
         temperature = 0.1 if attempt == 0 else 0.0
@@ -176,7 +298,7 @@ async def _call_llm_with_retry(
                 prompt=prompt,
                 model=model,
                 temperature=temperature,
-                max_tokens=max_tokens,
+                max_tokens=current_max_tokens,
                 response_schema=response_schema,
             )
 
@@ -185,6 +307,13 @@ async def _call_llm_with_retry(
 
         except (json.JSONDecodeError, ValueError) as e:
             last_error = e
+            # Check if output was likely truncated (output tokens near limit)
+            if response.output_tokens >= current_max_tokens * 0.95:
+                logger.warning(
+                    f"LLM output likely truncated ({response.output_tokens}/{current_max_tokens} tokens). "
+                    f"Retrying with higher limit."
+                )
+                current_max_tokens = min(current_max_tokens * 2, 32768)
             logger.warning(
                 f"LLM JSON parse failed (attempt {attempt + 1}/{max_retries + 1}): {e}"
             )
@@ -237,7 +366,7 @@ async def _map_single_chunk(
         prompt=prompt,
         model=model,
         response_schema=ChunkSummary,
-        max_tokens=4096,
+        max_tokens=8192,
     )
 
     return ChunkSummary(**data), response.input_tokens, response.output_tokens
