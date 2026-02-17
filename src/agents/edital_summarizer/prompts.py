@@ -14,8 +14,9 @@ REGRAS:
 - Para campos nao encontrados no texto, retorne null.
 - Distinga claramente entre garantia de PROPOSTA (bid bond / garantia de participacao) e garantia CONTRATUAL (performance bond / garantia de execucao).
 - Em "modalidades_aceitas" de garantia, liste as formas aceitas pelo edital (seguro garantia, fianca bancaria, caucao em dinheiro, titulo da divida publica, etc.).
+- Para campos de lista (habilitacao, riscos, oportunidades), cada item deve ser UMA exigencia/risco/oportunidade individual e concisa (1-2 frases). NAO junte multiplas exigencias em um unico item de lista.
 - Para riscos, identifique clausulas que possam ser problematicas para licitantes: penalidades severas, prazos curtos, requisitos tecnicos restritivos, exigencias financeiras elevadas, clausulas de exclusividade.
-- Para oportunidades, identifique aspectos favoraveis: preferencia para ME/EPP, margem de preferencia, valor significativo de garantia (receita potencial para corretora de seguros), contratos de longa duracao, possibilidade de consorcio.
+- Para oportunidades, identifique APENAS aspectos comercialmente favoraveis EXPLICITAMENTE presentes no edital para uma corretora de seguro garantia: preferencia para ME/EPP, margem de preferencia, valor significativo de garantia (receita potencial), contratos de longa duracao, possibilidade de consorcio, subcontratacao permitida. NAO inclua analises genericas de mercado, impacto social, ou oportunidades que nao estejam diretamente mencionadas no texto do edital.
 - Resumo executivo: 3-5 frases em tom profissional e direto, focando no que importa para uma corretora de seguro garantia. Mencione: tipo de contratacao, valor, garantias exigidas, prazo, e recomendacao.
 - Responda SOMENTE com JSON valido no schema especificado. Sem texto adicional fora do JSON."""
 
@@ -28,6 +29,7 @@ REGRAS:
 - Extraia APENAS informacoes explicitamente presentes no texto. Nao invente dados.
 - Para campos nao encontrados, retorne null ou lista vazia.
 - Foque em: objeto, garantias (proposta e contratual), prazos, habilitacao, penalidades, pagamento, riscos e oportunidades.
+- Para campos de lista, cada item deve ser UMA informacao individual e concisa (1-2 frases). NAO junte multiplas informacoes em um unico item.
 - Se o trecho nao contiver informacao relevante para um campo, deixe-o vazio.
 - Responda SOMENTE com JSON valido no schema especificado."""
 
@@ -42,8 +44,9 @@ REGRAS:
 - Use os metadados do banco de dados como referencia principal para numero, orgao, modalidade e valor.
 - Se houver conflito entre resumos parciais, use a informacao mais detalhada/especifica.
 - Distinga claramente entre garantia de PROPOSTA (bid bond) e garantia CONTRATUAL (performance bond).
+- Para campos de lista, cada item deve ser UMA informacao individual e concisa (1-2 frases). NAO junte multiplas informacoes em um unico item.
 - Riscos: identifique clausulas problematicas mencionadas em qualquer trecho.
-- Oportunidades: identifique aspectos favoraveis para uma corretora de seguro garantia.
+- Oportunidades: identifique APENAS aspectos comercialmente favoraveis EXPLICITAMENTE presentes no edital para uma corretora de seguro garantia (preferencia ME/EPP, margem de preferencia, valor de garantia, contratos longos, consorcio, subcontratacao). NAO inclua analises genericas de mercado ou impacto social.
 - Resumo executivo: 3-5 frases profissionais focando no que importa para seguro garantia.
 - Responda SOMENTE com JSON valido no schema especificado."""
 
