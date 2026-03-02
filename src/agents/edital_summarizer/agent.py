@@ -36,7 +36,7 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
-DEFAULT_SUMMARIZATION_MODEL = os.getenv("DEFAULT_SUMMARIZATION_MODEL", "gemini-2.5-flash")
+DEFAULT_SUMMARIZATION_MODEL = os.getenv("DEFAULT_SUMMARIZATION_MODEL", "gemini-2.5-flash-lite")
 
 # Threshold: above this, use map-reduce instead of direct
 MAP_REDUCE_THRESHOLD = 80_000

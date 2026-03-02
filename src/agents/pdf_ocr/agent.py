@@ -17,8 +17,8 @@ from .schemas import PdfOcrResult
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
-# Use gemini-2.0-flash for better OCR quality (not flash-lite)
-DEFAULT_OCR_MODEL = "gemini-2.0-flash"
+# v2: gemini-2.5-flash-lite — newer/cheaper than 2.0-flash, good OCR quality
+DEFAULT_OCR_MODEL = "gemini-2.5-flash-lite"
 
 
 async def convert_pdf_to_markdown(
@@ -69,7 +69,7 @@ async def convert_pdf_to_markdown(
 
         config = types.GenerateContentConfig(
             temperature=0.1,
-            max_output_tokens=65536,
+            max_output_tokens=32768,
         )
 
         logger.info(f"[PDF-OCR] Sending {filename} ({len(pdf_bytes)} bytes) to Gemini Vision ({model})")
