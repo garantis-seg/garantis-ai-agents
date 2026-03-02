@@ -40,7 +40,7 @@ steps:
       - '--memory'
       - '2Gi'
       - '--cpu'
-      - '2'
+      - '1'
       - '--timeout'
       - '300'
       - '--set-env-vars'
