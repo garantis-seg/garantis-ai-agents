@@ -1,25 +1,17 @@
 steps:
-  # Get pip credentials for Artifact Registry
-  - name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: 'bash'
+  # Build + push with Kaniko (cache enabled — pip install cached when requirements.txt unchanged)
+  - name: 'gcr.io/kaniko-project/executor:latest'
     args:
-      - '-c'
-      - |
-        gcloud auth print-access-token > /workspace/token.txt
+      - '--dockerfile=Dockerfile'
+      - '--context=.'
+      - '--destination=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest'
+      - '--cache=true'
+      - '--cache-ttl=168h'
+      - '--cache-repo=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api-cache'
+      - '--snapshot-mode=redo'
+    timeout: '600s'
 
-  - name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        ACCESS_TOKEN=$(cat /workspace/token.txt)
-        docker build \
-          --build-arg PIP_EXTRA_INDEX_URL="https://oauth2accesstoken:$${ACCESS_TOKEN}@southamerica-east1-python.pkg.dev/neqsti/python-packages/simple/" \
-          -t southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest .
-
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest']
-
+  # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gcloud
     args:
@@ -47,9 +39,6 @@ steps:
       - 'DEFAULT_MODEL=gemini-2.0-flash,DEFAULT_PROMPT_VERSION=v3'
       - '--set-secrets'
       - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
-
-images:
-  - 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
