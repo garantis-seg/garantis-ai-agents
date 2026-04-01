@@ -10,15 +10,13 @@ ENV PYTHONDONTWRITEBYTECODE=1     PYTHONUNBUFFERED=1     PIP_NO_CACHE_DIR=1     
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends     curl     && rm -rf /var/lib/apt/lists/*
 
-# Build arg for Artifact Registry authentication (CI)
-ARG PIP_EXTRA_INDEX_URL
-ENV PIP_EXTRA_INDEX_URL=${PIP_EXTRA_INDEX_URL}
+# Layer 1: AR keyring auth for private packages (rarely changes — cached)
+RUN pip install --no-cache-dir keyrings.google-artifactregistry-auth
 
-# Copy requirements and install dependencies
+# Layer 2: Dependencies (changes only when requirements.txt changes — cached by Kaniko)
 COPY requirements.txt ./
-# Remove hardcoded extra-index-url (we use the authenticated one from build arg)
-RUN sed -i '/--extra-index-url/d' requirements.txt && \
-    pip install --no-cache-dir -r requirements.txt
+ENV PIP_EXTRA_INDEX_URL=https://southamerica-east1-python.pkg.dev/neqsti/python-packages/simple/
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy pyproject.toml for package metadata (optional)
 COPY pyproject.toml README.md ./

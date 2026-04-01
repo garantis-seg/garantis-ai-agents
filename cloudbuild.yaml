@@ -1,11 +1,16 @@
 steps:
-  # Build the container image
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:$COMMIT_SHA', '.']
-
-  # Push the container image to Artifact Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:$COMMIT_SHA']
+  # Build + push with Kaniko (cache enabled — pip install cached when requirements.txt unchanged)
+  - name: 'gcr.io/kaniko-project/executor:latest'
+    args:
+      - '--dockerfile=Dockerfile'
+      - '--context=.'
+      - '--destination=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:$COMMIT_SHA'
+      - '--destination=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest'
+      - '--cache=true'
+      - '--cache-ttl=168h'
+      - '--cache-repo=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api-cache'
+      - '--snapshot-mode=redo'
+    timeout: '600s'
 
   # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -29,9 +34,6 @@ steps:
       - 'DEFAULT_MODEL=gemini-2.0-flash-lite,DEFAULT_PROMPT_VERSION=v3'
       - '--set-secrets'
       - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
-
-images:
-  - 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:$COMMIT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
