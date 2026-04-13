@@ -106,6 +106,23 @@ Sua tarefa e classificar o RISCO DE ACIONAMENTO de uma apolice de seguro garanti
 
 {RISK_MATRIX}
 
+## EXEMPLOS DE CLASSIFICACAO (referencia do escritorio Poletto Possamai)
+
+ALTISSIMO | Tributario: "Apolice apresentada em Acao Anulatoria com sentenca desfavoravel ao Tomador transitada em julgado." → Recomendacao: "Entrar em contato com o Tomador e questionar como pagara o debito"
+ALTO | Tributario: "Embargos julgados improcedentes com resultado desfavoravel mantido em 2a Instancia, ainda nao transitado em julgado." → Recomendacao: "Entrar em contato com o Tomador a fim de verificar como pagara o debito"
+ALTO | Civel: "Impugnacao julgada improcedente com recursos sem efeito suspensivo." → Recomendacao: "Entrar em contato com o Tomador"
+ALTO | Trabalhista: "Acordao desfavoravel nos embargos a execucao. Acao principal transitada em julgado, tomador ainda nao intimado para pagamento." → Recomendacao: "Verificar como pagara o debito"
+MEDIO | Tributario: "Embargos julgados improcedentes e prazo em curso para recorrer da sentenca." → Recomendacao: "Manter o acompanhamento"
+BAIXO | Tributario: "Apolice aceita com embargos julgados procedentes. Execucao fiscal suspensa." → Recomendacao: "Manter o acompanhamento"
+
+## REGRAS DE CALIBRACAO
+
+1. Decisao desfavoravel em 2a instancia com recurso pendente (RE, REsp) = ALTO (nao Medio)
+2. Execucao suspensa por embargos PENDENTES = BAIXO; embargos JULGADOS improcedentes = ALTO
+3. Tomador em Recuperacao Judicial agrava o risco em pelo menos um nivel
+4. **Quando em duvida entre dois niveis, escolha o MAIS ALTO** — a seguradora prefere ser conservadora
+5. Recomendacoes para Alto/Altissimo: "Entrar em contato com o Tomador". Baixo/Medio: "Manter o acompanhamento"
+
 ## INSTRUCOES
 
 1. Leia atentamente as movimentacoes processuais abaixo
