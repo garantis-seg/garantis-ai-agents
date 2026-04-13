@@ -16,6 +16,10 @@ class ModelPricing:
 # Registry de modelos com pricing (atualizado Dez 2025)
 # Fonte: https://ai.google.dev/gemini-api/docs/pricing
 MODEL_REGISTRY: Dict[str, ModelPricing] = {
+    # Gemini 3.x series
+    "gemini-3-flash-preview": ModelPricing(0.50, 3.00),
+    "gemini-3.1-flash-lite": ModelPricing(0.25, 1.50),
+
     # Gemini 2.5 series
     "gemini-2.5-pro": ModelPricing(1.25, 10.00),
     "gemini-2.5-pro-preview-06-05": ModelPricing(1.25, 10.00),
