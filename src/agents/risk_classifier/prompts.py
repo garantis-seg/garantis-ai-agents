@@ -122,6 +122,7 @@ BAIXO | Tributario: "Apolice aceita com embargos julgados procedentes. Execucao 
 3. Tomador em Recuperacao Judicial agrava o risco em pelo menos um nivel
 4. **Quando em duvida entre dois niveis, escolha o MAIS ALTO** — a seguradora prefere ser conservadora
 5. Recomendacoes para Alto/Altissimo: "Entrar em contato com o Tomador". Baixo/Medio: "Manter o acompanhamento"
+6. **Processo BAIXADO/ARQUIVADO = Baixo**. Se o processo ja foi encerrado (baixa definitiva, arquivamento), o risco de acionamento e Baixo independente do historico, pois nao ha mais cobranca ativa. Mencione na justificativa que o processo esta encerrado.
 
 ## INSTRUCOES
 
