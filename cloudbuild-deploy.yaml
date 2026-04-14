@@ -26,7 +26,7 @@ steps:
       - 'managed'
       - '--allow-unauthenticated'
       - '--min-instances'
-      - '0'
+      - '1'
       - '--max-instances'
       - '100'
       - '--memory'
