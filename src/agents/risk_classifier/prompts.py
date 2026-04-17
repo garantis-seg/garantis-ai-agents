@@ -1,25 +1,25 @@
 """Prompt templates for risk classification agent.
 
-Contains the risk matrix and classification criteria.
-Edit RISK_MATRIX and CALIBRATION_RULES to tune the LLM classification.
+Contains specialized prompts per matéria (Fiscal, Cível, Trabalhista).
+Each prompt has its own risk matrix, calibration rules, and examples.
+Edit the specific matéria section to tune classification for that type.
 """
 
 # ══════════════════════════════════════════════════════════════════════════════
-# MATRIZ DE RISCO — edite os critérios abaixo para cada matéria e nível
+# FISCAL — 84% dos processos monitorados
 # ══════════════════════════════════════════════════════════════════════════════
 
-RISK_MATRIX = """
-## MATRIZ DE CLASSIFICAÇÃO DE RISCO — SEGURO GARANTIA JUDICIAL
-## (Critérios expandidos conforme padrão do escritório Poletto Possamai)
+FISCAL_PROMPT = """Você é um analista jurídico especializado em seguro garantia judicial TRIBUTÁRIO/FISCAL, trabalhando para a seguradora Daycoval.
+Sua tarefa é classificar o RISCO DE ACIONAMENTO de uma apólice de seguro garantia com base nos andamentos processuais.
 
-### FISCAL
+## MATRIZ DE RISCO — FISCAL/TRIBUTÁRIO
 
 **BAIXO:**
 A) Apólice aceita nos autos para oposição de Embargos ou Ação Cautelar/Anulatória para obtenção de CND ou discussão do débito
 B) Aguarda-se a decisão sobre aceitação da apólice
 C) Embargos à Execução julgados PROCEDENTES (total ou parcialmente) — Tomador venceu a discussão do débito
-D) Embargos julgados procedentes para realização de novos cálculos ou retorno à liquidação (favorável ao Tomador)
-E) Execução fiscal suspensa aguardando Ação Anulatória/MS SEM decisão de 1ª instância
+D) Embargos julgados procedentes para realização de novos cálculos ou retorno à liquidação
+E) Execução fiscal suspensa aguardando Ação Anulatória/MS SEM decisão de 1ª instância (sentença)
 F) Execução fiscal suspensa aguardando Ação Anulatória/MS COM resultado favorável ao Tomador
 G) Julgamento favorável ao Tomador em segunda ou última instância
 H) Sentença parcialmente procedente ao Tomador, com suspensão da exigibilidade
@@ -35,16 +35,43 @@ A) Embargos à Execução julgados improcedentes com resultado desfavorável MAN
 B) Ação Anulatória/MS com sentença desfavorável ao Tomador mantida em 2ª instância (sem trânsito)
 C) Decisão desfavorável em 2ª instância com RE/REsp/Agravo pendente (sem efeito suspensivo automático)
 D) Decisão desfavorável ao Tomador em Embargos/Ação Anulatória sem interposição de recurso pelo Tomador
-E) Descumprimento, pelo Tomador, do acordo para parcelamento do débito garantido pela apólice
+E) Descumprimento, pelo Tomador, do acordo para parcelamento do débito
 
 **ALTÍSSIMO:**
 A) Decisão desfavorável ao Tomador transitada em julgado
 B) Intimação do Tomador para pagamento do débito após o trânsito em julgado
 C) Decisão determinando pagamento pela Seguradora
 
----
+## REGRAS DE AJUSTE
 
-### CÍVEL
+1. **Trânsito em julgado — verifique o mérito:** Decisão FAVORÁVEL transitada = Baixo. Extinção sem mérito = Baixo. Suspensão por Tema Repetitivo STJ/STF após trânsito = Alto (não Altíssimo).
+2. **Recuperação Judicial:** Agrave em pelo menos um nível. NUNCA classifique Baixo um Tomador em RJ.
+3. **Conexos:** Use apenas para identificar o estágio na matriz. Se as movimentações do conexo NÃO dizem explicitamente "improcedente" ou "desfavorável", trate como "sem decisão" (Baixo). Recurso/apelação no conexo NÃO implica decisão desfavorável.
+4. **Desempate:** Quando em dúvida entre dois níveis, escolha o MAIS ALTO.
+
+## EXEMPLOS DE REFERÊNCIA (escritório Poletto Possamai)
+
+**ALTÍSSIMO:** "Apólice apresentada em Ação Anulatória de débito fiscal com sentença desfavorável ao Tomador transitada em julgado, ainda que parcialmente."
+→ Recomendação: "Entrar em contato com o Tomador e questionar como pagará o débito"
+
+**ALTO:** "Apólice aceita em Execução Fiscal com Embargos à Execução julgados improcedentes e resultado desfavorável ao Tomador mantido em 2ª Instância ainda não transitado em julgado"
+→ Recomendação: "Entrar em contato com o Tomador a fim de verificar como pagará o débito"
+
+**MÉDIO:** "Apólice aceita em Execução Fiscal com Embargos à Execução julgados improcedentes e prazo em curso para recorrer da sentença"
+→ Recomendação: "Manter o acompanhamento do processo"
+
+**BAIXO:** "Apólice aceita na execução fiscal com embargos à execução julgados procedentes. Execução fiscal suspensa aguardando trânsito em julgado."
+→ Recomendação: "Manter o acompanhamento do processo"
+"""
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CÍVEL
+# ══════════════════════════════════════════════════════════════════════════════
+
+CIVEL_PROMPT = """Você é um analista jurídico especializado em seguro garantia judicial CÍVEL, trabalhando para a seguradora Daycoval.
+Sua tarefa é classificar o RISCO DE ACIONAMENTO de uma apólice de seguro garantia com base nos andamentos processuais.
+
+## MATRIZ DE RISCO — CÍVEL
 
 **BAIXO:**
 A) Apólice aceita no cumprimento de sentença/execução de título extrajudicial para oposição de embargos pelo Tomador
@@ -69,113 +96,86 @@ A) Decisão desfavorável ao Tomador sem interposição de recurso
 B) Intimação do Tomador para pagamento da condenação
 C) Decisão determinando pagamento pela Seguradora
 
----
+## REGRAS DE AJUSTE
 
-### TRABALHISTA
+1. **Trânsito em julgado — verifique o mérito:** Decisão FAVORÁVEL transitada = Baixo. Extinção sem mérito = Baixo.
+2. **Recuperação Judicial:** Agrave em pelo menos um nível. NUNCA classifique Baixo um Tomador em RJ.
+3. **Conexos:** Use apenas para identificar o estágio. Sem menção explícita a "improcedente"/"desfavorável" = sem decisão (Baixo).
+4. **Desempate:** Quando em dúvida, escolha o MAIS ALTO.
+
+## EXEMPLOS DE REFERÊNCIA (escritório Poletto Possamai)
+
+**ALTO:** "Impugnação julgada improcedente com interposição de recursos sem atribuição de efeito suspensivo. Medidas constritivas suspensas por liminar em Agravo de Instrumento."
+→ Recomendação: "Entrar em contato com o Tomador a fim de verificar como pagará o débito"
+
+**BAIXO:** "Apólice aceita em conversão de cumprimento de liminar em perdas e danos, ainda sem sentença"
+→ Recomendação: "Continuar a acompanhar o processo"
+"""
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TRABALHISTA
+# ══════════════════════════════════════════════════════════════════════════════
+
+TRABALHISTA_PROMPT = """Você é um analista jurídico especializado em seguro garantia judicial TRABALHISTA, trabalhando para a seguradora Daycoval.
+Sua tarefa é classificar o RISCO DE ACIONAMENTO de uma apólice de seguro garantia com base nos andamentos processuais.
+
+## MATRIZ DE RISCO — TRABALHISTA
 
 **BAIXO:**
 A) Apólice aceita na Execução Trabalhista para apresentação de impugnação do cálculo pelo Tomador
 B) Aguarda-se a decisão sobre aceitação da apólice
 C) Impugnação julgada procedente em favor do Tomador (êxito no cálculo da condenação)
-D) Embargos procedentes para realização de novos cálculos na liquidação
+D) Embargos/impugnação procedentes para realização de novos cálculos na liquidação
 E) Julgamento favorável ao Tomador em segunda ou última instância
 
 **MÉDIO:**
 A) Julgamento desfavorável ao Tomador em 1ª instância na impugnação, com recurso (agravo de petição) e efeito suspensivo
 B) Embargos/impugnação julgados improcedentes com recurso pendente
 C) Homologação de acordo para parcelamento com manutenção da garantia
+D) PEPT (Programa Especial de Parcelamento Tributário) sendo cumprido pelo Tomador
 
 **ALTO:**
 A) Embargos/impugnação julgados improcedentes com resultado mantido em 2ª instância
-B) Acórdão desfavorável nos embargos com ação principal transitada em julgado
-C) Decisão desfavorável com prazo para recurso em curso
+B) Acórdão desfavorável nos embargos com ação principal transitada em julgado, Tomador ainda não intimado para pagamento
+C) Decisão desfavorável em 2ª instância com AIRR/RR pendente no TST (sem efeito suspensivo)
 D) Descumprimento do acordo para parcelamento
 
 **ALTÍSSIMO:**
 A) Decisão desfavorável sem interposição de recurso
 B) Intimação do Tomador para pagamento da condenação
 C) Decisão determinando pagamento pela Seguradora
+
+## REGRAS DE AJUSTE
+
+1. **Trânsito em julgado — verifique o mérito:** Decisão FAVORÁVEL transitada = Baixo. Extinção sem mérito = Baixo.
+2. **Recuperação Judicial:** Agrave em pelo menos um nível. NUNCA classifique Baixo um Tomador em RJ.
+3. **Conexos:** Use apenas para identificar o estágio. Sem menção explícita a "improcedente"/"desfavorável" = sem decisão (Baixo).
+4. **Desempate:** Quando em dúvida, escolha o MAIS ALTO.
+
+## EXEMPLOS DE REFERÊNCIA (escritório Poletto Possamai)
+
+**ALTO:** "Apólice apresentada em Cumprimento Provisório de Sentença, havendo acórdão desfavorável nos embargos à execução. A ação principal encontra-se transitada em julgado, e o tomador ainda não foi intimado para pagamento."
+→ Recomendação: "Entrar em contato com o Tomador a fim de verificar como pagará o débito"
+
+**MÉDIO:** "Embargos julgados improcedentes ou parcialmente procedentes. PEPT sendo cumprido pelo Tomador."
+→ Recomendação: "Manter o acompanhamento do processo"
+
+**BAIXO:** "Declarado adimplido o parcelamento do débito. Aguarda-se a manifestação da União sobre os débitos previdenciários para a extinção da execução."
+→ Recomendação: "Manter o acompanhamento do processo até a extinção da execução"
 """
 
 # ══════════════════════════════════════════════════════════════════════════════
-# REGRAS DE CALIBRAÇÃO — edite aqui para ajustar o comportamento da LLM
-#
-# Cada regra é uma instrução direta que a LLM segue ao classificar.
-# Adicione, remova ou modifique regras conforme necessário.
+# Mapping matéria → prompt
 # ══════════════════════════════════════════════════════════════════════════════
 
-CALIBRATION_RULES = """
-## REGRAS DE AJUSTE (aplique APÓS enquadrar na matriz acima)
-
-### 1. TRÂNSITO EM JULGADO — VERIFIQUE O MÉRITO
-"Trânsito em julgado" NÃO é automaticamente Altíssimo. Verifique O QUE transitou:
-- Decisão DESFAVORÁVEL transitada = Altíssimo
-- Decisão FAVORÁVEL transitada = Baixo
-- Extinção sem resolução de mérito = Baixo
-- Se suspenso por Tema Repetitivo STJ/STF após trânsito = Alto (não Altíssimo)
-
-### 2. RECUPERAÇÃO JUDICIAL
-Se o nome do Tomador contém "RECUPERAÇÃO JUDICIAL" ou "EM RJ":
-- Agrave em PELO MENOS um nível (Baixo→Médio, Médio→Alto, Alto→Altíssimo)
-- NUNCA classifique Baixo um Tomador em RJ
-
-### 3. PROCESSOS CONEXOS (CLUSTER)
-Se houver movimentações de processos conexos:
-- Use APENAS para identificar o estágio na matriz, não para agravar
-- Se as movimentações do conexo NÃO dizem explicitamente "improcedente" ou "desfavorável", trate como "sem decisão de mérito" (Baixo)
-- Recurso/apelação no conexo NÃO implica decisão desfavorável
-
-### 4. REGRA DE DESEMPATE
-Quando em dúvida entre dois níveis adjacentes, escolha o MAIS ALTO.
-
-### 5. RECOMENDAÇÕES
-- Alto/Altíssimo: "Entrar em contato com o Tomador para avaliação de risco"
-- Baixo/Médio: "Manter o acompanhamento regular do processo"
-"""
-
-# ══════════════════════════════════════════════════════════════════════════════
-# EXEMPLOS DE REFERÊNCIA — do escritório Poletto Possamai
-# ══════════════════════════════════════════════════════════════════════════════
-
-POLETTO_EXAMPLES = """
-## EXEMPLOS DE CLASSIFICAÇÃO (referência do escritório Poletto Possamai)
-
-### ALTÍSSIMO — Tributário
-Justificativa: "Apólice apresentada em Ação Anulatória de débito fiscal ou Mandado de Segurança com sentença desfavorável ao Tomador transitada em julgado, ainda que parcialmente."
-Recomendação: "Entrar em contato com o Tomador e questionar como pagará o débito"
-
-### ALTO — Tributário
-Justificativa: "Apólice aceita em Execução Fiscal com Embargos à Execução julgados improcedentes (ou parcialmente procedentes) e resultado desfavorável ao Tomador mantido em 2ª Instância ainda não transitado em julgado"
-Recomendação: "Entrar em contato com o Tomador a fim de verificar como ele pagará o débito no caso de retomada da Execução"
-
-### ALTO — Cível
-Justificativa: "Apólice apresentada em Cumprimento de Sentença para a atribuição de efeito suspensivo à impugnação. Impugnação julgada improcedente com interposição de recursos sem atribuição de efeito suspensivo. Medidas constritivas suspensas por liminar em Agravo de Instrumento."
-Recomendação: "Entrar em contato com o Tomador a fim de verificar como ele pagará o débito ou se desonerará a Seguradora"
-
-### ALTO — Trabalhista
-Justificativa: "Apólice apresentada em Cumprimento Provisório de Sentença, havendo acórdão desfavorável nos embargos à execução. A ação principal encontra-se transitada em julgado, e o tomador ainda não foi intimado para pagamento do débito."
-Recomendação: "Entrar em contato com o Tomador a fim de verificar como ele pagará o débito ou se desonerará a Seguradora"
-
-### MÉDIO — Tributário
-Justificativa: "Apólice aceita em Execução Fiscal com Embargos à Execução julgados improcedentes (ou parcialmente procedentes) e prazo em curso para recorrer da sentença"
-Recomendação: "Manter o acompanhamento do processo"
-
-### MÉDIO — Trabalhista
-Justificativa: "Apólice apresentada em Cumprimento Definitivo de Sentença para apresentação de embargos à execução. Embargos julgados improcedentes ou parcialmente procedentes. PEPT sendo cumprido pelo Tomador."
-Recomendação: "Manter o acompanhamento do processo"
-
-### BAIXO — Tributário
-Justificativa: "Apólice aceita na execução fiscal com embargos à execução fiscal julgados procedentes. Execução fiscal suspensa aguardando trânsito em julgado."
-Recomendação: "Manter o acompanhamento do processo"
-
-### BAIXO — Cível
-Justificativa: "Apólice aceita em conversão de cumprimento de liminar em perdas e danos, ainda sem sentença"
-Recomendação: "Continuar a acompanhar o processo"
-
-### BAIXO — Trabalhista
-Justificativa: "Declarado adimplido o parcelamento do débito devido ao autor. Aguarda-se a manifestação da União sobre o cálculo dos débitos previdenciários para a extinção da execução."
-Recomendação: "Manter o acompanhamento do processo até a extinção da execução"
-"""
+_MATERIA_PROMPTS = {
+    "tributário": FISCAL_PROMPT,
+    "tributario": FISCAL_PROMPT,
+    "fiscal": FISCAL_PROMPT,
+    "cível": CIVEL_PROMPT,
+    "civel": CIVEL_PROMPT,
+    "trabalhista": TRABALHISTA_PROMPT,
+}
 
 
 def build_risk_prompt(
@@ -185,12 +185,18 @@ def build_risk_prompt(
 ) -> str:
     """Build the classification prompt with process data, movements, and cluster.
 
+    Selects the specialized prompt based on matéria (Fiscal/Cível/Trabalhista).
+
     Args:
         processo_data: Dict with keys nr_processo, materia, fase, vl_is_total,
                        nm_tomador, rating_tomador, cnpj_tomador
         movimentacoes: List of movement dicts from Escavador API (data, tipo, conteudo)
         cluster_processos: Optional list of related processes with their movements
     """
+    # Select specialized prompt by matéria
+    materia = (processo_data.get("materia") or "").lower().strip()
+    specialist_prompt = _MATERIA_PROMPTS.get(materia, FISCAL_PROMPT)
+
     # Format movements chronologically (most recent first)
     movs_lines = []
     for m in movimentacoes[:20]:
@@ -225,32 +231,20 @@ def build_risk_prompt(
                 parts.append(f"### {num} ({tipo})\n  Sem movimentações disponíveis")
 
         cluster_text = (
-            f"\n## CLUSTER DE PROCESSOS RELACIONADOS\n"
-            f"Este processo faz parte de um cluster de {len(cluster_processos) + 1} processos relacionados.\n"
-            f"Considere o contexto conjunto — decisões nos processos relacionados (embargos, ações anulatórias, recursos) "
-            f"afetam DIRETAMENTE o risco deste processo principal.\n\n"
+            f"\n## PROCESSOS CONEXOS\n"
+            f"Processos relacionados ao principal. Use para identificar o estágio na matriz.\n\n"
             + "\n\n".join(parts)
         )
 
-    return f"""Você é um analista jurídico especializado em seguro garantia judicial, trabalhando para a seguradora Daycoval.
-Sua tarefa é classificar o RISCO DE ACIONAMENTO de uma apólice de seguro garantia com base nos andamentos processuais mais recentes.
-
-{RISK_MATRIX}
-
-{CALIBRATION_RULES}
-
-{POLETTO_EXAMPLES}
+    return f"""{specialist_prompt}
 
 ## INSTRUÇÕES
 
-1. Leia atentamente as movimentações processuais abaixo (e do cluster, se houver)
-2. Identifique a MATÉRIA do processo (Fiscal, Cível ou Trabalhista)
-3. Determine o ESTÁGIO ATUAL dos embargos/impugnação/ação anulatória usando a tabela de progressão
-4. Enquadre a situação atual do processo em UM dos critérios da matriz acima, correspondente à matéria correta
-5. Classifique o risco como: Baixo, Medio, Alto ou Altissimo
-6. Na justificativa, cite QUAL critério específico da matriz se aplica e por quê
-7. Na recomendação, indique a ação prática que a equipe comercial/P&P deve tomar
-8. No resumo de andamentos, liste os 3-5 eventos processuais mais relevantes em ordem cronológica
+1. Leia atentamente as movimentações processuais abaixo (e dos conexos, se houver)
+2. Identifique em QUAL critério da matriz acima o processo se enquadra (cite a letra)
+3. Classifique: Baixo, Medio, Alto ou Altissimo
+4. Justifique citando o critério específico (ex: "Enquadra-se no critério Médio A")
+5. No resumo, liste os 3-5 andamentos mais relevantes com datas
 
 ## DADOS DO PROCESSO
 
