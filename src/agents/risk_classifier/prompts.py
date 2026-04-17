@@ -147,9 +147,9 @@ def build_risk_prompt(
     materia = (processo_data.get("materia") or "").lower().strip()
     specialist_prompt = _MATERIA_PROMPTS.get(materia, FISCAL_PROMPT)
 
-    # Format movements chronologically (most recent first)
+    # Format movements chronologically (most recent first, max 10)
     movs_lines = []
-    for m in movimentacoes[:20]:
+    for m in movimentacoes[:10]:
         data = m.get("data", "s/d")
         tipo = m.get("tipo", "")
         conteudo = m.get("conteudo", "")
@@ -174,7 +174,7 @@ def build_risk_prompt(
             if movs:
                 lines = [
                     f"  [{m.get('data', 's/d')}] {m.get('tipo', '')}: {m.get('conteudo', '')[:150]}"
-                    for m in movs[:10]
+                    for m in movs[:5]
                 ]
                 parts.append(f"### {num} ({tipo})\n" + "\n".join(lines))
             else:
