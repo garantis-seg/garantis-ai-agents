@@ -233,6 +233,8 @@ Foque em identificar:
 - Se o processo está suspenso e por qual motivo
 - Se há determinação de pagamento ou intimação para pagamento
 
+IMPORTANTE: Só marque embargos como "improcedentes" se houver menção EXPLÍCITA a "improcedente", "rejeitado" ou "desfavorável". A mera existência de recurso NÃO significa que o resultado foi desfavorável — pode ser recurso da outra parte contra decisão favorável ao Tomador.
+
 ## DADOS DO PROCESSO
 
 - Número: {nr_processo}
@@ -243,25 +245,7 @@ Foque em identificar:
 ## ANDAMENTOS PROCESSUAIS (mais recentes primeiro)
 
 {movs_text}
-{cluster_text}
-
-Responda EXCLUSIVAMENTE em JSON válido:
-{{
-  "embargos_status": "nao_opostos | pendentes | procedentes | improcedentes | parcialmente_procedentes",
-  "embargos_instancia": "1a | 2a | superior | null",
-  "embargos_recurso_pendente": true/false,
-  "embargos_resultado_2a_instancia": "mantido_desfavoravel | reformado_favoravel | pendente | null",
-  "acao_anulatoria_status": "inexistente | sem_decisao | favoravel | desfavoravel",
-  "acao_anulatoria_recurso_pendente": true/false,
-  "transito_em_julgado": true/false,
-  "transito_favoravel_tomador": true/false/null,
-  "acordo_parcelamento": "inexistente | vigente | descumprido",
-  "processo_suspenso": true/false,
-  "motivo_suspensao": "string ou null",
-  "intimacao_pagamento": true/false,
-  "determinacao_pagamento_seguradora": true/false,
-  "resumo_situacao": "1-2 frases descrevendo a situação processual atual"
-}}"""
+{cluster_text}"""
 
 
 def build_summary_prompt(

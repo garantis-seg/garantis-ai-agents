@@ -14,7 +14,7 @@ from typing import Optional
 
 from ...providers import create_provider
 from ...providers.base import LLMResponse
-from .schemas import RiskClassificationResult
+from .schemas import RiskClassificationResult, ProcessSummaryResult
 from .prompts import build_risk_prompt, build_summary_prompt, build_classification_from_summary_prompt
 
 logger = logging.getLogger(__name__)
@@ -60,6 +60,7 @@ async def classify_risk(
         prompt=summary_prompt,
         model=model,
         temperature=0.0,
+        response_schema=ProcessSummaryResult,
     )
 
     total_input += summary_response.input_tokens or 0
@@ -67,6 +68,8 @@ async def classify_risk(
 
     try:
         summary = json.loads(summary_response.text)
+        # Validate with pydantic
+        ProcessSummaryResult(**summary)
     except (json.JSONDecodeError, Exception) as e:
         logger.warning(f"Summary parse failed, falling back to direct classification: {e}")
         # Fallback: direct classification without summary

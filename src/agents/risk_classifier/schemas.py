@@ -1,7 +1,54 @@
 """Pydantic schemas for risk classification agent."""
 
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
+
+
+class ProcessSummaryResult(BaseModel):
+    """Structured summary of process facts extracted from movements."""
+
+    embargos_status: Literal[
+        "nao_opostos", "pendentes", "procedentes", "improcedentes", "parcialmente_procedentes"
+    ] = Field(description="Status dos embargos/impugnação")
+    embargos_instancia: Optional[Literal["1a", "2a", "superior"]] = Field(
+        default=None, description="Instância atual dos embargos"
+    )
+    embargos_recurso_pendente: bool = Field(
+        default=False, description="Se há recurso pendente nos embargos"
+    )
+    embargos_resultado_2a_instancia: Optional[Literal[
+        "mantido_desfavoravel", "reformado_favoravel", "pendente"
+    ]] = Field(default=None, description="Resultado em 2ª instância")
+    acao_anulatoria_status: Literal[
+        "inexistente", "sem_decisao", "favoravel", "desfavoravel"
+    ] = Field(default="inexistente", description="Status da ação anulatória/MS paralela")
+    acao_anulatoria_recurso_pendente: bool = Field(
+        default=False, description="Se há recurso pendente na ação anulatória"
+    )
+    transito_em_julgado: bool = Field(
+        default=False, description="Se houve trânsito em julgado"
+    )
+    transito_favoravel_tomador: Optional[bool] = Field(
+        default=None, description="Se o trânsito foi favorável ao Tomador"
+    )
+    acordo_parcelamento: Literal[
+        "inexistente", "vigente", "descumprido"
+    ] = Field(default="inexistente", description="Status de acordo/parcelamento")
+    processo_suspenso: bool = Field(
+        default=False, description="Se o processo está suspenso"
+    )
+    motivo_suspensao: Optional[str] = Field(
+        default=None, description="Motivo da suspensão"
+    )
+    intimacao_pagamento: bool = Field(
+        default=False, description="Se houve intimação para pagamento"
+    )
+    determinacao_pagamento_seguradora: bool = Field(
+        default=False, description="Se há decisão determinando pagamento pela seguradora"
+    )
+    resumo_situacao: str = Field(
+        description="1-2 frases descrevendo a situação processual atual"
+    )
 
 
 class RiskClassificationResult(BaseModel):
