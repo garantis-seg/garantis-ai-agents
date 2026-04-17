@@ -10,74 +10,91 @@ Edit RISK_MATRIX and CALIBRATION_RULES to tune the LLM classification.
 
 RISK_MATRIX = """
 ## MATRIZ DE CLASSIFICAÇÃO DE RISCO — SEGURO GARANTIA JUDICIAL
+## (Critérios expandidos conforme padrão do escritório Poletto Possamai)
 
 ### FISCAL
 
 **BAIXO:**
-- Apólice aceita nos autos pelo Juiz e Segurado para oposição de Embargos ou Ação Cautelar Antecedente/Liminar/Ação Anulatória para obtenção de Certidão Negativa de Débitos ou discussão do débito
-- Aguarda-se a decisão sobre aceitação da apólice
-- Apólice aceita na execução fiscal com embargos à execução fiscal julgados procedentes
-- Apólice aceita em execução fiscal suspensa enquanto se aguarda o trânsito em julgado de ação anulatória do débito fiscal
-- Julgamento favorável ao Tomador em segunda ou última instância
+A) Apólice aceita nos autos para oposição de Embargos ou Ação Cautelar/Anulatória para obtenção de CND ou discussão do débito
+B) Aguarda-se a decisão sobre aceitação da apólice
+C) Embargos à Execução julgados PROCEDENTES (total ou parcialmente) — Tomador venceu a discussão do débito
+D) Embargos julgados procedentes para realização de novos cálculos ou retorno à liquidação (favorável ao Tomador)
+E) Execução fiscal suspensa aguardando Ação Anulatória/MS SEM decisão de 1ª instância
+F) Execução fiscal suspensa aguardando Ação Anulatória/MS COM resultado favorável ao Tomador
+G) Julgamento favorável ao Tomador em segunda ou última instância
+H) Sentença parcialmente procedente ao Tomador, com suspensão da exigibilidade
 
 **MÉDIO:**
-- Julgamento desfavorável em 1ª Instância com interposição de recurso pelo Tomador
-- Execução Fiscal suspensa em razão de acordo realizado entre Tomador e Segurado para parcelamento do débito, desde que haja manutenção da garantia na modalidade execução fiscal
+A) Embargos à Execução julgados IMPROCEDENTES com recurso de apelação interposto (pendente de julgamento)
+B) Embargos à Execução julgados improcedentes com prazo para recurso em curso
+C) Execução fiscal suspensa aguardando Ação Anulatória/MS COM sentença desfavorável ao Tomador e recurso de apelação pendente
+D) Execução fiscal suspensa em razão de acordo judicial para parcelamento do débito, com manutenção da garantia
 
 **ALTO:**
-- Decisão desfavorável ao Tomador em Embargos à Execução/Ação Anulatória que discute o débito, sem interposição de recurso pelo Tomador
-- Descumprimento, pelo Tomador, do acordo para parcelamento do débito garantido pela apólice
+A) Embargos à Execução julgados improcedentes com resultado desfavorável MANTIDO em 2ª instância (ainda não transitado em julgado)
+B) Ação Anulatória/MS com sentença desfavorável ao Tomador mantida em 2ª instância (sem trânsito)
+C) Decisão desfavorável em 2ª instância com RE/REsp/Agravo pendente (sem efeito suspensivo automático)
+D) Decisão desfavorável ao Tomador em Embargos/Ação Anulatória sem interposição de recurso pelo Tomador
+E) Descumprimento, pelo Tomador, do acordo para parcelamento do débito garantido pela apólice
 
 **ALTÍSSIMO:**
-- Decisão desfavorável ao Tomador transitada em julgado
-- Intimação do Tomador para pagamento do débito após o trânsito em julgado
-- Decisão determinando pagamento pela Seguradora
+A) Decisão desfavorável ao Tomador transitada em julgado
+B) Intimação do Tomador para pagamento do débito após o trânsito em julgado
+C) Decisão determinando pagamento pela Seguradora
 
 ---
 
 ### CÍVEL
 
 **BAIXO:**
-- Apólice aceita no cumprimento de sentença/execução de título extrajudicial para oposição de embargos pelo Tomador
-- Aguarda-se a decisão sobre aceitação da apólice
-- Apólice aceita no cumprimento de sentença/embargos à execução com julgamento procedente em favor do Tomador/Executado (êxito na discussão integral do débito)
-- Julgamento favorável ao Tomador em segunda ou última Instância
+A) Apólice aceita no cumprimento de sentença/execução de título extrajudicial para oposição de embargos pelo Tomador
+B) Aguarda-se a decisão sobre aceitação da apólice
+C) Embargos à execução julgados procedentes em favor do Tomador (êxito na discussão do débito)
+D) Embargos procedentes para realização de novos cálculos ou desoneração parcial
+E) Julgamento favorável ao Tomador em segunda ou última instância
 
 **MÉDIO:**
-- Aceita a garantia no processo, com julgamento desfavorável total ou parcial ao Tomador em 1ª Instância na execução/cumprimento de sentença, com interposição de recurso de apelação e atribuição de efeito suspensivo
-- Homologação de acordo para parcelamento do valor garantido na apólice, com obrigatoriedade de manutenção da garantia
+A) Julgamento desfavorável ao Tomador em 1ª instância com recurso de apelação e efeito suspensivo
+B) Embargos julgados improcedentes com recurso de apelação pendente
+C) Homologação de acordo para parcelamento com obrigatoriedade de manutenção da garantia
 
 **ALTO:**
-- Decisão desfavorável ao Tomador em Embargos à Execução/Cumprimento de Sentença que discute o débito, com prazo para interposição de recurso
-- Descumprimento, pelo Tomador, do acordo para parcelamento da dívida garantida pela apólice
+A) Embargos julgados improcedentes com resultado mantido em 2ª instância (sem trânsito)
+B) Impugnação julgada improcedente com recursos sem efeito suspensivo
+C) Decisão desfavorável com prazo para recurso em curso
+D) Descumprimento do acordo para parcelamento da dívida garantida
 
 **ALTÍSSIMO:**
-- Decisão desfavorável ao Tomador em Embargos à Execução/Cumprimento de Sentença que discute o débito, sem interposição de recurso
-- Intimação do Tomador para pagamento da condenação
-- Decisão determinando pagamento pela Seguradora
+A) Decisão desfavorável ao Tomador sem interposição de recurso
+B) Intimação do Tomador para pagamento da condenação
+C) Decisão determinando pagamento pela Seguradora
 
 ---
 
 ### TRABALHISTA
 
 **BAIXO:**
-- Apólice aceita na Execução Trabalhista para apresentação de impugnação do cálculo pelo Tomador
-- Aguarda-se a decisão sobre aceitação da apólice
-- Apólice aceita na impugnação com julgamento procedente em favor do Tomador (êxito em relação ao cálculo da condenação)
-- Julgamento favorável ao Tomador em segunda ou última instância
+A) Apólice aceita na Execução Trabalhista para apresentação de impugnação do cálculo pelo Tomador
+B) Aguarda-se a decisão sobre aceitação da apólice
+C) Impugnação julgada procedente em favor do Tomador (êxito no cálculo da condenação)
+D) Embargos procedentes para realização de novos cálculos na liquidação
+E) Julgamento favorável ao Tomador em segunda ou última instância
 
 **MÉDIO:**
-- Aceita a garantia no processo, com julgamento desfavorável ao Tomador em 1ª Instância na impugnação, com interposição de recurso (agravo de petição) e atribuição de efeito suspensivo
-- Homologação de acordo para parcelamento do valor garantido na apólice, com obrigatoriedade de manutenção da garantia
+A) Julgamento desfavorável ao Tomador em 1ª instância na impugnação, com recurso (agravo de petição) e efeito suspensivo
+B) Embargos/impugnação julgados improcedentes com recurso pendente
+C) Homologação de acordo para parcelamento com manutenção da garantia
 
 **ALTO:**
-- Decisão desfavorável ao Tomador em impugnação à execução que discute o débito, com prazo para interposição de recurso
-- Descumprimento, pelo Tomador, do acordo para parcelamento da dívida garantida pela apólice
+A) Embargos/impugnação julgados improcedentes com resultado mantido em 2ª instância
+B) Acórdão desfavorável nos embargos com ação principal transitada em julgado
+C) Decisão desfavorável com prazo para recurso em curso
+D) Descumprimento do acordo para parcelamento
 
 **ALTÍSSIMO:**
-- Decisão desfavorável ao Tomador em impugnação à execução que discute o débito, sem interposição de recurso
-- Intimação do Tomador para pagamento da condenação
-- Decisão determinando pagamento pela Seguradora
+A) Decisão desfavorável sem interposição de recurso
+B) Intimação do Tomador para pagamento da condenação
+C) Decisão determinando pagamento pela Seguradora
 """
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -88,94 +105,31 @@ RISK_MATRIX = """
 # ══════════════════════════════════════════════════════════════════════════════
 
 CALIBRATION_RULES = """
-## REGRAS DE CALIBRAÇÃO
+## REGRAS DE AJUSTE (aplique APÓS enquadrar na matriz acima)
 
-### PROGRESSÃO DOS EMBARGOS/IMPUGNAÇÃO (CRÍTICO — leia com atenção)
-A classificação depende do ESTÁGIO atual dos embargos/impugnação, não apenas de existirem:
+### 1. TRÂNSITO EM JULGADO — VERIFIQUE O MÉRITO
+"Trânsito em julgado" NÃO é automaticamente Altíssimo. Verifique O QUE transitou:
+- Decisão DESFAVORÁVEL transitada = Altíssimo
+- Decisão FAVORÁVEL transitada = Baixo
+- Extinção sem resolução de mérito = Baixo
+- Se suspenso por Tema Repetitivo STJ/STF após trânsito = Alto (não Altíssimo)
 
-| Estágio dos Embargos/Impugnação | Risco |
-|--------------------------------|-------|
-| Opostos, ainda sem julgamento | Baixo |
-| Julgados IMPROCEDENTES + prazo para recurso em curso (sem recurso interposto ainda) | Médio |
-| Julgados IMPROCEDENTES + recurso interposto (apelação pendente de julgamento) | Médio |
-| Julgados IMPROCEDENTES + resultado mantido em 2ª instância (sem trânsito em julgado) | Alto |
-| Julgados IMPROCEDENTES + trânsito em julgado | Altíssimo |
-| Julgados PROCEDENTES (tomador venceu a discussão do débito) | Baixo |
-| Julgados PARCIALMENTE PROCEDENTES (tomador ganhou em parte) | Baixo |
+### 2. RECUPERAÇÃO JUDICIAL
+Se o nome do Tomador contém "RECUPERAÇÃO JUDICIAL" ou "EM RJ":
+- Agrave em PELO MENOS um nível (Baixo→Médio, Médio→Alto, Alto→Altíssimo)
+- NUNCA classifique Baixo um Tomador em RJ
 
-### SENTENÇA "PARCIALMENTE PROCEDENTE"
-Sentença parcialmente procedente geralmente FAVORECE o Tomador — significa que ele ganhou ao menos parte da discussão.
-- Parcialmente procedente com suspensão da exigibilidade = Baixo
-- Parcialmente procedente + recurso do Fisco = Baixo (tomador na posição favorável)
-- NÃO confunda com "improcedente" (onde o tomador perdeu tudo)
+### 3. PROCESSOS CONEXOS (CLUSTER)
+Se houver movimentações de processos conexos:
+- Use APENAS para identificar o estágio na matriz, não para agravar
+- Se as movimentações do conexo NÃO dizem explicitamente "improcedente" ou "desfavorável", trate como "sem decisão de mérito" (Baixo)
+- Recurso/apelação no conexo NÃO implica decisão desfavorável
 
-### AÇÃO ANULATÓRIA / MANDADO DE SEGURANÇA PARALELO
-Quando a execução fiscal está suspensa aguardando ação anulatória ou MS:
-- Sem decisão de 1ª instância na ação anulatória/MS = Baixo
-- Sentença desfavorável ao Tomador na ação anulatória/MS + recurso de apelação pendente = Médio
-- Sentença desfavorável mantida em 2ª instância (sem trânsito em julgado) = Alto
-- Trânsito em julgado desfavorável na ação anulatória/MS = Altíssimo
-- Sentença ou Acórdão FAVORÁVEL ao Tomador = Baixo
+### 4. REGRA DE DESEMPATE
+Quando em dúvida entre dois níveis adjacentes, escolha o MAIS ALTO.
 
-### TRÂNSITO EM JULGADO — VERIFICAR O MÉRITO (NÃO É AUTOMATICAMENTE ALTÍSSIMO)
-"Trânsito em julgado" significa que não cabem mais recursos. Mas verifique O QUE transitou:
-- Decisão DESFAVORÁVEL ao Tomador transitada em julgado = Altíssimo
-- Decisão FAVORÁVEL ao Tomador transitada em julgado = Baixo
-- Extinção sem resolução de mérito = Baixo (não houve condenação)
-- Embargos PROCEDENTES transitados em julgado = Baixo (tomador venceu)
-
-### SUSPENSÃO POR TEMA REPETITIVO (STJ/STF)
-Se o processo está suspenso por afetação a Tema Repetitivo no STJ ou STF (ex: "Tema 1263"):
-- A suspensão paralisa efetivamente a execução — desça UM nível em relação ao que seria sem a suspensão
-- Trânsito em julgado + suspensão por tema = Alto (não Altíssimo), pois a execução está paralisada
-
-### PROGRAMAS DE PARCELAMENTO INCENTIVADO (PPI, REFIS, TRANSAÇÃO PGFN)
-Adesão a programa de parcelamento NÃO cancela decisões de mérito anteriores:
-- Adesão a PPI/REFIS/Transação SEM decisão desfavorável anterior = Baixo
-- Adesão a PPI/REFIS/Transação MAS com sentença desfavorável mantida em 2ª instância = manter o risco da decisão (Alto)
-- Acordo JUDICIAL de parcelamento homologado pelo juiz com manutenção da garantia = Médio
-- Descumprimento de qualquer acordo = Alto
-
-### EMBARGOS PROCEDENTES PARA NOVOS CÁLCULOS
-Quando embargos são julgados procedentes para "realização de novos cálculos" ou "retorno à fase de liquidação":
-- Isso é FAVORÁVEL ao Tomador = Baixo
-- O Tomador conseguiu desconstituir ou reduzir o débito cobrado
-- NÃO confunda com improcedência dos embargos
-
-### "AGUARDA ACEITAÇÃO DA APÓLICE"
-Se o processo ainda aguarda a decisão judicial sobre aceitação da apólice = Baixo.
-Mesmo que o processo esteja em fase recursal em outro aspecto, a situação da APÓLICE é o que importa.
-
-### RECUPERAÇÃO JUDICIAL (OBRIGATÓRIO)
-Se "RECUPERAÇÃO JUDICIAL" ou "EM RJ" aparece no nome do Tomador:
-- Agrave o risco em PELO MENOS um nível (Baixo→Médio, Médio→Alto, Alto→Altíssimo)
-- NUNCA classifique como Baixo um Tomador em Recuperação Judicial, exceto se houve decisão favorável transitada em julgado
-- Se a ação anulatória/MS paralela tem decisão desfavorável mantida em 2ª instância + RJ = Altíssimo
-
-### PROCESSO BAIXADO/ARQUIVADO — DEPENDE DO MOTIVO
-Processo baixado ou arquivado = Baixo SOMENTE se:
-- O encerramento decorreu de decisão favorável ao Tomador, OU
-- Não há condenação/débito pendente
-Se o processo foi arquivado após trânsito em julgado DESFAVORÁVEL ao Tomador, manter o risco conforme a decisão (Alto ou Altíssimo).
-
-### DECISÃO EM 2ª INSTÂNCIA + RECURSO ESPECIAL/EXTRAORDINÁRIO
-Decisão desfavorável em 2ª instância com RE/REsp/Agravo pendente = ALTO (não Médio).
-Recursos para tribunais superiores (STJ/STF/TST) NÃO têm efeito suspensivo automático.
-
-### PROCESSOS CONEXOS (CLUSTER) — CUIDADO COM INFERÊNCIAS
-Se houver dados de processos conexos (embargos, ações anulatórias, recursos):
-- Use APENAS para entender o estágio, NUNCA para agravar automaticamente
-- Conexo com resultado FAVORÁVEL ao Tomador (procedente, parcialmente procedente) = Baixo
-- Conexo com resultado EXPLICITAMENTE DESFAVORÁVEL (palavras "improcedente", "desfavorável", "condenado") = use a tabela de progressão
-- **Se as movimentações do conexo NÃO dizem explicitamente "improcedente" ou "desfavorável", NÃO assuma que o resultado foi desfavorável** — trate como "sem decisão" = Baixo
-- A mera existência de recurso/apelação no conexo NÃO significa que houve decisão desfavorável — pode ser recurso do Fisco contra decisão favorável
-- Se o conexo tem apenas andamentos procedimentais (expedição, intimação, remessa, despacho), IGNORE-O
-
-### REGRA DE DESEMPATE
-Quando em dúvida entre dois níveis, escolha o MAIS ALTO — a seguradora prefere ser conservadora.
-
-### RECOMENDAÇÕES
-- Alto/Altíssimo: "Entrar em contato com o Tomador para avaliação de risco e possíveis providências"
+### 5. RECOMENDAÇÕES
+- Alto/Altíssimo: "Entrar em contato com o Tomador para avaliação de risco"
 - Baixo/Médio: "Manter o acompanhamento regular do processo"
 """
 
