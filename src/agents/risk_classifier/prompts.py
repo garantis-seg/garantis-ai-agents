@@ -215,3 +215,154 @@ Analise as movimentações processuais abaixo e classifique o risco:
 {cluster_text}
 
 Responda EXCLUSIVAMENTE em JSON válido com os campos: risco, justificativa, recomendacao, andamentos_resumo."""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SUMARIZADOR — Etapa 1: extrai fatos estruturados das movimentações
+# ══════════════════════════════════════════════════════════════════════════════
+
+SUMMARIZER_PROMPT = """Você é um analista jurídico. Analise as movimentações processuais abaixo e extraia os FATOS RELEVANTES para avaliar o risco de uma apólice de seguro garantia.
+
+Foque em identificar:
+- Se houve embargos/impugnação e qual o resultado (procedentes, improcedentes, parcialmente procedentes)
+- Se há ação anulatória ou mandado de segurança paralelo e qual o resultado
+- Em qual instância está o processo (1ª, 2ª, STJ/STF/TST)
+- Se há recurso pendente e qual tipo (apelação, RE, REsp, agravo, AIRR)
+- Se houve trânsito em julgado e de que decisão (favorável ou desfavorável ao tomador)
+- Se há acordo/parcelamento e se está sendo cumprido
+- Se o processo está suspenso e por qual motivo
+- Se há determinação de pagamento ou intimação para pagamento
+
+## DADOS DO PROCESSO
+
+- Número: {nr_processo}
+- Matéria: {materia}
+- Fase: {fase}
+- Tomador: {nm_tomador}
+
+## ANDAMENTOS PROCESSUAIS (mais recentes primeiro)
+
+{movs_text}
+{cluster_text}
+
+Responda EXCLUSIVAMENTE em JSON válido:
+{{
+  "embargos_status": "nao_opostos | pendentes | procedentes | improcedentes | parcialmente_procedentes",
+  "embargos_instancia": "1a | 2a | superior | null",
+  "embargos_recurso_pendente": true/false,
+  "embargos_resultado_2a_instancia": "mantido_desfavoravel | reformado_favoravel | pendente | null",
+  "acao_anulatoria_status": "inexistente | sem_decisao | favoravel | desfavoravel",
+  "acao_anulatoria_recurso_pendente": true/false,
+  "transito_em_julgado": true/false,
+  "transito_favoravel_tomador": true/false/null,
+  "acordo_parcelamento": "inexistente | vigente | descumprido",
+  "processo_suspenso": true/false,
+  "motivo_suspensao": "string ou null",
+  "intimacao_pagamento": true/false,
+  "determinacao_pagamento_seguradora": true/false,
+  "resumo_situacao": "1-2 frases descrevendo a situação processual atual"
+}}"""
+
+
+def build_summary_prompt(
+    processo_data: dict,
+    movimentacoes: list[dict],
+    cluster_processos: list[dict] | None = None,
+) -> str:
+    """Build the summarizer prompt (step 1 of 2-step classification)."""
+    # Format movements
+    movs_lines = []
+    for m in movimentacoes[:10]:
+        data = m.get("data", "s/d")
+        tipo = m.get("tipo", "")
+        conteudo = m.get("conteudo", "")
+        if conteudo:
+            conteudo = conteudo[:500]
+        movs_lines.append(f"[{data}] {tipo}: {conteudo}")
+
+    movs_text = "\n".join(movs_lines) if movs_lines else "Nenhuma movimentação disponível."
+
+    # Cluster
+    cluster_text = ""
+    if cluster_processos:
+        parts = []
+        for cp in cluster_processos:
+            num = cp.get("numero", "")
+            tipo = cp.get("tipo_relacao", "relacionado")
+            movs = cp.get("movimentacoes", [])
+            if movs:
+                lines = [
+                    f"  [{m.get('data', 's/d')}] {m.get('tipo', '')}: {m.get('conteudo', '')[:150]}"
+                    for m in movs[:5]
+                ]
+                parts.append(f"### {num} ({tipo})\n" + "\n".join(lines))
+            else:
+                parts.append(f"### {num} ({tipo})\n  Sem movimentações disponíveis")
+        cluster_text = (
+            f"\n## PROCESSOS CONEXOS\n\n"
+            + "\n\n".join(parts)
+        )
+
+    return SUMMARIZER_PROMPT.format(
+        nr_processo=processo_data.get("nr_processo", "N/A"),
+        materia=processo_data.get("materia", "N/A"),
+        fase=processo_data.get("fase", "N/A"),
+        nm_tomador=processo_data.get("nm_tomador", "N/A"),
+        movs_text=movs_text,
+        cluster_text=cluster_text,
+    )
+
+
+def build_classification_from_summary_prompt(
+    processo_data: dict,
+    summary: dict,
+) -> str:
+    """Build the classifier prompt using structured summary (step 2 of 2-step)."""
+    materia = (processo_data.get("materia") or "").lower().strip()
+    specialist_prompt = _MATERIA_PROMPTS.get(materia, FISCAL_PROMPT)
+
+    is_val = processo_data.get("vl_is_total")
+    is_str = f"R$ {is_val:,.2f}" if is_val else "Não informado"
+
+    # Format summary as readable text
+    summary_text = f"""- Embargos/Impugnação: {summary.get('embargos_status', 'desconhecido')}
+- Instância dos embargos: {summary.get('embargos_instancia', 'N/A')}
+- Recurso pendente nos embargos: {summary.get('embargos_recurso_pendente', 'N/A')}
+- Resultado em 2ª instância: {summary.get('embargos_resultado_2a_instancia', 'N/A')}
+- Ação Anulatória/MS: {summary.get('acao_anulatoria_status', 'inexistente')}
+- Recurso pendente na ação anulatória: {summary.get('acao_anulatoria_recurso_pendente', 'N/A')}
+- Trânsito em julgado: {summary.get('transito_em_julgado', False)}
+- Trânsito favorável ao Tomador: {summary.get('transito_favoravel_tomador', 'N/A')}
+- Acordo/Parcelamento: {summary.get('acordo_parcelamento', 'inexistente')}
+- Processo suspenso: {summary.get('processo_suspenso', False)} ({summary.get('motivo_suspensao', '')})
+- Intimação para pagamento: {summary.get('intimacao_pagamento', False)}
+- Determinação de pagamento pela seguradora: {summary.get('determinacao_pagamento_seguradora', False)}
+- Situação atual: {summary.get('resumo_situacao', 'N/A')}"""
+
+    return f"""{specialist_prompt}
+
+## INSTRUÇÕES
+
+Com base na ANÁLISE PROCESSUAL ESTRUTURADA abaixo, classifique o risco:
+
+1. Identifique em QUAL critério acima o processo se enquadra (cite a letra, ex: "Baixo C")
+2. Classifique: Baixo, Medio, Alto ou Altissimo
+3. Justifique citando o critério específico e a situação processual
+4. Recomende ação prática:
+   - Alto/Altíssimo: "Entrar em contato com o Tomador para avaliação de risco"
+   - Baixo/Médio: "Manter o acompanhamento regular do processo"
+
+## DADOS DO PROCESSO
+
+- Número: {processo_data.get('nr_processo', 'N/A')}
+- Matéria: {processo_data.get('materia', 'N/A')}
+- Fase: {processo_data.get('fase', 'N/A')}
+- Importância Segurada (IS): {is_str}
+- Tomador: {processo_data.get('nm_tomador', 'N/A')}
+- Rating: {processo_data.get('rating_tomador', 'N/A')}
+
+## ANÁLISE PROCESSUAL ESTRUTURADA
+
+{summary_text}
+
+Responda EXCLUSIVAMENTE em JSON válido com os campos: risco, justificativa, recomendacao, andamentos_resumo."""

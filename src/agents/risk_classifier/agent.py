@@ -15,7 +15,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from .schemas import RiskClassificationResult
-from .prompts import build_risk_prompt
+from .prompts import build_risk_prompt, build_summary_prompt, build_classification_from_summary_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,9 @@ async def classify_risk(
     provider: str = DEFAULT_PROVIDER,
 ) -> dict:
     """
-    Classify bond activation risk based on court movements.
+    Classify bond activation risk using 2-step pipeline:
+    1. Summarize: extract structured facts from raw movements
+    2. Classify: apply risk criteria to structured summary
 
     Args:
         processo_data: Dict with nr_processo, materia, fase, vl_is_total, nm_tomador, etc.
@@ -48,6 +50,73 @@ async def classify_risk(
     if model is None:
         model = DEFAULT_MODEL
 
+    total_input = 0
+    total_output = 0
+
+    # ── Step 1: Summarize movements into structured facts ──
+    summary_prompt = build_summary_prompt(processo_data, movimentacoes, cluster_processos)
+
+    summary_response: LLMResponse = await llm_provider.agenerate(
+        prompt=summary_prompt,
+        model=model,
+        temperature=0.0,
+    )
+
+    total_input += summary_response.input_tokens or 0
+    total_output += summary_response.output_tokens or 0
+
+    try:
+        summary = json.loads(summary_response.text)
+    except (json.JSONDecodeError, Exception) as e:
+        logger.warning(f"Summary parse failed, falling back to direct classification: {e}")
+        # Fallback: direct classification without summary
+        return await _classify_direct(llm_provider, processo_data, movimentacoes, cluster_processos, model, provider)
+
+    logger.info(f"Summary for {processo_data.get('nr_processo')}: {summary.get('resumo_situacao', 'N/A')}")
+
+    # ── Step 2: Classify based on structured summary ──
+    classify_prompt = build_classification_from_summary_prompt(processo_data, summary)
+
+    response: LLMResponse = await llm_provider.agenerate(
+        prompt=classify_prompt,
+        model=model,
+        temperature=0.1,
+        response_schema=RiskClassificationResult,
+    )
+
+    total_input += response.input_tokens or 0
+    total_output += response.output_tokens or 0
+
+    raw_response = response.text
+    try:
+        parsed_json = json.loads(raw_response)
+        classification = RiskClassificationResult(**parsed_json)
+    except (json.JSONDecodeError, Exception) as e:
+        logger.error(f"Failed to parse risk classification response: {e}")
+        classification = None
+        parsed_json = {"error": str(e), "raw": raw_response}
+
+    usage = {
+        "input_tokens": total_input,
+        "output_tokens": total_output,
+        "total_tokens": total_input + total_output,
+        "cost_usd": response.metadata.get("cost_usd", 0.0),
+        "model": model,
+        "provider": provider,
+    }
+
+    return {
+        "classification": classification.model_dump() if classification else parsed_json,
+        "summary": summary,
+        "raw_response": raw_response,
+        "usage": usage,
+    }
+
+
+async def _classify_direct(
+    llm_provider, processo_data, movimentacoes, cluster_processos, model, provider,
+) -> dict:
+    """Fallback: single-step classification (used when summarizer fails)."""
     prompt = build_risk_prompt(processo_data, movimentacoes, cluster_processos)
 
     response: LLMResponse = await llm_provider.agenerate(
