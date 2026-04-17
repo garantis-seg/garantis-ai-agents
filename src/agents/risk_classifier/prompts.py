@@ -269,10 +269,14 @@ def build_summary_prompt(
     movimentacoes: list[dict],
     cluster_processos: list[dict] | None = None,
 ) -> str:
-    """Build the summarizer prompt (step 1 of 2-step classification)."""
-    # Format movements
+    """Build the summarizer prompt (step 1 of 2-step classification).
+
+    Uses ALL available movements (up to 60) for maximum context,
+    unlike the classifier which uses only the 10 most recent.
+    """
+    # Format ALL movements (summarizer handles the volume)
     movs_lines = []
-    for m in movimentacoes[:10]:
+    for m in movimentacoes[:60]:
         data = m.get("data", "s/d")
         tipo = m.get("tipo", "")
         conteudo = m.get("conteudo", "")
