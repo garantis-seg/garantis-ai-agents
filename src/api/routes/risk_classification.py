@@ -28,6 +28,7 @@ async def classify_risk_endpoint(request: RiskClassificationRequest):
         result = await classify_risk(
             processo_data=request.processo_data,
             movimentacoes=request.movimentacoes,
+            cluster_processos=request.cluster_processos,
             provider=request.provider or "gemini",
             model=request.model,
         )

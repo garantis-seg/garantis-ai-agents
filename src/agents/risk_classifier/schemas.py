@@ -32,6 +32,10 @@ class RiskClassificationRequest(BaseModel):
 
     processo_data: dict = Field(description="Process metadata: nr_processo, materia, fase, etc.")
     movimentacoes: list[dict] = Field(description="List of movements from Escavador API")
+    cluster_processos: list[dict] | None = Field(
+        default=None,
+        description="Related processes with their movements for cluster context",
+    )
     provider: str | None = Field(default=None, description="LLM provider override")
     model: str | None = Field(default=None, description="Model override")
 

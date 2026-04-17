@@ -26,6 +26,7 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 async def classify_risk(
     processo_data: dict,
     movimentacoes: list[dict],
+    cluster_processos: list[dict] | None = None,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
 ) -> dict:
@@ -35,6 +36,7 @@ async def classify_risk(
     Args:
         processo_data: Dict with nr_processo, materia, fase, vl_is_total, nm_tomador, etc.
         movimentacoes: List of movement dicts from Escavador API
+        cluster_processos: Optional related processes with their movements
         model: Model name override (default: gemini-3-flash-preview)
         provider: LLM provider name (default: gemini)
 
@@ -46,7 +48,7 @@ async def classify_risk(
     if model is None:
         model = DEFAULT_MODEL
 
-    prompt = build_risk_prompt(processo_data, movimentacoes)
+    prompt = build_risk_prompt(processo_data, movimentacoes, cluster_processos)
 
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt,
@@ -95,11 +97,13 @@ class RiskClassifierAgent:
         self,
         processo_data: dict,
         movimentacoes: list[dict],
+        cluster_processos: list[dict] | None = None,
     ) -> dict:
         """Classify risk for a single process."""
         return await classify_risk(
             processo_data=processo_data,
             movimentacoes=movimentacoes,
+            cluster_processos=cluster_processos,
             model=self.model,
             provider=self.provider,
         )
