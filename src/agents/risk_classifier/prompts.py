@@ -130,15 +130,27 @@ Se o processo está suspenso por afetação a Tema Repetitivo no STJ ou STF (ex:
 - Trânsito em julgado + suspensão por tema = Alto (não Altíssimo), pois a execução está paralisada
 
 ### PROGRAMAS DE PARCELAMENTO INCENTIVADO (PPI, REFIS, TRANSAÇÃO PGFN)
-Adesão voluntária a programa de parcelamento incentivado (PPI, REFIS, Transação Excepcional PGFN) é DIFERENTE de acordo judicial:
-- Adesão a PPI/REFIS/Transação com garantia mantida = Baixo (o Tomador está regularizando o débito voluntariamente)
+Adesão a programa de parcelamento NÃO cancela decisões de mérito anteriores:
+- Adesão a PPI/REFIS/Transação SEM decisão desfavorável anterior = Baixo
+- Adesão a PPI/REFIS/Transação MAS com sentença desfavorável mantida em 2ª instância = manter o risco da decisão (Alto)
 - Acordo JUDICIAL de parcelamento homologado pelo juiz com manutenção da garantia = Médio
 - Descumprimento de qualquer acordo = Alto
+
+### EMBARGOS PROCEDENTES PARA NOVOS CÁLCULOS
+Quando embargos são julgados procedentes para "realização de novos cálculos" ou "retorno à fase de liquidação":
+- Isso é FAVORÁVEL ao Tomador = Baixo
+- O Tomador conseguiu desconstituir ou reduzir o débito cobrado
+- NÃO confunda com improcedência dos embargos
+
+### "AGUARDA ACEITAÇÃO DA APÓLICE"
+Se o processo ainda aguarda a decisão judicial sobre aceitação da apólice = Baixo.
+Mesmo que o processo esteja em fase recursal em outro aspecto, a situação da APÓLICE é o que importa.
 
 ### RECUPERAÇÃO JUDICIAL (OBRIGATÓRIO)
 Se "RECUPERAÇÃO JUDICIAL" ou "EM RJ" aparece no nome do Tomador:
 - Agrave o risco em PELO MENOS um nível (Baixo→Médio, Médio→Alto, Alto→Altíssimo)
 - NUNCA classifique como Baixo um Tomador em Recuperação Judicial, exceto se houve decisão favorável transitada em julgado
+- Se a ação anulatória/MS paralela tem decisão desfavorável mantida em 2ª instância + RJ = Altíssimo
 
 ### PROCESSO BAIXADO/ARQUIVADO — DEPENDE DO MOTIVO
 Processo baixado ou arquivado = Baixo SOMENTE se:
@@ -150,12 +162,14 @@ Se o processo foi arquivado após trânsito em julgado DESFAVORÁVEL ao Tomador,
 Decisão desfavorável em 2ª instância com RE/REsp/Agravo pendente = ALTO (não Médio).
 Recursos para tribunais superiores (STJ/STF/TST) NÃO têm efeito suspensivo automático.
 
-### PROCESSOS CONEXOS (CLUSTER)
+### PROCESSOS CONEXOS (CLUSTER) — CUIDADO COM INFERÊNCIAS
 Se houver dados de processos conexos (embargos, ações anulatórias, recursos):
-- Use os conexos para ENTENDER o estágio processual, não para agravar automaticamente
-- Conexo com resultado FAVORÁVEL ao Tomador = confirma risco Baixo (não agrave)
-- Conexo com resultado DESFAVORÁVEL = use para determinar o estágio correto na tabela de progressão
-- Se o conexo não tiver decisão de mérito (apenas andamentos de rotina), IGNORE-O na classificação
+- Use APENAS para entender o estágio, NUNCA para agravar automaticamente
+- Conexo com resultado FAVORÁVEL ao Tomador (procedente, parcialmente procedente) = Baixo
+- Conexo com resultado EXPLICITAMENTE DESFAVORÁVEL (palavras "improcedente", "desfavorável", "condenado") = use a tabela de progressão
+- **Se as movimentações do conexo NÃO dizem explicitamente "improcedente" ou "desfavorável", NÃO assuma que o resultado foi desfavorável** — trate como "sem decisão" = Baixo
+- A mera existência de recurso/apelação no conexo NÃO significa que houve decisão desfavorável — pode ser recurso do Fisco contra decisão favorável
+- Se o conexo tem apenas andamentos procedimentais (expedição, intimação, remessa, despacho), IGNORE-O
 
 ### REGRA DE DESEMPATE
 Quando em dúvida entre dois níveis, escolha o MAIS ALTO — a seguradora prefere ser conservadora.
