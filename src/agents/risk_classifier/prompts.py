@@ -98,26 +98,6 @@ CALIBRATION_RULES = """
 6. **Processo BAIXADO/ARQUIVADO = Baixo**. Se o processo já foi encerrado (baixa definitiva, arquivamento), o risco de acionamento é Baixo independente do histórico, pois não há mais cobrança ativa. Mencione na justificativa que o processo está encerrado.
 """
 
-# ══════════════════════════════════════════════════════════════════════════════
-# EXEMPLOS DE REFERÊNCIA — few-shot examples para calibrar a LLM
-#
-# Formato: NÍVEL | Matéria: "Situação" → Recomendação: "Ação"
-# Adicione exemplos reais (especialmente os que Poletto classificou)
-# para melhorar a concordância.
-# ══════════════════════════════════════════════════════════════════════════════
-
-EXAMPLES = """
-## EXEMPLOS DE CLASSIFICAÇÃO (referência)
-
-ALTÍSSIMO | Tributário: "Apólice apresentada em Ação Anulatória com sentença desfavorável ao Tomador transitada em julgado." → Recomendação: "Entrar em contato com o Tomador e questionar como pagará o débito"
-ALTO | Tributário: "Embargos julgados improcedentes com resultado desfavorável mantido em 2ª Instância, ainda não transitado em julgado." → Recomendação: "Entrar em contato com o Tomador a fim de verificar como pagará o débito"
-ALTO | Cível: "Impugnação julgada improcedente com recursos sem efeito suspensivo." → Recomendação: "Entrar em contato com o Tomador"
-ALTO | Trabalhista: "Acórdão desfavorável nos embargos à execução. Ação principal transitada em julgado, tomador ainda não intimado para pagamento." → Recomendação: "Verificar como pagará o débito"
-MÉDIO | Tributário: "Embargos julgados improcedentes e prazo em curso para recorrer da sentença." → Recomendação: "Manter o acompanhamento"
-BAIXO | Tributário: "Apólice aceita com embargos julgados procedentes. Execução fiscal suspensa." → Recomendação: "Manter o acompanhamento"
-"""
-
-
 def build_risk_prompt(processo_data: dict, movimentacoes: list[dict]) -> str:
     """Build the classification prompt with process data and movements.
 
@@ -146,8 +126,6 @@ def build_risk_prompt(processo_data: dict, movimentacoes: list[dict]) -> str:
 Sua tarefa é classificar o RISCO DE ACIONAMENTO de uma apólice de seguro garantia com base nos andamentos processuais mais recentes.
 
 {RISK_MATRIX}
-
-{EXAMPLES}
 
 {CALIBRATION_RULES}
 
