@@ -42,6 +42,7 @@ async def classify_risk_endpoint(request: RiskClassificationRequest):
 
         return RiskClassificationResponse(
             classification=RiskClassificationResult(**classification_data),
+            summary=result.get("summary"),
             usage=result.get("usage", {}),
         )
 

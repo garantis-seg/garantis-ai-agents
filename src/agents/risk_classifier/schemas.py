@@ -91,4 +91,8 @@ class RiskClassificationResponse(BaseModel):
     """Response from risk classification endpoint."""
 
     classification: RiskClassificationResult
+    summary: Optional[dict] = Field(
+        default=None,
+        description="Structured process summary from summarizer step (2-step pipeline)",
+    )
     usage: dict = Field(default_factory=dict)
