@@ -96,11 +96,18 @@ A classificação depende do ESTÁGIO atual dos embargos/impugnação, não apen
 | Estágio dos Embargos/Impugnação | Risco |
 |--------------------------------|-------|
 | Opostos, ainda sem julgamento | Baixo |
-| Julgados IMPROCEDENTES + recurso interposto com efeito suspensivo | Médio |
-| Julgados IMPROCEDENTES + prazo para recurso em curso (sem recurso interposto ainda) | Alto |
+| Julgados IMPROCEDENTES + prazo para recurso em curso (sem recurso interposto ainda) | Médio |
+| Julgados IMPROCEDENTES + recurso interposto (apelação pendente de julgamento) | Médio |
 | Julgados IMPROCEDENTES + resultado mantido em 2ª instância (sem trânsito em julgado) | Alto |
 | Julgados IMPROCEDENTES + trânsito em julgado | Altíssimo |
 | Julgados PROCEDENTES (tomador venceu a discussão do débito) | Baixo |
+| Julgados PARCIALMENTE PROCEDENTES (tomador ganhou em parte) | Baixo |
+
+### SENTENÇA "PARCIALMENTE PROCEDENTE"
+Sentença parcialmente procedente geralmente FAVORECE o Tomador — significa que ele ganhou ao menos parte da discussão.
+- Parcialmente procedente com suspensão da exigibilidade = Baixo
+- Parcialmente procedente + recurso do Fisco = Baixo (tomador na posição favorável)
+- NÃO confunda com "improcedente" (onde o tomador perdeu tudo)
 
 ### AÇÃO ANULATÓRIA / MANDADO DE SEGURANÇA PARALELO
 Quando a execução fiscal está suspensa aguardando ação anulatória ou MS:
@@ -117,6 +124,17 @@ Quando a execução fiscal está suspensa aguardando ação anulatória ou MS:
 - Extinção sem resolução de mérito = Baixo (não houve condenação)
 - Embargos PROCEDENTES transitados em julgado = Baixo (tomador venceu)
 
+### SUSPENSÃO POR TEMA REPETITIVO (STJ/STF)
+Se o processo está suspenso por afetação a Tema Repetitivo no STJ ou STF (ex: "Tema 1263"):
+- A suspensão paralisa efetivamente a execução — desça UM nível em relação ao que seria sem a suspensão
+- Trânsito em julgado + suspensão por tema = Alto (não Altíssimo), pois a execução está paralisada
+
+### PROGRAMAS DE PARCELAMENTO INCENTIVADO (PPI, REFIS, TRANSAÇÃO PGFN)
+Adesão voluntária a programa de parcelamento incentivado (PPI, REFIS, Transação Excepcional PGFN) é DIFERENTE de acordo judicial:
+- Adesão a PPI/REFIS/Transação com garantia mantida = Baixo (o Tomador está regularizando o débito voluntariamente)
+- Acordo JUDICIAL de parcelamento homologado pelo juiz com manutenção da garantia = Médio
+- Descumprimento de qualquer acordo = Alto
+
 ### RECUPERAÇÃO JUDICIAL (OBRIGATÓRIO)
 Se "RECUPERAÇÃO JUDICIAL" ou "EM RJ" aparece no nome do Tomador:
 - Agrave o risco em PELO MENOS um nível (Baixo→Médio, Médio→Alto, Alto→Altíssimo)
@@ -132,9 +150,12 @@ Se o processo foi arquivado após trânsito em julgado DESFAVORÁVEL ao Tomador,
 Decisão desfavorável em 2ª instância com RE/REsp/Agravo pendente = ALTO (não Médio).
 Recursos para tribunais superiores (STJ/STF/TST) NÃO têm efeito suspensivo automático.
 
-### PARCELAMENTO/ACORDO
-Acordo para parcelamento com manutenção da garantia = Médio.
-Descumprimento do acordo pelo Tomador = Alto.
+### PROCESSOS CONEXOS (CLUSTER)
+Se houver dados de processos conexos (embargos, ações anulatórias, recursos):
+- Use os conexos para ENTENDER o estágio processual, não para agravar automaticamente
+- Conexo com resultado FAVORÁVEL ao Tomador = confirma risco Baixo (não agrave)
+- Conexo com resultado DESFAVORÁVEL = use para determinar o estágio correto na tabela de progressão
+- Se o conexo não tiver decisão de mérito (apenas andamentos de rotina), IGNORE-O na classificação
 
 ### REGRA DE DESEMPATE
 Quando em dúvida entre dois níveis, escolha o MAIS ALTO — a seguradora prefere ser conservadora.
