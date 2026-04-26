@@ -5,7 +5,6 @@ Provides OCR correction, text formatting, and other text processing tasks.
 """
 
 from .agent import (
-    TextProcessorAgent,
     correct_ocr_text,
     format_text,
     extract_key_info,
@@ -20,7 +19,6 @@ from .schemas import (
 )
 
 __all__ = [
-    "TextProcessorAgent",
     "correct_ocr_text",
     "format_text",
     "extract_key_info",

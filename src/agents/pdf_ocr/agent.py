@@ -124,30 +124,3 @@ async def convert_pdf_to_markdown(
         )
 
 
-class PdfOcrAgent:
-    """
-    Agent for PDF OCR conversion.
-
-    Class-based interface for PDF-to-Markdown conversion.
-    """
-
-    def __init__(
-        self,
-        provider: str = DEFAULT_PROVIDER,
-        model: Optional[str] = None,
-    ):
-        self.provider = provider
-        self.model = model or DEFAULT_OCR_MODEL
-
-    async def convert(
-        self,
-        pdf_bytes: bytes,
-        filename: str = "document.pdf",
-    ) -> PdfOcrResult:
-        """Convert PDF to Markdown."""
-        return await convert_pdf_to_markdown(
-            pdf_bytes=pdf_bytes,
-            filename=filename,
-            model=self.model,
-            provider_name=self.provider,
-        )

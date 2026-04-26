@@ -10,7 +10,6 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from ...agents.edital_categorizer import (
-    EditalCategorizerAgent,
     categorize_edital,
     categorize_l1,
     categorize_l2,

@@ -6,7 +6,6 @@ matching would miss. For example: "mjradv.com.br" = "Moraes Junior Advogados"
 """
 
 from .agent import (
-    DomainValidatorAgent,
     validate_domain,
     validate_domains_batch,
 )
@@ -17,7 +16,6 @@ from .schemas import (
 )
 
 __all__ = [
-    "DomainValidatorAgent",
     "validate_domain",
     "validate_domains_batch",
     "DomainValidationRequest",

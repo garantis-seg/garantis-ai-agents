@@ -5,7 +5,6 @@ Categorizes government bidding documents (editais) into L1/L2/L3 hierarchy.
 """
 
 from .agent import (
-    EditalCategorizerAgent,
     categorize_edital,
     categorize_l1,
     categorize_l2,
@@ -22,7 +21,6 @@ from .schemas import (
 )
 
 __all__ = [
-    "EditalCategorizerAgent",
     "categorize_edital",
     "categorize_l1",
     "categorize_l2",

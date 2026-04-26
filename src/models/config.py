@@ -3,7 +3,7 @@ Configuração de modelos LLM e pricing.
 """
 
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict
 
 
 @dataclass
@@ -90,32 +90,3 @@ def calculate_cost(
     )
 
 
-def list_available_models() -> list:
-    """
-    Lista todos os modelos disponíveis.
-
-    Returns:
-        Lista de nomes de modelos.
-    """
-    return list(MODEL_REGISTRY.keys())
-
-
-def get_model_info(model: str) -> Optional[dict]:
-    """
-    Retorna informações sobre um modelo.
-
-    Args:
-        model: Nome do modelo
-
-    Returns:
-        Dicionário com informações ou None se não existir.
-    """
-    if model not in MODEL_REGISTRY:
-        return None
-
-    pricing = MODEL_REGISTRY[model]
-    return {
-        "name": model,
-        "input_cost_per_million": pricing.input_per_million,
-        "output_cost_per_million": pricing.output_per_million,
-    }

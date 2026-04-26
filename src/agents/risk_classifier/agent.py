@@ -154,28 +154,3 @@ async def _classify_direct(
     }
 
 
-class RiskClassifierAgent:
-    """Wrapper class for risk classification agent."""
-
-    def __init__(
-        self,
-        provider: str = DEFAULT_PROVIDER,
-        model: Optional[str] = None,
-    ):
-        self.provider = provider
-        self.model = model or DEFAULT_MODEL
-
-    async def classify(
-        self,
-        processo_data: dict,
-        movimentacoes: list[dict],
-        cluster_processos: list[dict] | None = None,
-    ) -> dict:
-        """Classify risk for a single process."""
-        return await classify_risk(
-            processo_data=processo_data,
-            movimentacoes=movimentacoes,
-            cluster_processos=cluster_processos,
-            model=self.model,
-            provider=self.provider,
-        )
