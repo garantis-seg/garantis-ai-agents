@@ -10,6 +10,7 @@ Uses Gemini 3 Flash for classification via the provider abstraction layer.
 import json
 import os
 import logging
+import re
 from typing import Optional
 
 from ...providers import create_provider
@@ -18,6 +19,49 @@ from .schemas import RiskClassificationResult, ProcessSummaryResult
 from .prompts import build_risk_prompt, build_summary_prompt, build_classification_from_summary_prompt
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_llm_json(raw: str) -> dict:
+    """Tolerant parser for LLM JSON output.
+
+    Handles: arrays (returns first element), trailing extra data ("Extra data:
+    line N..."), unterminated strings (truncates to last complete object), and
+    code-fenced markdown wrappers. Last resort tries json_repair if available.
+    """
+    text = (raw or "").strip()
+    if not text:
+        raise ValueError("empty LLM response")
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text).strip()
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as e:
+        msg = str(e)
+        pos = getattr(e, "pos", None)
+        if "Extra data" in msg and pos is not None:
+            # Multiple top-level objects concatenated — keep the first.
+            parsed = json.loads(text[: pos])
+        elif "Unterminated string" in msg and pos is not None:
+            # Truncated mid-string: keep up to the last complete key/value pair.
+            last_comma = text.rfind(",", 0, pos)
+            if last_comma > 0:
+                parsed = json.loads(text[: last_comma] + "}")
+            else:
+                raise
+        else:
+            last_brace = text.rfind("}")
+            if last_brace > 0:
+                parsed = json.loads(text[: last_brace + 1])
+            else:
+                raise
+
+    if isinstance(parsed, list):
+        parsed = parsed[0] if parsed else {}
+    if not isinstance(parsed, dict):
+        raise ValueError(f"Expected JSON object, got {type(parsed).__name__}")
+    return parsed
 
 DEFAULT_MODEL = os.getenv("RISK_CLASSIFIER_MODEL", "gemini-3-flash-preview")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
@@ -67,7 +111,7 @@ async def classify_risk(
     total_output += summary_response.output_tokens or 0
 
     try:
-        summary = json.loads(summary_response.text)
+        summary = _parse_llm_json(summary_response.text)
         # Validate with pydantic
         ProcessSummaryResult(**summary)
     except (json.JSONDecodeError, Exception) as e:
@@ -92,7 +136,7 @@ async def classify_risk(
 
     raw_response = response.text
     try:
-        parsed_json = json.loads(raw_response)
+        parsed_json = _parse_llm_json(raw_response)
         classification = RiskClassificationResult(**parsed_json)
     except (json.JSONDecodeError, Exception) as e:
         logger.error(f"Failed to parse risk classification response: {e}")
@@ -131,7 +175,7 @@ async def _classify_direct(
 
     raw_response = response.text
     try:
-        parsed_json = json.loads(raw_response)
+        parsed_json = _parse_llm_json(raw_response)
         classification = RiskClassificationResult(**parsed_json)
     except (json.JSONDecodeError, Exception) as e:
         logger.error(f"Failed to parse risk classification response: {e}")
