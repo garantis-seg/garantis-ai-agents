@@ -24,7 +24,7 @@ class PdfOcrRequest(BaseModel):
 
     pdf_base64: str = Field(description="Base64-encoded PDF bytes")
     filename: str = Field(default="document.pdf", description="Original filename")
-    model: Optional[str] = Field(default=None, description="Gemini model (default: gemini-2.0-flash)")
+    model: Optional[str] = Field(default=None, description="Gemini model (default: gemini-2.5-flash-lite)")
     provider: Optional[str] = Field(default=None, description="LLM provider (default: gemini)")
 
 

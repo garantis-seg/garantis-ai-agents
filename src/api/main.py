@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
     """Lifecycle management da aplicação."""
     logger.info("Iniciando garantis-ai-agents...")
     logger.info(f"Provider padrão: {os.getenv('DEFAULT_PROVIDER', 'gemini')}")
-    logger.info(f"Modelo padrão: {os.getenv('DEFAULT_MODEL', 'gemini-2.0-flash')}")
+    logger.info(f"Modelo padrão: {os.getenv('DEFAULT_MODEL', 'gemini-2.5-flash-lite')}")
     logger.info(f"Prompt padrão: {os.getenv('DEFAULT_PROMPT_VERSION', 'v3')}")
 
     yield

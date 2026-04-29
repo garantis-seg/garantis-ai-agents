@@ -36,7 +36,7 @@ async def convert_pdf_to_markdown(
     Args:
         pdf_bytes: Raw PDF file bytes
         filename: Original filename (for logging)
-        model: Gemini model to use (default: gemini-2.0-flash)
+        model: Gemini model to use (default: gemini-2.5-flash-lite)
         provider_name: LLM provider (default: gemini)
 
     Returns:

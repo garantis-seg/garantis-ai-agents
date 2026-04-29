@@ -110,7 +110,7 @@ class CategorizationResult(BaseModel):
 
     # Metadata
     provider: str = Field(default="gemini")
-    model: str = Field(default="gemini-2.0-flash-lite")
+    model: str = Field(default="gemini-2.5-flash-lite")
     tokens_used: int = Field(default=0)
     cost_usd: float = Field(default=0.0)
 

@@ -31,7 +31,7 @@ steps:
       - '--timeout'
       - '300'
       - '--set-env-vars'
-      - 'DEFAULT_MODEL=gemini-2.0-flash-lite,DEFAULT_PROMPT_VERSION=v3'
+      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,DEFAULT_PROMPT_VERSION=v3'
       - '--set-secrets'
       - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
 

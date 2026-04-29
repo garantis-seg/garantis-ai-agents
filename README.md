@@ -13,7 +13,7 @@ Repositório centralizado de AI Agents com suporte a múltiplos LLM providers.
 
 ## Providers Suportados
 
-- **Gemini** (Google) - Default: `gemini-2.0-flash-lite` ✨ (75% custo reduzido)
+- **Gemini** (Google) - Default: `gemini-2.5-flash-lite` ✨
 - **OpenAI** (GPT-4o, GPT-4o-mini)
 - **Groq** (Llama 3.3 70B)
 - **OpenRouter** (múltiplos modelos)
@@ -61,7 +61,7 @@ uvicorn src.api.main:app --reload
 |----------|-----------|---------|
 | `GOOGLE_API_KEY` | Chave API do Gemini | - |
 | `DEFAULT_PROVIDER` | Provider padrão | `gemini` |
-| `DEFAULT_MODEL` | Modelo padrão | `gemini-2.0-flash` |
+| `DEFAULT_MODEL` | Modelo padrão | `gemini-2.5-flash-lite` |
 
 ## License
 

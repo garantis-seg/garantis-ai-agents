@@ -41,7 +41,7 @@ MODEL_REGISTRY: Dict[str, ModelPricing] = {
 }
 
 # Modelo padrão
-DEFAULT_MODEL = "gemini-2.0-flash"
+DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
 
 def get_model_pricing(model: str) -> ModelPricing:
@@ -58,7 +58,7 @@ def get_model_pricing(model: str) -> ModelPricing:
     if model in MODEL_REGISTRY:
         return MODEL_REGISTRY[model]
 
-    # Tentar match por prefixo (ex: "gemini-2.0-flash-exp" -> "gemini-2.0-flash")
+    # Tentar match por prefixo (ex: "gemini-2.5-flash-preview-05-20" -> "gemini-2.5-flash")
     for key in MODEL_REGISTRY:
         if model.startswith(key):
             return MODEL_REGISTRY[key]
