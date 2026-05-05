@@ -3,11 +3,11 @@
 import json
 import logging
 import os
-import re
 from typing import Optional
 
 from ...providers import create_provider
 from ...providers.base import LLMResponse
+from ...utils.llm_json import parse_llm_json
 from .prompts import build_mov_prompt
 from .schemas import MovCardSummary, MovInput, ProcessoContext
 
@@ -15,42 +15,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = os.getenv("MOV_SUMMARIZER_MODEL", "gemini-2.5-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
-
-
-def _parse_llm_json(raw: str) -> dict:
-    """Tolerant JSON parser (mirrors risk_classifier / apolice_lifecycle)."""
-    text = (raw or "").strip()
-    if not text:
-        raise ValueError("empty LLM response")
-    if text.startswith("```"):
-        text = re.sub(r"^```(?:json)?\s*", "", text)
-        text = re.sub(r"\s*```$", "", text).strip()
-
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError as e:
-        msg = str(e)
-        pos = getattr(e, "pos", None)
-        if "Extra data" in msg and pos is not None:
-            parsed = json.loads(text[:pos])
-        elif "Unterminated string" in msg and pos is not None:
-            last_comma = text.rfind(",", 0, pos)
-            if last_comma > 0:
-                parsed = json.loads(text[:last_comma] + "}")
-            else:
-                raise
-        else:
-            last_brace = text.rfind("}")
-            if last_brace > 0:
-                parsed = json.loads(text[:last_brace + 1])
-            else:
-                raise
-
-    if isinstance(parsed, list):
-        parsed = parsed[0] if parsed else {}
-    if not isinstance(parsed, dict):
-        raise ValueError(f"Expected JSON object, got {type(parsed).__name__}")
-    return parsed
 
 
 async def classify_mov(
@@ -84,7 +48,7 @@ async def classify_mov(
 
     raw_response = response.text
     try:
-        parsed = _parse_llm_json(raw_response)
+        parsed = parse_llm_json(raw_response)
         # Garantir que mov_id e data ecoem o input mesmo se LLM resetou
         parsed.setdefault("mov_id", mov.mov_id)
         if mov.data and not parsed.get("data"):
