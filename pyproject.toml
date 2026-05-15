@@ -16,6 +16,11 @@ dependencies = [
     "pydantic>=2.10.0",
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
+    # Kept in sync with requirements.txt (the Dockerfile installs from
+    # requirements.txt; pyproject is used for wheel/local installs). Drift
+    # here previously omitted garantis-shared → import failure on any
+    # pyproject-based build path.
+    "garantis-shared>=1.13.0",
 ]
 
 [project.optional-dependencies]
