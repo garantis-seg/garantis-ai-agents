@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from garantis_shared.logging_setup import setup_logging
 
-from .routes import apolice_lifecycle, categorization, health, mov_summarizer, pdf, prompts, providers, risk_classification, summarization, text, timing, validation
+from .routes import apolice_lifecycle, categorization, health, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, risk_classification, summarization, text, timing, validation
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -65,6 +65,9 @@ app.include_router(pdf.router)
 app.include_router(risk_classification.router)
 app.include_router(apolice_lifecycle.router)
 app.include_router(mov_summarizer.router)
+app.include_router(mov_factsheet.router)
+app.include_router(processo_synthesis.router)
+app.include_router(merito_synthesis.router)
 
 
 @app.get("/")
