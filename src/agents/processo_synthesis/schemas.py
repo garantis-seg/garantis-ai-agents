@@ -13,14 +13,15 @@ from pydantic import BaseModel, Field
 
 
 class DecisaoVigente(BaseModel):
-    """Decisao judicial atualmente em vigor neste processo."""
+    """Decisao judicial atualmente em vigor neste processo.
 
-    sentido: Optional[Literal["favoravel", "desfavoravel", "parcial", "neutro"]] = None
-    instancia: Optional[Literal["1g", "2g", "stj", "stf"]] = None
-    natureza: Optional[Literal[
-        "procedente", "improcedente", "parcialmente_procedente",
-        "extinto_sem_merito", "homologatoria", "interlocutoria",
-    ]] = None
+    Literais foram afrouxados pra Optional[str] (LLM gera valores fora-da-lista
+    ocasionalmente; melhor recordar que falhar parse).
+    """
+
+    sentido: Optional[str] = None  # ideal: favoravel | desfavoravel | parcial | neutro
+    instancia: Optional[str] = None  # ideal: 1g | 2g | stj | stf
+    natureza: Optional[str] = None  # ideal: procedente | improcedente | parcialmente_procedente | extinto_sem_merito | homologatoria | interlocutoria
     data: Optional[str] = Field(default=None, description="YYYY-MM-DD da decisao")
     transito_certificado: bool = False
     recorrida: bool = Field(
@@ -34,16 +35,9 @@ class LifecycleGarantiaEvent(BaseModel):
 
     data: Optional[str] = Field(default=None, description="YYYY-MM-DD")
     mov_id: Optional[str] = None
-    evento: Literal[
-        "apresentacao", "aceitacao", "recusa", "levantamento", "substituicao", "reforço",
-    ]
-    tipo_garantia: Optional[Literal[
-        "seguro_garantia", "fianca_bancaria", "carta_fianca",
-        "deposito_judicial", "penhora", "fiduciaria", "outras",
-    ]] = None
-    status_pos: Literal[
-        "apresentado", "aceito", "recusado", "levantado", "substituido", "nenhum",
-    ]
+    evento: Optional[str] = None  # ideal: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço
+    tipo_garantia: Optional[str] = None  # ideal: seguro_garantia | fianca_bancaria | carta_fianca | deposito_judicial | penhora | fiduciaria | outras
+    status_pos: Optional[str] = None  # ideal: apresentado | aceito | recusado | levantado | substituido | nenhum
     motivo_recusa: Optional[str] = None
 
 
@@ -71,9 +65,9 @@ class ProcessoSynthesisCard(BaseModel):
     processo_numero: str = Field(description="CNJ digits-only ou formatado")
     classe: Optional[str] = None
     classe_cnj_code: Optional[int] = None
-    role_no_merito: Optional[Literal["principal", "conexo"]] = Field(
+    role_no_merito: Optional[str] = Field(
         default=None,
-        description="Echo do role declarado no input (do mapeamento merito_membros)",
+        description="Echo do role declarado no input (do mapeamento merito_membros). Ideal: 'principal' | 'conexo'",
     )
 
     # Campo 1: estado processual
@@ -92,15 +86,15 @@ class ProcessoSynthesisCard(BaseModel):
     )
 
     # Campo 4: risco intermediario do processo
-    risco_processo_intermediario: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo"]] = Field(
+    risco_processo_intermediario: Optional[str] = Field(
         default="Baixo",
-        description="Risco SO deste processo. NAO e o risco do merito (esse e camada 3)."
+        description="Risco SO deste processo (Baixo|Medio|Alto|Altissimo). NAO e o risco do merito (esse e camada 3)."
     )
 
     # Campo 5: trajetoria dentro do processo
-    trajetoria_dentro_processo: Literal["estavel", "deteriorando", "melhorando", "indefinida"] = Field(
+    trajetoria_dentro_processo: Optional[str] = Field(
         default="indefinida",
-        description="Sentido da evolucao do risco ao longo das movs deste processo",
+        description="Sentido da evolucao (estavel|deteriorando|melhorando|indefinida)",
     )
 
     # Campo 6: peca-pivo candidata

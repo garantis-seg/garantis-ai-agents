@@ -14,14 +14,15 @@ from pydantic import BaseModel, Field
 
 
 class DecisaoAtual(BaseModel):
-    """Decisao judicial atualmente vigente no merito (do processo mais relevante)."""
+    """Decisao judicial atualmente vigente no merito (do processo mais relevante).
 
-    sentido: Optional[Literal["favoravel", "desfavoravel", "parcial", "neutro"]] = None
-    instancia: Optional[Literal["1g", "2g", "stj", "stf"]] = None
-    natureza: Optional[Literal[
-        "procedente", "improcedente", "parcialmente_procedente",
-        "extinto_sem_merito", "homologatoria", "interlocutoria",
-    ]] = None
+    Literais afrouxados pra Optional[str] (LLM gera valores fora-da-lista
+    ocasionalmente).
+    """
+
+    sentido: Optional[str] = None  # ideal: favoravel | desfavoravel | parcial | neutro
+    instancia: Optional[str] = None  # ideal: 1g | 2g | stj | stf
+    natureza: Optional[str] = None  # ideal: procedente | improcedente | parcialmente_procedente | extinto_sem_merito | homologatoria | interlocutoria
     data: Optional[str] = Field(default=None, description="YYYY-MM-DD")
     processo_de_origem: Optional[str] = Field(
         default=None,
@@ -36,14 +37,9 @@ class CicloGarantiaEvent(BaseModel):
 
     data: Optional[str] = None
     processo_numero: Optional[str] = None
-    evento: Literal[
-        "apresentacao", "aceitacao", "recusa", "levantamento",
-        "substituicao", "reforço",
-    ]
+    evento: Optional[str] = None  # ideal: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço
     tipo_garantia: Optional[str] = None
-    status_pos: Literal[
-        "apresentado", "aceito", "recusado", "levantado", "substituido", "nenhum",
-    ]
+    status_pos: Optional[str] = None  # ideal: apresentado | aceito | recusado | levantado | substituido | nenhum
     motivo_recusa: Optional[str] = None
 
 
@@ -62,13 +58,10 @@ class PecaPivoMerito(BaseModel):
 class EvidenceArtifact(BaseModel):
     """Citacao de card consumido pra sustentar a sintese."""
 
-    kind: Literal[
-        "processo_synthesis", "mov_factsheet", "apolice", "conexo",
-        "cda", "aiim", "tomador", "merito",
-    ]
-    ref: str = Field(description="processo_numero, mov_id, merito_id, ou outro identificador")
-    snippet: str = Field(description="Trecho citado (~200 chars)")
-    weight: Literal["high", "medium", "low"]
+    kind: Optional[str] = None  # ideal: processo_synthesis | mov_factsheet | apolice | conexo | cda | aiim | tomador | merito
+    ref: Optional[str] = Field(default=None, description="processo_numero, mov_id, merito_id, ou outro identificador")
+    snippet: Optional[str] = Field(default=None, description="Trecho citado (~200 chars)")
+    weight: Optional[str] = None  # ideal: high | medium | low
 
 
 # ── Output card principal ─────────────────────────────────────────────────
@@ -86,9 +79,9 @@ class MeritoSynthesisCard(BaseModel):
     merito_context: Literal["monit_poletto", "global"] = "monit_poletto"
 
     # Output principal - risco + justificativa
-    risco: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo"]] = Field(
+    risco: Optional[str] = Field(
         default="Baixo",
-        description="Risco de acionamento da apolice no MERITO (nao por processo)"
+        description="Risco de acionamento da apolice no MERITO (Baixo|Medio|Alto|Altissimo)"
     )
     justificativa: Optional[str] = Field(
         default="",
@@ -124,9 +117,7 @@ class MeritoSynthesisCard(BaseModel):
 
     # Trajetoria - computada externamente baseada em snapshot anterior
     # (LLM NAO preenche esses campos; orchestrator setta antes de persistir)
-    trajetoria: Optional[Literal[
-        "estavel", "piorou", "melhorou", "primeira_classificacao",
-    ]] = None
+    trajetoria: Optional[str] = None  # ideal: estavel | piorou | melhorou | primeira_classificacao
     trajetoria_motivo: Optional[str] = None
 
     # Meta
