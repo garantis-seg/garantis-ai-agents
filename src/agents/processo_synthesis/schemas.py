@@ -77,7 +77,8 @@ class ProcessoSynthesisCard(BaseModel):
     )
 
     # Campo 1: estado processual
-    estado_processual: str = Field(
+    estado_processual: Optional[str] = Field(
+        default="",
         description="1-2 frases PT-BR descrevendo o estado atual do processo",
     )
 
@@ -91,7 +92,8 @@ class ProcessoSynthesisCard(BaseModel):
     )
 
     # Campo 4: risco intermediario do processo
-    risco_processo_intermediario: Literal["Baixo", "Medio", "Alto", "Altissimo"] = Field(
+    risco_processo_intermediario: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo"]] = Field(
+        default="Baixo",
         description="Risco SO deste processo. NAO e o risco do merito (esse e camada 3)."
     )
 

@@ -101,6 +101,10 @@ class GeminiProvider(BaseLLMProvider):
         if response_schema:
             config_params["response_mime_type"] = "application/json"
             config_params["response_schema"] = response_schema
+        elif kwargs.get("response_mime_type"):
+            # Permite forcar JSON output sem passar response_schema
+            # (necessario quando schema tem dict[str, Any] que Gemini Developer API rejeita)
+            config_params["response_mime_type"] = kwargs["response_mime_type"]
 
         config = self._types.GenerateContentConfig(**config_params)
 
@@ -165,6 +169,10 @@ class GeminiProvider(BaseLLMProvider):
         if response_schema:
             config_params["response_mime_type"] = "application/json"
             config_params["response_schema"] = response_schema
+        elif kwargs.get("response_mime_type"):
+            # Permite forcar JSON output sem passar response_schema
+            # (necessario quando schema tem dict[str, Any] que Gemini Developer API rejeita)
+            config_params["response_mime_type"] = kwargs["response_mime_type"]
 
         config = self._types.GenerateContentConfig(**config_params)
 

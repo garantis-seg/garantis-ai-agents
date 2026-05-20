@@ -86,10 +86,12 @@ class MeritoSynthesisCard(BaseModel):
     merito_context: Literal["monit_poletto", "global"] = "monit_poletto"
 
     # Output principal - risco + justificativa
-    risco: Literal["Baixo", "Medio", "Alto", "Altissimo"] = Field(
+    risco: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo"]] = Field(
+        default="Baixo",
         description="Risco de acionamento da apolice no MERITO (nao por processo)"
     )
-    justificativa: str = Field(
+    justificativa: Optional[str] = Field(
+        default="",
         description="2-4 paragrafos PT-BR citando evidencias dos cards consumidos"
     )
     narrativa_executiva: Optional[str] = Field(

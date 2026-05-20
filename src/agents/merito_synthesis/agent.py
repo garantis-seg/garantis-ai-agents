@@ -47,12 +47,13 @@ async def classify_merito_synthesis(
     prompt = build_merito_synthesis_prompt(request)
 
     # NOTA: response_schema dropado (Gemini Developer API rejeita
-    # additionalProperties gerado por dict no schema). parse_llm_json
-    # extrai JSON com fallback regex robusto.
+    # additionalProperties gerado por dict no schema).
+    # response_mime_type='application/json' forca JSON output sem schema.
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt,
         model=model,
         temperature=0.1,
+        response_mime_type="application/json",
     )
 
     raw_response = response.text
