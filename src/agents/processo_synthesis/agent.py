@@ -46,11 +46,13 @@ async def classify_processo_synthesis(
     llm_provider = create_provider(provider)
     prompt = build_processo_synthesis_prompt(request)
 
+    # NOTA: response_schema dropado (Gemini Developer API rejeita
+    # additionalProperties gerado por dict[str, Any] no schema). parse_llm_json
+    # extrai JSON do texto livre com fallback regex.
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt,
         model=model,
         temperature=0.1,
-        response_schema=ProcessoSynthesisCard,
     )
 
     raw_response = response.text
