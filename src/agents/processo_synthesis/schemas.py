@@ -66,13 +66,17 @@ class ProbabilidadeExito(BaseModel):
 
     A camada 3 (merito_synthesis) usa probabilidade_exito como input forte
     pro risco final do merito.
+
+    Literais afrouxados pra Optional[str] (LLM ocasionalmente gera valores
+    fora da lista; defensive default).
     """
 
-    classificacao: Literal["provavel", "possivel", "poucas_chances", "remota"] = Field(
-        description="Classificacao Daycoval. Pesos: provavel=1.0, possivel=0.7, poucas_chances=0.4, remota=0.0001",
+    classificacao: Optional[str] = Field(
+        default=None,
+        description="provavel | possivel | poucas_chances | remota. Pesos respectivos: 1.0 / 0.7 / 0.4 / 0.0001",
     )
-    score: float = Field(
-        ge=0.0, le=1.0,
+    score: Optional[float] = Field(
+        default=None,
         description="Peso numerico (1.0 / 0.7 / 0.4 / 0.0001) — espelha classificacao",
     )
     criterios_aplicados: list[str] = Field(
@@ -144,15 +148,15 @@ class ProcessoSynthesisCard(BaseModel):
     )
 
     # Campo 8: tipo judicial (determinado upstream por classify_tipo_judicial)
-    tipo_judicial: Literal["fiscal", "trabalhista", "civel"] = Field(
+    tipo_judicial: Optional[str] = Field(
         default="civel",
-        description="Tipo do processo (echo do request). Define qual matriz Daycoval aplicar pra probabilidade_exito.",
+        description="Tipo do processo (echo do request). Define qual matriz Daycoval aplicar. Valores ideais: fiscal | trabalhista | civel",
     )
 
     # Campo 9: probabilidade de exito (Matriz Daycoval 2026-05-21)
     probabilidade_exito: ProbabilidadeExito = Field(
-        ...,
-        description="Probabilidade do tomador ter exito. LLM aplica os criterios objetivos da matriz Daycoval correspondente ao tipo_judicial.",
+        default_factory=ProbabilidadeExito,
+        description="Probabilidade do tomador ter exito. LLM aplica os criterios objetivos da matriz Daycoval correspondente ao tipo_judicial. Default vazio quando LLM nao retorna (audit no campo classificacao=null).",
     )
 
     # Meta
