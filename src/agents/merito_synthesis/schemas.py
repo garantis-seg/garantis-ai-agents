@@ -277,4 +277,5 @@ class MeritoSynthesisRequest(BaseModel):
 class MeritoSynthesisResponse(BaseModel):
     card: MeritoSynthesisCard
     raw_response: Optional[str] = None
+    llm_raw_prompt: Optional[str] = None
     usage: Optional[dict[str, Any]] = None

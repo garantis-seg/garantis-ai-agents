@@ -46,7 +46,10 @@ async def classify_mov_factsheet(
         provider: 'gemini' (default)
 
     Returns:
-        {"card": MovFactSheetCard.model_dump() | error_dict, "raw_response": str, "usage": dict}
+        {"card": MovFactSheetCard.model_dump() | error_dict,
+         "raw_response": str,
+         "llm_raw_prompt": str,
+         "usage": dict}
     """
     if isinstance(processo, dict):
         processo = ProcessoContext(**processo)
@@ -109,5 +112,6 @@ async def classify_mov_factsheet(
     return {
         "card": card_data,
         "raw_response": raw_response,
+        "llm_raw_prompt": prompt,
         "usage": usage,
     }

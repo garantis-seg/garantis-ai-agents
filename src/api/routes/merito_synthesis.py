@@ -39,6 +39,7 @@ async def classify_merito_synthesis_endpoint(request: MeritoSynthesisRequest):
         return MeritoSynthesisResponse(
             card=MeritoSynthesisCard(**card_data),
             raw_response=result.get("raw_response"),
+            llm_raw_prompt=result.get("llm_raw_prompt"),
             usage=result.get("usage", {}),
         )
     except HTTPException:

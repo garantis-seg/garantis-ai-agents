@@ -35,7 +35,9 @@ async def classify_merito_synthesis(
 
     Returns:
         {"card": MeritoSynthesisCard.model_dump() | error_dict,
-         "raw_response": str, "usage": dict}
+         "raw_response": str,
+         "llm_raw_prompt": str,
+         "usage": dict}
     """
     if isinstance(request, dict):
         request = MeritoSynthesisRequest(**request)
@@ -92,5 +94,6 @@ async def classify_merito_synthesis(
     return {
         "card": card_data,
         "raw_response": raw_response,
+        "llm_raw_prompt": prompt,
         "usage": usage,
     }

@@ -41,6 +41,7 @@ async def classify_mov_factsheet_endpoint(request: MovFactSheetRequest):
         return MovFactSheetResponse(
             card=MovFactSheetCard(**card_data),
             raw_response=result.get("raw_response"),
+            llm_raw_prompt=result.get("llm_raw_prompt"),
             usage=result.get("usage", {}),
         )
     except HTTPException:

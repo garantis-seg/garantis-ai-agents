@@ -38,6 +38,7 @@ async def classify_processo_synthesis_endpoint(request: ProcessoSynthesisRequest
         return ProcessoSynthesisResponse(
             card=ProcessoSynthesisCard(**card_data),
             raw_response=result.get("raw_response"),
+            llm_raw_prompt=result.get("llm_raw_prompt"),
             usage=result.get("usage", {}),
         )
     except HTTPException:

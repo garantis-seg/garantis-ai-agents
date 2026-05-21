@@ -36,6 +36,7 @@ async def classify_processo_synthesis(
     Returns:
         {"card": ProcessoSynthesisCard.model_dump() | error_dict,
          "raw_response": {"synthesis": ..., "prob_exito": ...},
+         "llm_raw_prompt": {"synthesis": str, "prob_exito": str},
          "usage": dict (somando tokens dos 2 calls)}
     """
     if isinstance(request, dict):
@@ -60,6 +61,10 @@ async def classify_processo_synthesis(
             "synthesis": synthesis_result["raw_response"],
             "prob_exito": prob_exito_result["raw_response"],
         },
+        "llm_raw_prompt": {
+            "synthesis": synthesis_result["prompt"],
+            "prob_exito": prob_exito_result["prompt"],
+        },
         "usage": usage,
     }
 
@@ -71,7 +76,7 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
         prompt=prompt, model=model, temperature=0.1,
         response_mime_type="application/json",
     )
-    return {"raw_response": response.text, "usage": _usage_from(response)}
+    return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
 
 
 async def _call_probabilidade_exito(llm_provider, request, model, provider) -> dict:
@@ -81,7 +86,7 @@ async def _call_probabilidade_exito(llm_provider, request, model, provider) -> d
         prompt=prompt, model=model, temperature=0.1,
         response_mime_type="application/json",
     )
-    return {"raw_response": response.text, "usage": _usage_from(response)}
+    return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
 
 
 def _merge_results(
