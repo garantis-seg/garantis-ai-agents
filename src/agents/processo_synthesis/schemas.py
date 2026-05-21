@@ -267,5 +267,6 @@ class ProcessoSynthesisRequest(BaseModel):
 
 class ProcessoSynthesisResponse(BaseModel):
     card: ProcessoSynthesisCard
-    raw_response: Optional[str] = None
+    # dict[str,str] desde split em 2 LLM calls: {"synthesis": ..., "prob_exito": ...}
+    raw_response: Optional[dict[str, Any]] = None
     usage: Optional[dict[str, Any]] = None
