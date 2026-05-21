@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-2.5-flash")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
+# Bump quando alterar build_merito_synthesis_prompt OU MeritoSynthesisCard
+# schema. Usado em leads.engine_llm_calls.prompt_version pra drift detection.
+PROMPT_VERSION = "merito_synthesis.v1.0"
+
 
 async def classify_merito_synthesis(
     request: MeritoSynthesisRequest | dict,
@@ -95,5 +99,6 @@ async def classify_merito_synthesis(
         "card": card_data,
         "raw_response": raw_response,
         "llm_raw_prompt": prompt,
+        "prompt_version": PROMPT_VERSION,
         "usage": usage,
     }

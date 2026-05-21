@@ -258,4 +258,5 @@ class MovFactSheetResponse(BaseModel):
     card: MovFactSheetCard
     raw_response: Optional[str] = None
     llm_raw_prompt: Optional[str] = None
+    prompt_version: Optional[str] = None
     usage: Optional[dict[str, Any]] = None

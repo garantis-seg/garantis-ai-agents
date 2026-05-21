@@ -296,4 +296,5 @@ class ProcessoSynthesisResponse(BaseModel):
     # dict[str,str] desde split em 2 LLM calls: {"synthesis": ..., "prob_exito": ...}
     raw_response: Optional[dict[str, Any]] = None
     llm_raw_prompt: Optional[dict[str, Any]] = None
+    prompt_version: Optional[str] = None
     usage: Optional[dict[str, Any]] = None

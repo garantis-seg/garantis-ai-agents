@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("PROCESSO_SYNTHESIS_MODEL", "gemini-2.5-flash")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
+# Bump quando alterar build_processo_synthesis_prompt, build_probabilidade_exito_prompt
+# OU ProcessoSynthesisCard schema. Usado em leads.engine_llm_calls.prompt_version.
+PROMPT_VERSION = "processo_synthesis.v1.0"
+
 
 async def classify_processo_synthesis(
     request: ProcessoSynthesisRequest | dict,
@@ -65,6 +69,7 @@ async def classify_processo_synthesis(
             "synthesis": synthesis_result["prompt"],
             "prob_exito": prob_exito_result["prompt"],
         },
+        "prompt_version": PROMPT_VERSION,
         "usage": usage,
     }
 

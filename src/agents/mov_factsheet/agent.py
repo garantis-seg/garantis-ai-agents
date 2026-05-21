@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("MOV_FACTSHEET_MODEL", "gemini-2.5-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
+# Bump quando alterar build_mov_factsheet_prompt OR MovFactSheetCard schema.
+# Usado pra drift detection em leads.engine_llm_calls.prompt_version.
+PROMPT_VERSION = "mov_factsheet.v1.0"
+
 
 async def classify_mov_factsheet(
     processo: ProcessoContext | dict,
@@ -113,5 +117,6 @@ async def classify_mov_factsheet(
         "card": card_data,
         "raw_response": raw_response,
         "llm_raw_prompt": prompt,
+        "prompt_version": PROMPT_VERSION,
         "usage": usage,
     }
