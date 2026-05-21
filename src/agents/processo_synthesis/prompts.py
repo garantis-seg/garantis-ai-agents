@@ -460,13 +460,7 @@ Retorne APENAS JSON valido seguindo este shape exato:
   "classe_cnj_code": {classe_code_json},
   "role_no_merito": {role_json},
   "tipo_judicial": "{req.tipo_judicial}",
-  "probabilidade_exito": {{
-    "classificacao": "provavel|possivel|poucas_chances|remota",
-    "score": 1.0,
-    "criterios_aplicados": ["bullet literal copiado da matriz"],
-    "justificativa": "1-3 frases amarrando criterios ao caso concreto"
-  }},
-  "estado_processual": "...",
+  "estado_processual": "1-2 frases descrevendo o estado atual (OBRIGATORIO, nao deixar vazio)",
   "decisao_vigente": {{
     "sentido": null,
     "instancia": null,
@@ -475,8 +469,14 @@ Retorne APENAS JSON valido seguindo este shape exato:
     "transito_certificado": false,
     "recorrida": false
   }},
-  "lifecycle_garantia": [],
   "risco_processo_intermediario": "Baixo|Medio|Alto|Altissimo",
+  "probabilidade_exito": {{
+    "classificacao": "provavel|possivel|poucas_chances|remota",
+    "score": 1.0,
+    "criterios_aplicados": ["bullet literal copiado da matriz"],
+    "justificativa": "1-3 frases amarrando criterios ao caso concreto"
+  }},
+  "lifecycle_garantia": [],
   "trajetoria_dentro_processo": "estavel|deteriorando|melhorando|indefinida",
   "peca_pivo_candidata": {{
     "mov_id": null,
