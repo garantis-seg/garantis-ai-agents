@@ -16,6 +16,137 @@ _DOC_TEXT_CAP_CHARS = 6000     # DD4-alt: cap por doc dos autos
 _MAX_DOCS_INLINE = 10           # DD4-alt: cap docs no prompt
 
 
+# ── Matriz Daycoval (Probabilidade de Exito) ─────────────────────────────
+# Criterios objetivos por tipo judicial. Removido criterio "Tese consolidada
+# STJ/STF" da V1 (ambicioso demais, dependeria base externa). Pesos
+# correspondem a score: provavel=1.0 | possivel=0.7 | poucas_chances=0.4 | remota=0.0001.
+
+_DAYCOVAL_FISCAL = {
+    "provavel": [
+        "Materia com repercussao geral ou repetitivo definitivamente julgado favoravel ao contribuinte (Tomador)",
+        "Materia exclusivamente de direito favoravel ao contribuinte (Tomador)",
+        "Inexistencia de precedentes contrarios a materia discutida nos autos",
+        "Parecer juridico ou Pericia tecnica conclusivo e favoravel ao contribuinte (Tomador)",
+        "Mandado de Seguranca antecedente, favoravel ao contribuinte (Tomador) para o mesmo objeto",
+        "Decisoes anteriores sob a mesma materia, favoraveis ao contribuinte (Tomador) que NAO dependam de analise dos fatos e producao de prova",
+    ],
+    "possivel": [
+        "Jurisprudencia majoritariamente favoravel ao contribuinte (Tomador)",
+        "Precedentes pontuais favoraveis a materia processual do contribuinte (Tomador)",
+        "Tese favoravel ao contribuinte (Tomador) que dependa da producao de provas ou pericia tecnica",
+        "Decisoes anteriores sob a mesma materia, favoraveis ao contribuinte (Tomador), porem, depende da analise dos fatos e producao de provas",
+    ],
+    "poucas_chances": [
+        "Materia com jurisprudencia oscilante",
+        "Tema/Materia nao possui tese de recurso repetitivo (IRDR)",
+        "Decisoes desfavoraveis ao Tomador em Processo Administrativo que dependam da producao de provas no processo judicial",
+    ],
+    "remota": [
+        "Jurisprudencia predominantemente desfavoravel ao contribuinte (Tomador)",
+        "Decisoes precedentes contrarias a tese do contribuinte (Tomador)",
+        "Tese defensiva residual ou protelatoria",
+        "Processo em fase avancada com decisoes desfavoraveis ao contribuinte (Tomador)",
+        "Materia predominantemente de direito desfavoravel ao contribuinte (Tomador)",
+    ],
+}
+
+_DAYCOVAL_TRABALHISTA = {
+    "provavel": [
+        "Erro material ou aritmetico evidente nos calculos apresentados",
+        "Extrapolacao/violacao da coisa julgada em fase de Execucao Trabalhista pelo Reclamante (Segurado)",
+        "Materia exclusivamente de direito favoravel ao Reclamado (Tomador)",
+        "Jurisprudencia pacificada favoravel ao Reclamado (Tomador)",
+        "Prova documental incontestavel produzida pelo Reclamado (Tomador)",
+        "Sumulas vinculantes/Orientacoes Jurisprudenciais favoraveis ao Reclamado (Tomador)",
+    ],
+    "possivel": [
+        "Interpretacao do calculo favoravel ao Reclamado (Tomador)",
+        "Jurisprudencia majoritariamente favoravel que dependa de producao de provas/pericia contabil",
+        "Impugnacao/embargos bem fundamentados com tese favoravel ao Reclamado (Tomador)",
+    ],
+    "poucas_chances": [
+        "Divergencia relevante sobre criterios de calculo ainda nao pacificado por Tribunais Superiores",
+        "Jurisprudencia oscilante sobre o indice ou forma de calculo da condenacao",
+    ],
+    "remota": [
+        "Titulo Executivo definitivo, cuja impugnacao tem vies meramente protelatorio",
+        "Calculos da condenacao ja homologados na Execucao Definitiva sem materia para impugnacao",
+        "Impugnacoes/decisoes anteriores desfavoraveis ao Reclamado (Tomador)",
+        "Materia preclusa impugnada pelo Reclamado (Tomador)",
+        "Penhora ou atos expropriatorios em curso na fase de Execucao Definitiva",
+    ],
+}
+
+_DAYCOVAL_CIVEL = {
+    "provavel": [
+        "Materia com repercussao geral ou repetitivo definitivamente julgado favoravel ao garantido (Tomador)",
+        "Materia exclusivamente de direito, sem necessidade de producao de provas pelo garantido (Tomador)",
+        "Pedido juridicamente impossivel, prescrito ou decadente pela parte contraria",
+        "Titulo Executivo com clausula contratual expressa, valida e usual, ja reconhecida como licita favoravel ao Tomador",
+        "Inexistencia de precedentes contrarios a materia discutida nos autos",
+        "Decisoes anteriores sob a mesma materia, favoraveis ao garantido (Tomador) que NAO dependam de analise dos fatos e producao de provas",
+        "Provas produzidas favoraveis ao garantido (Tomador)",
+        "Parecer juridico ou Pericia tecnica conclusivo e favoravel ao garantido (Tomador)",
+    ],
+    "possivel": [
+        "Jurisprudencia majoritariamente favoravel ao garantido (Tomador)",
+        "Precedentes pontuais favoraveis a materia processual do garantido (Tomador)",
+        "Onus da prova nao cumprido pela parte contraria e favoraveis ao garantido (Tomador)",
+        "Discussao de merito (decisoes) favoraveis ao Tomador em sede de recursos",
+    ],
+    "poucas_chances": [
+        "Materia com jurisprudencia oscilante",
+        "Tema/Materia nao possui tese de recurso repetitivo (IRDR)",
+        "Discussao processual depende de producao de provas para conclusao da tese",
+    ],
+    "remota": [
+        "Jurisprudencia predominantemente desfavoravel a tese do garantido (Tomador)",
+        "Decisoes anteriores desfavoraveis ao garantido (Tomador)",
+        "Provas produzidas desfavoraveis ao garantido (Tomador)",
+        "Tese defensiva residual ou protelatoria",
+        "Penhora ou atos expropriatorios em curso na fase de Execucao Definitiva/Cumprimento de Sentenca",
+    ],
+}
+
+_DAYCOVAL_MATRIZES = {
+    "fiscal": _DAYCOVAL_FISCAL,
+    "trabalhista": _DAYCOVAL_TRABALHISTA,
+    "civel": _DAYCOVAL_CIVEL,
+}
+
+_SCORE_BY_CLASS = {
+    "provavel": 1.0,
+    "possivel": 0.7,
+    "poucas_chances": 0.4,
+    "remota": 0.0001,
+}
+
+
+def _build_matriz_block(tipo_judicial: str) -> str:
+    """Bloco com criterios objetivos da Matriz Daycoval per tipo (fiscal|trabalhista|civel).
+
+    LLM aplica e cita em probabilidade_exito.criterios_aplicados[].
+    """
+    matriz = _DAYCOVAL_MATRIZES.get(tipo_judicial, _DAYCOVAL_CIVEL)
+    label_map = {
+        "fiscal": "FISCAL",
+        "trabalhista": "TRABALHISTA",
+        "civel": "CIVEL",
+    }
+    label = label_map.get(tipo_judicial, "CIVEL")
+    lines = [f"\n=== MATRIZ DAYCOVAL — PROBABILIDADE DE EXITO ({label}) ==="]
+    lines.append(
+        "Aplique os criterios abaixo (cite literalmente em criterios_aplicados[]).\n"
+        "Score: provavel=1.0 | possivel=0.7 | poucas_chances=0.4 | remota=0.0001.\n"
+    )
+    for cls in ("provavel", "possivel", "poucas_chances", "remota"):
+        score = _SCORE_BY_CLASS[cls]
+        lines.append(f"\n[{cls.upper()}] (score={score}):")
+        for bullet in matriz[cls]:
+            lines.append(f"  - {bullet}")
+    return "\n".join(lines)
+
+
 def _summarize_factsheet(fs: MovFactSheetMin) -> str:
     """1 linha compacta por factsheet pro timeline do prompt."""
     parts = []
@@ -181,6 +312,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     header_lines = [f"CNJ: {req.processo_numero}"]
     if req.classe:
         header_lines.append(f"Classe: {req.classe}")
+    header_lines.append(f"Tipo judicial: {req.tipo_judicial}")
     if req.role_no_merito:
         header_lines.append(f"Papel no merito: {req.role_no_merito}")
     if req.polo_ativo:
@@ -191,6 +323,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     autos_block = _build_autos_block(req)
     docs_block = _build_documents_block(req)
+    matriz_block = _build_matriz_block(req.tipo_judicial)
 
     classe_json = f'"{req.classe}"' if req.classe else "null"
     classe_code_json = req.classe_cnj_code if req.classe_cnj_code is not None else "null"
@@ -213,6 +346,7 @@ para agregar o risco do MERITO.
 
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{autos_block}{docs_block}
+{matriz_block}
 
 === INSTRUCOES POR CAMPO ===
 
@@ -272,6 +406,29 @@ para agregar o risco do MERITO.
 10. evidence_artifacts: lista de {{mov_id, snippet, weight}} citando os 3-5 factsheets
     mais decisivos pra sua sintese. weight = high | medium | low.
 
+11. tipo_judicial: ECHO do header (ja decidido upstream pelo classify_tipo_judicial).
+    NAO recalcule, repita "{req.tipo_judicial}".
+
+12. probabilidade_exito: aplique a Matriz Daycoval acima (do tipo_judicial correspondente).
+    DIFERENTE de risco_processo_intermediario: prob_exito olha CHANCE DO TOMADOR
+    GANHAR juridicamente; risco_processo olha CHANCE DE ACIONAMENTO da garantia.
+    - classificacao: provavel | possivel | poucas_chances | remota
+    - score: 1.0 | 0.7 | 0.4 | 0.0001 (espelha classificacao exato)
+    - criterios_aplicados[]: lista de strings — bullets LITERAIS da matriz que voce
+      aplicou (pelo menos 1, max 4). NAO invente criterios, copie da matriz.
+    - justificativa: 1-3 frases PT-BR amarrando os criterios ao caso concreto
+      (cite factsheet/autos quando relevante).
+
+    Calibracao:
+    - "provavel" exige evidencia FORTE: factsheet com decisao favoravel transitada OU
+      pericia/parecer favoravel no autos OU jurisprudencia explicitamente firmada
+      em sentido pro-tomador documentada nos factsheets/autos.
+    - "remota" exige evidencia FORTE em sentido contrario: decisao desfavoravel
+      transitada, penhora em curso, juris predominantemente contraria documentada.
+    - "possivel" e "poucas_chances" sao a faixa cinza — use quando ha ambiguidade.
+    - Quando NAO ha evidencia suficiente, prefira "poucas_chances" (default
+      conservador) com confianca baixa, NAO "possivel" (vies otimista do v5).
+
 === REGRAS DE OURO ===
 
 A. NAO INVENTE. Se nenhum factsheet menciona apolice, deixe lifecycle_garantia=[].
@@ -315,6 +472,13 @@ Retorne APENAS JSON valido seguindo este shape exato:
   }},
   "valor_em_disputa": null,
   "valor_garantia": null,
+  "tipo_judicial": "{req.tipo_judicial}",
+  "probabilidade_exito": {{
+    "classificacao": "provavel|possivel|poucas_chances|remota",
+    "score": 1.0,
+    "criterios_aplicados": ["..."],
+    "justificativa": "..."
+  }},
   "movs_processed": {len(factsheets_capped)},
   "confianca": 0.7,
   "evidence_artifacts": []

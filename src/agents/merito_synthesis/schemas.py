@@ -55,6 +55,40 @@ class PecaPivoMerito(BaseModel):
     )
 
 
+class ProbabilidadeExitoMerito(BaseModel):
+    """Probabilidade de Exito agregada do merito (Matriz Daycoval).
+
+    Agregacao default V1: media ponderada por valor_em_disputa dos processos
+    'principal' (conexos contam metade). Pode evoluir pra peso especial de
+    peca-pivo apos testes (decisao open 2026-05-21).
+
+    Score numerico (0.0001 a 1.0) entra como FATOR no risco de acionamento
+    da Camada 3. Inversao monotonica: prob_exito alta → risco baixo.
+    """
+
+    classificacao_agregada: Optional[str] = Field(
+        default=None,
+        description="Bucket equivalente ao score (provavel|possivel|poucas_chances|remota)",
+    )
+    score_agregado: Optional[float] = Field(
+        default=None,
+        ge=0.0, le=1.0,
+        description="Media ponderada por valor_em_disputa dos processos. Espelha classificacao.",
+    )
+    metodo_agregacao: str = Field(
+        default="media_ponderada_valor_disputa",
+        description="Metodo usado (V1: media ponderada). Audit trail.",
+    )
+    breakdown_por_processo: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Lista de {processo_numero, role, classificacao, score, peso_aplicado, valor_em_disputa}",
+    )
+    contribuicao_no_risco: Optional[str] = Field(
+        default=None,
+        description="1 frase PT-BR explicando como a prob_exito agregada influenciou o risco final",
+    )
+
+
 class EvidenceArtifact(BaseModel):
     """Citacao de card consumido pra sustentar a sintese."""
 
@@ -112,6 +146,12 @@ class MeritoSynthesisCard(BaseModel):
     # Peca-pivo
     peca_pivo_merito: PecaPivoMerito = Field(default_factory=PecaPivoMerito)
 
+    # Probabilidade de Exito agregada (Matriz Daycoval 2026-05-21)
+    probabilidade_exito_merito: ProbabilidadeExitoMerito = Field(
+        default_factory=ProbabilidadeExitoMerito,
+        description="Agregacao das prob_exito dos processos do merito. Input forte pro risco final.",
+    )
+
     # Forward
     proximos_passos_provaveis: list[str] = Field(default_factory=list)
 
@@ -146,6 +186,11 @@ class ProcessoSynthesisMin(BaseModel):
     peca_pivo_candidata: Optional[dict[str, Any]] = None
     valor_em_disputa: Optional[float] = None
     valor_garantia: Optional[float] = None
+    tipo_judicial: Optional[Literal["fiscal", "trabalhista", "civel"]] = None
+    probabilidade_exito: Optional[dict[str, Any]] = Field(
+        default=None,
+        description="Card de probabilidade_exito do processo (Matriz Daycoval). Camada 3 agrega.",
+    )
 
     model_config = {"extra": "ignore"}
 

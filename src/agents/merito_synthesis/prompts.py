@@ -24,6 +24,17 @@ def _summarize_processo_synthesis(ps: ProcessoSynthesisMin) -> str:
         parts[0] += f" ({ps.role_no_merito})"
     if ps.classe:
         parts.append(f"  Classe: {ps.classe}")
+    if ps.tipo_judicial:
+        parts.append(f"  Tipo: {ps.tipo_judicial}")
+    pe = ps.probabilidade_exito or {}
+    if pe.get("classificacao"):
+        prob_str = f"  Prob. Exito (Daycoval): {pe['classificacao']} (score={pe.get('score')})"
+        if pe.get("justificativa"):
+            prob_str += f" — {(pe['justificativa'] or '')[:140]}"
+        parts.append(prob_str)
+        if pe.get("criterios_aplicados"):
+            for c in (pe["criterios_aplicados"] or [])[:2]:
+                parts.append(f"    crit: {c[:160]}")
     if ps.estado_processual:
         parts.append(f"  Estado: {ps.estado_processual}")
     dv = ps.decisao_vigente or {}
@@ -217,20 +228,37 @@ ESTA E A CAMADA 3 - OUTPUT PRIMARIO. Risco aqui e o que vai pra UI/cliente.
 
 8. proximos_passos_provaveis: lista de 2-4 acoes esperadas pro merito como um todo.
 
-9. trajetoria + trajetoria_motivo: COMPARE com snapshot_anterior:
+9. probabilidade_exito_merito (Matriz Daycoval agregada — INPUT FORTE PRO RISCO):
+   Cada processo_synthesis ja traz `probabilidade_exito` com score (1.0/0.7/0.4/0.0001)
+   da Matriz Daycoval. Voce agrega no nivel do MERITO:
+
+   a) classificacao_agregada + score_agregado:
+      - V1 (default): MEDIA PONDERADA POR valor_em_disputa dos processos.
+        Conexos contam metade do peso (multiplicar valor_em_disputa do conexo por 0.5
+        antes do calculo). Se valor_em_disputa estiver null em algum, use peso=1.
+        Mapeie de volta pro bucket: score >= 0.85 -> "provavel", >= 0.55 -> "possivel",
+        >= 0.20 -> "poucas_chances", < 0.20 -> "remota".
+      - Se UM SO processo (sem conexos), score_agregado = score do processo principal.
+   b) breakdown_por_processo: lista com {{processo_numero, role, classificacao, score,
+      peso_aplicado, valor_em_disputa}} pra audit.
+   c) metodo_agregacao: "media_ponderada_valor_disputa" (V1 default).
+   d) contribuicao_no_risco: 1 frase explicando COMO essa prob_exito agregada
+      influenciou o risco final que voce escolheu (vide regra F abaixo).
+
+10. trajetoria + trajetoria_motivo: COMPARE com snapshot_anterior:
    - Se previous_snapshot.risco_anterior IS NULL -> "primeira_classificacao", motivo=null
    - Se risco_atual > risco_anterior (escala Baixo<Medio<Alto<Altissimo) -> "piorou"
    - Se risco_atual < risco_anterior -> "melhorou"
    - Se igual -> "estavel"
    - motivo: 1 frase explicando A CAUSA da mudanca (qual mov/processo trigou)
 
-10. confidence (0-1):
+11. confidence (0-1):
     - 0.9+ quando decisao_atual clara em todos os processos
     - 0.7-0.8 quando ambigua mas com sinal majoritario
     - 0.5-0.7 quando muitos processos sem decisao
     - < 0.5 quando dados muito esparsos
 
-11. evidence_artifacts: 3-7 itens citando OS PROCESSOS/CARDS mais decisivos.
+12. evidence_artifacts: 3-7 itens citando OS PROCESSOS/CARDS mais decisivos.
     kind = processo_synthesis | mov_factsheet | apolice | conexo | cda | aiim | tomador | merito
     ref = processo_numero, mov_id, cda_number, cnpj_basico, etc.
 
@@ -245,6 +273,15 @@ D. Peca-pivo do merito pode ser de CONEXO (nao do principal). Ex: anulatória co
    julgou improcedente -> isso e pivo mesmo se principal e Embargos sem sentenca.
 E. Trajetoria so move pra "melhorou" se ha sinal explicito (acordo, suspensao por RJ,
    trans favoravel). Sem sinal claro -> "estavel".
+
+F. PROBABILIDADE DE EXITO (Daycoval) E INPUT FORTE PRO RISCO, NAO SUBSTITUI:
+   - prob_exito agregada ALTA (>= 0.85, "provavel") -> EMPURRA risco pra BAIXO
+     (mas nao supera trans em julgado desfavoravel — esse e Altissimo independente)
+   - prob_exito BAIXA (< 0.20, "remota") -> EMPURRA risco pra ALTO
+     (mesmo sem decisao desfavoravel ainda, pq a perda eventual e provavel)
+   - prob_exito MEDIA (0.20-0.85) -> deixa o risco governado pelo estado atual
+     (decisao_vigente, lifecycle_garantia, etc.)
+   - A `contribuicao_no_risco` deve EXPLICAR essa influencia em 1 frase.
 
 === FORMATO DE SAIDA ===
 
@@ -275,6 +312,17 @@ Retorne APENAS JSON valido:
     "motivo": null
   }},
   "proximos_passos_provaveis": [],
+  "probabilidade_exito_merito": {{
+    "classificacao_agregada": "provavel|possivel|poucas_chances|remota",
+    "score_agregado": 0.7,
+    "metodo_agregacao": "media_ponderada_valor_disputa",
+    "breakdown_por_processo": [
+      {{"processo_numero": "...", "role": "principal|conexo",
+        "classificacao": "...", "score": 0.7,
+        "peso_aplicado": 1.0, "valor_em_disputa": null}}
+    ],
+    "contribuicao_no_risco": "..."
+  }},
   "trajetoria": "estavel|piorou|melhorou|primeira_classificacao",
   "trajetoria_motivo": null,
   "confidence": 0.7,
