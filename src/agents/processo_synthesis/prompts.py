@@ -123,16 +123,9 @@ _SCORE_BY_CLASS = {
 
 
 def _build_matriz_block(tipo_judicial: str) -> str:
-    """Bloco com criterios objetivos da Matriz Daycoval per tipo (fiscal|trabalhista|civel).
-
-    LLM aplica e cita em probabilidade_exito.criterios_aplicados[].
-    """
+    """Bloco com criterios objetivos da Matriz Daycoval per tipo."""
     matriz = _DAYCOVAL_MATRIZES.get(tipo_judicial, _DAYCOVAL_CIVEL)
-    label_map = {
-        "fiscal": "FISCAL",
-        "trabalhista": "TRABALHISTA",
-        "civel": "CIVEL",
-    }
+    label_map = {"fiscal": "FISCAL", "trabalhista": "TRABALHISTA", "civel": "CIVEL"}
     label = label_map.get(tipo_judicial, "CIVEL")
     lines = [f"\n=== MATRIZ DAYCOVAL — PROBABILIDADE DE EXITO ({label}) ==="]
     lines.append(
@@ -145,6 +138,85 @@ def _build_matriz_block(tipo_judicial: str) -> str:
         for bullet in matriz[cls]:
             lines.append(f"  - {bullet}")
     return "\n".join(lines)
+
+
+def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
+    """Prompt FOCADO so na Probabilidade de Exito Daycoval — call B do C2.
+
+    Sem ruido das outras partes (estado_processual, decisao_vigente, etc.) —
+    LLM concentra atencao na matriz e produz output mais consistente.
+    Empirico v1: combinado com synthesis no mesmo prompt, gemini-2.5-flash
+    omitia prob_exito em 100% das tentativas (smoke 1-merito 12151 + 50).
+    """
+    factsheets = req.mov_factsheets or []
+    factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or ""))
+    if len(factsheets_sorted) > _MAX_MOVS_INLINE:
+        factsheets_capped = factsheets_sorted[-_MAX_MOVS_INLINE:]
+    else:
+        factsheets_capped = factsheets_sorted
+
+    timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_capped) \
+        or "(sem movimentacoes)"
+
+    autos_block = _build_autos_block(req)
+    docs_block = _build_documents_block(req)
+    matriz_block = _build_matriz_block(req.tipo_judicial)
+
+    header_parts = [f"CNJ: {req.processo_numero}"]
+    if req.classe:
+        header_parts.append(f"Classe: {req.classe}")
+    header_parts.append(f"Tipo judicial: {req.tipo_judicial.upper()}")
+    if req.polo_passivo:
+        header_parts.append(f"Tomador (polo passivo): {req.polo_passivo}")
+    header_block = "\n  ".join(header_parts)
+
+    return f"""Voce e analista juridico brasileiro especializado em SEGURO GARANTIA JUDICIAL.
+
+Sua UNICA tarefa: aplicar a Matriz Daycoval e classificar a PROBABILIDADE
+DO TOMADOR TER EXITO neste processo. Sao 4 buckets — escolha 1.
+
+=== PROCESSO ===
+  {header_block}
+
+=== TIMELINE DE FACTSHEETS (ordenados por data ASC) ===
+  {timeline_block}
+{autos_block}{docs_block}
+{matriz_block}
+
+=== INSTRUCOES ===
+
+1. classificacao: escolha UM bucket da matriz acima
+   (provavel | possivel | poucas_chances | remota).
+   - "provavel" exige evidencia FORTE: decisao favoravel transitada,
+     pericia/parecer favoravel no autos, jurisprudencia explicitamente firmada
+     em sentido pro-tomador documentada.
+   - "remota" exige evidencia FORTE em contrario: decisao desfavoravel
+     transitada, penhora em curso, juris predominantemente contraria.
+   - "possivel" e "poucas_chances" sao faixa cinza pra ambiguidade.
+   - **Sem evidencia suficiente: prefira "poucas_chances"** (default conservador
+     contra Baixo bias do v5), NAO "possivel" (vies otimista).
+
+2. score: ESPELHE classificacao exato.
+   provavel=1.0 | possivel=0.7 | poucas_chances=0.4 | remota=0.0001
+
+3. criterios_aplicados: lista de strings com bullets LITERAIS copiados da
+   matriz {req.tipo_judicial.upper()} acima. Minimo 1, max 4. NAO invente
+   criterios.
+
+4. justificativa: 1-3 frases PT-BR amarrando os criterios ao caso concreto
+   (cite factsheet/autos quando relevante).
+
+=== FORMATO DE SAIDA ===
+
+Retorne APENAS JSON valido seguindo este shape:
+
+{{
+  "classificacao": "provavel|possivel|poucas_chances|remota",
+  "score": 1.0,
+  "criterios_aplicados": ["bullet literal copiado da matriz"],
+  "justificativa": "1-3 frases amarrando criterios ao caso concreto"
+}}
+"""
 
 
 def _summarize_factsheet(fs: MovFactSheetMin) -> str:
@@ -323,7 +395,6 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     autos_block = _build_autos_block(req)
     docs_block = _build_documents_block(req)
-    matriz_block = _build_matriz_block(req.tipo_judicial)
 
     classe_json = f'"{req.classe}"' if req.classe else "null"
     classe_code_json = req.classe_cnj_code if req.classe_cnj_code is not None else "null"
@@ -331,18 +402,12 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
-Sua tarefa tem DUAS PARTES OBRIGATORIAS:
-  (A) Sintetizar o estado atual do PROCESSO a partir dos FactSheets das movimentacoes
-      (estado_processual, decisao_vigente, lifecycle_garantia, risco_processo_intermediario,
-      trajetoria, peca-pivo, valores).
-  (B) **APLICAR A MATRIZ DAYCOVAL** e preencher `probabilidade_exito` com a
-      classificacao do tipo {req.tipo_judicial.upper()} (criterios listados abaixo).
-      Esta parte E OBRIGATORIA - nao deixe o objeto vazio. Mesmo com pouca evidencia,
-      escolha o bucket mais conservador adequado ("poucas_chances" por default) com
-      `confianca` baixa em vez de omitir o campo.
+Sua tarefa: sintetizar o estado atual do PROCESSO a partir dos FactSheets das movimentacoes
++ contexto da(s) apolice(s) + autos.zip (se disponivel). Output sera consumido pela
+camada 3 (merito_synthesis) pra agregar risco do MERITO.
 
-Output e a camada 2 de 3 da engine v6. Output sera consumido pela camada 3 (merito_synthesis)
-para agregar o risco do MERITO + a probabilidade_exito ponderada por valor.
+NOTA: `probabilidade_exito` (Matriz Daycoval) e calculada em CALL SEPARADA do C2;
+NAO inclua esse campo neste output.
 
 === PROCESSO ===
   {header_block}
@@ -352,7 +417,6 @@ para agregar o risco do MERITO + a probabilidade_exito ponderada por valor.
 
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{autos_block}{docs_block}
-{matriz_block}
 
 === INSTRUCOES POR CAMPO ===
 
@@ -415,26 +479,6 @@ para agregar o risco do MERITO + a probabilidade_exito ponderada por valor.
 11. tipo_judicial: ECHO do header (ja decidido upstream pelo classify_tipo_judicial).
     NAO recalcule, repita "{req.tipo_judicial}".
 
-12. probabilidade_exito: aplique a Matriz Daycoval acima (do tipo_judicial correspondente).
-    DIFERENTE de risco_processo_intermediario: prob_exito olha CHANCE DO TOMADOR
-    GANHAR juridicamente; risco_processo olha CHANCE DE ACIONAMENTO da garantia.
-    - classificacao: provavel | possivel | poucas_chances | remota
-    - score: 1.0 | 0.7 | 0.4 | 0.0001 (espelha classificacao exato)
-    - criterios_aplicados[]: lista de strings — bullets LITERAIS da matriz que voce
-      aplicou (pelo menos 1, max 4). NAO invente criterios, copie da matriz.
-    - justificativa: 1-3 frases PT-BR amarrando os criterios ao caso concreto
-      (cite factsheet/autos quando relevante).
-
-    Calibracao:
-    - "provavel" exige evidencia FORTE: factsheet com decisao favoravel transitada OU
-      pericia/parecer favoravel no autos OU jurisprudencia explicitamente firmada
-      em sentido pro-tomador documentada nos factsheets/autos.
-    - "remota" exige evidencia FORTE em sentido contrario: decisao desfavoravel
-      transitada, penhora em curso, juris predominantemente contraria documentada.
-    - "possivel" e "poucas_chances" sao a faixa cinza — use quando ha ambiguidade.
-    - Quando NAO ha evidencia suficiente, prefira "poucas_chances" (default
-      conservador) com confianca baixa, NAO "possivel" (vies otimista do v5).
-
 === REGRAS DE OURO ===
 
 A. NAO INVENTE. Se nenhum factsheet menciona apolice, deixe lifecycle_garantia=[].
@@ -470,12 +514,6 @@ Retorne APENAS JSON valido seguindo este shape exato:
     "recorrida": false
   }},
   "risco_processo_intermediario": "Baixo|Medio|Alto|Altissimo",
-  "probabilidade_exito": {{
-    "classificacao": "provavel|possivel|poucas_chances|remota",
-    "score": 1.0,
-    "criterios_aplicados": ["bullet literal copiado da matriz"],
-    "justificativa": "1-3 frases amarrando criterios ao caso concreto"
-  }},
   "lifecycle_garantia": [],
   "trajetoria_dentro_processo": "estavel|deteriorando|melhorando|indefinida",
   "peca_pivo_candidata": {{

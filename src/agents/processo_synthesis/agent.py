@@ -1,12 +1,14 @@
 """Processo Synthesis Agent - engine v6_meritos camada 2.
 
-Single LLM call por PROCESSO, sintetiza N mov_factsheets + apolice context
-em 7 campos estruturados (estado processual, decisao vigente, lifecycle garantia,
-risco intermediario, trajetoria, peca-pivo candidata, valores).
+Faz 2 LLM calls em paralelo:
+- Call A: synthesis tradicional (estado_processual, decisao_vigente, etc.).
+- Call B: probabilidade_exito Daycoval (matriz per tipo_judicial).
 
-Output cabe em leads.dossier_artifacts com kind='processo_synthesis'.
+Merge no card final. Empirico: combinado num so prompt, gemini-2.5-flash
+omitia prob_exito em 100% das tentativas (smoke 1-merito 12151 + 50).
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -15,13 +17,11 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
-from .prompts import build_processo_synthesis_prompt
-from .schemas import ProcessoSynthesisCard, ProcessoSynthesisRequest
+from .prompts import build_probabilidade_exito_prompt, build_processo_synthesis_prompt
+from .schemas import ProbabilidadeExito, ProcessoSynthesisCard, ProcessoSynthesisRequest
 
 logger = logging.getLogger(__name__)
 
-# Default model: gemini-2.5-flash (nao Lite) - sintese precisa de mais qualidade
-# que mov_factsheet. Override via env.
 DEFAULT_MODEL = os.getenv("PROCESSO_SYNTHESIS_MODEL", "gemini-2.5-flash")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
@@ -31,35 +31,72 @@ async def classify_processo_synthesis(
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
 ) -> dict:
-    """Synthesize a processo from its mov_factsheets + apolice context.
+    """Synthesize a processo + classify probabilidade_exito (2 LLM calls em paralelo).
 
     Returns:
         {"card": ProcessoSynthesisCard.model_dump() | error_dict,
-         "raw_response": str, "usage": dict}
+         "raw_response": {"synthesis": ..., "prob_exito": ...},
+         "usage": dict (somando tokens dos 2 calls)}
     """
     if isinstance(request, dict):
         request = ProcessoSynthesisRequest(**request)
-
     if model is None:
         model = DEFAULT_MODEL
 
     llm_provider = create_provider(provider)
-    prompt = build_processo_synthesis_prompt(request)
 
-    # NOTA: response_schema dropado (Gemini Developer API rejeita
-    # additionalProperties gerado por dict[str, Any] no schema).
-    # response_mime_type='application/json' forca JSON output sem schema.
-    response: LLMResponse = await llm_provider.agenerate(
-        prompt=prompt,
-        model=model,
-        temperature=0.1,
-        response_mime_type="application/json",
+    synthesis_task = _call_synthesis(llm_provider, request, model, provider)
+    prob_exito_task = _call_probabilidade_exito(llm_provider, request, model, provider)
+    synthesis_result, prob_exito_result = await asyncio.gather(
+        synthesis_task, prob_exito_task,
     )
 
-    raw_response = response.text
+    card_data = _merge_results(request, synthesis_result, prob_exito_result)
+    usage = _merge_usage(synthesis_result["usage"], prob_exito_result["usage"], model, provider)
+
+    return {
+        "card": card_data,
+        "raw_response": {
+            "synthesis": synthesis_result["raw_response"],
+            "prob_exito": prob_exito_result["raw_response"],
+        },
+        "usage": usage,
+    }
+
+
+async def _call_synthesis(llm_provider, request, model, provider) -> dict:
+    """Call A — synthesis sem prob_exito."""
+    prompt = build_processo_synthesis_prompt(request)
+    response: LLMResponse = await llm_provider.agenerate(
+        prompt=prompt, model=model, temperature=0.1,
+        response_mime_type="application/json",
+    )
+    return {"raw_response": response.text, "usage": _usage_from(response)}
+
+
+async def _call_probabilidade_exito(llm_provider, request, model, provider) -> dict:
+    """Call B — probabilidade_exito Daycoval focused."""
+    prompt = build_probabilidade_exito_prompt(request)
+    response: LLMResponse = await llm_provider.agenerate(
+        prompt=prompt, model=model, temperature=0.1,
+        response_mime_type="application/json",
+    )
+    return {"raw_response": response.text, "usage": _usage_from(response)}
+
+
+def _merge_results(
+    request: ProcessoSynthesisRequest,
+    synthesis_result: dict,
+    prob_exito_result: dict,
+) -> dict:
+    """Parse + merge synthesis (call A) + prob_exito (call B) num card final.
+
+    Defensive: se call A falhar, retorna error_dict. Se call B falhar, card
+    synthesis sai com probabilidade_exito vazio (telemetria warning).
+    """
+    synthesis_raw = synthesis_result["raw_response"]
     try:
-        parsed = parse_llm_json(raw_response)
-        # Echo input identifiers
+        parsed = parse_llm_json(synthesis_raw)
         parsed.setdefault("processo_numero", request.processo_numero)
         if request.classe and not parsed.get("classe"):
             parsed["classe"] = request.classe
@@ -67,46 +104,72 @@ async def classify_processo_synthesis(
             parsed["classe_cnj_code"] = request.classe_cnj_code
         if request.role_no_merito and not parsed.get("role_no_merito"):
             parsed["role_no_merito"] = request.role_no_merito
-        # tipo_judicial e DETERMINISTICO upstream (classify_tipo_judicial).
-        # Sempre echo, ignora valor que LLM possa ter inventado.
         parsed["tipo_judicial"] = request.tipo_judicial
         if not parsed.get("movs_processed"):
             parsed["movs_processed"] = len(request.mov_factsheets or [])
+
+        parsed["probabilidade_exito"] = _parse_prob_exito(
+            request, prob_exito_result["raw_response"],
+        )
+
         card = ProcessoSynthesisCard(**parsed)
-        card_data = card.model_dump()
-        # Telemetria: detecta quando LLM omitiu prob_exito (campo novo,
-        # gemini-2.5-flash as vezes ignora apesar do prompt forte).
-        pe = card_data.get("probabilidade_exito") or {}
-        if not pe.get("classificacao"):
-            logger.warning(
-                "processo_synthesis pn=%s probabilidade_exito OMITIDO pelo LLM "
-                "(tipo=%s, movs=%d) - cair-vai como null no merito_synthesis aggregate",
-                request.processo_numero, request.tipo_judicial,
-                len(request.mov_factsheets or []),
-            )
+        return card.model_dump()
     except (json.JSONDecodeError, Exception) as e:
         logger.error(
-            "processo_synthesis parse failed pn=%s: %s | raw_first_800=%s | raw_last_400=%s",
-            request.processo_numero, repr(e),
-            (raw_response or "")[:800],
-            (raw_response or "")[-400:],
+            "processo_synthesis parse failed pn=%s: %s | raw_first_800=%s",
+            request.processo_numero, repr(e), (synthesis_raw or "")[:800],
         )
-        card_data = {
-            "error": repr(e), "raw": raw_response,
+        return {
+            "error": repr(e), "raw": synthesis_raw,
             "processo_numero": request.processo_numero,
         }
 
-    usage = {
+
+def _parse_prob_exito(
+    request: ProcessoSynthesisRequest, raw_response: str,
+) -> dict:
+    """Parse call B output. Defaults vazios se LLM omitiu/falhou — caller
+    (merito_synthesis aggregator) trata classificacao=null como sem-sinal."""
+    try:
+        parsed = parse_llm_json(raw_response)
+        pe = ProbabilidadeExito(**parsed)
+        result = pe.model_dump()
+        if not result.get("classificacao"):
+            logger.warning(
+                "probabilidade_exito pn=%s OMITIDO pelo LLM (tipo=%s, movs=%d)",
+                request.processo_numero, request.tipo_judicial,
+                len(request.mov_factsheets or []),
+            )
+        return result
+    except (json.JSONDecodeError, Exception) as e:
+        logger.warning(
+            "prob_exito parse failed pn=%s: %s | raw_first_400=%s",
+            request.processo_numero, repr(e), (raw_response or "")[:400],
+        )
+        return ProbabilidadeExito().model_dump()
+
+
+def _usage_from(response: LLMResponse) -> dict:
+    return {
         "input_tokens": response.input_tokens or 0,
         "output_tokens": response.output_tokens or 0,
-        "total_tokens": (response.input_tokens or 0) + (response.output_tokens or 0),
         "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
-        "model": model,
-        "provider": provider,
     }
 
+
+def _merge_usage(
+    usage_a: dict, usage_b: dict, model: str, provider: str,
+) -> dict:
+    """Soma os 2 calls + adiciona model/provider."""
     return {
-        "card": card_data,
-        "raw_response": raw_response,
-        "usage": usage,
+        "input_tokens": usage_a["input_tokens"] + usage_b["input_tokens"],
+        "output_tokens": usage_a["output_tokens"] + usage_b["output_tokens"],
+        "total_tokens": (
+            usage_a["input_tokens"] + usage_b["input_tokens"]
+            + usage_a["output_tokens"] + usage_b["output_tokens"]
+        ),
+        "cost_usd": usage_a["cost_usd"] + usage_b["cost_usd"],
+        "model": model,
+        "provider": provider,
+        "calls": 2,
     }
