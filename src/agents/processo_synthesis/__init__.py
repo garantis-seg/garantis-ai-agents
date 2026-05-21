@@ -10,6 +10,7 @@ from .agent import classify_processo_synthesis
 from .schemas import (
     ApoliceContextMin,
     AutosRawExcerpt,
+    DocAutos,
     MovFactSheetMin,
     ProcessoSynthesisCard,
     ProcessoSynthesisRequest,
@@ -20,6 +21,7 @@ __all__ = [
     "classify_processo_synthesis",
     "ApoliceContextMin",
     "AutosRawExcerpt",
+    "DocAutos",
     "MovFactSheetMin",
     "ProcessoSynthesisCard",
     "ProcessoSynthesisRequest",

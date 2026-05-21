@@ -12,6 +12,8 @@ from .schemas import ApoliceContextMin, MovFactSheetMin, ProcessoSynthesisReques
 
 _MAX_MOVS_INLINE = 50  # cap defensivo no input do prompt
 _AUTOS_TEXT_CAP_CHARS = 60000  # DD6: cap absoluto 60k chars
+_DOC_TEXT_CAP_CHARS = 6000     # DD4-alt: cap por doc dos autos
+_MAX_DOCS_INLINE = 10           # DD4-alt: cap docs no prompt
 
 
 def _summarize_factsheet(fs: MovFactSheetMin) -> str:
@@ -83,6 +85,54 @@ def _summarize_apolice(ap: ApoliceContextMin) -> str:
     return " | ".join(parts)
 
 
+def _build_documents_block(req: ProcessoSynthesisRequest) -> str:
+    """DD4-alt: bloco DOCUMENTOS DOS AUTOS quando documents_dos_autos nao vazio.
+
+    Substitui o pivot mov-level (que dependia de hash matching nao recuperavel
+    nos 39k links legacy). LLM da camada 2 cor-relaciona docs com factsheets.
+    """
+    docs = req.documents_dos_autos or []
+    if not docs:
+        return ""
+    docs_capped = docs[:_MAX_DOCS_INLINE]
+    lines = []
+    for i, d in enumerate(docs_capped):
+        text = (d.text_content or "").strip()
+        truncated_note = ""
+        if len(text) > _DOC_TEXT_CAP_CHARS:
+            text = text[:_DOC_TEXT_CAP_CHARS]
+            truncated_note = f"\n  [TRUNCADO a {_DOC_TEXT_CAP_CHARS} chars]"
+        meta_parts = []
+        if d.tipo:
+            meta_parts.append(f"tipo: {d.tipo}")
+        if d.titulo:
+            meta_parts.append(f"titulo: {d.titulo}")
+        if d.data_documento:
+            meta_parts.append(f"data: {d.data_documento}")
+        meta_parts.append(f"doc_key: {d.doc_key}")
+        lines.append(f"--- DOC {i+1}/{len(docs_capped)} ---")
+        lines.append("  " + " | ".join(meta_parts))
+        lines.append("  texto:")
+        lines.append("  " + text.replace("\n", "\n  "))
+        if truncated_note:
+            lines.append(truncated_note)
+    omitted = len(docs) - len(docs_capped)
+    omitted_note = f"\n[+ {omitted} docs omitidos do prompt]" if omitted > 0 else ""
+    return (
+        f"\n\n=== DOCUMENTOS DOS AUTOS ({len(docs)} disponivel{'is' if len(docs)!=1 else ''}, mostrando {len(docs_capped)}) ===\n"
+        + "\n".join(lines)
+        + omitted_note
+        + "\n\nINSTRUCOES SOBRE DOCUMENTOS:\n"
+        "- Os docs vem do autos do processo (provedor jusbrasil tipicamente)\n"
+        "- Use o texto deles pra ENRIQUECER estado_processual, decisao_vigente,\n"
+        "  peca_pivo_candidata e valores. NAO duplique - sintetize.\n"
+        "- Quando doc aponta pra decisao/sentenca/acordao, cite doc_key em\n"
+        "  evidence_artifacts com kind='cda'/'aiim'/'sentenca' (best fit).\n"
+        "- Os factsheets (timeline) sao primarios pro estado processual;\n"
+        "  docs complementam com texto literal das pecas."
+    )
+
+
 def _build_autos_block(req: ProcessoSynthesisRequest) -> str:
     """DD6 rev2: bloco AUTOS.ZIP TRECHO RAW quando autos_raw_excerpt presente.
 
@@ -140,6 +190,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     header_block = "\n  ".join(header_lines)
 
     autos_block = _build_autos_block(req)
+    docs_block = _build_documents_block(req)
 
     classe_json = f'"{req.classe}"' if req.classe else "null"
     classe_code_json = req.classe_cnj_code if req.classe_cnj_code is not None else "null"
@@ -161,7 +212,7 @@ para agregar o risco do MERITO.
   {timeline_block}
 
 === APOLICE(S) ATRELADA(S) ===
-  {apolice_block}{autos_block}
+  {apolice_block}{autos_block}{docs_block}
 
 === INSTRUCOES POR CAMPO ===
 

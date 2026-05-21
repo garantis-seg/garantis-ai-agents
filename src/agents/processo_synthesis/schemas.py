@@ -174,6 +174,23 @@ class AutosRawExcerpt(BaseModel):
     source: str = Field(default="lawsuit_pdfs_extraction", description="origem do PDF (lawsuit_pdfs ou outra)")
 
 
+class DocAutos(BaseModel):
+    """1 documento do autos (jusbrasil ou similar provider) com text_content cached.
+
+    REV4 2026-05-21 (DD4-alternative): docs alimentados ao processo_synthesis
+    como contexto, em vez de tentar mov-level link (hash mismatch nos 39k links
+    legacy nao recuperavel sem re-flatten).
+    """
+
+    doc_key: str
+    titulo: Optional[str] = None
+    tipo: Optional[str] = None
+    data_documento: Optional[str] = None  # YYYY-MM-DD
+    text_content: str = Field(description="Texto extraido cap'd upstream")
+    text_truncated: bool = False
+    provider: str = "jusbrasil"
+
+
 class ProcessoSynthesisRequest(BaseModel):
     processo_numero: str
     classe: Optional[str] = None
@@ -186,6 +203,10 @@ class ProcessoSynthesisRequest(BaseModel):
     autos_raw_excerpt: Optional[AutosRawExcerpt] = Field(
         default=None,
         description="DD6 rev2: trecho raw autos.zip pros 207/237 procs com extraction_completed",
+    )
+    documents_dos_autos: list[DocAutos] = Field(
+        default_factory=list,
+        description="DD4-alt: docs jusbrasil com text_content (cap 10 docs, 30k chars total). Camada 2 cor-relaciona com factsheets.",
     )
     model: Optional[str] = None
     provider: Optional[str] = None
