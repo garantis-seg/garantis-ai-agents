@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("DAY_FACTSHEET_MODEL", "gemini-2.5-flash")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
+# Drift detection em leads.engine_llm_calls.prompt_version (P9).
+PROMPT_VERSION = "day_factsheet.v1.0"
+
 
 async def classify_day_factsheet(
     processo: ProcessoContextMin | dict,
@@ -113,4 +116,5 @@ async def classify_day_factsheet(
         "raw_response": raw_response,
         "llm_raw_prompt": prompt,
         "usage": usage,
+        "prompt_version": PROMPT_VERSION,
     }
