@@ -52,6 +52,39 @@ class PecaPivoCandidata(BaseModel):
     )
 
 
+class ProbabilidadeExito(BaseModel):
+    """Probabilidade do CONTRIBUINTE (tomador) ter exito no processo.
+
+    Matriz Daycoval 2026-05-21. Per-tipo (fiscal | trabalhista | civel) com
+    criterios objetivos da planilha 'Matriz de Risco - Garantias Judiciais'.
+
+    Conceitualmente DIFERENTE de risco_processo_intermediario:
+    - prob_exito = ponto de vista juridico (chance do contribuinte ganhar)
+    - risco_processo = ponto de vista da seguradora (chance de acionamento)
+    Sao inversamente correlacionados mas nao 100%: tempo ate transito,
+    substituicao de garantia, transacao tambem entram no risco.
+
+    A camada 3 (merito_synthesis) usa probabilidade_exito como input forte
+    pro risco final do merito.
+    """
+
+    classificacao: Literal["provavel", "possivel", "poucas_chances", "remota"] = Field(
+        description="Classificacao Daycoval. Pesos: provavel=1.0, possivel=0.7, poucas_chances=0.4, remota=0.0001",
+    )
+    score: float = Field(
+        ge=0.0, le=1.0,
+        description="Peso numerico (1.0 / 0.7 / 0.4 / 0.0001) — espelha classificacao",
+    )
+    criterios_aplicados: list[str] = Field(
+        default_factory=list,
+        description="Bullets dos criterios objetivos da matriz Daycoval que sustentam a classificacao (audit trail juridico). Ex: ['Materia exclusivamente de direito favoravel ao Tomador']",
+    )
+    justificativa: Optional[str] = Field(
+        default=None,
+        description="1-3 frases PT-BR amarrando os criterios ao caso concreto",
+    )
+
+
 # ── Output card principal ─────────────────────────────────────────────────
 
 
@@ -108,6 +141,18 @@ class ProcessoSynthesisCard(BaseModel):
     valor_garantia: Optional[float] = Field(
         default=None,
         description="Valor da apolice/garantia depositada neste processo (BRL). null se nao identificavel.",
+    )
+
+    # Campo 8: tipo judicial (determinado upstream por classify_tipo_judicial)
+    tipo_judicial: Literal["fiscal", "trabalhista", "civel"] = Field(
+        default="civel",
+        description="Tipo do processo (echo do request). Define qual matriz Daycoval aplicar pra probabilidade_exito.",
+    )
+
+    # Campo 9: probabilidade de exito (Matriz Daycoval 2026-05-21)
+    probabilidade_exito: ProbabilidadeExito = Field(
+        ...,
+        description="Probabilidade do tomador ter exito. LLM aplica os criterios objetivos da matriz Daycoval correspondente ao tipo_judicial.",
     )
 
     # Meta
@@ -198,6 +243,10 @@ class ProcessoSynthesisRequest(BaseModel):
     polo_ativo: Optional[str] = None
     polo_passivo: Optional[str] = None
     role_no_merito: Optional[Literal["principal", "conexo"]] = None
+    tipo_judicial: Literal["fiscal", "trabalhista", "civel"] = Field(
+        default="civel",
+        description="Determinado upstream por garantis_shared.cnj_utils.classify_tipo_judicial(assunto, tribunal, classe_codigo). Caller resolve e passa.",
+    )
     mov_factsheets: list[MovFactSheetMin] = Field(default_factory=list)
     apolices: list[ApoliceContextMin] = Field(default_factory=list)
     autos_raw_excerpt: Optional[AutosRawExcerpt] = Field(
