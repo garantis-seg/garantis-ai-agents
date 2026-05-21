@@ -85,7 +85,12 @@ async def classify_processo_synthesis(
                 len(request.mov_factsheets or []),
             )
     except (json.JSONDecodeError, Exception) as e:
-        logger.error(f"processo_synthesis parse failed pn={request.processo_numero}: {repr(e)}")
+        logger.error(
+            "processo_synthesis parse failed pn=%s: %s | raw_first_800=%s | raw_last_400=%s",
+            request.processo_numero, repr(e),
+            (raw_response or "")[:800],
+            (raw_response or "")[-400:],
+        )
         card_data = {
             "error": repr(e), "raw": raw_response,
             "processo_numero": request.processo_numero,
