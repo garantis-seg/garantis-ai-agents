@@ -331,12 +331,18 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
-Sua tarefa: sintetizar o estado atual de UM PROCESSO a partir dos FactSheets de suas movimentacoes
-(mov_factsheets ja extraidos pela camada 1) + contexto da(s) apolice(s) atrelada(s)
-+ trecho raw do autos.zip (quando disponivel, DD6).
+Sua tarefa tem DUAS PARTES OBRIGATORIAS:
+  (A) Sintetizar o estado atual do PROCESSO a partir dos FactSheets das movimentacoes
+      (estado_processual, decisao_vigente, lifecycle_garantia, risco_processo_intermediario,
+      trajetoria, peca-pivo, valores).
+  (B) **APLICAR A MATRIZ DAYCOVAL** e preencher `probabilidade_exito` com a
+      classificacao do tipo {req.tipo_judicial.upper()} (criterios listados abaixo).
+      Esta parte E OBRIGATORIA - nao deixe o objeto vazio. Mesmo com pouca evidencia,
+      escolha o bucket mais conservador adequado ("poucas_chances" por default) com
+      `confianca` baixa em vez de omitir o campo.
 
 Output e a camada 2 de 3 da engine v6. Output sera consumido pela camada 3 (merito_synthesis)
-para agregar o risco do MERITO.
+para agregar o risco do MERITO + a probabilidade_exito ponderada por valor.
 
 === PROCESSO ===
   {header_block}
@@ -453,6 +459,13 @@ Retorne APENAS JSON valido seguindo este shape exato:
   "classe": {classe_json},
   "classe_cnj_code": {classe_code_json},
   "role_no_merito": {role_json},
+  "tipo_judicial": "{req.tipo_judicial}",
+  "probabilidade_exito": {{
+    "classificacao": "provavel|possivel|poucas_chances|remota",
+    "score": 1.0,
+    "criterios_aplicados": ["bullet literal copiado da matriz"],
+    "justificativa": "1-3 frases amarrando criterios ao caso concreto"
+  }},
   "estado_processual": "...",
   "decisao_vigente": {{
     "sentido": null,
@@ -472,13 +485,6 @@ Retorne APENAS JSON valido seguindo este shape exato:
   }},
   "valor_em_disputa": null,
   "valor_garantia": null,
-  "tipo_judicial": "{req.tipo_judicial}",
-  "probabilidade_exito": {{
-    "classificacao": "provavel|possivel|poucas_chances|remota",
-    "score": 1.0,
-    "criterios_aplicados": ["..."],
-    "justificativa": "..."
-  }},
   "movs_processed": {len(factsheets_capped)},
   "confianca": 0.7,
   "evidence_artifacts": []

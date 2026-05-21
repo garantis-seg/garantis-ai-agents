@@ -67,10 +67,23 @@ async def classify_processo_synthesis(
             parsed["classe_cnj_code"] = request.classe_cnj_code
         if request.role_no_merito and not parsed.get("role_no_merito"):
             parsed["role_no_merito"] = request.role_no_merito
+        # tipo_judicial e DETERMINISTICO upstream (classify_tipo_judicial).
+        # Sempre echo, ignora valor que LLM possa ter inventado.
+        parsed["tipo_judicial"] = request.tipo_judicial
         if not parsed.get("movs_processed"):
             parsed["movs_processed"] = len(request.mov_factsheets or [])
         card = ProcessoSynthesisCard(**parsed)
         card_data = card.model_dump()
+        # Telemetria: detecta quando LLM omitiu prob_exito (campo novo,
+        # gemini-2.5-flash as vezes ignora apesar do prompt forte).
+        pe = card_data.get("probabilidade_exito") or {}
+        if not pe.get("classificacao"):
+            logger.warning(
+                "processo_synthesis pn=%s probabilidade_exito OMITIDO pelo LLM "
+                "(tipo=%s, movs=%d) - cair-vai como null no merito_synthesis aggregate",
+                request.processo_numero, request.tipo_judicial,
+                len(request.mov_factsheets or []),
+            )
     except (json.JSONDecodeError, Exception) as e:
         logger.error(f"processo_synthesis parse failed pn={request.processo_numero}: {repr(e)}")
         card_data = {
