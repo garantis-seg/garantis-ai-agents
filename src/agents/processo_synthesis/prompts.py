@@ -7,7 +7,7 @@ autos.zip) pra 207/237 procs Monit com extraction_completed. DD6 do plano.
 import json
 from typing import Any
 
-from .schemas import ApoliceContextMin, MovFactSheetMin, ProcessoSynthesisRequest
+from .schemas import ApoliceContextMin, DayFactSheetMin, MovFactSheetMin, ProcessoSynthesisRequest
 
 
 _MAX_MOVS_INLINE = 50  # cap defensivo no input do prompt
@@ -364,8 +364,31 @@ def _build_autos_block(req: ProcessoSynthesisRequest) -> str:
     )
 
 
+def _summarize_day_factsheet(d: DayFactSheetMin) -> str:
+    """Bloco curto de 1 day_factsheet pro prompt."""
+    parts = [f"[DIA {d.date or '?'}]"]
+    if d.relevancia_para_merito:
+        parts.append(f"relev={d.relevancia_para_merito}")
+    if d.resumo_dia:
+        parts.append(f"resumo: {d.resumo_dia[:200]}")
+    eventos = d.eventos or []
+    if eventos:
+        eventos_str = "; ".join(
+            f"{e.get('tipo', '?')}: {(e.get('descricao') or '')[:80]}"
+            for e in eventos[:5]
+        )
+        parts.append(f"eventos: {eventos_str}")
+    if d.decisao_do_dia and d.decisao_do_dia.get("tem_decisao"):
+        sentido = d.decisao_do_dia.get("sentido", "?")
+        natureza = d.decisao_do_dia.get("natureza", "?")
+        parts.append(f"DECISAO: {sentido}/{natureza}")
+    if d.evento_garantia_do_dia and d.evento_garantia_do_dia.get("tipo") not in (None, "nenhum"):
+        parts.append(f"garantia: {d.evento_garantia_do_dia.get('tipo')}")
+    return " | ".join(parts)
+
+
 def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
-    """Build prompt que agrega mov_factsheets do processo + apolice context + autos_raw_excerpt."""
+    """Build prompt que agrega mov_factsheets + day_factsheets + apolice context + autos_raw_excerpt."""
     factsheets = req.mov_factsheets or []
     factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or ""))
     if len(factsheets_sorted) > _MAX_MOVS_INLINE:
@@ -376,7 +399,13 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         cap_note = ""
 
     timeline_block = cap_note + "\n  ".join(_summarize_factsheet(f) for f in factsheets_capped) \
-        or "(sem movimentacoes)"
+        or "(sem movimentacoes mov-by-mov)"
+
+    # Day_factsheets: tier Degradado-Dia. Coexiste com mov_factsheets quando
+    # parte das movs tem FK e parte nao (intra-proc mixed).
+    day_factsheets_sorted = sorted(req.day_factsheets or [], key=lambda d: (d.date or ""))
+    days_block = "\n  ".join(_summarize_day_factsheet(d) for d in day_factsheets_sorted) \
+        or "(sem day_factsheets — proc nao esta em tier Degradado-Dia OU nao ha docs sem FK)"
 
     apolice_block = "\n  ".join(_summarize_apolice(ap) for ap in (req.apolices or [])) \
         or "(sem apolice atrelada)"
@@ -414,6 +443,21 @@ NAO inclua esse campo neste output.
 
 === TIMELINE DE FACTSHEETS (mov_factsheets, ordenados por data ASC) ===
   {timeline_block}
+
+=== DAY FACTSHEETS (tier Degradado-Dia, ordenados por data ASC) ===
+  {days_block}
+
+  INSTRUCOES PARA day_factsheets:
+  - Existem quando ha docs nos autos com texto MAS sem vinculo nativo
+    doc<->mov (caso tipico: Judit, Jusbrasil sem id de anexo). 1 card por dia
+    agregando movs+docs do mesmo dia.
+  - Coexistem com mov_factsheets no MESMO proc (intra-proc mixed tier).
+    NAO sao duplicata: cobrem dias que mov_factsheet nao teve acesso a doc.
+  - Use o RESUMO_DIA e EVENTOS pra extrair informacao FACTUAL (decisao,
+    valores, peca-pivo) que mov_factsheet nao pegou.
+  - Quando day_factsheet tem DECISAO mas mov_factsheet nao tem na mesma
+    data: confie no day (que viu o doc) sobre mov (que viu so o snippet).
+  - Confianca menor (~0.5-0.7) — correlacao multi-mov*multi-doc tem ruido.
 
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{autos_block}{docs_block}

@@ -195,6 +195,27 @@ class MovFactSheetMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
+class DayFactSheetMin(BaseModel):
+    """Subset do DayFactsheetCard pra alimentar processo_synthesis.
+
+    Day_factsheet eh camada 1 alternativa quando proc tier=Degradado-Dia:
+    1 card por DIA agregando movs+docs sem FK nativa doc<->mov. O L2 consome
+    AO LADO dos mov_factsheets (intra-proc mixed tier — vide memory
+    engine-v6-pipeline-quality-tiers).
+    """
+
+    date: Optional[str] = None
+    resumo_dia: Optional[str] = None
+    eventos: Optional[list[dict[str, Any]]] = None
+    decisao_do_dia: Optional[dict[str, Any]] = None
+    evento_garantia_do_dia: Optional[dict[str, Any]] = None
+    relevancia_para_merito: Optional[str] = None
+    docs_considerados: Optional[list[str]] = None
+    confianca: Optional[float] = None
+
+    model_config = {"extra": "ignore"}
+
+
 class ApoliceContextMin(BaseModel):
     """Resumo apolice card pra contexto."""
 
@@ -252,6 +273,11 @@ class ProcessoSynthesisRequest(BaseModel):
         description="Determinado upstream por garantis_shared.cnj_utils.classify_tipo_judicial(assunto, tribunal, classe_codigo). Caller resolve e passa.",
     )
     mov_factsheets: list[MovFactSheetMin] = Field(default_factory=list)
+    day_factsheets: list[DayFactSheetMin] = Field(
+        default_factory=list,
+        description="Cards camada 1 alternativa (1 por dia) quando proc tier=Degradado-Dia. "
+                    "Consumir junto com mov_factsheets (intra-proc mixed tier).",
+    )
     apolices: list[ApoliceContextMin] = Field(default_factory=list)
     autos_raw_excerpt: Optional[AutosRawExcerpt] = Field(
         default=None,
