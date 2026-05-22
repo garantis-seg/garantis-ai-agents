@@ -59,6 +59,16 @@ class LifecycleGarantiaMonolitica(BaseModel):
     motivo_recusa: Optional[str] = None
 
 
+class PecaPivoMonolith(BaseModel):
+    """A peca mais decisiva identificada no PDF monolitico."""
+
+    data: Optional[str] = None
+    descricao: Optional[str] = Field(
+        default=None,
+        description="1 frase explicando porque eh pivo",
+    )
+
+
 # ── Output card principal ───────────────────────────────────────────────
 
 
@@ -101,9 +111,9 @@ class MonolithFactsheetCard(BaseModel):
         description="Valor da apolice/garantia (BRL)",
     )
 
-    peca_pivo: Optional[dict[str, Any]] = Field(
-        default=None,
-        description="{data, descricao} — peça mais decisiva identificada no PDF",
+    peca_pivo: PecaPivoMonolith = Field(
+        default_factory=PecaPivoMonolith,
+        description="Peça mais decisiva identificada no PDF",
     )
 
     proximos_passos_provaveis: list[str] = Field(
