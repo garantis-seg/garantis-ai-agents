@@ -71,7 +71,7 @@ class GeminiProvider(BaseLLMProvider):
         prompt: str,
         model: Optional[str] = None,
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
         response_schema: Optional[Type] = None,
         **kwargs,
     ) -> LLMResponse:
@@ -140,7 +140,7 @@ class GeminiProvider(BaseLLMProvider):
         prompt: str,
         model: Optional[str] = None,
         temperature: float = 0.1,
-        max_tokens: int = 4096,
+        max_tokens: int = 16384,
         response_schema: Optional[Type] = None,
         **kwargs,
     ) -> LLMResponse:
