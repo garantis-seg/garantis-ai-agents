@@ -229,36 +229,28 @@ class ApoliceContextMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
-class AutosRawExcerpt(BaseModel):
-    """Trecho raw do autos.zip pra alimentar processo_synthesis quando
-    mov_factsheet nao tem doc_text (DD6 v6_meritos rev2).
+class MonolithFactsheetMin(BaseModel):
+    """Subset do MonolithFactsheetCard (camada 1 tier monolitico) pra alimentar
+    processo_synthesis.
 
-    Padrao: primeiras 10 paginas (peticao inicial) + ultimas 50 (decisoes recentes).
-    Cap absoluto: 60 paginas ou 60k chars.
+    Full-RAG (memory engine-v6-pipeline-quality-tiers): substitui o legacy
+    AutosRawExcerpt + DocAutos no L2. L1 monolith_factsheet ja sintetizou o
+    PDF inteiro em campos estruturados — L2 consome esse card, nao o raw.
     """
 
-    text: str = Field(description="Texto extraido do autos.zip com separadores --- Pagina X/N ---")
-    total_pages: int = 0
-    pages_used: int = 0
-    truncated: bool = False
-    source: str = Field(default="lawsuit_pdfs_extraction", description="origem do PDF (lawsuit_pdfs ou outra)")
+    processo_numero: Optional[str] = None
+    resumo_executivo: Optional[str] = None
+    decisao_vigente: Optional[dict[str, Any]] = None
+    eventos_principais: Optional[list[dict[str, Any]]] = None
+    lifecycle_garantia: Optional[list[dict[str, Any]]] = None
+    valor_em_disputa: Optional[float] = None
+    valor_garantia: Optional[float] = None
+    peca_pivo: Optional[dict[str, Any]] = None
+    proximos_passos_provaveis: Optional[list[str]] = None
+    confianca: Optional[float] = None
+    pages_used: Optional[int] = None
 
-
-class DocAutos(BaseModel):
-    """1 documento do autos (jusbrasil ou similar provider) com text_content cached.
-
-    REV4 2026-05-21 (DD4-alternative): docs alimentados ao processo_synthesis
-    como contexto, em vez de tentar mov-level link (hash mismatch nos 39k links
-    legacy nao recuperavel sem re-flatten).
-    """
-
-    doc_key: str
-    titulo: Optional[str] = None
-    tipo: Optional[str] = None
-    data_documento: Optional[str] = None  # YYYY-MM-DD
-    text_content: str = Field(description="Texto extraido cap'd upstream")
-    text_truncated: bool = False
-    provider: str = "jusbrasil"
+    model_config = {"extra": "ignore"}
 
 
 class ProcessoSynthesisRequest(BaseModel):
@@ -275,18 +267,15 @@ class ProcessoSynthesisRequest(BaseModel):
     mov_factsheets: list[MovFactSheetMin] = Field(default_factory=list)
     day_factsheets: list[DayFactSheetMin] = Field(
         default_factory=list,
-        description="Cards camada 1 alternativa (1 por dia) quando proc tier=Degradado-Dia. "
+        description="Cards camada 1 alternativa (1 por dia) quando proc tier=por_dia. "
                     "Consumir junto com mov_factsheets (intra-proc mixed tier).",
     )
-    apolices: list[ApoliceContextMin] = Field(default_factory=list)
-    autos_raw_excerpt: Optional[AutosRawExcerpt] = Field(
+    monolith_factsheet: Optional[MonolithFactsheetMin] = Field(
         default=None,
-        description="DD6 rev2: trecho raw autos.zip pros 207/237 procs com extraction_completed",
+        description="Card camada 1 tier monolitico — sintese do PDF inteiro. "
+                    "Quando present, substitui o legacy autos_raw_excerpt + documents_dos_autos.",
     )
-    documents_dos_autos: list[DocAutos] = Field(
-        default_factory=list,
-        description="DD4-alt: docs jusbrasil com text_content (cap 10 docs, 30k chars total). Camada 2 cor-relaciona com factsheets.",
-    )
+    apolices: list[ApoliceContextMin] = Field(default_factory=list)
     model: Optional[str] = None
     provider: Optional[str] = None
 

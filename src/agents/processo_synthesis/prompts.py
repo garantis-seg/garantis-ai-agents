@@ -158,8 +158,7 @@ def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
     timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_capped) \
         or "(sem movimentacoes)"
 
-    autos_block = _build_autos_block(req)
-    docs_block = _build_documents_block(req)
+    monolith_block = _build_monolith_block(req)
     matriz_block = _build_matriz_block(req.tipo_judicial)
 
     header_parts = [f"CNJ: {req.processo_numero}"]
@@ -180,7 +179,7 @@ DO TOMADOR TER EXITO neste processo. Sao 4 buckets — escolha 1.
 
 === TIMELINE DE FACTSHEETS (ordenados por data ASC) ===
   {timeline_block}
-{autos_block}{docs_block}
+{monolith_block}
 {matriz_block}
 
 === INSTRUCOES ===
@@ -288,79 +287,81 @@ def _summarize_apolice(ap: ApoliceContextMin) -> str:
     return " | ".join(parts)
 
 
-def _build_documents_block(req: ProcessoSynthesisRequest) -> str:
-    """DD4-alt: bloco DOCUMENTOS DOS AUTOS quando documents_dos_autos nao vazio.
+def _build_monolith_block(req: ProcessoSynthesisRequest) -> str:
+    """Bloco MONOLITH FACTSHEET quando proc tier=monolitico (PDF blob sintetizado
+    pela Camada 1 monolith_factsheet em 1 card estruturado).
 
-    Substitui o pivot mov-level (que dependia de hash matching nao recuperavel
-    nos 39k links legacy). LLM da camada 2 cor-relaciona docs com factsheets.
+    Full-RAG (memory engine-v6-pipeline-quality-tiers): SUBSTITUI os legacy
+    _build_documents_block + _build_autos_block. L2 NAO recebe mais raw —
+    monolith_factsheet (L1) ja fez essa sintese e expoe campos estruturados.
+
+    Retorna string vazia quando proc nao esta em tier monolitico.
     """
-    docs = req.documents_dos_autos or []
-    if not docs:
+    mf = req.monolith_factsheet
+    if not mf:
         return ""
-    docs_capped = docs[:_MAX_DOCS_INLINE]
+
     lines = []
-    for i, d in enumerate(docs_capped):
-        text = (d.text_content or "").strip()
-        truncated_note = ""
-        if len(text) > _DOC_TEXT_CAP_CHARS:
-            text = text[:_DOC_TEXT_CAP_CHARS]
-            truncated_note = f"\n  [TRUNCADO a {_DOC_TEXT_CAP_CHARS} chars]"
-        meta_parts = []
-        if d.tipo:
-            meta_parts.append(f"tipo: {d.tipo}")
-        if d.titulo:
-            meta_parts.append(f"titulo: {d.titulo}")
-        if d.data_documento:
-            meta_parts.append(f"data: {d.data_documento}")
-        meta_parts.append(f"doc_key: {d.doc_key}")
-        lines.append(f"--- DOC {i+1}/{len(docs_capped)} ---")
-        lines.append("  " + " | ".join(meta_parts))
-        lines.append("  texto:")
-        lines.append("  " + text.replace("\n", "\n  "))
-        if truncated_note:
-            lines.append(truncated_note)
-    omitted = len(docs) - len(docs_capped)
-    omitted_note = f"\n[+ {omitted} docs omitidos do prompt]" if omitted > 0 else ""
+    if mf.resumo_executivo:
+        lines.append(f"  resumo_executivo: {mf.resumo_executivo}")
+
+    dv = mf.decisao_vigente or {}
+    if dv.get("tem_decisao"):
+        d_parts = [f"DECISAO_VIGENTE {dv.get('natureza') or '?'}"]
+        if dv.get("instancia"):
+            d_parts.append(dv["instancia"])
+        if dv.get("sentido"):
+            d_parts.append(dv["sentido"])
+        if dv.get("data"):
+            d_parts.append(f"({dv['data']})")
+        if dv.get("transito_certificado"):
+            d_parts.append("[TRANSITO CERTIFICADO]")
+        lines.append("  " + " ".join(d_parts))
+
+    eventos = mf.eventos_principais or []
+    if eventos:
+        ev_str = "; ".join(
+            f"[{e.get('data','?')}] {e.get('tipo','?')}: {(e.get('descricao') or '')[:80]}"
+            for e in eventos[:10]
+        )
+        lines.append(f"  eventos: {ev_str}")
+
+    lc = mf.lifecycle_garantia or []
+    if lc:
+        lc_str = "; ".join(
+            f"[{e.get('data','?')}] {e.get('evento','?')}/{e.get('tipo_garantia','?')}"
+            for e in lc[:5]
+        )
+        lines.append(f"  lifecycle_garantia: {lc_str}")
+
+    if mf.valor_em_disputa is not None:
+        lines.append(f"  valor_em_disputa: R$ {mf.valor_em_disputa:,.2f}")
+    if mf.valor_garantia is not None:
+        lines.append(f"  valor_garantia: R$ {mf.valor_garantia:,.2f}")
+
+    pivo = mf.peca_pivo or {}
+    if pivo.get("descricao"):
+        lines.append(f"  peca_pivo: [{pivo.get('data','?')}] {pivo['descricao']}")
+
+    if mf.proximos_passos_provaveis:
+        lines.append(f"  proximos_passos: {'; '.join(mf.proximos_passos_provaveis)}")
+
+    if mf.confianca is not None:
+        lines.append(f"  confianca: {mf.confianca}")
+
+    pages_note = f" ({mf.pages_used} pgs lidas)" if mf.pages_used else ""
+    body = "\n".join(lines) if lines else "  (monolith_factsheet vazio)"
     return (
-        f"\n\n=== DOCUMENTOS DOS AUTOS ({len(docs)} disponivel{'is' if len(docs)!=1 else ''}, mostrando {len(docs_capped)}) ===\n"
-        + "\n".join(lines)
-        + omitted_note
-        + "\n\nINSTRUCOES SOBRE DOCUMENTOS:\n"
-        "- Os docs vem do autos do processo (provedor jusbrasil tipicamente)\n"
-        "- Use o texto deles pra ENRIQUECER estado_processual, decisao_vigente,\n"
-        "  peca_pivo_candidata e valores. NAO duplique - sintetize.\n"
-        "- Quando doc aponta pra decisao/sentenca/acordao, cite doc_key em\n"
-        "  evidence_artifacts com kind='cda'/'aiim'/'sentenca' (best fit).\n"
-        "- Os factsheets (timeline) sao primarios pro estado processual;\n"
-        "  docs complementam com texto literal das pecas."
-    )
-
-
-def _build_autos_block(req: ProcessoSynthesisRequest) -> str:
-    """DD6 rev2: bloco AUTOS.ZIP TRECHO RAW quando autos_raw_excerpt presente.
-
-    Retorna string vazia quando nao ha autos disponivel.
-    """
-    if not req.autos_raw_excerpt:
-        return ""
-    ax = req.autos_raw_excerpt
-    text = (ax.text or "").strip()
-    if not text:
-        return ""
-    if len(text) > _AUTOS_TEXT_CAP_CHARS:
-        text = text[:_AUTOS_TEXT_CAP_CHARS] + "\n\n[TRUNCADO a 60k chars]"
-    return (
-        f"\n\n=== AUTOS.ZIP TRECHO RAW (peticao inicial + decisoes recentes, "
-        f"{ax.pages_used} de {ax.total_pages} pgs) ===\n"
-        f"{text}\n\n"
-        "INSTRUCOES SOBRE AUTOS RAW:\n"
-        "- Este e o TEXTO BRUTO do PDF do autos.zip merged (nao decomposto por mov).\n"
-        "- Use como COMPLEMENTO aos factsheets (que sao a fonte primaria).\n"
-        "- Quando ha conflito entre factsheet e autos: prefira a evidencia FACTUAL do autos\n"
-        "  (texto literal) mas registre na justificativa.\n"
-        "- Use o autos pra: confirmar peca-pivo, extrair valores numericos precisos,\n"
-        "  identificar tese juridica da peticao inicial, ver dispositivos de sentencas/acordaos\n"
-        "  literais."
+        f"\n\n=== MONOLITH FACTSHEET (tier monolitico, PDF inteiro sintetizado{pages_note}) ===\n"
+        f"{body}\n\n"
+        "INSTRUCOES PARA monolith_factsheet:\n"
+        "- Sintese ja-feita pela Camada 1 do PDF MONOLITICO inteiro (sem per-doc).\n"
+        "- Confianca menor (~0.4-0.7) por construcao — leitura de PDF inteiro\n"
+        "  sem mov-by-mov tem ruido. Mas eh sintese ESTRUTURADA, nao raw.\n"
+        "- Use em complemento aos mov_factsheets + day_factsheets. Quando ambos\n"
+        "  existem, factsheets per-mov/dia tem mais granularidade — prefira.\n"
+        "- Quando monolith_factsheet eh a UNICA fonte (sem mov/day), use ele\n"
+        "  como base, propagando a confianca menor pro card de saida."
     )
 
 
@@ -422,8 +423,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         header_lines.append(f"Polo passivo (tomador): {req.polo_passivo}")
     header_block = "\n  ".join(header_lines)
 
-    autos_block = _build_autos_block(req)
-    docs_block = _build_documents_block(req)
+    monolith_block = _build_monolith_block(req)
 
     classe_json = f'"{req.classe}"' if req.classe else "null"
     classe_code_json = req.classe_cnj_code if req.classe_cnj_code is not None else "null"
@@ -431,9 +431,13 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
-Sua tarefa: sintetizar o estado atual do PROCESSO a partir dos FactSheets das movimentacoes
-+ contexto da(s) apolice(s) + autos.zip (se disponivel). Output sera consumido pela
-camada 3 (merito_synthesis) pra agregar risco do MERITO.
+Sua tarefa: sintetizar o estado atual do PROCESSO a partir dos FACTSHEETS da Camada 1
+(mov_factsheet + day_factsheet + monolith_factsheet) + contexto da(s) apolice(s).
+Output sera consumido pela camada 3 (merito_synthesis) pra agregar risco do MERITO.
+
+ARQUITETURA FULL-RAG: voce SO recebe cards estruturados ja-sintetizados pela Camada 1
+(nao recebe raw PDF nem docs cru). Confie nos cards — a Camada 1 fez o trabalho
+de extracao FACTUAL com acesso ao texto. Sua tarefa eh AGREGAR + INTERPRETAR.
 
 NOTA: `probabilidade_exito` (Matriz Daycoval) e calculada em CALL SEPARADA do C2;
 NAO inclua esse campo neste output.
@@ -460,7 +464,7 @@ NAO inclua esse campo neste output.
   - Confianca menor (~0.5-0.7) — correlacao multi-mov*multi-doc tem ruido.
 
 === APOLICE(S) ATRELADA(S) ===
-  {apolice_block}{autos_block}{docs_block}
+  {apolice_block}{monolith_block}
 
 === INSTRUCOES POR CAMPO ===
 
