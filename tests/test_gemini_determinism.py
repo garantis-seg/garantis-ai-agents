@@ -222,3 +222,58 @@ def test_agents_pass_thinking_budget_zero():
         assert "temperature=0.0" in src_text, (
             f"{mod.__name__} usa temperature != 0.0 — non-determinismo."
         )
+
+
+# ── L3 classified_at us truncation (Bug 4 followup) ────────────────────────
+
+
+def test_l3_classified_at_truncated_to_seconds():
+    """Bug 4 followup: L3 prompt diverge em microssegundos do classified_at
+    do snapshot anterior. Cada cascade grava NOW() com us, L3 inclui inline,
+    LLM gera narrativa ligeiramente diferente mesmo com L2 parsed_card
+    identico. Fix: truncar pra segundos.
+    """
+    from src.agents.merito_synthesis.prompts import _summarize_previous
+    from src.agents.merito_synthesis.schemas import PreviousSnapshot
+
+    # Mesmo segundo, microssegundos diferentes (prod prov 4b385580 vs 838276a4)
+    prev1 = PreviousSnapshot(
+        risco_anterior="Medio",
+        classified_at_anterior="2026-05-23 09:04:42.164498",
+    )
+    prev2 = PreviousSnapshot(
+        risco_anterior="Medio",
+        classified_at_anterior="2026-05-23 09:04:42.165133",
+    )
+
+    out1 = _summarize_previous(prev1)
+    out2 = _summarize_previous(prev2)
+
+    # Output deve ser IDENTICO entre os 2 (microssegundos truncados)
+    assert out1 == out2, (
+        f"classified_at us nao foi truncado:\n  out1={out1!r}\n  out2={out2!r}"
+    )
+    # Confirma que segundos ainda aparecem (nao truncou demais)
+    assert "09:04:42" in out1
+    # E us NAO aparecem
+    assert "164498" not in out1
+    assert "165133" not in out1
+
+
+def test_l3_classified_at_none_handled():
+    """Sem classified_at -> nao chora."""
+    from src.agents.merito_synthesis.prompts import _summarize_previous
+    from src.agents.merito_synthesis.schemas import PreviousSnapshot
+
+    prev = PreviousSnapshot(risco_anterior="Medio", classified_at_anterior=None)
+    out = _summarize_previous(prev)
+    assert "classified_at" not in out
+    assert "Medio" in out
+
+
+def test_l3_no_previous_snapshot():
+    """Primeiro cascade — sem prev."""
+    from src.agents.merito_synthesis.prompts import _summarize_previous
+
+    out = _summarize_previous(None)
+    assert "PRIMEIRA CLASSIFICACAO" in out

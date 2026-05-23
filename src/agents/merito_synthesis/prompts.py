@@ -130,7 +130,12 @@ def _summarize_previous(prev: PreviousSnapshot | None) -> str:
         return "PRIMEIRA CLASSIFICACAO (sem snapshot anterior)"
     parts = [f"  risco_anterior: {prev.risco_anterior}"]
     if prev.classified_at_anterior:
-        parts.append(f"classified_at: {prev.classified_at_anterior}")
+        # Truncate microsseconds — Bug 4 handoff: micro varia entre cascades
+        # consecutivas (cada snapshot grava NOW() com precisao us), L3 prompt
+        # diverge em 5-6 chars, LLM gera narrativa ligeiramente diferente
+        # mesmo com L2 parsed_card identico.
+        cls_at = str(prev.classified_at_anterior).split(".")[0]
+        parts.append(f"classified_at: {cls_at}")
     if prev.decisao_anterior:
         parts.append(f"decisao_anterior: {json.dumps(prev.decisao_anterior, ensure_ascii=False)[:200]}")
     return "\n".join(parts)
