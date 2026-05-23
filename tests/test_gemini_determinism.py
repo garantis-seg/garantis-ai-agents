@@ -227,37 +227,64 @@ def test_agents_pass_thinking_budget_zero():
 # ── L3 classified_at us truncation (Bug 4 followup) ────────────────────────
 
 
-def test_l3_classified_at_truncated_to_seconds():
-    """Bug 4 followup: L3 prompt diverge em microssegundos do classified_at
-    do snapshot anterior. Cada cascade grava NOW() com us, L3 inclui inline,
-    LLM gera narrativa ligeiramente diferente mesmo com L2 parsed_card
-    identico. Fix: truncar pra segundos.
+def test_l3_classified_at_truncated_to_date():
+    """Bug 4 followup #2: L3 prompt ainda divergia em hora/min/seg do
+    classified_at do snapshot anterior. Cada cascade nova ve um snapshot
+    diferente (gerado pela cascade imediatamente previa), com horario
+    diferente no mesmo dia. Fix: truncar [:10] pra YYYY-MM-DD.
+
+    Acceptance: 2 cascades no MESMO DIA com horarios diferentes produzem
+    L3 prompt IDENTICO.
     """
     from src.agents.merito_synthesis.prompts import _summarize_previous
     from src.agents.merito_synthesis.schemas import PreviousSnapshot
 
-    # Mesmo segundo, microssegundos diferentes (prod prov 4b385580 vs 838276a4)
+    # Prod cascades 9db68047 (10:53) vs bd5697c3 (10:35) — mesmo dia,
+    # horarios diferentes (drift de 2 chars que sobrou pos-us fix).
     prev1 = PreviousSnapshot(
         risco_anterior="Medio",
-        classified_at_anterior="2026-05-23 09:04:42.164498",
+        classified_at_anterior="2026-05-23 10:35:26.937755",
     )
     prev2 = PreviousSnapshot(
         risco_anterior="Medio",
-        classified_at_anterior="2026-05-23 09:04:42.165133",
+        classified_at_anterior="2026-05-23 10:53:26.334197",
     )
 
     out1 = _summarize_previous(prev1)
     out2 = _summarize_previous(prev2)
 
-    # Output deve ser IDENTICO entre os 2 (microssegundos truncados)
+    # Output IDENTICO entre os 2 (horario truncado, fica so YYYY-MM-DD)
     assert out1 == out2, (
-        f"classified_at us nao foi truncado:\n  out1={out1!r}\n  out2={out2!r}"
+        f"classified_at hora nao foi truncada:\n  out1={out1!r}\n  out2={out2!r}"
     )
-    # Confirma que segundos ainda aparecem (nao truncou demais)
-    assert "09:04:42" in out1
-    # E us NAO aparecem
-    assert "164498" not in out1
-    assert "165133" not in out1
+    # Confirma que data aparece (preserve staleness signal)
+    assert "2026-05-23" in out1
+    # Hora/min/seg NAO aparecem
+    assert "10:35" not in out1
+    assert "10:53" not in out1
+
+
+def test_l3_classified_at_different_days_diverge():
+    """Sanity: diferentes DIAS ainda divergem (preserva staleness signal).
+    Snapshot anterior de hoje vs de 30d atras NAO deve ser igual no prompt."""
+    from src.agents.merito_synthesis.prompts import _summarize_previous
+    from src.agents.merito_synthesis.schemas import PreviousSnapshot
+
+    prev_recent = PreviousSnapshot(
+        risco_anterior="Medio",
+        classified_at_anterior="2026-05-23 10:00:00.000000",
+    )
+    prev_stale = PreviousSnapshot(
+        risco_anterior="Medio",
+        classified_at_anterior="2026-04-23 10:00:00.000000",
+    )
+
+    out_recent = _summarize_previous(prev_recent)
+    out_stale = _summarize_previous(prev_stale)
+
+    assert out_recent != out_stale, "dias diferentes deveriam divergir"
+    assert "2026-05-23" in out_recent
+    assert "2026-04-23" in out_stale
 
 
 def test_l3_classified_at_none_handled():

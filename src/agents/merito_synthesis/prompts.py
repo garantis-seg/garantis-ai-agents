@@ -130,11 +130,12 @@ def _summarize_previous(prev: PreviousSnapshot | None) -> str:
         return "PRIMEIRA CLASSIFICACAO (sem snapshot anterior)"
     parts = [f"  risco_anterior: {prev.risco_anterior}"]
     if prev.classified_at_anterior:
-        # Truncate microsseconds — Bug 4 handoff: micro varia entre cascades
-        # consecutivas (cada snapshot grava NOW() com precisao us), L3 prompt
-        # diverge em 5-6 chars, LLM gera narrativa ligeiramente diferente
-        # mesmo com L2 parsed_card identico.
-        cls_at = str(prev.classified_at_anterior).split(".")[0]
+        # Bug 4 followup: truncate pra YYYY-MM-DD (data so, sem horario).
+        # Cada cascade nova ve um snapshot anterior gerado pela cascade
+        # imediatamente previa — hora/min/seg variam entre runs no mesmo dia
+        # e poluem L3 prompt_hash sem agregar sinal util ao LLM (granularidade
+        # de "dia" basta p/ avaliar staleness do snapshot prev vs hoje).
+        cls_at = str(prev.classified_at_anterior)[:10]
         parts.append(f"classified_at: {cls_at}")
     if prev.decisao_anterior:
         parts.append(f"decisao_anterior: {json.dumps(prev.decisao_anterior, ensure_ascii=False)[:200]}")
