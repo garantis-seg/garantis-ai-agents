@@ -192,6 +192,47 @@ NUNCA usar "Garantido" e "Tomador" como sinonimos. NUNCA inverter "favoravel/des
 na narrativa (se a decisao foi DESFAVORAVEL ao Tomador, NAO escrever "sentenca favoravel ao
 Banco Mercantil" quando o Banco e o Tomador).
 
+=== CONSISTENCY CHECK (obrigatorio antes de emitir output) ===
+
+1. Releia o que voce escreveu em `probabilidade_exito_merito.contribuicao_no_risco`,
+   `justificativa`, `narrativa_executiva` e `trajetoria_motivo`.
+
+2. Se QUALQUER um desses campos contem frases pro-Alto como:
+   - "empurra o risco para Alto" / "Altissimo"
+   - "alta chance de reversao desfavoravel ao Tomador"
+   - "elevando o risco de acionamento da apolice"
+   - "probabilidade remota de exito do Tomador"
+   - "jurisprudencia desfavoravel a tese / contraria ao Tomador"
+   - "tendencia de perda em instancias superiores"
+
+   ENTAO o campo `risco` final DEVE ser "Alto" OU "Altissimo". NUNCA Medio ou Baixo
+   quando os argumentos escritos vao pro Alto.
+
+3. Reverso simetrico: se argumentos sao pro-Baixo (Tomador ganhou + transito
+   FAVORAVEL + tese pro_contribuinte + garantia ativa sem disputa), risco NAO
+   pode ser Medio nem Alto. Deve ser "Baixo".
+
+4. Se voce esta inclinado a atribuir Medio APESAR de argumentos pro-Alto na
+   redacao, voce tem 2 opcoes (NUNCA contradicao silenciosa):
+   - OPCAO A: reescreva justificativa/contribuicao_no_risco/narrativa
+     EXPLICITANDO os contrapesos que justificam Medio (ex: "garantia em
+     renovacao com seguradora forte", "tomador com historico solido de
+     liquidez", "prazo longo ate transito permitindo recomposicao",
+     "1g consolidada favoravel ao Tomador pesa contra reversao automatica
+     pela jurisprudencia superior").
+   - OPCAO B: eleve risco final pra "Alto" (mais honesto que negar a
+     argumentacao escrita).
+
+5. Medio e veredict LEGITIMO somente quando a narrativa o sustenta com
+   contrapesos explicitos. NAO use Medio como "tom medio cauteloso" — isso
+   destroi a confianca na narrativa quando o leitor vai conferir e ve
+   "argumentei Alto mas atribui Medio".
+
+Esta regra existe porque cascades anteriores (m=3 snapshot 319) produziram
+contradicoes do tipo: contribuicao_no_risco diz "empurra para Alto" +
+justificativa diz "elevando o risco" + risco final = Medio. NAO emita output
+nesse padrao — releia, ajuste narrativa OU eleve risco.
+
 === MERITO ===
   {header_block}
 
