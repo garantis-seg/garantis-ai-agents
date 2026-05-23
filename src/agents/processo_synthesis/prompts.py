@@ -14,6 +14,20 @@ _MAX_MOVS_INLINE = 50  # cap defensivo no input do prompt
 _AUTOS_TEXT_CAP_CHARS = 60000  # DD6: cap absoluto 60k chars
 _DOC_TEXT_CAP_CHARS = 6000     # DD4-alt: cap por doc dos autos
 _MAX_DOCS_INLINE = 10           # DD4-alt: cap docs no prompt
+_MOV_ID_DISPLAY_CHARS = 8       # UUID prefix na exibicao (Bug 3 handoff)
+
+
+def _short_mov_id(mov_id: str | None) -> str:
+    """Trunca mov_id pra exibicao no prompt. UUID -> primeiros 8 chars.
+    Numerico/outro formato -> retorna inteiro (compat legacy)."""
+    if not mov_id:
+        return "?"
+    s = str(mov_id)
+    # UUID detection: 36 chars com hifens em 8/13/18/23
+    if (len(s) == 36 and s[8] == "-" and s[13] == "-"
+            and s[18] == "-" and s[23] == "-"):
+        return s[:_MOV_ID_DISPLAY_CHARS]
+    return s
 
 
 # ── Matriz Daycoval (Probabilidade de Exito) ─────────────────────────────
@@ -219,11 +233,16 @@ Retorne APENAS JSON valido seguindo este shape:
 
 
 def _summarize_factsheet(fs: MovFactSheetMin) -> str:
-    """1 linha compacta por factsheet pro timeline do prompt."""
+    """1 linha compacta por factsheet pro timeline do prompt.
+
+    mov_id renderizado como prefix de 8 chars (UUID estavel pos-Fase 2
+    canonical layer — antes era canonical_event.id BIGINT volatil entre
+    re-materializes, causava drift do prompt L2 entre cascades).
+    """
     parts = []
     if fs.data:
         parts.append(f"[{fs.data}]")
-    parts.append(f"#{fs.mov_id}")
+    parts.append(f"#{_short_mov_id(fs.mov_id)}")
     if fs.categoria:
         parts.append(fs.categoria)
     if fs.relevancia_merito:
@@ -389,9 +408,17 @@ def _summarize_day_factsheet(d: DayFactSheetMin) -> str:
 
 
 def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
-    """Build prompt que agrega mov_factsheets + day_factsheets + apolice context + autos_raw_excerpt."""
+    """Build prompt que agrega mov_factsheets + day_factsheets + apolice context + autos_raw_excerpt.
+
+    Sort do timeline e DETERMINISTICO: (data ASC, mov_id ASC). mov_id e
+    cluster_id UUID estavel pos-Fase 2 (Bug 3 handoff). Mesmo input
+    produz mesmo prompt entre cascades — drift L2 eliminado.
+    """
     factsheets = req.mov_factsheets or []
-    factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or ""))
+    factsheets_sorted = sorted(
+        factsheets,
+        key=lambda f: (f.data or "", f.mov_id or ""),
+    )
     if len(factsheets_sorted) > _MAX_MOVS_INLINE:
         factsheets_capped = factsheets_sorted[-_MAX_MOVS_INLINE:]
         cap_note = f"\n  [{len(factsheets_sorted) - _MAX_MOVS_INLINE} movs anteriores omitidas para caber no prompt]\n"
@@ -403,7 +430,8 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         or "(sem movimentacoes mov-by-mov)"
 
     # Day_factsheets: tier Degradado-Dia. Coexiste com mov_factsheets quando
-    # parte das movs tem FK e parte nao (intra-proc mixed).
+    # parte das movs tem FK e parte nao (intra-proc mixed). Sort tie-break
+    # por date string (sem mov_id em day).
     day_factsheets_sorted = sorted(req.day_factsheets or [], key=lambda d: (d.date or ""))
     days_block = "\n  ".join(_summarize_day_factsheet(d) for d in day_factsheets_sorted) \
         or "(sem day_factsheets — proc nao esta em tier Degradado-Dia OU nao ha docs sem FK)"
