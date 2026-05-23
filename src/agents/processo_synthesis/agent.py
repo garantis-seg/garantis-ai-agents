@@ -75,21 +75,30 @@ async def classify_processo_synthesis(
 
 
 async def _call_synthesis(llm_provider, request, model, provider) -> dict:
-    """Call A — synthesis sem prob_exito."""
+    """Call A — synthesis sem prob_exito.
+
+    Determinismo Bug 4 handoff: temperature=0.0 (era 0.1) + thinking_budget=0
+    em gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
+    """
     prompt = build_processo_synthesis_prompt(request)
     response: LLMResponse = await llm_provider.agenerate(
-        prompt=prompt, model=model, temperature=0.1,
+        prompt=prompt, model=model, temperature=0.0,
         response_mime_type="application/json",
+        thinking_budget=0,
     )
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
 
 
 async def _call_probabilidade_exito(llm_provider, request, model, provider) -> dict:
-    """Call B — probabilidade_exito Daycoval focused."""
+    """Call B — probabilidade_exito Daycoval focused.
+
+    Determinismo Bug 4: temperature=0.0 (era 0.1) + thinking_budget=0.
+    """
     prompt = build_probabilidade_exito_prompt(request)
     response: LLMResponse = await llm_provider.agenerate(
-        prompt=prompt, model=model, temperature=0.1,
+        prompt=prompt, model=model, temperature=0.0,
         response_mime_type="application/json",
+        thinking_budget=0,
     )
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
 

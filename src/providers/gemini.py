@@ -66,6 +66,72 @@ class GeminiProvider(BaseLLMProvider):
 
         logger.info(f"GeminiProvider initialized with default model: {self._default_model}")
 
+    def _build_config_params(
+        self,
+        *,
+        temperature: float,
+        max_tokens: int,
+        response_schema: Optional[Type],
+        model: str,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """Build kwargs p/ GenerateContentConfig — centralizado p/ generate/agenerate.
+
+        Determinismo: quando temperature=0, force top_p=1.0 + top_k=1 (greedy
+        strict decoding). Gemini 2.5 tem thinking mode ON by default — caller
+        passa thinking_budget=0 p/ disable (elimina variabilidade dos thinking
+        tokens, ver Bug 4 handoff).
+        """
+        config_params: Dict[str, Any] = {
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+        }
+
+        # Structured output
+        if response_schema is not None:
+            config_params["response_mime_type"] = "application/json"
+            config_params["response_schema"] = response_schema
+        elif kwargs.get("response_mime_type"):
+            # Permite forcar JSON output sem passar response_schema
+            # (necessario quando schema tem dict[str, Any] que Gemini Developer API rejeita)
+            config_params["response_mime_type"] = kwargs["response_mime_type"]
+
+        # Greedy strict decoding quando temperature=0 (top_p=1, top_k=1).
+        # Override possivel via kwargs.
+        if temperature == 0.0:
+            config_params["top_p"] = kwargs.get("top_p", 1.0)
+            config_params["top_k"] = kwargs.get("top_k", 1)
+        else:
+            if "top_p" in kwargs:
+                config_params["top_p"] = kwargs["top_p"]
+            if "top_k" in kwargs:
+                config_params["top_k"] = kwargs["top_k"]
+
+        # Thinking mode (Gemini 2.5 only). thinking_budget=0 desabilita.
+        # Caller opt-in: nao mexer se kwarg ausente, preserva default SDK.
+        thinking_budget = kwargs.get("thinking_budget")
+        if thinking_budget is not None and "2.5" in (model or ""):
+            try:
+                config_params["thinking_config"] = self._types.ThinkingConfig(
+                    thinking_budget=thinking_budget,
+                )
+            except (AttributeError, TypeError) as e:
+                logger.warning(
+                    "ThinkingConfig not supported by SDK; ignoring thinking_budget=%s: %r",
+                    thinking_budget, e,
+                )
+
+        # Seed (opcional — fixa seed do sampler quando SDK suporta).
+        seed = kwargs.get("seed")
+        if seed is not None:
+            try:
+                # SDK pode aceitar direto em GenerateContentConfig OR rejeitar.
+                config_params["seed"] = seed
+            except Exception:
+                pass
+
+        return config_params
+
     def generate(
         self,
         prompt: str,
@@ -90,22 +156,13 @@ class GeminiProvider(BaseLLMProvider):
             LLMResponse with generated content.
         """
         model = model or self._default_model
-
-        # Build generation config
-        config_params = {
-            "temperature": temperature,
-            "max_output_tokens": max_tokens,
-        }
-
-        # Add structured output if schema provided
-        if response_schema:
-            config_params["response_mime_type"] = "application/json"
-            config_params["response_schema"] = response_schema
-        elif kwargs.get("response_mime_type"):
-            # Permite forcar JSON output sem passar response_schema
-            # (necessario quando schema tem dict[str, Any] que Gemini Developer API rejeita)
-            config_params["response_mime_type"] = kwargs["response_mime_type"]
-
+        config_params = self._build_config_params(
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+            model=model,
+            **kwargs,
+        )
         config = self._types.GenerateContentConfig(**config_params)
 
         # Make API call
@@ -153,27 +210,23 @@ class GeminiProvider(BaseLLMProvider):
             temperature: Sampling temperature.
             max_tokens: Maximum output tokens.
             response_schema: Pydantic model for structured JSON output.
-            **kwargs: Additional parameters.
+            **kwargs: Additional parameters. Reconhecidos p/ determinismo:
+                - thinking_budget (int, 0 = thinking OFF em gemini-2.5-*)
+                - top_p (float, default 1.0 quando temperature=0)
+                - top_k (int, default 1 quando temperature=0)
+                - seed (int, fixa seed do sampler se SDK suporta)
 
         Returns:
             LLMResponse with generated content.
         """
         model = model or self._default_model
-
-        # Build generation config
-        config_params = {
-            "temperature": temperature,
-            "max_output_tokens": max_tokens,
-        }
-
-        if response_schema:
-            config_params["response_mime_type"] = "application/json"
-            config_params["response_schema"] = response_schema
-        elif kwargs.get("response_mime_type"):
-            # Permite forcar JSON output sem passar response_schema
-            # (necessario quando schema tem dict[str, Any] que Gemini Developer API rejeita)
-            config_params["response_mime_type"] = kwargs["response_mime_type"]
-
+        config_params = self._build_config_params(
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_schema=response_schema,
+            model=model,
+            **kwargs,
+        )
         config = self._types.GenerateContentConfig(**config_params)
 
         # Make async API call

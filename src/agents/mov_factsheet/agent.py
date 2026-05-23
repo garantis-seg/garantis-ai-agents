@@ -87,6 +87,9 @@ async def classify_mov_factsheet(
         model=model,
         temperature=0.0,
         response_schema=MovFactSheetCard,
+        # Determinismo Bug 4 handoff: greedy strict + thinking OFF em gemini-2.5-*.
+        # Provider aplica top_p=1.0, top_k=1 automaticamente quando temperature=0.
+        thinking_budget=0,
     )
 
     raw_response = response.text

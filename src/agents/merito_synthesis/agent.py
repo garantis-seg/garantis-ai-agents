@@ -55,11 +55,14 @@ async def classify_merito_synthesis(
     # NOTA: response_schema dropado (Gemini Developer API rejeita
     # additionalProperties gerado por dict no schema).
     # response_mime_type='application/json' forca JSON output sem schema.
+    # Determinismo Bug 4 handoff: temperature=0.0 (era 0.1) + thinking_budget=0
+    # em gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt,
         model=model,
-        temperature=0.1,
+        temperature=0.0,
         response_mime_type="application/json",
+        thinking_budget=0,
     )
 
     raw_response = response.text
