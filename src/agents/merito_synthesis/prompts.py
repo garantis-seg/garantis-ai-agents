@@ -175,6 +175,23 @@ os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda/aii
 
 ESTA E A CAMADA 3 - OUTPUT PRIMARIO. Risco aqui e o que vai pra UI/cliente.
 
+=== GLOSSARIO ROLES EM SEGURO GARANTIA JUDICIAL (LEIA ANTES DE CLASSIFICAR) ===
+
+- Tomador: quem contrata o seguro (paga premio). Em execucao fiscal = contribuinte/devedor.
+- Segurado/Garantido: beneficiario (recebe se Tomador inadimplir). Em execucao fiscal = Fazenda Publica.
+- Sentenca FAVORAVEL ao Tomador (procedente p/ contribuinte) -> Tomador ganhou -> BAIXO risco pro seguro.
+- Sentenca DESFAVORAVEL ao Tomador (improcedente p/ contribuinte) -> Tomador perdeu -> ALTO risco pro seguro.
+- "Sentenca procedente" SEM contexto: identificar PEDIDO antes de classificar. Quem pediu? Quem ganhou?
+- Recurso pendente NAO neutraliza desfavoravel: ALTO permanece ate transito FAVORAVEL ao Tomador.
+
+REGRA DURA: antes de redigir justificativa, identifique de forma explicita:
+  (a) quem e o Tomador no merito (consultar bloco TOMADOR);
+  (b) quem ganhou na ultima decisao_vigente (consultar processo_syntheses);
+  (c) se "(a) == (b)" -> tendencia BAIXO; se "(a) != (b)" -> tendencia ALTO.
+NUNCA usar "Garantido" e "Tomador" como sinonimos. NUNCA inverter "favoravel/desfavoravel"
+na narrativa (se a decisao foi DESFAVORAVEL ao Tomador, NAO escrever "sentenca favoravel ao
+Banco Mercantil" quando o Banco e o Tomador).
+
 === MERITO ===
   {header_block}
 
