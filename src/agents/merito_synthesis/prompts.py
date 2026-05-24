@@ -198,12 +198,15 @@ Banco Mercantil" quando o Banco e o Tomador).
    `justificativa`, `narrativa_executiva` e `trajetoria_motivo`.
 
 2. Se QUALQUER um desses campos contem frases pro-Alto como:
-   - "empurra o risco para Alto" / "Altissimo"
+   - "empurra o risco para Alto" / "Altissimo" / "para cima"
    - "alta chance de reversao desfavoravel ao Tomador"
+   - "alta probabilidade de reversao" (mesmo sem dizer "Alto")
    - "elevando o risco de acionamento da apolice"
-   - "probabilidade remota de exito do Tomador"
+   - "probabilidade remota de exito" / "probabilidade de exito e 'remota'"
    - "jurisprudencia desfavoravel a tese / contraria ao Tomador"
    - "tendencia de perda em instancias superiores"
+   - "tese majoritariamente pro_fazenda" / "majoritario pro-Fazenda"
+   - "tese firmada / consolidada / decidida contra o Tomador" no STF/STJ/repetitivo
 
    ENTAO o campo `risco` final DEVE ser "Alto" OU "Altissimo". NUNCA Medio ou Baixo
    quando os argumentos escritos vao pro Alto.
@@ -346,6 +349,30 @@ F. PROBABILIDADE DE EXITO (Daycoval) E INPUT FORTE PRO RISCO, NAO SUBSTITUI:
    - prob_exito MEDIA (0.20-0.85) -> deixa o risco governado pelo estado atual
      (decisao_vigente, lifecycle_garantia, etc.)
    - A `contribuicao_no_risco` deve EXPLICAR essa influencia em 1 frase.
+
+G. REGRA DURA — TESE STF/STJ FIRMADA CONTRA TOMADOR PREVALECE SOBRE 1g FAVORAVEL:
+   Quando o conjunto:
+     (i)  jurisprudencia.resultado_majoritario IN ('pro_fazenda', 'pro_segurado')
+          em Tema STF / Tema STJ / repetitivo COM Tema_numero firmado, AND
+     (ii) prob_exito agregada = "remota" (Daycoval matriz), AND
+     (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
+           (apelacao/agravo/RE/REsp pendente),
+   ENTAO risco = "Alto" (NAO Medio).
+
+   Por que: tese firmada no STF/STJ vincula instancias inferiores pela ratio
+   decidendi. Sentenca 1g favoravel sera revertida em juizo de admissibilidade ou
+   no merito do recurso pela propria corte superior que ja decidiu o tema. O
+   efeito suspensivo de apelacao NAO neutraliza esse risco — apenas adia.
+   Acionamento da apolice fica praticamente certo no medio prazo (3-5 anos).
+
+   "Medio" SO se aplica nesse cenario se houver contrapeso EXPLICITO citado:
+   ex. modulacao temporal pela corte que protege o caso, distinguishing claro
+   nos autos, garantia em renovacao com seguradora muito forte (so isso pra
+   reduzir um patamar; nunca dois). Sem contrapeso explicito = Alto.
+
+   Casos paradigmaticos: CSLL Tema 372 STF (Lei 7.689/88), IRPJ Stock Options
+   Tema 1226 STJ, ICMS-ST repetitivo, qualquer tese pro_fazenda definitivamente
+   julgada com modulacao restritiva.
 
 === FORMATO DE SAIDA ===
 
