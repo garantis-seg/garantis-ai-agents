@@ -80,9 +80,9 @@ def build_mov_factsheet_prompt(
     if processo.classe:
         proc_lines.append(f"Classe: {processo.classe}")
     if processo.polo_ativo:
-        proc_lines.append(f"Polo ativo (exequente): {processo.polo_ativo}")
+        proc_lines.append(f"Polo ativo: {processo.polo_ativo}")
     if processo.polo_passivo:
-        proc_lines.append(f"Polo passivo (executado/tomador): {processo.polo_passivo}")
+        proc_lines.append(f"Polo passivo: {processo.polo_passivo}")
     proc_block = "\n  ".join(proc_lines)
 
     mov_meta_lines = [f"id: {mov.mov_id}"]
@@ -149,6 +149,34 @@ pra calcular o risco de acionamento da apolice no merito.
 
   texto da publicacao (snippet):
   {texto}{docs_section}{contexto_extra_section}
+
+=== REGRA DE LEITURA DE POLOS (CRITICA — leia antes de classificar sentido) ===
+
+O Tomador da apolice eh o cliente da seguradora — pode estar em QUALQUER polo
+dependendo da classe processual:
+
+- Execucao Fiscal, Cumprimento de Sentenca, Acao Monitoria contra o Tomador:
+  polo_ativo = Fazenda/Credor; polo_passivo = TOMADOR (executado).
+  Procedente da execucao = TOMADOR PERDEU. Improcedente = TOMADOR GANHOU.
+
+- Embargos a Execucao Fiscal, Excecao de Pre-Executividade:
+  polo_ativo = TOMADOR (embargante); polo_passivo = Fazenda (embargada).
+  Procedente dos embargos = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
+
+- Acao Anulatoria de Debito Fiscal, Mandado de Seguranca, Acao Declaratoria,
+  Repetitorio de Indebito, Acao Ordinaria Tributaria:
+  polo_ativo = TOMADOR (autor/impetrante); polo_passivo = Fazenda (re/coatora).
+  Procedente da anulatoria/MS = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
+
+- Acao Civel Generica ("Procedimento Comum Civel"): identifique pelo objeto da
+  acao + quem moveu (autor pediu o que?). Nao assuma defaults.
+
+REGRA DURA — 3 PASSOS pra preencher decisao.sentido:
+1. Identifique o Tomador (cruze CNPJ/nome da publicacao com polo_ativo/polo_passivo).
+2. Mapeie "procedente/improcedente" RELATIVO ao polo onde o Tomador esta.
+   Em sentido juridico tradicional: procedente = autor venceu; improcedente = autor perdeu.
+3. Se NAO conseguir identificar com confianca em qual polo o Tomador esta:
+   sentido=null + confianca <=0.5. NUNCA chute "Fazenda autora" como default.
 
 === INSTRUCOES POR CAMPO ===
 
@@ -231,8 +259,11 @@ pra calcular o risco de acionamento da apolice no merito.
 === REGRAS DE OURO ===
 
 A. NAO INVENTE. Se a mov+docs nao mencionam apolice, deixe apolice.numero=null + apresentada=null + aceita=null.
-B. Sentido DO TOMADOR: em Execucao Fiscal, o TOMADOR e o EXECUTADO. Julgar improcedente
-   os Embargos = DESFAVORAVEL ao tomador. Julgar improcedente a Execucao = FAVORAVEL.
+B. Sentido DO TOMADOR depende do polo (ver REGRA DE LEITURA DE POLOS acima).
+   - Em EF: Tomador=executado (polo passivo); improcedente da execucao = FAVORAVEL.
+   - Em Embargos: Tomador=embargante (polo ativo); improcedente dos embargos = DESFAVORAVEL.
+   - Em Anulatoria/MS: Tomador=autor (polo ativo); procedente da anulatoria = FAVORAVEL.
+   Identifique o Tomador via polo_ativo/polo_passivo + classe ANTES de mapear sentido.
 C. status_garantia_pos_mov deve refletir o ESTADO final: se a mov so APRESENTOU mas nao foi aceita,
    status='apresentado' (NAO 'aceito').
 D. delta_risco.direcao=='aumentou' so quando ha sinal explicito desfavoravel. Apelacao com efeito

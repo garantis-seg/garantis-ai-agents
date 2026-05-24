@@ -446,9 +446,9 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     if req.role_no_merito:
         header_lines.append(f"Papel no merito: {req.role_no_merito}")
     if req.polo_ativo:
-        header_lines.append(f"Polo ativo (exequente): {req.polo_ativo}")
+        header_lines.append(f"Polo ativo: {req.polo_ativo}")
     if req.polo_passivo:
-        header_lines.append(f"Polo passivo (tomador): {req.polo_passivo}")
+        header_lines.append(f"Polo passivo: {req.polo_passivo}")
     header_block = "\n  ".join(header_lines)
 
     monolith_block = _build_monolith_block(req)
@@ -494,6 +494,41 @@ NAO inclua esse campo neste output.
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{monolith_block}
 
+=== REGRA DE LEITURA DE POLOS (CRITICA — leia antes de classificar decisao_vigente.sentido) ===
+
+O Tomador da apolice eh o cliente da seguradora — pode estar em QUALQUER polo
+dependendo da classe processual. NAO assuma defaults.
+
+- Execucao Fiscal, Cumprimento de Sentenca, Acao Monitoria contra o Tomador:
+  polo_ativo = Fazenda/Credor; polo_passivo = TOMADOR (executado).
+  Procedente da execucao = TOMADOR PERDEU. Improcedente = TOMADOR GANHOU.
+
+- Embargos a Execucao, Excecao de Pre-Executividade:
+  polo_ativo = TOMADOR (embargante); polo_passivo = Fazenda/credor.
+  Procedente dos embargos = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
+
+- Acao Anulatoria de Debito Fiscal, Mandado de Seguranca, Acao Declaratoria,
+  Repetitorio de Indebito, Acao Ordinaria Tributaria:
+  polo_ativo = TOMADOR (autor/impetrante); polo_passivo = Fazenda (re/coatora).
+  Procedente da anulatoria/MS = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
+
+- Procedimento Comum Civel generico: identifique pelo objeto + quem moveu.
+
+REGRA DURA — 3 PASSOS pra decisao_vigente.sentido (e p/ ler factsheets que
+trazem decisao.sentido invertido por erro de leitura da Camada 1):
+1. Identifique o Tomador (cruze CNPJ/nome em uma apolice/factsheet com
+   polo_ativo e polo_passivo do header).
+2. Mapeie "procedente/improcedente" RELATIVO ao polo onde o Tomador esta:
+   procedente = autor venceu; improcedente = autor perdeu.
+3. Se nao identificar Tomador com confianca: sentido=null + confianca <=0.5.
+   NUNCA chute "polo_ativo=Fazenda" como default.
+
+CAVEAT — Camada 1 pode ter classificado decisao.sentido errado neste mesmo
+processo (mesmo bug). Releia os factsheets com lente de polo: se um factsheet
+trouxer sentido='desfavoravel' em um caso de Anulatoria onde Tomador eh autor
+e a natureza eh 'procedente', a Camada 1 errou — corrija no estado_processual
++ decisao_vigente.sentido.
+
 === INSTRUCOES POR CAMPO ===
 
 1. estado_processual: 1-2 frases PT-BR descrevendo o estado ATUAL do processo. Cite:
@@ -502,7 +537,8 @@ NAO inclua esse campo neste output.
    - Se a garantia esta aceita ou nao
 
 2. decisao_vigente: a decisao mais recente que governa o processo HOJE.
-   - sentido: favoravel | desfavoravel | parcial | neutro (DO PONTO DE VISTA DO TOMADOR)
+   - sentido: favoravel | desfavoravel | parcial | neutro (DO PONTO DE VISTA DO TOMADOR;
+     aplique a REGRA DE LEITURA DE POLOS acima — NAO assuma Fazenda=autor por default)
    - instancia: 1g | 2g | stj | stf
    - natureza: procedente | improcedente | parcialmente_procedente | extinto_sem_merito |
      homologatoria | interlocutoria
