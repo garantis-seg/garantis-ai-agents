@@ -144,7 +144,7 @@ def _summarize_previous(prev: PreviousSnapshot | None) -> str:
 
 def build_merito_synthesis_prompt(req: MeritoSynthesisRequest) -> str:
     """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda/aiim
-    + jurisprudencia + previous_snapshot pra computar risco/trajetoria do MERITO."""
+    + jurisprudencia + previous_snapshot pra computar risco do MERITO."""
     header_lines = [f"MERITO ID: {req.merito_id} (context={req.merito_context})"]
     if req.titulo:
         header_lines.append(f"Titulo: {req.titulo}")
@@ -171,7 +171,7 @@ def build_merito_synthesis_prompt(req: MeritoSynthesisRequest) -> str:
 
 Sua tarefa: classificar o RISCO DE ACIONAMENTO DA APOLICE pro MERITO inteiro. Voce recebe
 os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda/aiim
-+ jurisprudencia da tese + snapshot anterior pra trajetoria.
++ jurisprudencia da tese + snapshot anterior (referencia historica).
 
 ESTA E A CAMADA 3 - OUTPUT PRIMARIO. Risco aqui e o que vai pra UI/cliente.
 
@@ -195,7 +195,7 @@ Banco Mercantil" quando o Banco e o Tomador).
 === CONSISTENCY CHECK (obrigatorio antes de emitir output) ===
 
 1. Releia o que voce escreveu em `probabilidade_exito_merito.contribuicao_no_risco`,
-   `justificativa`, `narrativa_executiva` e `trajetoria_motivo`.
+   `justificativa` e `narrativa_executiva`.
 
 2. Se QUALQUER um desses campos contem frases pro-Alto como:
    - "empurra o risco para Alto" / "Altissimo" / "para cima"
@@ -269,7 +269,7 @@ nesse padrao — releia, ajuste narrativa OU eleve risco.
   Considere o sinal mais forte na precedencia:
   firmado > oscilante > pendente > tese_nova > nao_classificada.
 
-=== SNAPSHOT ANTERIOR (pra trajetoria) ===
+=== SNAPSHOT ANTERIOR (referencia historica — engine v6 nao usa hoje pra trajetoria; informativo) ===
 {prev_block}
 
 === INSTRUCOES POR CAMPO ===
@@ -327,20 +327,13 @@ nesse padrao — releia, ajuste narrativa OU eleve risco.
    d) contribuicao_no_risco: 1 frase explicando COMO essa prob_exito agregada
       influenciou o risco final que voce escolheu (vide regra F abaixo).
 
-10. trajetoria + trajetoria_motivo: COMPARE com snapshot_anterior:
-   - Se previous_snapshot.risco_anterior IS NULL -> "primeira_classificacao", motivo=null
-   - Se risco_atual > risco_anterior (escala Baixo<Medio<Alto<Altissimo) -> "piorou"
-   - Se risco_atual < risco_anterior -> "melhorou"
-   - Se igual -> "estavel"
-   - motivo: 1 frase explicando A CAUSA da mudanca (qual mov/processo trigou)
-
-11. confidence (0-1):
+10. confidence (0-1):
     - 0.9+ quando decisao_atual clara em todos os processos
     - 0.7-0.8 quando ambigua mas com sinal majoritario
     - 0.5-0.7 quando muitos processos sem decisao
     - < 0.5 quando dados muito esparsos
 
-12. evidence_artifacts: 3-7 itens citando OS PROCESSOS/CARDS mais decisivos.
+11. evidence_artifacts: 3-7 itens citando OS PROCESSOS/CARDS mais decisivos.
     kind = processo_synthesis | mov_factsheet | apolice | conexo | cda | aiim | tomador | merito
     ref = processo_numero, mov_id, cda_number, cnpj_basico, etc.
 
@@ -353,9 +346,6 @@ C. CDA/AIIM contam pra magnitude do valor em disputa MAS nao mudam o risco diret
    sao contexto descritivo. Risco vem do ESTADO DOS PROCESSOS.
 D. Peca-pivo do merito pode ser de CONEXO (nao do principal). Ex: anulatória conexa
    julgou improcedente -> isso e pivo mesmo se principal e Embargos sem sentenca.
-E. Trajetoria so move pra "melhorou" se ha sinal explicito (acordo, suspensao por RJ,
-   trans favoravel). Sem sinal claro -> "estavel".
-
 F. PROBABILIDADE DE EXITO (Daycoval) E INPUT FORTE PRO RISCO, NAO SUBSTITUI:
    - prob_exito agregada ALTA (>= 0.85, "provavel") -> EMPURRA risco pra BAIXO
      (mas nao supera trans em julgado desfavoravel — esse e Altissimo independente)
@@ -400,8 +390,8 @@ G.2 PENDENTE JULGAMENTO SUPERIOR:
    'pendente_julgamento_superior' (ex: DIFAL pre-LC 190/2022 ainda em afetacao)
    NAO move risco diretamente — governado pelo estado atual da causa. Porem
    REDUZIR confianca em 10-20% e CITAR EXPLICITAMENTE o julgamento pendente
-   no campo trajetoria_motivo como risco prospectivo. Cliente precisa ouvir
-   "ha um tema afetado que pode virar o jogo nos proximos meses".
+   na narrativa_executiva + justificativa como risco prospectivo. Cliente
+   precisa ouvir "ha um tema afetado que pode virar o jogo nos proximos meses".
 
 === FORMATO DE SAIDA ===
 
@@ -443,8 +433,6 @@ Retorne APENAS JSON valido:
     ],
     "contribuicao_no_risco": "..."
   }},
-  "trajetoria": "estavel|piorou|melhorou|primeira_classificacao",
-  "trajetoria_motivo": null,
   "confidence": 0.7,
   "evidence_artifacts": [],
   "cards_index": {{}}
