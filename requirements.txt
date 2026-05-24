@@ -11,7 +11,7 @@ openai>=1.0.0
 groq>=0.4.0
 
 # Shared utilities (from Artifact Registry — URL set via PIP_EXTRA_INDEX_URL env)
-garantis-shared>=1.13.0
+garantis-shared>=1.19.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0

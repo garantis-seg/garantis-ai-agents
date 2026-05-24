@@ -20,7 +20,7 @@ dependencies = [
     # requirements.txt; pyproject is used for wheel/local installs). Drift
     # here previously omitted garantis-shared → import failure on any
     # pyproject-based build path.
-    "garantis-shared>=1.13.0",
+    "garantis-shared>=1.19.0",
 ]
 
 [project.optional-dependencies]

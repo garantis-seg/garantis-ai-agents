@@ -9,9 +9,34 @@ import os
 import logging
 from typing import Any, Dict, List, Optional, Type
 
+from garantis_shared.rate_limit import TokenBucketRateLimiter
+
 from .base import BaseLLMProvider, LLMResponse
 
 logger = logging.getLogger(__name__)
+
+# Rate limiter global per-process — protege contra 503 storms quando varios
+# agentes (mov_factsheet/day_factsheet/processo_synthesis/merito_synthesis/etc)
+# disparam Gemini em paralelo. Single chokepoint: todos os agentes que usam
+# GeminiProvider compartilham este limiter.
+#
+# Sizing (Tier 3 paid):
+#   - flash-lite global: 30k RPM = 500 RPS
+#   - ai-agents max_instances=100 (worst case scaling)
+#   - per-process: 500 / 100 = 5 RPS sustained
+#   - burst 10: cobre L1 3-way gather (mov + day + monolith) com Semaphore(5)
+#
+# Override via env GEMINI_RATE_LIMIT_RPS / GEMINI_RATE_LIMIT_BURST se preciso
+# ajustar sem redeploy (e.g. degrade rapido em incident).
+_GEMINI_RATE = float(os.getenv("GEMINI_RATE_LIMIT_RPS", "5.0"))
+_GEMINI_BURST = int(os.getenv("GEMINI_RATE_LIMIT_BURST", "10"))
+_GEMINI_ACQUIRE_TIMEOUT_S = float(os.getenv("GEMINI_RATE_LIMIT_TIMEOUT_S", "60.0"))
+
+_gemini_rate_limiter = TokenBucketRateLimiter(
+    rate=_GEMINI_RATE,
+    bucket_size=_GEMINI_BURST,
+    name="gemini",
+)
 
 # Model pricing (USD per 1M tokens) - Updated Dec 2024
 GEMINI_PRICING = {
@@ -228,6 +253,11 @@ class GeminiProvider(BaseLLMProvider):
             **kwargs,
         )
         config = self._types.GenerateContentConfig(**config_params)
+
+        # Rate limit ANTES da call — single chokepoint protege contra 503 storms.
+        # asyncio.TimeoutError propagada e tratada como retryable pelo caller
+        # (frontend-api ai_agents.call ja trata httpx.HTTPError + TimeoutError).
+        await _gemini_rate_limiter.acquire(timeout=_GEMINI_ACQUIRE_TIMEOUT_S)
 
         # Make async API call
         response = await self._client.aio.models.generate_content(
