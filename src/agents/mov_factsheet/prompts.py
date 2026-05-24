@@ -199,11 +199,23 @@ REGRA DURA — 3 PASSOS pra preencher decisao.sentido:
      - favoravel: julga procedente embargos / improcedente execucao / concede liminar pro tomador
      - desfavoravel: rejeita defesa, mantem execucao, julga improcedente embargos
      - parcial: parte favoravel, parte nao
-     - neutro: meramente processual sem ganhador claro
+     - neutro: meramente processual sem ganhador claro (extincao SEM merito SEMPRE neutro)
    - instancia: 1g (juizo) | 2g (TJ/TRF) | stj | stf
    - natureza: procedente | improcedente | parcialmente_procedente | extinto_sem_merito |
      homologatoria | interlocutoria
    - transito_certificado: true SO se a mov CERTIFICA transito em julgado
+
+   REGRA DURA — EXTINCAO SEM MERITO:
+   Quando natureza='extinto_sem_merito', sentido DEVE ser 'neutro', NUNCA
+   'desfavoravel'. Extincao sem merito significa que o juiz NAO julgou o
+   conteudo da causa — pode ser ausencia de pressuposto processual,
+   ilegitimidade de parte, falta de interesse, transacao, desistencia,
+   perempcao, etc. NAO consolida divida nem julga risco. Mesmo se o
+   processo for direcionado pra Execucao Fiscal posterior, a EXTINCAO
+   nao move risco — o que move risco e a Execucao Fiscal subsequente
+   (que sera classificada quando suas movs aparecerem).
+   transito_certificado='true' aplica a extincao mas sentido continua
+   'neutro' — extincao transitada NAO equivale a improcedencia transitada.
 
 5. evento_garantia:
    - tipo: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço | nenhum

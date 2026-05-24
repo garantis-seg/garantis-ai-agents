@@ -393,6 +393,52 @@ G.2 PENDENTE JULGAMENTO SUPERIOR:
    na narrativa_executiva + justificativa como risco prospectivo. Cliente
    precisa ouvir "ha um tema afetado que pode virar o jogo nos proximos meses".
 
+H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL:
+   Padrao identificado em ~30 meritos do Monit Poletto Mai/2026: cenarios
+   onde a Execucao Fiscal esta SUSPENSA aguardando o tramite de uma
+   Anulatoria/MS conexa com decisao FAVORAVEL ao Tomador (sentenca 1g
+   procedente OU liminar em vigor), com apolice ja apresentada e aceita.
+   Poletto classifica esses casos como Baixo. Engine v6 estava classificando
+   como Medio/Alto por pesar excessivamente tese pro-Fazenda STF firmada
+   (regra G) ignorando o contexto operacional.
+
+   Quando o conjunto:
+     (i)   apolice apresentada E aceita (lifecycle_garantia tem evento
+           tipo='aceitacao' SEM levantamento posterior), AND
+     (ii)  processo principal (Execucao Fiscal) SUSPENSO/sobrestado
+           aguardando processo conexo (Anulatoria, MS, ADI, repercussao
+           geral afetada), AND
+     (iii) conexo tem decisao FAVORAVEL ao Tomador em vigor (mesmo 1g sem
+           transito), OU processo principal extinto sem merito,
+   ENTAO risco = "Baixo" — mesmo com tese pro_fazenda_firmado (regra G).
+
+   Por que: o gatilho de acionamento da apolice e a Execucao Fiscal ATIVA
+   exigir pagamento. Enquanto a execucao esta SUSPENSA por causa externa
+   favoravel, NAO HA gatilho de curto prazo. A reversao eventual no STF
+   pelo tema firmado eh prospectiva (3-5 anos) — nao move risco HOJE.
+   Regra G prevalece sobre H apenas quando a SUSPENSAO sai (conexo perde
+   o efeito suspensivo, retomada da execucao, intimacao da seguradora).
+
+   Equivale a "diferimento operacional": apolice aceita protege liquidez +
+   suspensao protege exigibilidade. Os dois juntos = risco baixo HOJE.
+
+   CONTRAPESO LEGITIMO pra subir pra Medio mesmo com H aplicavel:
+   - apolice vencida ou em renovacao com seguradora questionavel
+   - tomador em RJ com plano em risco
+   - sinal explicito de retomada iminente da execucao (despacho determinando
+     intimacao da seguradora ja proferido)
+   Sem contrapeso explicito = Baixo.
+
+H.1 EXTINCAO SEM MERITO NAO CONSOLIDA DIVIDA:
+   Decisao com natureza='extinto_sem_merito' (mesmo transitada) NAO julga
+   o conteudo da causa — eh decisao processual. Tomador NEM ganhou NEM
+   perdeu o merito. O processo extinto NAO move risco. Se houver Execucao
+   Fiscal subsequente, classificar pela situacao DELA, nao pela extincao.
+
+   Cenario tipico: Anulatoria extinta sem merito por falta de pressuposto,
+   tomador segue na Execucao Fiscal. NAO classificar como Altissimo so por
+   causa do "transito" da extincao — extincao sem merito eh neutra.
+
 === FORMATO DE SAIDA ===
 
 Retorne APENAS JSON valido:
