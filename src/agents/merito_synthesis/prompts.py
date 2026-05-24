@@ -272,18 +272,68 @@ nesse padrao — releia, ajuste narrativa OU eleve risco.
 === SNAPSHOT ANTERIOR (referencia historica — engine v6 nao usa hoje pra trajetoria; informativo) ===
 {prev_block}
 
+=== PROTOCOLO DE RISCO BASE (CRITICA — leia antes de classificar risco) ===
+
+POSTURA: o gatilho de acionamento da apolice de seguro garantia eh a
+EXECUCAO FISCAL ATIVA exigir pagamento do Tomador (intimacao pra pagar,
+penhora, levantamento). Sem gatilho concreto, NAO HA risco imediato.
+
+DEFAULT = "Baixo". So sobe pra Medio/Alto/Altissimo com SINAL EXPLICITO
+documentado nos cards. NUNCA usar "Medio" como zona-cinza/cauteloso.
+
+ESCALA EXPLICITA (em ordem crescente de severidade — primeiro nivel
+que CASE, escolha; senao continue Baixo):
+
+[ALTISSIMO] gatilho de acionamento JA disparado:
+- transito em julgado CERTIFICADO desfavoravel + execucao ativa
+- cumprimento de sentenca contra Tomador ja determinado
+- intimacao da seguradora pra pagamento ja deferida
+- penhora online deferida cobrindo o debito
+- Tomador em RJ com plano em risco AND decisao desfavoravel transitada
+  em conexa
+
+[ALTO] gatilho iminente / sem rota de escape clara:
+- decisao 2g desfavoravel SEM REsp/RE viavel (mantida em STJ ou STF)
+- intimacao pra pagamento solicitada pela Fazenda (ainda nao deferida
+  mas em curso)
+- 1g desfavoravel + tese pro_fazenda_firmado (Regra G) sem contrapeso
+- Tomador em RJ com plano em risco AND processo principal com decisao
+  desfavoravel pendente
+- apolice RECUSADA pelo juizo OR levantada por substituicao desfavoravel
+
+[MEDIO] degradacao prospectiva concreta mas reversao razoavel:
+- decisao 1g desfavoravel + apelacao pendente (efeito suspensivo CPC
+  art. 1.012) SEM tese pro_fazenda_firmado
+- decisao parcialmente desfavoravel + recurso pendente
+- 1g favoravel + acordao 2g desfavoravel + REsp/RE admissivel pendente
+
+[BAIXO] (default) — qualquer cenario sem sinal explicito acima:
+- nenhuma decisao desfavoravel transitada
+- apolice apresentada (mesmo sem aceitacao explicita registrada)
+- processo em fase inicial / instrucao / aguardando manifestacao
+- 1g favoravel ao Tomador (com ou sem recurso da contraparte) SEM tese
+  pro_fazenda_firmado contraria
+- processo extinto sem merito (regra H.1)
+- execucao suspensa por causa externa favoravel (regra H)
+- tese pro_contribuinte_firmado em vigor (regra G.1)
+
+REGRA DURA — JUSTIFIQUE A SUBIDA:
+Pra atribuir Medio/Alto/Altissimo, a justificativa DEVE citar
+explicitamente:
+1. QUAL processo carrega o sinal explicito (CNJ)
+2. QUAL evento concreto (data + tipo: sentenca/transito/intimacao/penhora)
+3. POR QUE encaixa no nivel escolhido (referencia ao bullet da escala)
+
+Sem esses 3 itens citados na narrativa, a classificacao DEVE ser Baixo.
+"Risco intermediario por sinais ambiguos" NAO eh argumento valido — eh
+sinal de Baixo (sem evidencia explicita) OU classificacao indevida.
+
 === INSTRUCOES POR CAMPO ===
 
-1. risco (UM dos 4 niveis):
-   - Baixo: nenhum processo com decisao desfavoravel; embargos pendentes; apolice
-     aceita sem questionamento; tomador sem RJ; nada move o gatilho de acionamento.
-   - Medio: AO MENOS 1 processo com sentenca improcedente em 1a inst + apelacao pendente
-     (efeito suspensivo CPC 1.012); OU decisao parcial; OU sinais ambiguos.
-   - Alto: sentenca desfavoravel sem recurso; mantido em 2a inst sem transito; intimacao
-     para pagamento ja deferida; tomador em RJ que afeta o caso; tese MAJ pro-fazenda
-     ja firmada + processo em curso.
-   - Altissimo: transito em julgado certificado desfavoravel; cumprimento de sentenca
-     determinado; apolice ja em iminencia de acionamento.
+1. risco (UM dos 4 niveis): aplique o PROTOCOLO DE RISCO BASE acima.
+   Default = Baixo. So sobe com sinal explicito (decisao desfavoravel
+   transitada, intimacao seguradora, penhora, tese pro_fazenda_firmado
+   contraria, etc — vide escala completa).
 
 2. justificativa: 2-4 paragrafos PT-BR.
    - Paragrafo 1: estado factual (qual processo carrega a decisao mais decisiva, sentido)
