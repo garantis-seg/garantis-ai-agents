@@ -254,6 +254,21 @@ nesse padrao — releia, ajuste narrativa OU eleve risco.
 === JURISPRUDENCIA DA TESE ===
   {jur_block}
 
+  Glossario `resultado_majoritario` (vigente desde 2026-05-25):
+  - pro_contribuinte_firmado: tese STF/STJ vinculante, favoravel ao Tomador (EMPURRA Baixo)
+  - pro_fazenda_firmado: tese STF/STJ vinculante, desfavoravel ao Tomador (EMPURRA Alto)
+  - oscilante: decisoes divididas entre turmas/instancias — sem majoritario claro
+    (NAO move risco; governado pelo estado da causa)
+  - pendente_julgamento_superior: tema afetado, aguarda STF/STJ
+    (estado atual domina, MAS narrativa deve citar julgamento pendente como risco prospectivo)
+  - tese_nova: sem historico significativo (governado pelo estado, baixa confianca)
+  - nao_classificada: catch-all generico, sem mapeamento juridico especifico
+    (governado pelo estado; FLAG na narrativa que falta tese canonica)
+
+  OBS: campo pode vir com multiplos valores comma-separated (string_agg de rows multiplas).
+  Considere o sinal mais forte na precedencia:
+  firmado > oscilante > pendente > tese_nova > nao_classificada.
+
 === SNAPSHOT ANTERIOR (pra trajetoria) ===
 {prev_block}
 
@@ -352,8 +367,8 @@ F. PROBABILIDADE DE EXITO (Daycoval) E INPUT FORTE PRO RISCO, NAO SUBSTITUI:
 
 G. REGRA DURA — TESE STF/STJ FIRMADA CONTRA TOMADOR PREVALECE SOBRE 1g FAVORAVEL:
    Quando o conjunto:
-     (i)  jurisprudencia.resultado_majoritario IN ('pro_fazenda', 'pro_segurado')
-          em Tema STF / Tema STJ / repetitivo COM Tema_numero firmado, AND
+     (i)  jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
+          (tese STF/STJ transitada — repetitivo/repercussao geral), AND
      (ii) prob_exito agregada = "remota" (Daycoval matriz), AND
      (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
            (apelacao/agravo/RE/REsp pendente),
@@ -371,8 +386,22 @@ G. REGRA DURA — TESE STF/STJ FIRMADA CONTRA TOMADOR PREVALECE SOBRE 1g FAVORAV
    reduzir um patamar; nunca dois). Sem contrapeso explicito = Alto.
 
    Casos paradigmaticos: CSLL Tema 372 STF (Lei 7.689/88), IRPJ Stock Options
-   Tema 1226 STJ, ICMS-ST repetitivo, qualquer tese pro_fazenda definitivamente
+   Tema 1226 STJ, ICMS-ST repetitivo, qualquer tese pro_fazenda_firmado
    julgada com modulacao restritiva.
+
+G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR:
+   'pro_contribuinte_firmado' eh vento de cauda forte: tese STF/STJ transitada
+   favoravel ao Tomador (ex: PIS-COFINS exclusao ICMS, Tema 69 STF). EMPURRA
+   risco pra Baixo mesmo se houver decisao 1g desfavoravel — reversao em
+   instancia superior eh provavel pela mesma ratio decidendi. Aplicar a mesma
+   logica de G em sentido inverso: sem contrapeso explicito = Baixo.
+
+G.2 PENDENTE JULGAMENTO SUPERIOR:
+   'pendente_julgamento_superior' (ex: DIFAL pre-LC 190/2022 ainda em afetacao)
+   NAO move risco diretamente — governado pelo estado atual da causa. Porem
+   REDUZIR confianca em 10-20% e CITAR EXPLICITAMENTE o julgamento pendente
+   no campo trajetoria_motivo como risco prospectivo. Cliente precisa ouvir
+   "ha um tema afetado que pode virar o jogo nos proximos meses".
 
 === FORMATO DE SAIDA ===
 
