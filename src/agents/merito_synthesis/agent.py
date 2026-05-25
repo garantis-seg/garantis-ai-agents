@@ -15,7 +15,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
-from .prompts import build_merito_synthesis_prompt
+from .prompts import build_prompt_and_version
 from .schemas import MeritoSynthesisCard, MeritoSynthesisRequest
 
 logger = logging.getLogger(__name__)
@@ -24,10 +24,6 @@ logger = logging.getLogger(__name__)
 # quando o usuario quiser maior performance ao custo de 8x preco.
 DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-2.5-flash")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
-
-# Bump quando alterar build_merito_synthesis_prompt OU MeritoSynthesisCard
-# schema. Usado em leads.engine_llm_calls.prompt_version pra drift detection.
-PROMPT_VERSION = "merito_synthesis.v1.0"
 
 
 async def classify_merito_synthesis(
@@ -50,7 +46,7 @@ async def classify_merito_synthesis(
         model = DEFAULT_MODEL
 
     llm_provider = create_provider(provider)
-    prompt = build_merito_synthesis_prompt(request)
+    prompt, prompt_version = build_prompt_and_version(request)
 
     # NOTA: response_schema dropado (Gemini Developer API rejeita
     # additionalProperties gerado por dict no schema).
@@ -102,6 +98,6 @@ async def classify_merito_synthesis(
         "card": card_data,
         "raw_response": raw_response,
         "llm_raw_prompt": prompt,
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": prompt_version,
         "usage": usage,
     }

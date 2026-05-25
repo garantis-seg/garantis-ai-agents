@@ -1,10 +1,19 @@
 """Prompt pro merito_synthesis agent (engine v6_meritos camada 3).
 
 Output PRIMARIO da engine - risco + justificativa por merito.
+
+Estrutura modular: blocos COMUNS (intro, glossario, cards, etc.) + blocos
+PLUGAVEIS dispatch por `tipo_judicial` dominante (fiscal/trabalhista/civel/
+misto). Routing determ. via `_determine_tipo_dominante()` com threshold 80%
+pra escolher variant; abaixo disso cai pra 'misto' (fallback generico com
+confidence reduzido).
+
+Padrao arquitetural: ver memory `engine-v6-prompt-modular-pattern`.
 """
 
 import json
-from typing import Any
+from collections import Counter
+from typing import Literal
 
 from .schemas import (
     AIIMCardMin,
@@ -15,6 +24,31 @@ from .schemas import (
     ProcessoSynthesisMin,
     TomadorCardMin,
 )
+
+
+# Bump quando alterar build_merito_synthesis_prompt OU MeritoSynthesisCard
+# schema. Sufixo `-{tipo}` via _prompt_version_for() rastreia variant em
+# leads.engine_llm_calls.
+PROMPT_VERSION_BASE = "merito_synthesis.v1.1"
+
+
+def _prompt_version_for(tipo: str) -> str:
+    """Concatena base + tipo dominante p/ telemetria.
+
+    Strings produzidas:
+      merito_synthesis.v1.1-fiscal
+      merito_synthesis.v1.1-trabalhista
+      merito_synthesis.v1.1-civel
+      merito_synthesis.v1.1-misto
+
+    Backward-compat queries:
+      WHERE prompt_version LIKE 'merito_synthesis.v1.1-%'  (apenas split)
+      WHERE prompt_version LIKE 'merito_synthesis.v1.%'    (todas versoes)
+    """
+    return f"{PROMPT_VERSION_BASE}-{tipo}"
+
+
+# ─── Card summarizers (input cards → string fragments) ─────────────────────
 
 
 def _summarize_processo_synthesis(ps: ProcessoSynthesisMin) -> str:
@@ -142,40 +176,62 @@ def _summarize_previous(prev: PreviousSnapshot | None) -> str:
     return "\n".join(parts)
 
 
-def build_merito_synthesis_prompt(req: MeritoSynthesisRequest) -> str:
-    """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda/aiim
-    + jurisprudencia + previous_snapshot pra computar risco do MERITO."""
-    header_lines = [f"MERITO ID: {req.merito_id} (context={req.merito_context})"]
-    if req.titulo:
-        header_lines.append(f"Titulo: {req.titulo}")
-    if req.tipo_principal:
-        header_lines.append(f"Tipo principal: {req.tipo_principal}")
-    if req.cnpj_principal:
-        header_lines.append(f"CNPJ: {req.cnpj_principal}")
-    if req.razao_social:
-        header_lines.append(f"Razao social: {req.razao_social}")
-    header_block = "\n  ".join(header_lines)
+# ─── Routing (axis: tipo_judicial dominante) ───────────────────────────────
 
-    if req.processo_syntheses:
-        proc_block = "\n\n".join(_summarize_processo_synthesis(p) for p in req.processo_syntheses)
-    else:
-        proc_block = "(SEM processo_synthesis disponivel - merito vazio ou cards faltam)"
 
-    cdas_block = "\n".join(_summarize_cda(c) for c in (req.cdas or [])) or "  (sem CDA materializada)"
-    aiims_block = "\n".join(_summarize_aiim(a) for a in (req.aiims or [])) or "  (sem AIIM/PAF materializado)"
-    tomador_block = _summarize_tomador(req.tomador) if req.tomador else "  (sem tomador card)"
-    jur_block = _summarize_jurisprudencia(req.jurisprudencia) if req.jurisprudencia else "  (sem jurisprudencia mapeada)"
-    prev_block = _summarize_previous(req.previous_snapshot)
+def _determine_tipo_dominante(
+    processo_syntheses: list[ProcessoSynthesisMin],
+) -> Literal["fiscal", "trabalhista", "civel", "misto"]:
+    """Determina tipo_judicial dominante do merito.
 
-    return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
+    Threshold 80%: o tipo mais comum precisa cobrir >=80% dos processos
+    com tipo nao-NULL pra ser eleito 'dominante'. Abaixo disso retorna
+    'misto' (fallback generico).
 
-Sua tarefa: classificar o RISCO DE ACIONAMENTO DA APOLICE pro MERITO inteiro. Voce recebe
-os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda/aiim
-+ jurisprudencia da tese + snapshot anterior (referencia historica).
+    Retorna 'misto' quando:
+    - processo_syntheses vazio
+    - todos tipos NULL (sinal nao disponivel pra dispatch determ.)
+    - tipo mais comum cobre <80% dos processos
 
-ESTA E A CAMADA 3 - OUTPUT PRIMARIO. Risco aqui e o que vai pra UI/cliente.
+    Tie-breaking: Counter.most_common(1) usa ordem de insercao pra empate.
+    Empates 50/50 entre 2 tipos -> sempre <80% -> 'misto'.
+    """
+    if not processo_syntheses:
+        return "misto"
+    tipos = [p.tipo_judicial for p in processo_syntheses if p.tipo_judicial]
+    if not tipos:
+        return "misto"
+    counter = Counter(tipos)
+    most_common, count = counter.most_common(1)[0]
+    if count / len(tipos) >= 0.8:
+        return most_common  # type: ignore[return-value]
+    return "misto"
 
-=== GLOSSARIO ROLES EM SEGURO GARANTIA JUDICIAL (LEIA ANTES DE CLASSIFICAR) ===
+
+# ─── Common prompt blocks (no axis variation) ──────────────────────────────
+
+
+def _build_intro() -> str:
+    """Apresentacao do papel + tarefa. Comum a todos os tipos."""
+    return (
+        "Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.\n"
+        "\n"
+        "Sua tarefa: classificar o RISCO DE ACIONAMENTO DA APOLICE pro MERITO inteiro. Voce recebe\n"
+        "os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda/aiim\n"
+        "+ jurisprudencia da tese + snapshot anterior (referencia historica).\n"
+        "\n"
+        "ESTA E A CAMADA 3 - OUTPUT PRIMARIO. Risco aqui e o que vai pra UI/cliente."
+    )
+
+
+def _build_glossary_roles() -> str:
+    """Glossario Tomador/Segurado/Garantido + REGRA DURA 3-step. Comum.
+
+    Bug 5a handoff: glossario fixo elimina oscilacao Tomador/Segurado entre
+    cascades. Terminologia e a mesma em fiscal/trabalhista/civel — soh muda
+    quem ocupa cada papel (em fiscal Tomador=contribuinte, em trabalhista
+    Tomador=empregador, em civel Tomador=devedor)."""
+    return """=== GLOSSARIO ROLES EM SEGURO GARANTIA JUDICIAL (LEIA ANTES DE CLASSIFICAR) ===
 
 - Tomador: quem contrata o seguro (paga premio). Em execucao fiscal = contribuinte/devedor.
 - Segurado/Garantido: beneficiario (recebe se Tomador inadimplir). Em execucao fiscal = Fazenda Publica.
@@ -190,9 +246,12 @@ REGRA DURA: antes de redigir justificativa, identifique de forma explicita:
   (c) se "(a) == (b)" -> tendencia BAIXO; se "(a) != (b)" -> tendencia ALTO.
 NUNCA usar "Garantido" e "Tomador" como sinonimos. NUNCA inverter "favoravel/desfavoravel"
 na narrativa (se a decisao foi DESFAVORAVEL ao Tomador, NAO escrever "sentenca favoravel ao
-Banco Mercantil" quando o Banco e o Tomador).
+Banco Mercantil" quando o Banco e o Tomador)."""
 
-=== CONSISTENCY CHECK (obrigatorio antes de emitir output) ===
+
+def _build_consistency_check() -> str:
+    """Bug 5c handoff: check obrigatorio pro-Alto/pro-Baixo. Comum a todos."""
+    return """=== CONSISTENCY CHECK (obrigatorio antes de emitir output) ===
 
 1. Releia o que voce escreveu em `probabilidade_exito_merito.contribuicao_no_risco`,
    `justificativa` e `narrativa_executiva`.
@@ -234,24 +293,52 @@ Banco Mercantil" quando o Banco e o Tomador).
 Esta regra existe porque cascades anteriores (m=3 snapshot 319) produziram
 contradicoes do tipo: contribuicao_no_risco diz "empurra para Alto" +
 justificativa diz "elevando o risco" + risco final = Medio. NAO emita output
-nesse padrao — releia, ajuste narrativa OU eleve risco.
+nesse padrao — releia, ajuste narrativa OU eleve risco."""
 
-=== MERITO ===
-  {header_block}
 
-=== PROCESSOS DO MERITO (synthesis cards) ===
-{proc_block}
+def _build_merito_header_block(req: MeritoSynthesisRequest) -> str:
+    """MERITO ID + titulo + CNPJ + razao social. Comum a todos."""
+    header_lines = [f"MERITO ID: {req.merito_id} (context={req.merito_context})"]
+    if req.titulo:
+        header_lines.append(f"Titulo: {req.titulo}")
+    if req.tipo_principal:
+        header_lines.append(f"Tipo principal: {req.tipo_principal}")
+    if req.cnpj_principal:
+        header_lines.append(f"CNPJ: {req.cnpj_principal}")
+    if req.razao_social:
+        header_lines.append(f"Razao social: {req.razao_social}")
+    header_block = "\n  ".join(header_lines)
+    return f"=== MERITO ===\n  {header_block}"
 
-=== CDA / DIVIDAS ATIVAS ===
-{cdas_block}
 
-=== AIIM / PAFs ADMINISTRATIVOS ===
-{aiims_block}
+def _build_processos_block(req: MeritoSynthesisRequest) -> str:
+    """Synthesis cards dos processos do merito (chama _summarize_processo_synthesis)."""
+    if req.processo_syntheses:
+        proc_block = "\n\n".join(_summarize_processo_synthesis(p) for p in req.processo_syntheses)
+    else:
+        proc_block = "(SEM processo_synthesis disponivel - merito vazio ou cards faltam)"
+    return f"=== PROCESSOS DO MERITO (synthesis cards) ===\n{proc_block}"
 
-=== TOMADOR (historico CNPJ basico) ===
-{tomador_block}
 
-=== JURISPRUDENCIA DA TESE ===
+def _build_cdas_block(req: MeritoSynthesisRequest) -> str:
+    cdas_block = "\n".join(_summarize_cda(c) for c in (req.cdas or [])) or "  (sem CDA materializada)"
+    return f"=== CDA / DIVIDAS ATIVAS ===\n{cdas_block}"
+
+
+def _build_aiims_block(req: MeritoSynthesisRequest) -> str:
+    aiims_block = "\n".join(_summarize_aiim(a) for a in (req.aiims or [])) or "  (sem AIIM/PAF materializado)"
+    return f"=== AIIM / PAFs ADMINISTRATIVOS ===\n{aiims_block}"
+
+
+def _build_tomador_block_section(req: MeritoSynthesisRequest) -> str:
+    tomador_block = _summarize_tomador(req.tomador) if req.tomador else "  (sem tomador card)"
+    return f"=== TOMADOR (historico CNPJ basico) ===\n{tomador_block}"
+
+
+def _build_jurisprudencia_block(req: MeritoSynthesisRequest) -> str:
+    """Jurisprudencia da tese + glossario `resultado_majoritario`."""
+    jur_block = _summarize_jurisprudencia(req.jurisprudencia) if req.jurisprudencia else "  (sem jurisprudencia mapeada)"
+    return f"""=== JURISPRUDENCIA DA TESE ===
   {jur_block}
 
   Glossario `resultado_majoritario` (vigente desde 2026-05-25):
@@ -267,97 +354,32 @@ nesse padrao — releia, ajuste narrativa OU eleve risco.
 
   OBS: campo pode vir com multiplos valores comma-separated (string_agg de rows multiplas).
   Considere o sinal mais forte na precedencia:
-  firmado > oscilante > pendente > tese_nova > nao_classificada.
+  firmado > oscilante > pendente > tese_nova > nao_classificada."""
 
-=== SNAPSHOT ANTERIOR (referencia historica — engine v6 nao usa hoje pra trajetoria; informativo) ===
-{prev_block}
 
-=== PROTOCOLO DE RISCO BASE (CRITICA — leia antes de classificar risco) ===
+def _build_snapshot_anterior_block(req: MeritoSynthesisRequest) -> str:
+    prev_block = _summarize_previous(req.previous_snapshot)
+    return f"=== SNAPSHOT ANTERIOR (referencia historica — engine v6 nao usa hoje pra trajetoria; informativo) ===\n{prev_block}"
+
+
+def _build_protocolo_postura_default() -> str:
+    """POSTURA + DEFAULT Baixo. Comum a todos os tipos.
+
+    "Medio" NUNCA como zona-cinza — regra vale pra todos os tipos."""
+    return """=== PROTOCOLO DE RISCO BASE (CRITICA — leia antes de classificar risco) ===
 
 POSTURA: o gatilho de acionamento da apolice de seguro garantia eh a
-EXECUCAO FISCAL ATIVA exigir pagamento do Tomador (intimacao pra pagar,
-penhora, levantamento). Sem gatilho concreto, NAO HA risco imediato.
+EXIGENCIA ATIVA de pagamento ao Tomador (intimacao pra pagar, penhora,
+levantamento, cumprimento de sentenca). Sem gatilho concreto, NAO HA risco
+imediato.
 
 DEFAULT = "Baixo". So sobe pra Medio/Alto/Altissimo com SINAL EXPLICITO
-documentado nos cards. NUNCA usar "Medio" como zona-cinza/cauteloso.
+documentado nos cards. NUNCA usar "Medio" como zona-cinza/cauteloso."""
 
-ESCALA EXPLICITA (em ordem crescente de severidade — primeiro nivel
-que CASE, escolha; senao continue Baixo):
 
-[ALTISSIMO] gatilho de acionamento JA disparado:
-- transito em julgado CERTIFICADO desfavoravel + execucao ativa
-- cumprimento de sentenca contra Tomador ja determinado
-- intimacao da seguradora pra pagamento ja deferida
-- penhora online deferida cobrindo o debito
-- Tomador em RJ com plano em risco AND decisao desfavoravel transitada
-  em conexa
-
-[ALTO] gatilho iminente / sem rota de escape clara:
-- decisao 2g desfavoravel SEM REsp/RE viavel (mantida em STJ ou STF)
-- intimacao pra pagamento solicitada pela Fazenda (ainda nao deferida
-  mas em curso)
-- 1g desfavoravel + tese pro_fazenda_firmado (Regra G) sem contrapeso
-- Tomador em RJ com plano em risco AND processo principal com decisao
-  desfavoravel pendente
-- apolice RECUSADA pelo juizo OR levantada por substituicao desfavoravel
-
-[MEDIO] degradacao prospectiva concreta mas reversao razoavel:
-- decisao 1g desfavoravel + apelacao pendente (efeito suspensivo CPC
-  art. 1.012) SEM tese pro_fazenda_firmado
-- decisao parcialmente desfavoravel + recurso pendente
-- 1g favoravel + acordao 2g desfavoravel + REsp/RE admissivel pendente
-
-[BAIXO] (default) — qualquer cenario sem sinal explicito acima:
-- nenhuma decisao desfavoravel transitada
-- apolice apresentada (mesmo sem aceitacao explicita registrada)
-- processo em fase inicial / instrucao / aguardando manifestacao
-- 1g favoravel ao Tomador (com ou sem recurso da contraparte) SEM tese
-  pro_fazenda_firmado contraria
-- processo extinto sem merito (regra H.1)
-- execucao suspensa por causa externa favoravel (regra H)
-- tese pro_contribuinte_firmado em vigor (regra G.1)
-
-REGRA DURA — DECISAO PROCESSUAL NAO MOVE RISCO:
-
-Eventos PROCESSUAIS NAO equivalem a decisao desfavoravel de merito,
-mesmo se transitados em julgado. NAO sobem risco — quando vier do L2
-como decisao_vigente.sentido='desfavoravel', RECLASSIFIQUE pra neutro
-porque o L2 confundiu processual com merito.
-
-Lista NAO-EXAUSTIVA de eventos processuais (NAO movem risco):
-- Agravo de instrumento (provido OU desprovido) — recurso sobre decisao
-  interlocutoria; NAO julga merito da causa.
-- Excecao de pre-executividade (acolhida OU rejeitada) — defesa preliminar
-  sobre admissibilidade; NAO decide o credito tributario.
-- Embargos de declaracao (acolhidos OU rejeitados) — esclarecimento de
-  decisao anterior; NAO eh novo julgamento de merito.
-- Juizo de admissibilidade de REsp/RE/Agravo Interno em REsp (positivo
-  OU negativo) — porta de entrada do recurso superior; NAO decide
-  merito. "TST negou seguimento ao RR" eh processual, nao desfavoravel
-  de merito.
-- Revogacao de efeito suspensivo de recurso — processual sobre
-  tramitacao; abre porta pra Fazenda agir mas NAO consolida divida.
-- Arquivamento provisorio, suspensao processual, baixa administrativa
-  — atos de tramitacao.
-
-SO movem risco (sobem pra Medio/Alto/Altissimo) decisoes DE MERITO
-sobre o CONTEUDO da causa:
-- Sentenca de procedencia/improcedencia em 1g
-- Acordao de provimento/desprovimento do recurso de apelacao em 2g
-- Acordao do STJ/STF que reforma OU mantem o merito ja julgado
-- Transito em julgado da decisao de merito (nao de processual)
-
-TESTE PRA DUVIDA: olhe o que a decisao DECIDIU.
-- Decidiu sobre o credito/obrigacao/relacao juridica material? -> MERITO
-- Decidiu sobre como o processo deve tramitar (recurso cabe, defesa
-  cabe, prazo, suspensao)? -> PROCESSUAL = nao move risco.
-
-Quando em duvida (decisao ambigua), NAO suba — fique em Baixo.
-False negative (deixar Baixo erradamente) eh menos danoso que false
-positive (atribuir Alto pra mov processual + cliente recebe alerta
-indevido).
-
-REGRA DURA — JUSTIFIQUE A SUBIDA:
+def _build_justifique_subida() -> str:
+    """REGRA DURA — JUSTIFIQUE A SUBIDA. Comum a todos os tipos."""
+    return """REGRA DURA — JUSTIFIQUE A SUBIDA:
 Pra atribuir Medio/Alto/Altissimo, a justificativa DEVE citar
 explicitamente:
 1. QUAL processo carrega o sinal explicito (CNJ)
@@ -367,14 +389,21 @@ explicitamente:
 
 Sem esses 4 itens citados na narrativa, a classificacao DEVE ser Baixo.
 "Risco intermediario por sinais ambiguos" NAO eh argumento valido — eh
-sinal de Baixo (sem evidencia explicita) OU classificacao indevida.
+sinal de Baixo (sem evidencia explicita) OU classificacao indevida."""
 
-=== INSTRUCOES POR CAMPO ===
+
+def _build_field_instructions() -> str:
+    """=== INSTRUCOES POR CAMPO === — 11 itens sobre formato JSON output.
+
+    Comum a todos os tipos: schema de output e o mesmo independente do
+    tipo_judicial dominante. Soh os exemplos textuais sao genericos
+    suficientes pra cobrir fiscal/trab/civel."""
+    return """=== INSTRUCOES POR CAMPO ===
 
 1. risco (UM dos 4 niveis): aplique o PROTOCOLO DE RISCO BASE acima.
    Default = Baixo. So sobe com sinal explicito (decisao desfavoravel
-   transitada, intimacao seguradora, penhora, tese pro_fazenda_firmado
-   contraria, etc — vide escala completa).
+   transitada, intimacao seguradora, penhora, cumprimento de sentenca
+   determinado, tese contraria firmada, etc — vide escala completa).
 
 2. justificativa: 2-4 paragrafos PT-BR.
    - Paragrafo 1: estado factual (qual processo carrega a decisao mais decisiva, sentido)
@@ -412,8 +441,8 @@ sinal de Baixo (sem evidencia explicita) OU classificacao indevida.
         Mapeie de volta pro bucket: score >= 0.85 -> "provavel", >= 0.55 -> "possivel",
         >= 0.20 -> "poucas_chances", < 0.20 -> "remota".
       - Se UM SO processo (sem conexos), score_agregado = score do processo principal.
-   b) breakdown_por_processo: lista com {{processo_numero, role, classificacao, score,
-      peso_aplicado, valor_em_disputa}} pra audit.
+   b) breakdown_por_processo: lista com {processo_numero, role, classificacao, score,
+      peso_aplicado, valor_em_disputa} pra audit.
    c) metodo_agregacao: "media_ponderada_valor_disputa" (V1 default).
    d) contribuicao_no_risco: 1 frase explicando COMO essa prob_exito agregada
       influenciou o risco final que voce escolheu (vide regra F abaixo).
@@ -426,111 +455,12 @@ sinal de Baixo (sem evidencia explicita) OU classificacao indevida.
 
 11. evidence_artifacts: 3-7 itens citando OS PROCESSOS/CARDS mais decisivos.
     kind = processo_synthesis | mov_factsheet | apolice | conexo | cda | aiim | tomador | merito
-    ref = processo_numero, mov_id, cda_number, cnpj_basico, etc.
+    ref = processo_numero, mov_id, cda_number, cnpj_basico, etc."""
 
-=== REGRAS DE OURO ===
 
-A. NAO INVENTE. Se nenhum processo_synthesis tem decisao_vigente, decisao_atual.sentido=null.
-B. Tomador em RJ NAO sobe risco automaticamente. RJ pode SUSPENDER o processo (Baixo).
-   Mas se ha processo com decisao desfavoravel TRANSITADA + tomador em RJ -> Altissimo.
-C. CDA/AIIM contam pra magnitude do valor em disputa MAS nao mudam o risco diretamente -
-   sao contexto descritivo. Risco vem do ESTADO DOS PROCESSOS.
-D. Peca-pivo do merito pode ser de CONEXO (nao do principal). Ex: anulatória conexa
-   julgou improcedente -> isso e pivo mesmo se principal e Embargos sem sentenca.
-F. PROBABILIDADE DE EXITO (Daycoval) E INPUT FORTE PRO RISCO, NAO SUBSTITUI:
-   - prob_exito agregada ALTA (>= 0.85, "provavel") -> EMPURRA risco pra BAIXO
-     (mas nao supera trans em julgado desfavoravel — esse e Altissimo independente)
-   - prob_exito BAIXA (< 0.20, "remota") -> EMPURRA risco pra ALTO
-     (mesmo sem decisao desfavoravel ainda, pq a perda eventual e provavel)
-   - prob_exito MEDIA (0.20-0.85) -> deixa o risco governado pelo estado atual
-     (decisao_vigente, lifecycle_garantia, etc.)
-   - A `contribuicao_no_risco` deve EXPLICAR essa influencia em 1 frase.
-
-G. REGRA DURA — TESE STF/STJ FIRMADA CONTRA TOMADOR PREVALECE SOBRE 1g FAVORAVEL:
-   Quando o conjunto:
-     (i)  jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
-          (tese STF/STJ transitada — repetitivo/repercussao geral), AND
-     (ii) prob_exito agregada = "remota" (Daycoval matriz), AND
-     (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
-           (apelacao/agravo/RE/REsp pendente),
-   ENTAO risco = "Alto" (NAO Medio).
-
-   Por que: tese firmada no STF/STJ vincula instancias inferiores pela ratio
-   decidendi. Sentenca 1g favoravel sera revertida em juizo de admissibilidade ou
-   no merito do recurso pela propria corte superior que ja decidiu o tema. O
-   efeito suspensivo de apelacao NAO neutraliza esse risco — apenas adia.
-   Acionamento da apolice fica praticamente certo no medio prazo (3-5 anos).
-
-   "Medio" SO se aplica nesse cenario se houver contrapeso EXPLICITO citado:
-   ex. modulacao temporal pela corte que protege o caso, distinguishing claro
-   nos autos, garantia em renovacao com seguradora muito forte (so isso pra
-   reduzir um patamar; nunca dois). Sem contrapeso explicito = Alto.
-
-   Casos paradigmaticos: CSLL Tema 372 STF (Lei 7.689/88), IRPJ Stock Options
-   Tema 1226 STJ, ICMS-ST repetitivo, qualquer tese pro_fazenda_firmado
-   julgada com modulacao restritiva.
-
-G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR:
-   'pro_contribuinte_firmado' eh vento de cauda forte: tese STF/STJ transitada
-   favoravel ao Tomador (ex: PIS-COFINS exclusao ICMS, Tema 69 STF). EMPURRA
-   risco pra Baixo mesmo se houver decisao 1g desfavoravel — reversao em
-   instancia superior eh provavel pela mesma ratio decidendi. Aplicar a mesma
-   logica de G em sentido inverso: sem contrapeso explicito = Baixo.
-
-G.2 PENDENTE JULGAMENTO SUPERIOR:
-   'pendente_julgamento_superior' (ex: DIFAL pre-LC 190/2022 ainda em afetacao)
-   NAO move risco diretamente — governado pelo estado atual da causa. Porem
-   REDUZIR confianca em 10-20% e CITAR EXPLICITAMENTE o julgamento pendente
-   na narrativa_executiva + justificativa como risco prospectivo. Cliente
-   precisa ouvir "ha um tema afetado que pode virar o jogo nos proximos meses".
-
-H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL:
-   Padrao identificado em ~30 meritos do Monit Poletto Mai/2026: cenarios
-   onde a Execucao Fiscal esta SUSPENSA aguardando o tramite de uma
-   Anulatoria/MS conexa com decisao FAVORAVEL ao Tomador (sentenca 1g
-   procedente OU liminar em vigor), com apolice ja apresentada e aceita.
-   Poletto classifica esses casos como Baixo. Engine v6 estava classificando
-   como Medio/Alto por pesar excessivamente tese pro-Fazenda STF firmada
-   (regra G) ignorando o contexto operacional.
-
-   Quando o conjunto:
-     (i)   apolice apresentada E aceita (lifecycle_garantia tem evento
-           tipo='aceitacao' SEM levantamento posterior), AND
-     (ii)  processo principal (Execucao Fiscal) SUSPENSO/sobrestado
-           aguardando processo conexo (Anulatoria, MS, ADI, repercussao
-           geral afetada), AND
-     (iii) conexo tem decisao FAVORAVEL ao Tomador em vigor (mesmo 1g sem
-           transito), OU processo principal extinto sem merito,
-   ENTAO risco = "Baixo" — mesmo com tese pro_fazenda_firmado (regra G).
-
-   Por que: o gatilho de acionamento da apolice e a Execucao Fiscal ATIVA
-   exigir pagamento. Enquanto a execucao esta SUSPENSA por causa externa
-   favoravel, NAO HA gatilho de curto prazo. A reversao eventual no STF
-   pelo tema firmado eh prospectiva (3-5 anos) — nao move risco HOJE.
-   Regra G prevalece sobre H apenas quando a SUSPENSAO sai (conexo perde
-   o efeito suspensivo, retomada da execucao, intimacao da seguradora).
-
-   Equivale a "diferimento operacional": apolice aceita protege liquidez +
-   suspensao protege exigibilidade. Os dois juntos = risco baixo HOJE.
-
-   CONTRAPESO LEGITIMO pra subir pra Medio mesmo com H aplicavel:
-   - apolice vencida ou em renovacao com seguradora questionavel
-   - tomador em RJ com plano em risco
-   - sinal explicito de retomada iminente da execucao (despacho determinando
-     intimacao da seguradora ja proferido)
-   Sem contrapeso explicito = Baixo.
-
-H.1 EXTINCAO SEM MERITO NAO CONSOLIDA DIVIDA:
-   Decisao com natureza='extinto_sem_merito' (mesmo transitada) NAO julga
-   o conteudo da causa — eh decisao processual. Tomador NEM ganhou NEM
-   perdeu o merito. O processo extinto NAO move risco. Se houver Execucao
-   Fiscal subsequente, classificar pela situacao DELA, nao pela extincao.
-
-   Cenario tipico: Anulatoria extinta sem merito por falta de pressuposto,
-   tomador segue na Execucao Fiscal. NAO classificar como Altissimo so por
-   causa do "transito" da extincao — extincao sem merito eh neutra.
-
-=== FORMATO DE SAIDA ===
+def _build_output_schema(req: MeritoSynthesisRequest) -> str:
+    """Template JSON de saida. Schema unificado — variants nao mudam aqui."""
+    return f"""=== FORMATO DE SAIDA ===
 
 Retorne APENAS JSON valido:
 
@@ -573,5 +503,777 @@ Retorne APENAS JSON valido:
   "confidence": 0.7,
   "evidence_artifacts": [],
   "cards_index": {{}}
-}}
-"""
+}}"""
+
+
+# ─── Variant: ESCALA bullets (per tipo_judicial) ───────────────────────────
+
+
+def _build_escala_fiscal() -> str:
+    """ESCALA bullets pra merito FISCAL-dominante.
+
+    Linguagem: Execucao Fiscal, intimacao seguradora, penhora online,
+    aceite de apolice, tese pro_fazenda_firmado."""
+    return """ESCALA EXPLICITA (em ordem crescente de severidade — primeiro nivel
+que CASE, escolha; senao continue Baixo):
+
+[ALTISSIMO] gatilho de acionamento JA disparado:
+- transito em julgado CERTIFICADO desfavoravel + execucao fiscal ativa
+- cumprimento de sentenca contra Tomador ja determinado
+- intimacao da seguradora pra pagamento ja deferida
+- penhora online deferida cobrindo o debito
+- Tomador em RJ com plano em risco AND decisao desfavoravel transitada
+  em conexa
+
+[ALTO] gatilho iminente / sem rota de escape clara:
+- decisao 2g desfavoravel SEM REsp/RE viavel (mantida em STJ ou STF)
+- intimacao pra pagamento solicitada pela Fazenda (ainda nao deferida
+  mas em curso)
+- 1g desfavoravel + tese pro_fazenda_firmado (Regra G) sem contrapeso
+- Tomador em RJ com plano em risco AND processo principal com decisao
+  desfavoravel pendente
+- apolice RECUSADA pelo juizo OR levantada por substituicao desfavoravel
+
+[MEDIO] degradacao prospectiva concreta mas reversao razoavel:
+- decisao 1g desfavoravel + apelacao pendente (efeito suspensivo CPC
+  art. 1.012) SEM tese pro_fazenda_firmado
+- decisao parcialmente desfavoravel + recurso pendente
+- 1g favoravel + acordao 2g desfavoravel + REsp/RE admissivel pendente
+
+[BAIXO] (default) — qualquer cenario sem sinal explicito acima:
+- nenhuma decisao desfavoravel transitada
+- apolice apresentada (mesmo sem aceitacao explicita registrada)
+- processo em fase inicial / instrucao / aguardando manifestacao
+- 1g favoravel ao Tomador (com ou sem recurso da contraparte) SEM tese
+  pro_fazenda_firmado contraria
+- processo extinto sem merito (regra H.1)
+- execucao fiscal suspensa por causa externa favoravel (regra H)
+- tese pro_contribuinte_firmado em vigor (regra G.1)"""
+
+
+def _build_escala_trabalhista() -> str:
+    """ESCALA bullets pra merito TRABALHISTA-dominante.
+
+    Linguagem: Reclamacao Trabalhista, cumprimento provisorio/definitivo,
+    levantamento de deposito recursal, RR, AIRR, Sumula TST."""
+    return """ESCALA EXPLICITA (em ordem crescente de severidade — primeiro nivel
+que CASE, escolha; senao continue Baixo):
+
+[ALTISSIMO] gatilho de acionamento JA disparado:
+- transito em julgado CERTIFICADO de sentenca trabalhista desfavoravel
+  + cumprimento definitivo iniciado contra Tomador
+- levantamento de deposito recursal autorizado pra beneficiario
+- penhora online deferida cobrindo o valor da obrigacao
+- intimacao da seguradora pra pagamento ja deferida
+- Tomador em RJ com plano em risco AND condenacao trabalhista transitada
+  em processo conexo (responsabilidade subsidiaria, sucessao trabalhista)
+
+[ALTO] gatilho iminente / sem rota de escape clara:
+- acordao TRT 2g desfavoravel SEM RR (Recurso de Revista) viavel OU
+  com juizo de admissibilidade do RR ja negado
+- cumprimento PROVISORIO determinado contra Tomador (CLT art. 899
+  c/c CPC art. 520)
+- 1g desfavoravel + Sumula TST consolidada contraria sem distinguishing
+  (ex: Sumula 331 TST em terceirizacao tipica) — vide Regra G
+- Tomador em RJ com plano em risco AND processo principal com decisao
+  desfavoravel pendente
+- apolice RECUSADA pelo juizo OR levantada por substituicao desfavoravel
+- penhora sobre faturamento da empresa Tomadora determinada
+
+[MEDIO] degradacao prospectiva concreta mas reversao razoavel:
+- decisao 1g desfavoravel + recurso ordinario pro TRT pendente SEM
+  Sumula/OJ TST consolidada contraria
+- decisao parcialmente desfavoravel (procedente em parte) + recurso pendente
+- 1g favoravel + acordao TRT 2g desfavoravel + RR admissivel pendente
+- Sumula TST oscilante sobre a tese OU OJ SDI-1 sem unanimidade
+
+[BAIXO] (default) — qualquer cenario sem sinal explicito acima:
+- nenhuma decisao desfavoravel transitada
+- apolice apresentada (mesmo sem aceitacao explicita registrada)
+- deposito recursal feito como garantia (mitigante de liquidez)
+- processo em fase de instrucao / audiencia / aguardando manifestacao
+- 1g favoravel ao Tomador SEM Sumula TST contraria firmada
+- processo arquivado / extinto sem julgamento de merito (CLT art. 765,
+  CPC art. 485)
+- execucao trabalhista suspensa aguardando decisao em conexo favoravel
+- Sumula TST consolidada favoravel ao Tomador OU Tema STF favoravel
+  ao empregador firmado (regra G.1)"""
+
+
+def _build_escala_civel() -> str:
+    """ESCALA bullets pra merito CIVEL-dominante.
+
+    Linguagem: Acao Indenizatoria/Cobranca, cumprimento de sentenca,
+    REsp/RE, AREsp, Tema repetitivo STJ, Sumula STJ."""
+    return """ESCALA EXPLICITA (em ordem crescente de severidade — primeiro nivel
+que CASE, escolha; senao continue Baixo):
+
+[ALTISSIMO] gatilho de acionamento JA disparado:
+- transito em julgado CERTIFICADO desfavoravel + cumprimento de
+  sentenca em curso (CPC art. 523+)
+- satisfacao via levantamento autorizada pela autoridade competente
+- penhora online deferida cobrindo o credito do exequente
+- intimacao da seguradora pra pagamento ja deferida
+- Tomador em RJ com plano em risco AND decisao civel desfavoravel
+  transitada em conexa
+
+[ALTO] gatilho iminente / sem rota de escape clara:
+- acordao TJ 2g desfavoravel SEM REsp/RE viavel OU com juizo de
+  admissibilidade do REsp ja negado (AREsp improvido)
+- 1g desfavoravel + Tema repetitivo STJ ou Sumula STJ contraria sem
+  distinguishing claro (vide Regra G)
+- cumprimento provisorio determinado contra Tomador
+- Tomador em RJ com plano em risco AND processo principal com decisao
+  desfavoravel pendente
+- apolice RECUSADA pelo juizo OR levantada por substituicao desfavoravel
+
+[MEDIO] degradacao prospectiva concreta mas reversao razoavel:
+- sentenca 1g desfavoravel + apelacao pendente (efeito suspensivo CPC
+  art. 1.012) SEM Tema repetitivo STJ contrario firmado
+- decisao parcialmente desfavoravel + recurso pendente
+- 1g favoravel + acordao 2g desfavoravel + REsp/RE admissivel pendente
+  (admissibilidade ainda nao apreciada)
+- Tema STJ pendente de julgamento envolvendo a tese da causa
+
+[BAIXO] (default) — qualquer cenario sem sinal explicito acima:
+- nenhuma decisao desfavoravel transitada
+- apolice apresentada (mesmo sem aceitacao explicita registrada)
+- processo em fase de instrucao / audiencia / aguardando manifestacao
+- 1g favoravel ao Tomador (com ou sem recurso da contraparte) SEM
+  Tema STJ ou Sumula STJ contraria firmada
+- processo extinto sem merito (regra H.1)
+- execucao suspensa por causa externa favoravel (regra H)
+- Tema repetitivo STJ ou Sumula STJ favoravel ao Tomador em vigor
+  (regra G.1)"""
+
+
+def _build_escala_misto() -> str:
+    """ESCALA bullets pra merito MISTO (>=2 tipos ou dominancia <80%).
+
+    Linguagem ABSTRATA: 'qualquer processo do merito', 'sinal
+    desfavoravel transitado' — sem se comprometer com vocabulario
+    fiscal/trab/civel especifico."""
+    return """ESCALA EXPLICITA (mérito MISTO — abstrata, aplicavel a qualquer tipo):
+
+NOTA: este mérito mistura tipos judiciais distintos (>=2 tipos OU dominancia
+<80%). Use bullets ABSTRATOS abaixo e aplique regras CONDICIONAIS por
+processo: pra processo fiscal use vocabulario fiscal (EF, tese STF), pra
+trabalhista use TST/RR, pra civel use STJ/REsp. CITE explicitamente o
+tipo do processo que carrega o sinal na narrativa.
+
+[ALTISSIMO] gatilho de acionamento JA disparado em QUALQUER processo do mérito:
+- transito em julgado CERTIFICADO desfavoravel + execucao/cumprimento ativo
+- intimacao da seguradora pra pagamento ja deferida em qualquer processo
+- penhora online deferida cobrindo o debito
+- Tomador em RJ com plano em risco AND decisao desfavoravel transitada
+
+[ALTO] gatilho iminente / sem rota de escape clara em QUALQUER processo:
+- decisao 2g desfavoravel SEM recurso superior viavel
+- 1g desfavoravel + tese contraria firmada (Sumula vinculante / Tema
+  repetitivo / Sumula TST consolidada) sem contrapeso
+- cumprimento provisorio determinado contra Tomador
+- apolice RECUSADA pelo juizo OR levantada por substituicao desfavoravel
+
+[MEDIO] degradacao prospectiva concreta mas reversao razoavel:
+- decisao 1g desfavoravel + recurso pendente SEM tese contraria firmada
+- decisao parcialmente desfavoravel + recurso pendente
+
+[BAIXO] (default) — sem sinal explicito acima:
+- nenhuma decisao desfavoravel transitada em nenhum processo
+- apolice apresentada (mesmo sem aceitacao explicita)
+- processos em fase inicial / instrucao
+- 1g favoravel ao Tomador SEM tese contraria firmada
+- processos extintos sem merito
+- execucoes suspensas por causa externa favoravel"""
+
+
+# ─── Variant: DECISAO PROCESSUAL events (per tipo_judicial) ────────────────
+
+
+_DECISAO_PROCESSUAL_INTRO = """REGRA DURA — DECISAO PROCESSUAL NAO MOVE RISCO:
+
+Eventos PROCESSUAIS NAO equivalem a decisao desfavoravel de merito,
+mesmo se transitados em julgado. NAO sobem risco — quando vier do L2
+como decisao_vigente.sentido='desfavoravel', RECLASSIFIQUE pra neutro
+porque o L2 confundiu processual com merito."""
+
+
+_DECISAO_PROCESSUAL_TESTE = """SO movem risco (sobem pra Medio/Alto/Altissimo) decisoes DE MERITO
+sobre o CONTEUDO da causa:
+- Sentenca de procedencia/improcedencia em 1g
+- Acordao de provimento/desprovimento do recurso de apelacao em 2g
+- Acordao do STJ/STF/TST que reforma OU mantem o merito ja julgado
+- Transito em julgado da decisao de merito (nao de processual)
+
+TESTE PRA DUVIDA: olhe o que a decisao DECIDIU.
+- Decidiu sobre o credito/obrigacao/relacao juridica material? -> MERITO
+- Decidiu sobre como o processo deve tramitar (recurso cabe, defesa
+  cabe, prazo, suspensao)? -> PROCESSUAL = nao move risco.
+
+Quando em duvida (decisao ambigua), NAO suba — fique em Baixo.
+False negative (deixar Baixo erradamente) eh menos danoso que false
+positive (atribuir Alto pra mov processual + cliente recebe alerta
+indevido)."""
+
+
+def _build_decisao_processual_fiscal() -> str:
+    """Lista de eventos processuais que NAO movem risco — FISCAL."""
+    return f"""{_DECISAO_PROCESSUAL_INTRO}
+
+Lista NAO-EXAUSTIVA de eventos processuais FISCAIS (NAO movem risco):
+- Agravo de instrumento (provido OU desprovido) — recurso sobre decisao
+  interlocutoria; NAO julga merito da causa.
+- Excecao de pre-executividade (acolhida OU rejeitada) — defesa
+  preliminar sobre admissibilidade da execucao fiscal; NAO decide o
+  credito tributario.
+- Embargos de declaracao (acolhidos OU rejeitados) — esclarecimento de
+  decisao anterior; NAO eh novo julgamento de merito.
+- Juizo de admissibilidade de REsp/RE/Agravo Interno em REsp (positivo
+  OU negativo) — porta de entrada do recurso superior; NAO decide
+  merito. "STJ negou seguimento ao REsp" eh processual, nao desfavoravel
+  de merito.
+- Revogacao de efeito suspensivo de recurso — processual sobre
+  tramitacao; abre porta pra Fazenda agir mas NAO consolida divida.
+- Arquivamento provisorio da execucao fiscal, suspensao processual,
+  baixa administrativa, prescricao intercorrente (CTN art. 174) — atos
+  de tramitacao OU encerramento sem julgamento de merito.
+
+{_DECISAO_PROCESSUAL_TESTE}"""
+
+
+def _build_decisao_processual_trabalhista() -> str:
+    """Lista de eventos processuais que NAO movem risco — TRABALHISTA."""
+    return f"""{_DECISAO_PROCESSUAL_INTRO}
+
+Lista NAO-EXAUSTIVA de eventos processuais TRABALHISTAS (NAO movem risco):
+- Agravo de instrumento em RR (AIRR — Agravo de Instrumento em Recurso
+  de Revista, provido OU desprovido) — recurso sobre admissibilidade do
+  RR; NAO julga merito.
+- Agravo regimental em RR (AgR-RR) — recurso interno sobre decisao
+  monocratica do TST; processual.
+- Agravo regimental / Agravo Interno em qualquer instancia trabalhista
+  — recurso sobre tramitacao do recurso principal.
+- Embargos infringentes em TST (Lei 13.467/2017 reduziu cabimento, mas
+  ainda possivel) — recurso sobre divergencia jurisprudencial entre
+  Subsecoes; NAO julga merito da causa originaria.
+- Embargos de declaracao (acolhidos OU rejeitados) — esclarecimento de
+  decisao anterior; NAO eh novo julgamento de merito.
+- Juizo de admissibilidade de RR/Recurso Ordinario (positivo OU
+  negativo) — "TST negou seguimento ao RR" eh processual, nao
+  desfavoravel de merito.
+- Revogacao de efeito suspensivo de recurso ordinario — processual
+  sobre tramitacao; abre porta pro cumprimento provisorio mas NAO
+  consolida condenacao.
+- Arquivamento por abandono (CLT art. 844), arquivamento por ausencia
+  do reclamante, extincao por carencia da acao — atos de tramitacao OU
+  encerramento sem julgamento de merito.
+
+{_DECISAO_PROCESSUAL_TESTE}"""
+
+
+def _build_decisao_processual_civel() -> str:
+    """Lista de eventos processuais que NAO movem risco — CIVEL."""
+    return f"""{_DECISAO_PROCESSUAL_INTRO}
+
+Lista NAO-EXAUSTIVA de eventos processuais CIVEIS (NAO movem risco):
+- Agravo de instrumento (provido OU desprovido) — recurso sobre decisao
+  interlocutoria; NAO julga merito da causa principal.
+- Agravo interno em decisao monocratica de relator (TJ, STJ, STF) —
+  processual sobre tramitacao recursal; NAO decide o conflito material.
+- Embargos de declaracao (acolhidos OU rejeitados) — esclarecimento de
+  decisao anterior; NAO eh novo julgamento de merito.
+- Agravo em Recurso Especial / Extraordinario (AREsp/ARE), provido OU
+  desprovido — recurso sobre admissibilidade do REsp/RE; NAO decide
+  merito. "STJ negou seguimento ao REsp" / "STF nao conheceu RE" eh
+  processual, nao desfavoravel de merito.
+- Juizo de admissibilidade de REsp/RE em segundo grau (positivo OU
+  negativo) — porta de entrada do recurso superior; NAO decide merito.
+- Embargos a Execucao (rejeitados) sobre questao processual (nulidade
+  da CDA, prescricao processual, ilegitimidade) — NAO decide o credito
+  material.
+- Impugnacao ao cumprimento de sentenca (rejeitada) sobre questao
+  processual (CPC art. 525) — defesa sobre tramitacao do cumprimento;
+  NAO altera o titulo executivo.
+- Suspensao processual, sobrestamento por tema afetado, prescricao
+  intercorrente, extincao por desistencia OU abandono — atos de
+  tramitacao OU encerramento sem julgamento de merito.
+
+{_DECISAO_PROCESSUAL_TESTE}"""
+
+
+def _build_decisao_processual_misto() -> str:
+    """Lista de eventos processuais que NAO movem risco — MISTO (abstrato)."""
+    return f"""{_DECISAO_PROCESSUAL_INTRO}
+
+Lista NAO-EXAUSTIVA de eventos processuais (NAO movem risco em mérito misto):
+- Recursos sobre admissibilidade ou tramitacao (agravo de instrumento,
+  agravo interno, agravo regimental, agravo em REsp/RE, AIRR, AgR-RR)
+  — processual, NAO julga merito.
+- Embargos de declaracao (acolhidos OU rejeitados) — esclarecimento de
+  decisao anterior; NAO eh novo julgamento de merito.
+- Juizo de admissibilidade de recurso superior (REsp/RE/RR em qualquer
+  instancia) — porta de entrada; NAO decide merito.
+- Revogacao de efeito suspensivo — processual sobre tramitacao.
+- Suspensao processual, arquivamento provisorio, prescricao
+  intercorrente, extincao por carencia/abandono — atos de tramitacao
+  OU encerramento sem julgamento de merito.
+- Embargos a execucao OU impugnacao ao cumprimento sobre questao
+  processual (nulidade, ilegitimidade, prescricao processual) — NAO
+  decide credito material.
+
+{_DECISAO_PROCESSUAL_TESTE}"""
+
+
+# ─── Variant: REGRAS DE OURO A-H.1 (per tipo_judicial) ─────────────────────
+
+
+_REGRAS_DE_OURO_HEADER = "=== REGRAS DE OURO ==="
+
+
+_REGRAS_AD_COMUM = """A. NAO INVENTE. Se nenhum processo_synthesis tem decisao_vigente, decisao_atual.sentido=null.
+B. Tomador em RJ NAO sobe risco automaticamente. RJ pode SUSPENDER o processo (Baixo).
+   Mas se ha processo com decisao desfavoravel TRANSITADA + tomador em RJ -> Altissimo.
+C. CDA/AIIM contam pra magnitude do valor em disputa MAS nao mudam o risco diretamente -
+   sao contexto descritivo. Risco vem do ESTADO DOS PROCESSOS.
+D. Peca-pivo do merito pode ser de CONEXO (nao do principal). Ex: anulatória conexa
+   julgou improcedente -> isso e pivo mesmo se principal e Embargos sem sentenca."""
+
+
+_REGRA_F_COMUM = """F. PROBABILIDADE DE EXITO (Daycoval) E INPUT FORTE PRO RISCO, NAO SUBSTITUI:
+   - prob_exito agregada ALTA (>= 0.85, "provavel") -> EMPURRA risco pra BAIXO
+     (mas nao supera trans em julgado desfavoravel — esse e Altissimo independente)
+   - prob_exito BAIXA (< 0.20, "remota") -> EMPURRA risco pra ALTO
+     (mesmo sem decisao desfavoravel ainda, pq a perda eventual e provavel)
+   - prob_exito MEDIA (0.20-0.85) -> deixa o risco governado pelo estado atual
+     (decisao_vigente, lifecycle_garantia, etc.)
+   - A `contribuicao_no_risco` deve EXPLICAR essa influencia em 1 frase."""
+
+
+_REGRA_H1_COMUM = """H.1 EXTINCAO SEM MERITO NAO CONSOLIDA DIVIDA:
+   Decisao com natureza='extinto_sem_merito' (mesmo transitada) NAO julga
+   o conteudo da causa — eh decisao processual. Tomador NEM ganhou NEM
+   perdeu o merito. O processo extinto NAO move risco. Se houver Execucao
+   subsequente, classificar pela situacao DELA, nao pela extincao.
+
+   Cenario tipico: Anulatoria/Acao Declaratoria extinta sem merito por
+   falta de pressuposto, tomador segue na Execucao. NAO classificar como
+   Altissimo so por causa do "transito" da extincao — extincao sem merito
+   eh neutra."""
+
+
+def _build_regras_ouro_fiscal() -> str:
+    """REGRAS DE OURO F/G/G.1/G.2/H/H.1 — FISCAL.
+
+    Exemplos: Tema 372 STF (CSLL), Tema 1226 STJ (Stock Options), ICMS-ST,
+    DIFAL, PIS-COFINS Tema 69 STF, Anulatoria/MS conexa."""
+    return f"""{_REGRAS_DE_OURO_HEADER}
+
+{_REGRAS_AD_COMUM}
+{_REGRA_F_COMUM}
+
+G. REGRA DURA — TESE STF/STJ FIRMADA CONTRA TOMADOR PREVALECE SOBRE 1g FAVORAVEL:
+   Quando o conjunto:
+     (i)  jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
+          (tese STF/STJ transitada — repetitivo/repercussao geral), AND
+     (ii) prob_exito agregada = "remota" (Daycoval matriz), AND
+     (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
+           (apelacao/agravo/RE/REsp pendente),
+   ENTAO risco = "Alto" (NAO Medio).
+
+   Por que: tese firmada no STF/STJ vincula instancias inferiores pela ratio
+   decidendi. Sentenca 1g favoravel sera revertida em juizo de admissibilidade ou
+   no merito do recurso pela propria corte superior que ja decidiu o tema. O
+   efeito suspensivo de apelacao NAO neutraliza esse risco — apenas adia.
+   Acionamento da apolice fica praticamente certo no medio prazo (3-5 anos).
+
+   "Medio" SO se aplica nesse cenario se houver contrapeso EXPLICITO citado:
+   ex. modulacao temporal pela corte que protege o caso, distinguishing claro
+   nos autos, garantia em renovacao com seguradora muito forte (so isso pra
+   reduzir um patamar; nunca dois). Sem contrapeso explicito = Alto.
+
+   Casos paradigmaticos fiscais: CSLL Tema 372 STF (Lei 7.689/88), IRPJ Stock
+   Options Tema 1226 STJ, ICMS-ST repetitivo, qualquer tese pro_fazenda_firmado
+   julgada com modulacao restritiva.
+
+G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR:
+   'pro_contribuinte_firmado' eh vento de cauda forte: tese STF/STJ transitada
+   favoravel ao Tomador (ex: PIS-COFINS exclusao ICMS, Tema 69 STF). EMPURRA
+   risco pra Baixo mesmo se houver decisao 1g desfavoravel — reversao em
+   instancia superior eh provavel pela mesma ratio decidendi. Aplicar a mesma
+   logica de G em sentido inverso: sem contrapeso explicito = Baixo.
+
+G.2 PENDENTE JULGAMENTO SUPERIOR:
+   'pendente_julgamento_superior' (ex: DIFAL pre-LC 190/2022 ainda em afetacao)
+   NAO move risco diretamente — governado pelo estado atual da causa. Porem
+   REDUZIR confianca em 10-20% e CITAR EXPLICITAMENTE o julgamento pendente
+   na narrativa_executiva + justificativa como risco prospectivo. Cliente
+   precisa ouvir "ha um tema afetado que pode virar o jogo nos proximos meses".
+
+H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (FISCAL):
+   Padrao identificado em ~30 meritos do Monit Poletto Mai/2026: cenarios
+   onde a Execucao Fiscal esta SUSPENSA aguardando o tramite de uma
+   Anulatoria/MS conexa com decisao FAVORAVEL ao Tomador (sentenca 1g
+   procedente OU liminar em vigor), com apolice ja apresentada e aceita.
+   Poletto classifica esses casos como Baixo. Engine v6 estava classificando
+   como Medio/Alto por pesar excessivamente tese pro-Fazenda STF firmada
+   (regra G) ignorando o contexto operacional.
+
+   Quando o conjunto:
+     (i)   apolice apresentada E aceita (lifecycle_garantia tem evento
+           tipo='aceitacao' SEM levantamento posterior), AND
+     (ii)  processo principal (Execucao Fiscal) SUSPENSO/sobrestado
+           aguardando processo conexo (Anulatoria, MS, ADI, repercussao
+           geral afetada), AND
+     (iii) conexo tem decisao FAVORAVEL ao Tomador em vigor (mesmo 1g sem
+           transito), OU processo principal extinto sem merito,
+   ENTAO risco = "Baixo" — mesmo com tese pro_fazenda_firmado (regra G).
+
+   Por que: o gatilho de acionamento da apolice e a Execucao Fiscal ATIVA
+   exigir pagamento. Enquanto a execucao esta SUSPENSA por causa externa
+   favoravel, NAO HA gatilho de curto prazo. A reversao eventual no STF
+   pelo tema firmado eh prospectiva (3-5 anos) — nao move risco HOJE.
+   Regra G prevalece sobre H apenas quando a SUSPENSAO sai (conexo perde
+   o efeito suspensivo, retomada da execucao, intimacao da seguradora).
+
+   Equivale a "diferimento operacional": apolice aceita protege liquidez +
+   suspensao protege exigibilidade. Os dois juntos = risco baixo HOJE.
+
+   CONTRAPESO LEGITIMO pra subir pra Medio mesmo com H aplicavel:
+   - apolice vencida ou em renovacao com seguradora questionavel
+   - tomador em RJ com plano em risco
+   - sinal explicito de retomada iminente da execucao (despacho determinando
+     intimacao da seguradora ja proferido)
+   Sem contrapeso explicito = Baixo.
+
+{_REGRA_H1_COMUM}"""
+
+
+def _build_regras_ouro_trabalhista() -> str:
+    """REGRAS DE OURO F/G/G.1/G.2/H/H.1 — TRABALHISTA.
+
+    Exemplos: Tema 725 STF (Pejotizacao), Tema 1118 STF (Terceirizacao
+    em saude), Sumula 331 TST (Terceirizacao), Sumula 363 TST (FGTS),
+    OJ SDI-1 firmadas, Cumprimento Provisorio."""
+    return f"""{_REGRAS_DE_OURO_HEADER}
+
+{_REGRAS_AD_COMUM}
+{_REGRA_F_COMUM}
+
+G. REGRA DURA — TESE TST/STF FIRMADA CONTRA TOMADOR PREVALECE SOBRE 1g FAVORAVEL:
+   Quando o conjunto:
+     (i)  jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
+          (no contexto trabalhista: tese desfavoravel ao empregador Tomador
+          — Sumula TST consolidada OU Tema STF de repercussao geral firmado
+          OU OJ SDI-1 firmada), AND
+     (ii) prob_exito agregada = "remota" (Daycoval matriz trabalhista), AND
+     (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
+           (recurso ordinario pra TRT pendente OU RR pendente),
+   ENTAO risco = "Alto" (NAO Medio).
+
+   Por que: Sumula TST consolidada vincula as Varas e os TRTs pela ratio
+   decidendi. Tema STF de repercussao geral vincula todo o Judiciario.
+   Sentenca 1g favoravel sera revertida em RR ou no acordao do TRT pela
+   mesma orientacao jurisprudencial firmada no TST/STF. O efeito suspensivo
+   do recurso ordinario NAO neutraliza esse risco — apenas adia.
+
+   "Medio" SO se aplica nesse cenario se houver contrapeso EXPLICITO citado:
+   ex. distinguishing claro nos autos (fato diverso do paradigma da Sumula),
+   modulacao temporal pelo TST/STF que protege o caso, garantia em renovacao
+   com seguradora muito forte. Sem contrapeso explicito = Alto.
+
+   Casos paradigmaticos trabalhistas: Tema 725 STF (Pejotizacao /
+   reconhecimento de vinculo), Tema 1118 STF (Terceirizacao em servico
+   essencial), Sumula 331 TST (Terceirizacao tipica), Sumula 363 TST
+   (responsabilidade subsidiaria por FGTS), OJ 191 SDI-1 TST (responsabilidade
+   solidaria em horas extras habituais).
+
+G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR:
+   'pro_contribuinte_firmado' (no contexto trabalhista: tese favoravel ao
+   empregador) eh vento de cauda forte. Tese STF/TST firmada que afasta
+   ou limita a responsabilidade do Tomador. EMPURRA risco pra Baixo mesmo
+   se houver decisao 1g desfavoravel — reversao em instancia superior eh
+   provavel pela mesma ratio decidendi. Sem contrapeso explicito = Baixo.
+
+   Exemplos: Tema 1046 STF (validade de norma coletiva flexibilizando
+   direitos), Sumulas TST de natureza pro-empregador firmadas, modulacoes
+   temporais do TST.
+
+G.2 PENDENTE JULGAMENTO SUPERIOR:
+   'pendente_julgamento_superior' (tema afetado pelo TST ou pelo STF em
+   repercussao geral) NAO move risco diretamente — governado pelo estado
+   atual da causa. Porem REDUZIR confianca em 10-20% e CITAR EXPLICITAMENTE
+   o julgamento pendente na narrativa_executiva + justificativa como risco
+   prospectivo. Cliente precisa ouvir "ha um tema afetado pelo TST/STF que
+   pode virar o jogo nos proximos meses".
+
+H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (TRABALHISTA):
+   Padrao analogo ao H fiscal mas adaptado pro contexto trabalhista:
+   cenarios onde o Cumprimento Provisorio/Definitivo esta SUSPENSO aguardando
+   tramite de processo conexo com decisao FAVORAVEL ao Tomador (ex: Acao
+   Anulatoria de auto de infracao do Ministerio do Trabalho, MS contra
+   determinacao de bloqueio, Acao de Reconhecimento de Inexistencia de
+   Vinculo julgada procedente em 1g), com apolice ja apresentada e aceita.
+
+   Deposito recursal feito (CLT art. 899, valor proporcional a alcada) e
+   MITIGANTE adicional — garante liquidez do credor sem acionar apolice.
+
+   Quando o conjunto:
+     (i)   apolice apresentada E aceita (lifecycle_garantia tem evento
+           tipo='aceitacao' SEM levantamento posterior), AND
+     (ii)  processo principal (Cumprimento ou Reclamacao) SUSPENSO/sobrestado
+           aguardando processo conexo, AND
+     (iii) conexo tem decisao FAVORAVEL ao Tomador em vigor (mesmo 1g sem
+           transito), OU processo principal extinto sem merito,
+   ENTAO risco = "Baixo" — mesmo com Sumula TST contraria (regra G).
+
+   Por que: o gatilho de acionamento da apolice e a EXIGENCIA ATIVA de
+   pagamento. Enquanto o Cumprimento esta SUSPENSO por causa externa
+   favoravel, NAO HA gatilho de curto prazo. A reversao eventual em
+   instancia superior eh prospectiva — nao move risco HOJE.
+
+   CONTRAPESO LEGITIMO pra subir pra Medio mesmo com H aplicavel:
+   - apolice vencida ou em renovacao com seguradora questionavel
+   - tomador em RJ com plano em risco
+   - sinal explicito de retomada iminente do cumprimento (despacho
+     determinando intimacao da seguradora ja proferido)
+   - deposito recursal levantado pelo beneficiario (mitigante drenado)
+   Sem contrapeso explicito = Baixo.
+
+{_REGRA_H1_COMUM}"""
+
+
+def _build_regras_ouro_civel() -> str:
+    """REGRAS DE OURO F/G/G.1/G.2/H/H.1 — CIVEL.
+
+    Exemplos: Temas repetitivos STJ, Sumulas STJ (matéria contratual,
+    indenizatoria, consumerista), Sumula 297 STJ (CDC aplica a bancos),
+    Acao Declaratoria conexa."""
+    return f"""{_REGRAS_DE_OURO_HEADER}
+
+{_REGRAS_AD_COMUM}
+{_REGRA_F_COMUM}
+
+G. REGRA DURA — TEMA REPETITIVO STJ OU SUMULA STJ FIRMADA CONTRA TOMADOR
+   PREVALECE SOBRE 1g FAVORAVEL:
+   Quando o conjunto:
+     (i)  jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
+          (no contexto civel: tese desfavoravel ao devedor Tomador — Tema
+          repetitivo STJ firmado OU Sumula STJ consolidada OU Tema STF de
+          repercussao geral firmado contra a posicao do Tomador), AND
+     (ii) prob_exito agregada = "remota" (Daycoval matriz civel), AND
+     (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
+           (apelacao/agravo/REsp/RE pendente),
+   ENTAO risco = "Alto" (NAO Medio).
+
+   Por que: Tema repetitivo STJ vincula todos os juizes e tribunais pelo
+   sistema de precedentes (CPC art. 927). Sumula STJ consolidada produz
+   o mesmo efeito pratico. Sentenca 1g favoravel sera revertida em
+   instancia superior pela mesma ratio decidendi. Efeito suspensivo de
+   apelacao NAO neutraliza esse risco — apenas adia.
+
+   "Medio" SO se aplica nesse cenario se houver contrapeso EXPLICITO:
+   ex. distinguishing claro do paradigma do Tema/Sumula, modulacao
+   temporal pelo STJ/STF que protege o caso, garantia em renovacao com
+   seguradora muito forte. Sem contrapeso explicito = Alto.
+
+   Casos paradigmaticos civeis: Tema 1.061 STJ (revisao contratual
+   bancaria), Tema 1.075 STJ (responsabilidade civil objetiva em
+   acidente de consumo), Sumula 297 STJ (CDC aplica a relacoes
+   bancarias), Sumula 5/STJ (interpretacao de contrato em REsp),
+   qualquer Tema STF de repercussao geral firmado contrario ao Tomador.
+
+G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR:
+   'pro_contribuinte_firmado' (no contexto civel: tese favoravel ao
+   devedor) eh vento de cauda forte. Tema repetitivo STJ ou Sumula STJ
+   firmada pro Tomador, OU Sumula STF/STJ pro-consumidor (quando
+   Tomador eh consumidor). EMPURRA risco pra Baixo mesmo se houver
+   decisao 1g desfavoravel — reversao em instancia superior eh
+   provavel. Sem contrapeso explicito = Baixo.
+
+G.2 PENDENTE JULGAMENTO SUPERIOR:
+   'pendente_julgamento_superior' (tema afetado pelo STJ em repetitivo
+   ou pelo STF em repercussao geral) NAO move risco diretamente —
+   governado pelo estado atual da causa. Porem REDUZIR confianca em
+   10-20% e CITAR EXPLICITAMENTE o julgamento pendente na
+   narrativa_executiva + justificativa como risco prospectivo. Cliente
+   precisa ouvir "ha um tema afetado pelo STJ/STF que pode virar o
+   jogo nos proximos meses".
+
+H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (CIVEL):
+   Padrao analogo ao H fiscal mas adaptado pro contexto civel:
+   cenarios onde a Execucao/Cumprimento de Sentenca esta SUSPENSO
+   aguardando tramite de processo conexo com decisao FAVORAVEL ao
+   Tomador (ex: Acao Declaratoria de Inexigibilidade de Debito julgada
+   procedente em 1g, Acao Revisional de Contrato com tutela provisoria
+   favoravel, Acao Rescisoria com efeito suspensivo), com apolice ja
+   apresentada e aceita.
+
+   Quando o conjunto:
+     (i)   apolice apresentada E aceita (lifecycle_garantia tem evento
+           tipo='aceitacao' SEM levantamento posterior), AND
+     (ii)  processo principal (Execucao OU Cumprimento de Sentenca)
+           SUSPENSO/sobrestado aguardando processo conexo, AND
+     (iii) conexo tem decisao FAVORAVEL ao Tomador em vigor (mesmo 1g
+           sem transito), OU processo principal extinto sem merito,
+   ENTAO risco = "Baixo" — mesmo com Tema repetitivo STJ contrario
+   (regra G).
+
+   Por que: o gatilho de acionamento da apolice e a EXIGENCIA ATIVA
+   de pagamento (cumprimento de sentenca em curso). Enquanto o
+   cumprimento esta SUSPENSO por causa externa favoravel, NAO HA
+   gatilho de curto prazo. A reversao eventual em instancia superior
+   eh prospectiva — nao move risco HOJE.
+
+   CONTRAPESO LEGITIMO pra subir pra Medio mesmo com H aplicavel:
+   - apolice vencida ou em renovacao com seguradora questionavel
+   - tomador em RJ com plano em risco
+   - sinal explicito de retomada iminente do cumprimento (despacho
+     determinando intimacao da seguradora ja proferido)
+   - acordao 2g desfavoravel transitando em breve (RE/REsp ja
+     admissibilidade negada)
+   Sem contrapeso explicito = Baixo.
+
+{_REGRA_H1_COMUM}"""
+
+
+def _build_regras_ouro_misto() -> str:
+    """REGRAS DE OURO F/G/G.1/G.2/H/H.1 — MISTO (abstrato + confidence -0.10).
+
+    Regras condicionais: 'pra processo fiscal aplique X, pra civel Y'.
+    Bullet abstrato. CONFIDENCE reduzido em 0.10 por incerteza."""
+    return f"""{_REGRAS_DE_OURO_HEADER}
+
+{_REGRAS_AD_COMUM}
+{_REGRA_F_COMUM}
+
+E. REGRA EXTRA PRA MERITO MISTO — CONFIDENCE REDUZIDO:
+   Este mérito mistura >=2 tipos judiciais OU dominancia <80%. SUBTRAIA
+   0.10 do confidence final que voce atribuiria normalmente. Ex: se tudo
+   indica 0.85 confidence, atribua 0.75. Isso reflete a incerteza
+   adicional de aplicar regras heterogeneas a processos de tipos
+   diferentes.
+
+   Justifique explicitamente na narrativa_executiva: "mérito misto
+   envolve processos [fiscal e civel / trabalhista e civel / ...]
+   — confidence reduzida por incerteza estrutural na agregacao".
+
+G. REGRA DURA — TESE FIRMADA CONTRA TOMADOR (regra condicional por tipo):
+   Aplique a regra DO TIPO ESPECIFICO do processo que carrega o sinal:
+   - Pra processo FISCAL: tese STF/STJ firmada (Tema 372 CSLL, Tema 1226
+     IRPJ Stock, ICMS-ST repetitivo) -> "Alto"
+   - Pra processo TRABALHISTA: Sumula TST consolidada OU Tema STF
+     trabalhista firmado (Tema 725 Pejotizacao, Sumula 331 Terceirizacao)
+     -> "Alto"
+   - Pra processo CIVEL: Tema repetitivo STJ OU Sumula STJ firmada contra
+     o Tomador -> "Alto"
+
+   Combinacao: se HA tese contraria firmada em QUALQUER processo do mérito
+   + prob_exito remota + 1g favoravel sem transito -> "Alto" (NAO Medio).
+
+   CITE explicitamente na narrativa qual processo (CNJ) carrega a tese
+   contraria e qual tese (Tema/Sumula). Sem essa citacao, fique em Medio
+   ou Baixo (sem evidencia).
+
+G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR (regra condicional):
+   Tese firmada FAVORAVEL ao Tomador em QUALQUER processo do mérito
+   EMPURRA risco pra Baixo, mesmo com decisoes 1g desfavoraveis. Aplica
+   a mesma logica de G em sentido inverso, com vocabulario do tipo
+   especifico do processo.
+
+G.2 PENDENTE JULGAMENTO SUPERIOR:
+   'pendente_julgamento_superior' em qualquer processo do mérito NAO move
+   risco diretamente. REDUZIR confianca em 10-20% (adicional ao -0.10
+   da Regra E pra misto, totalizando -20%/30%) e CITAR EXPLICITAMENTE
+   o julgamento pendente como risco prospectivo.
+
+H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (MISTO):
+   Quando o conjunto:
+     (i)   apolice apresentada E aceita (lifecycle_garantia tem evento
+           tipo='aceitacao' SEM levantamento posterior) EM PELO MENOS UM
+           processo do merito, AND
+     (ii)  processo principal SUSPENSO/sobrestado aguardando processo
+           conexo (independente do tipo), AND
+     (iii) conexo tem decisao FAVORAVEL ao Tomador em vigor (mesmo 1g
+           sem transito), OU processo principal extinto sem merito,
+   ENTAO risco = "Baixo" — mesmo com tese contraria firmada (regra G).
+
+   Por que: o gatilho de acionamento da apolice e a EXIGENCIA ATIVA de
+   pagamento em qualquer processo. Enquanto o principal esta SUSPENSO
+   por causa externa favoravel, NAO HA gatilho de curto prazo.
+
+   CONTRAPESO LEGITIMO pra subir pra Medio:
+   - apolice vencida ou em renovacao com seguradora questionavel
+   - tomador em RJ com plano em risco
+   - sinal explicito de retomada iminente em qualquer processo
+   Sem contrapeso explicito = Baixo.
+
+{_REGRA_H1_COMUM}"""
+
+
+# ─── Variant assembly (per tipo_judicial) ──────────────────────────────────
+
+
+_VARIANT_BLOCKS = {
+    "fiscal": (_build_escala_fiscal, _build_decisao_processual_fiscal, _build_regras_ouro_fiscal),
+    "trabalhista": (_build_escala_trabalhista, _build_decisao_processual_trabalhista, _build_regras_ouro_trabalhista),
+    "civel": (_build_escala_civel, _build_decisao_processual_civel, _build_regras_ouro_civel),
+    "misto": (_build_escala_misto, _build_decisao_processual_misto, _build_regras_ouro_misto),
+}
+
+
+def _build_rules(tipo: str) -> str:
+    """Assembla rules block do `tipo` dominante: escala + decisao processual
+    + justifique + field instructions + regras de ouro.
+
+    Misto adiciona Regra E (-0.10 confidence) via _build_regras_ouro_misto."""
+    escala, decisao, regras = _VARIANT_BLOCKS[tipo]
+    return "\n\n".join([
+        escala(),
+        decisao(),
+        _build_justifique_subida(),
+        _build_field_instructions(),
+        regras(),
+    ])
+
+
+# ─── Main prompt builder ───────────────────────────────────────────────────
+
+
+def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
+    """Computa (prompt, prompt_version) compartilhando o mesmo tipo dominante.
+
+    Single source of truth pro dispatch — garante que `prompt_version` em
+    `leads.engine_llm_calls` reflete a variant que efetivamente rodou
+    (sem drift risk se alguem mudar o router no futuro)."""
+    tipo = _determine_tipo_dominante(req.processo_syntheses)
+    parts = [
+        _build_intro(),
+        _build_glossary_roles(),
+        _build_consistency_check(),
+        _build_merito_header_block(req),
+        _build_processos_block(req),
+        _build_cdas_block(req),
+        _build_aiims_block(req),
+        _build_tomador_block_section(req),
+        _build_jurisprudencia_block(req),
+        _build_snapshot_anterior_block(req),
+        _build_protocolo_postura_default(),
+        _build_rules(tipo),
+        _build_output_schema(req),
+    ]
+    return "\n\n".join(parts) + "\n", _prompt_version_for(tipo)
+
+
+def build_merito_synthesis_prompt(req: MeritoSynthesisRequest) -> str:
+    """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda/aiim
+    + jurisprudencia + previous_snapshot pra computar risco do MERITO.
+
+    Dispatch determ.:
+    - >=80% fiscal -> vocab EF, Anulatoria, Tema 372/1226/DIFAL
+    - >=80% trabalhista -> vocab Cumprimento, RR, Sumula TST, Tema 725
+    - >=80% civel -> vocab Cumprimento de Sentenca, REsp, Tema repetitivo STJ
+    - resto -> 'misto' (vocab abstrato + confidence -0.10)
+
+    Pra telemetria com prompt_version use `build_prompt_and_version()`."""
+    prompt, _ = build_prompt_and_version(req)
+    return prompt
