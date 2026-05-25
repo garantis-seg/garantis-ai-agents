@@ -1,0 +1,14 @@
+{
+  "name": "garantis-ai-agents-evals",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PromptFoo regression suite pro engine v6 L1 mov_factsheet (e camadas futuras)",
+  "scripts": {
+    "eval": "promptfoo eval --config promptfooconfig.yaml",
+    "view": "promptfoo view",
+    "snapshot": "python scripts/build_golden_snapshot.py"
+  },
+  "devDependencies": {
+    "promptfoo": "0.119.x"
+  }
+}

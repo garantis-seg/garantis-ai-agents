@@ -1,6 +1,7 @@
 steps:
   # Build + push with Kaniko (cache enabled — pip install cached when requirements.txt unchanged)
   - name: 'gcr.io/kaniko-project/executor:latest'
+    id: 'kaniko-build'
     args:
       - '--dockerfile=Dockerfile'
       - '--context=.'
@@ -11,8 +12,52 @@ steps:
       - '--snapshot-mode=redo'
     timeout: '600s'
 
+  # PromptFoo regression eval (L1 mov_factsheet) — WARNING-ONLY initial mode.
+  # Roda em paralelo com kaniko (waitFor=['-']) pra nao bloquear build.
+  # Skip se golden snapshot ainda nao commitado em evals/promptfoo/golden/.
+  # Pra virar GATE REAL: remover `|| { ... exit 0 }` no final do bash block.
+  # Doc: evals/promptfoo/README.md
+  - name: 'python:3.11-slim'
+    id: 'promptfoo-eval'
+    waitFor: ['-']  # paralelo com kaniko-build
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set +e  # warning-only: nao falha o step
+
+        # Skip se snapshot nao existe (P5.1 = estrutura, P5.2 = snapshot commitado)
+        if [ ! -f evals/promptfoo/golden/snapshot_v1.yaml ]; then
+          echo "::warning::No golden snapshot at evals/promptfoo/golden/snapshot_v1.yaml — skipping eval"
+          exit 0
+        fi
+
+        echo "[promptfoo] installing Node 20 + Python deps..."
+        apt-get update -qq
+        apt-get install -y -qq curl gnupg ca-certificates
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+        apt-get install -y -qq nodejs
+
+        echo "[promptfoo] installing Python deps (garantis-shared via keyring)..."
+        pip install --quiet --no-cache-dir keyrings.google-artifactregistry-auth
+        PIP_EXTRA_INDEX_URL=https://southamerica-east1-python.pkg.dev/$PROJECT_ID/python-packages/simple/ \
+          pip install --quiet --no-cache-dir -r requirements.txt
+
+        echo "[promptfoo] running eval (max-concurrency=5)..."
+        cd evals/promptfoo
+        npm ci --silent
+        npx promptfoo eval --output results.json --max-concurrency 5 || {
+          echo "::warning::PromptFoo eval FAILED (or threshold not met) — warning-only mode active, deploy continues"
+          exit 0
+        }
+        echo "[promptfoo] eval passed"
+    secretEnv: ['GEMINI_API_KEY']
+    timeout: '300s'
+
   # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy'
+    waitFor: ['kaniko-build', 'promptfoo-eval']
     entrypoint: gcloud
     args:
       - 'run'
@@ -39,6 +84,11 @@ steps:
       - 'DEFAULT_MODEL=gemini-2.5-flash-lite,DEFAULT_PROMPT_VERSION=v3'
       - '--set-secrets'
       - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/$PROJECT_ID/secrets/GEMINI_API_KEY/versions/latest
+      env: 'GEMINI_API_KEY'
 
 options:
   logging: CLOUD_LOGGING_ONLY

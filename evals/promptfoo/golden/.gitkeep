@@ -1,0 +1,2 @@
+# Diretório para golden snapshots. Gere com:
+#   python scripts/build_golden_snapshot.py --out golden/snapshot_v1.yaml --sample 30

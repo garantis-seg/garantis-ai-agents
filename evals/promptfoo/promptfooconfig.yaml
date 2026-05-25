@@ -1,0 +1,75 @@
+description: Engine v6 L1 mov_factsheet regression suite
+
+# Provider Python custom: chama src.agents.mov_factsheet.classify_mov_factsheet
+# direto. Cobre prompt rendering + Gemini call + parse + Pydantic validation.
+providers:
+  - id: 'python:providers/mov_factsheet_provider.py'
+    label: l1-mov-factsheet-current
+
+prompts:
+  # PromptFoo exige `prompts:` mas o provider custom ignora — o prompt real
+  # é construído dentro do agente por build_mov_factsheet_prompt(). Stub.
+  - "{{processo.cnj}}::{{mov.mov_id}}"
+
+# Golden snapshot: tests = lista de cases lidos do snapshot YAML.
+# Cada case tem `vars` (processo, mov, docs, fb_ctx) + `expected` (card alvo).
+tests: file://golden/snapshot_v1.yaml
+
+defaultTest:
+  assert:
+    # Output deve ser JSON parseável (Pydantic já garantiu — sanity check)
+    - type: is-json
+      weight: 1
+
+    # Campos categóricos críticos — exact match
+    - type: javascript
+      weight: 5
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected;
+        return out.decisao?.sentido === exp.decisao?.sentido;
+    - type: javascript
+      weight: 5
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected;
+        return out.decisao?.transito_certificado === exp.decisao?.transito_certificado;
+    - type: javascript
+      weight: 4
+      value: |
+        const out = JSON.parse(output);
+        return out.categoria === context.vars.expected.categoria;
+    - type: javascript
+      weight: 3
+      value: |
+        const out = JSON.parse(output);
+        return out.relevancia_merito === context.vars.expected.relevancia_merito;
+    - type: javascript
+      weight: 3
+      value: |
+        const out = JSON.parse(output);
+        return out.peca_pivo?.e_pivo === context.vars.expected.peca_pivo?.e_pivo;
+    - type: javascript
+      weight: 2
+      value: |
+        const out = JSON.parse(output);
+        return out.delta_risco?.direcao === context.vars.expected.delta_risco?.direcao;
+
+    # Texto-livre — variance residual aceitavel, so checa que NAO esta vazio.
+    # Pra similarity real (embedding), precisaria provider de embeddings — fica
+    # como TODO se quiser ativar (config: --providers openai:text-embedding-3-small).
+    - type: javascript
+      weight: 1
+      value: |
+        const out = JSON.parse(output);
+        return (out.resumo_ato || '').length > 10;
+
+# Threshold global: media ponderada dos asserts.
+# 0.85 = no-regression (snapshot é gabarito → 100% esperado em greenfield).
+# Margem 0.15 cobre variance residual de texto-livre (similarity 0.80 vs 1.00).
+# Cloud Build step adiciona `|| true` no início (modo warning) — vira gate
+# real depois de validar estabilidade.
+sharing: false
+
+outputPath:
+  - results.json
