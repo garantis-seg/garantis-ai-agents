@@ -3,6 +3,12 @@
 REV2 2026-05-20 PM: doc-text first-class. Quando documentos_anexados nao
 vazio, LLM le o texto do doc junto. Quando vazio, fallback formal com
 processo summary + mov anterior.
+
+REV3 2026-05-25 (piloto sequencial L1): fb_ctx pode ser passado SEMPRE
+quando caller esta em modo cadenciado, mesmo com docs. Nesse caso o
+prompt acrescenta bloco CONTEXTO ANTERIOR com instrucoes narrowadas
+(uso so pra resolver pronouns/refs, docs prevalecem sobre contexto).
+Memory: engine-v6-piloto-sequencial-l1-2026-05-25.
 """
 
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
@@ -117,7 +123,29 @@ INSTRUCOES PARA DOCUMENTOS:
 - Se ha SENTENCA ou ACORDAO entre os docs, preencha decisao.tem_decisao=true com
   o sentido (favoravel/desfavoravel pro Tomador) extraido do dispositivo final.
 """
-        contexto_extra_section = ""
+        # Modo cadenciado (piloto sequential_l1): fb_ctx passado mesmo com
+        # docs, exclusivamente pra resolver refs/pronouns. Docs continuam
+        # sendo fonte primaria do conteudo. Bloco so renderiza quando ha
+        # contexto util (build_fallback_context retorna None caso contrario).
+        if fallback_context is not None:
+            contexto_extra_section = f"""
+
+=== CONTEXTO ANTERIOR (modo cadenciado) ===
+{_fallback_block(fallback_context)}
+
+INSTRUCOES PARA CONTEXTO ANTERIOR:
+- Os DOCUMENTOS ANEXADOS acima sao a FONTE PRIMARIA — eles mandam na
+  classificacao desta mov.
+- Use o CONTEXTO ANTERIOR APENAS pra resolver REFERENCIAS contextuais
+  (pronouns "o agravo", "a decisao", "a peticao") quando o texto da mov
+  atual aludir a algo anterior sem nomear explicitamente. NAO use pra
+  inferir conteudo desta mov.
+- Se houver conflito entre o teor dos DOCS e o contexto anterior, os
+  DOCS PREVALECEM. O contexto anterior so resolve ambiguidades, nao
+  override fatos.
+"""
+        else:
+            contexto_extra_section = ""
     else:
         docs_section = ""
         contexto_extra_section = f"""
