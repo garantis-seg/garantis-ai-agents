@@ -345,6 +345,23 @@ foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
    - transito_certificado: true SO se a mov CERTIFICA transito em julgado
    (Ver <regra_extincao_sem_merito> acima — regra dura por classe processual.)
 
+   REGRA DURA — INEXIGIBILIDADE NAO eh EXTINCAO SEM MERITO:
+   Quando uma sentenca em Embargos/Anulatoria/MS/Declaratoria ACOLHE A TESE
+   do Tomador (inconstitucionalidade, nulidade da CDA, decadencia, prescricao
+   da pretensao, etc) e declara "inexigibilidade do credito" / "inexigivel o
+   tributo" / "nula a CDA": natureza='procedente' (NAO extinto_sem_merito).
+   Foi julgamento DE MERITO acolhendo tese juridica — Tomador GANHOU no
+   merito da causa. Sentido='favoravel'.
+
+   Distincao chave: "extinguiu a execucao fiscal correlata" como CONSEQUENCIA
+   da procedencia dos embargos NAO transforma a sentenca em extinto_sem_merito
+   — o evento principal foi PROCEDENCIA dos embargos. A extincao da EF eh
+   efeito reflexo. natureza='procedente'.
+
+   extinto_sem_merito eh APENAS quando juiz NAO julgou conteudo (CPC 485):
+   ilegitimidade, falta de pressuposto, carencia, perda de objeto, abandono,
+   transacao homologatoria sem analise de tese.
+
 5. evento_garantia:
    - tipo: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço | nenhum
    - motivo (SO quando tipo=recusa): "valor insuficiente", "seguradora nao admitida",

@@ -54,7 +54,15 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #     Tomador-reu, EXCECAO desfavoravel pra classes Tomador-autor. Caso
 #     paradigma: Tutela Cautelar Antecedente extinta por perda de objeto
 #     (CPC 308) = sentido='desfavoravel' (Tomador perdeu).
-PROMPT_VERSION = "mov_factsheet.v2.2"
+#
+# v2.3 (2026-05-25, polo-regression case 6 LLM confundia natureza):
+#   - REGRA DURA — INEXIGIBILIDADE NAO eh EXTINCAO SEM MERITO. Quando
+#     sentenca em Embargos/Anulatoria acolhe tese e declara "inexigibilidade
+#     do credito" => natureza='procedente' (NAO extinto_sem_merito), porque
+#     foi julgamento de merito que acolheu a tese. Distincao chave: extincao
+#     da EF correlata como CONSEQUENCIA da procedencia eh efeito reflexo,
+#     nao transforma a sentenca em extinto_sem_merito.
+PROMPT_VERSION = "mov_factsheet.v2.3"
 
 
 async def classify_mov_factsheet(

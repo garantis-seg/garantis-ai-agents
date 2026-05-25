@@ -410,17 +410,11 @@ class MeritoSynthesisRequest(BaseModel):
     tomador: Optional[TomadorCardMin] = None
     cdas: list[CDACardMin] = Field(default_factory=list)
     aiims: list[AIIMCardMin] = Field(default_factory=list)
-    jurisprudencia: Optional[JurisprudenciaMin] = Field(
-        default=None,
-        description=(
-            "DEPRECATED v2.2: jurisprudencia migrada pra L2 (proposta L2-only) — "
-            "risco_processo_intermediario dos processo_syntheses JA absorveu o "
-            "sinal da juris via L2 prompt v2.2 regras J/J.1/J.2. Campo mantido "
-            "pra backward-compat do materializer (que ainda passa antigo); SUPRIMIDO "
-            "do prompt — LLM nao ve mais. Quando materializer L3 for atualizado "
-            "(prox refactor), este campo pode ser removido."
-        ),
-    )
+    # v2.3 (2026-05-25): campo `jurisprudencia` REMOVIDO. Migrado pra L2 em v2.2
+    # (proposta L2-only); v2.3 limpa o residuo DEPRECATED. risco_processo_inter-
+    # mediario dos processo_syntheses JA absorveu o sinal da juris via L2 prompt
+    # v2.2 regras J/J.1/J.2. Materializer L3 (frontend-api) DEVE parar de passar
+    # `jurisprudencia` no payload em sync com este commit.
     paradigmas: list[ParadigmaMin] = Field(default_factory=list)
 
     # Trajetoria (passado pelo orchestrator antes da call)
@@ -428,6 +422,10 @@ class MeritoSynthesisRequest(BaseModel):
 
     model: Optional[str] = None
     provider: Optional[str] = None
+
+    # Defensive: extra fields ignored (cobre materializer legacy passando
+    # `jurisprudencia` antes deste commit; safe pra rollouts staggered).
+    model_config = {"extra": "ignore"}
 
 
 class MeritoSynthesisResponse(BaseModel):
