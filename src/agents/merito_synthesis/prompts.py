@@ -317,14 +317,55 @@ que CASE, escolha; senao continue Baixo):
 - execucao suspensa por causa externa favoravel (regra H)
 - tese pro_contribuinte_firmado em vigor (regra G.1)
 
+REGRA DURA — DECISAO PROCESSUAL NAO MOVE RISCO:
+
+Eventos PROCESSUAIS NAO equivalem a decisao desfavoravel de merito,
+mesmo se transitados em julgado. NAO sobem risco — quando vier do L2
+como decisao_vigente.sentido='desfavoravel', RECLASSIFIQUE pra neutro
+porque o L2 confundiu processual com merito.
+
+Lista NAO-EXAUSTIVA de eventos processuais (NAO movem risco):
+- Agravo de instrumento (provido OU desprovido) — recurso sobre decisao
+  interlocutoria; NAO julga merito da causa.
+- Excecao de pre-executividade (acolhida OU rejeitada) — defesa preliminar
+  sobre admissibilidade; NAO decide o credito tributario.
+- Embargos de declaracao (acolhidos OU rejeitados) — esclarecimento de
+  decisao anterior; NAO eh novo julgamento de merito.
+- Juizo de admissibilidade de REsp/RE/Agravo Interno em REsp (positivo
+  OU negativo) — porta de entrada do recurso superior; NAO decide
+  merito. "TST negou seguimento ao RR" eh processual, nao desfavoravel
+  de merito.
+- Revogacao de efeito suspensivo de recurso — processual sobre
+  tramitacao; abre porta pra Fazenda agir mas NAO consolida divida.
+- Arquivamento provisorio, suspensao processual, baixa administrativa
+  — atos de tramitacao.
+
+SO movem risco (sobem pra Medio/Alto/Altissimo) decisoes DE MERITO
+sobre o CONTEUDO da causa:
+- Sentenca de procedencia/improcedencia em 1g
+- Acordao de provimento/desprovimento do recurso de apelacao em 2g
+- Acordao do STJ/STF que reforma OU mantem o merito ja julgado
+- Transito em julgado da decisao de merito (nao de processual)
+
+TESTE PRA DUVIDA: olhe o que a decisao DECIDIU.
+- Decidiu sobre o credito/obrigacao/relacao juridica material? -> MERITO
+- Decidiu sobre como o processo deve tramitar (recurso cabe, defesa
+  cabe, prazo, suspensao)? -> PROCESSUAL = nao move risco.
+
+Quando em duvida (decisao ambigua), NAO suba — fique em Baixo.
+False negative (deixar Baixo erradamente) eh menos danoso que false
+positive (atribuir Alto pra mov processual + cliente recebe alerta
+indevido).
+
 REGRA DURA — JUSTIFIQUE A SUBIDA:
 Pra atribuir Medio/Alto/Altissimo, a justificativa DEVE citar
 explicitamente:
 1. QUAL processo carrega o sinal explicito (CNJ)
 2. QUAL evento concreto (data + tipo: sentenca/transito/intimacao/penhora)
 3. POR QUE encaixa no nivel escolhido (referencia ao bullet da escala)
+4. CONFIRMAR que NAO eh decisao processual (vide regra acima)
 
-Sem esses 3 itens citados na narrativa, a classificacao DEVE ser Baixo.
+Sem esses 4 itens citados na narrativa, a classificacao DEVE ser Baixo.
 "Risco intermediario por sinais ambiguos" NAO eh argumento valido — eh
 sinal de Baixo (sem evidencia explicita) OU classificacao indevida.
 
