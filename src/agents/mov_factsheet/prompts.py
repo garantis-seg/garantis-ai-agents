@@ -48,23 +48,31 @@ def _summarize_doc(doc: DocAnexado, idx: int, total: int) -> str:
     return "\n".join(parts)
 
 
-def _fallback_block(ctx: FallbackContext | None) -> str:
-    if not ctx:
-        return "(sem fallback context)"
-    lines = []
-    if ctx.processo_resumo_ia:
-        resumo = (ctx.processo_resumo_ia or "")[:_RESUMO_PROCESSO_CAP]
-        lines.append(f"  RESUMO DO PROCESSO (cascata IA, cap {_RESUMO_PROCESSO_CAP} chars):")
-        lines.append(f"    {resumo}")
-    if ctx.mov_anterior_resumo:
-        prev_cat = ctx.mov_anterior_categoria or "?"
-        prev_dist = (
-            f"ha {ctx.distance_dias_mov_anterior} dias atras"
-            if ctx.distance_dias_mov_anterior is not None else "data anterior nao informada"
-        )
-        lines.append(f"  MOV ANTERIOR (categoria={prev_cat}, {prev_dist}):")
-        lines.append(f"    {(ctx.mov_anterior_resumo or '')[:600]}")
-    return "\n".join(lines) if lines else "(fallback context vazio)"
+def _processo_resumo_block(ctx: FallbackContext | None) -> str:
+    """Bloco RESUMO DO PROCESSO (so o resumo_ia, sem MOV ANTERIOR)."""
+    if not ctx or not ctx.processo_resumo_ia:
+        return ""
+    resumo = ctx.processo_resumo_ia[:_RESUMO_PROCESSO_CAP]
+    return (
+        f"\n\n=== RESUMO DO PROCESSO (cascata IA, cap {_RESUMO_PROCESSO_CAP} chars) ===\n"
+        f"{resumo}"
+    )
+
+
+def _mov_anterior_block(ctx: FallbackContext | None) -> str:
+    """Bloco MOV ANTERIOR (so quando ha resumo_ato anterior — modo cadenciado)."""
+    if not ctx or not ctx.mov_anterior_resumo:
+        return ""
+    prev_cat = ctx.mov_anterior_categoria or "?"
+    prev_dist = (
+        f"ha {ctx.distance_dias_mov_anterior} dias atras"
+        if ctx.distance_dias_mov_anterior is not None
+        else "data anterior nao informada"
+    )
+    return (
+        f"\n\n=== MOV ANTERIOR NA TIMELINE (categoria={prev_cat}, {prev_dist}) ===\n"
+        f"{(ctx.mov_anterior_resumo or '')[:600]}"
+    )
 
 
 def build_mov_factsheet_prompt(
@@ -102,7 +110,12 @@ def build_mov_factsheet_prompt(
     if len(texto) > 3000:
         texto = texto[:3000] + "..."
 
-    # Conditional blocks
+    # Conditional blocks — 4 secoes independentes, montadas conforme
+    # disponibilidade dos inputs:
+    # 1. DOCUMENTOS ANEXADOS: so quando has_docs=True
+    # 2. RESUMO DO PROCESSO: so quando processo_resumo_ia presente
+    # 3. MOV ANTERIOR: so quando mov_anterior_resumo presente (modo cadenciado)
+    # 4. INSTRUCOES DE USO: condicional ao que foi montado acima
     if has_docs:
         docs_capped = documentos_anexados[:_DOC_LIST_CAP]
         docs_block = "\n\n".join(
@@ -114,55 +127,52 @@ def build_mov_factsheet_prompt(
 
 === DOCUMENTOS ANEXADOS A ESTA MOV ({len(documentos_anexados)} doc(s)) ===
 {docs_block}
-
-INSTRUCOES PARA DOCUMENTOS:
-- O texto da publicacao no DJe pode ser GENERICO (ex: "Anexo Juntado").
-- A informacao SUBSTANTIVA esta nos documento(s) acima.
-- USE O CONTEUDO DOS DOCS pra preencher decisao, valores, peca_pivo, evento_garantia.
-- texto_resumo deve sintetizar O QUE ESTA NOS DOCS (nao no snippet).
-- Se ha SENTENCA ou ACORDAO entre os docs, preencha decisao.tem_decisao=true com
-  o sentido (favoravel/desfavoravel pro Tomador) extraido do dispositivo final.
 """
-        # Modo cadenciado (piloto sequential_l1): fb_ctx passado mesmo com
-        # docs, exclusivamente pra resolver refs/pronouns. Docs continuam
-        # sendo fonte primaria do conteudo. Bloco so renderiza quando ha
-        # contexto util (build_fallback_context retorna None caso contrario).
-        if fallback_context is not None:
-            contexto_extra_section = f"""
-
-=== CONTEXTO ANTERIOR (modo cadenciado) ===
-{_fallback_block(fallback_context)}
-
-INSTRUCOES PARA CONTEXTO ANTERIOR:
-- Os DOCUMENTOS ANEXADOS acima sao a FONTE PRIMARIA — eles mandam na
-  classificacao desta mov.
-- Use o CONTEXTO ANTERIOR APENAS pra resolver REFERENCIAS contextuais
-  (pronouns "o agravo", "a decisao", "a peticao") quando o texto da mov
-  atual aludir a algo anterior sem nomear explicitamente. NAO use pra
-  inferir conteudo desta mov.
-- Se houver conflito entre o teor dos DOCS e o contexto anterior, os
-  DOCS PREVALECEM. O contexto anterior so resolve ambiguidades, nao
-  override fatos.
-"""
-        else:
-            contexto_extra_section = ""
     else:
         docs_section = ""
-        contexto_extra_section = f"""
 
-=== FALLBACK CONTEXT (sem doc anexado disponivel) ===
-{_fallback_block(fallback_context)}
+    processo_section = _processo_resumo_block(fallback_context)
+    mov_anterior_section = _mov_anterior_block(fallback_context)
 
-INSTRUCOES PARA FALLBACK:
-- Sem doc anexo, voce SO TEM o snippet da publicacao + metadata.
-- Use o RESUMO DO PROCESSO pra entender contexto geral (tese, fase, partes).
-- Use a MOV ANTERIOR pra inferir continuidade (ex: anterior="expedido mandado",
-  esta="certifico cumprimento" => infira status).
-- NAO INVENTE conteudo. Se o snippet e generico, classifique como
-  relevancia_merito='ruido' OR 'baixa' + e_pivo=false + tem_decisao=false.
-- confianca deve refletir limitacao: 0.4-0.6 quando snippet e generico,
-  0.6-0.8 quando snippet ja traz teor (ex: "Despacho: O juiz determinou X").
-"""
+    # Instrucoes de uso variam por combinacao de inputs disponiveis.
+    instrucoes_parts = []
+    if has_docs:
+        instrucoes_parts.append(
+            "- O texto da publicacao no DJe pode ser GENERICO (ex: 'Anexo Juntado').\n"
+            "- A informacao SUBSTANTIVA esta nos DOCUMENTOS ANEXADOS acima.\n"
+            "- USE O CONTEUDO DOS DOCS pra preencher decisao, valores, peca_pivo, evento_garantia.\n"
+            "- resumo_ato deve sintetizar O QUE ESTA NESTA MOV (incluindo os docs anexos),\n"
+            "  NAO copiar o RESUMO DO PROCESSO ou MOV ANTERIOR.\n"
+            "- Se ha SENTENCA ou ACORDAO entre os docs, preencha decisao.tem_decisao=true com\n"
+            "  o sentido (favoravel/desfavoravel pro Tomador) extraido do dispositivo final."
+        )
+    else:
+        instrucoes_parts.append(
+            "- Sem doc anexo, voce SO TEM o snippet da publicacao + metadata desta mov.\n"
+            "- NAO INVENTE conteudo. Se o snippet e generico (ex: 'Expedicao de outros\n"
+            "  documentos', 'Juntada de peticao intercorrente'), classifique como\n"
+            "  relevancia_merito='ruido' ou 'baixa' + tem_decisao=false + e_pivo=false.\n"
+            "- confianca: 0.4-0.6 quando snippet generico, 0.6-0.8 quando snippet ja traz\n"
+            "  teor (ex: 'Despacho: O juiz determinou X')."
+        )
+    if processo_section:
+        instrucoes_parts.append(
+            "- RESUMO DO PROCESSO e contexto de FUNDO (tese, partes, valor da causa).\n"
+            "- NAO copie texto do RESUMO DO PROCESSO pro resumo_ato — esse campo descreve\n"
+            "  SOMENTE o que aconteceu NESTA mov. Se a mov e ruido, o resumo_ato deve dizer\n"
+            "  'Movimentacao sem teor substantivo', NAO repetir o resumo do processo."
+        )
+    if mov_anterior_section:
+        instrucoes_parts.append(
+            "- MOV ANTERIOR ajuda a resolver REFERENCIAS contextuais (pronomes 'o agravo',\n"
+            "  'a decisao', 'a peticao') quando o texto desta mov alude a algo anterior.\n"
+            "- NAO use a MOV ANTERIOR pra inferir conteudo desta mov. Conflito entre o teor\n"
+            "  desta mov (snippet+docs) e a MOV ANTERIOR? Esta mov PREVALECE."
+        )
+    contexto_extra_section = (
+        "\n\n=== INSTRUCOES PARA USO DO CONTEXTO ===\n" + "\n".join(instrucoes_parts)
+        if instrucoes_parts else ""
+    )
 
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
@@ -176,7 +186,7 @@ pra calcular o risco de acionamento da apolice no merito.
   {mov_meta}
 
   texto da publicacao (snippet):
-  {texto}{docs_section}{contexto_extra_section}
+  {texto}{docs_section}{processo_section}{mov_anterior_section}{contexto_extra_section}
 
 === REGRA DE LEITURA DE POLOS (CRITICA — leia antes de classificar sentido) ===
 
