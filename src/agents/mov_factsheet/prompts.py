@@ -202,12 +202,28 @@ dependendo da classe processual:
   Procedente dos embargos = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
 
 - Acao Anulatoria de Debito Fiscal, Mandado de Seguranca, Acao Declaratoria,
-  Repetitorio de Indebito, Acao Ordinaria Tributaria:
-  polo_ativo = TOMADOR (autor/impetrante); polo_passivo = Fazenda (re/coatora).
-  Procedente da anulatoria/MS = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
+  Repetitorio de Indebito, Acao Ordinaria Tributaria, Tutela Antecipada
+  Antecedente, Tutela Cautelar Antecedente, Acao Cautelar:
+  polo_ativo = TOMADOR (autor/impetrante/requerente); polo_passivo =
+  Fazenda (re/coatora).
+  Procedente da anulatoria/MS/tutela = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
 
 - Acao Civel Generica ("Procedimento Comum Civel"): identifique pelo objeto da
   acao + quem moveu (autor pediu o que?). Nao assuma defaults.
+
+REGRA DURA — CLASSE NAO LISTADA ACIMA:
+Se a classe do processo NAO esta em nenhum dos buckets acima, NUNCA
+assuma "Execucao Fiscal default". Em vez disso, cruze polo_ativo /
+polo_passivo com o nome do Tomador na publicacao OU resumo do processo
+pra identificar onde o Tomador esta:
+  - Tomador em polo_ativo => Tomador eh autor => procedente=favoravel
+  - Tomador em polo_passivo => Tomador eh reu => procedente=desfavoravel
+Se ambiguo, sentido=null + confianca <=0.5.
+
+ATENCAO ao RESUMO DO PROCESSO (cascata IA): ele pode usar a preposicao
+"contra" ambigua (ex: "Tutela Antecipada movida contra X" pode significar
+que X eh quem propos a acao). NUNCA confie SO no resumo — sempre cruze
+com polo_ativo/polo_passivo + nome do Tomador.
 
 REGRA DURA — 3 PASSOS pra preencher decisao.sentido:
 1. Identifique o Tomador (cruze CNPJ/nome da publicacao com polo_ativo/polo_passivo).
