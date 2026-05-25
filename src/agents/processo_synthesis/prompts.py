@@ -536,7 +536,29 @@ e a natureza eh 'procedente', a Camada 1 errou — corrija no estado_processual
    - Se ha decisao vigente e qual o sentido
    - Se a garantia esta aceita ou nao
 
-2. decisao_vigente: a decisao mais recente que governa o processo HOJE.
+2. decisao_vigente: a decisao MAIS LOAD-BEARING que governa o processo HOJE.
+   "Mais recente" NAO eh sinonimo de "mais load-bearing" — use a hierarquia:
+
+   HIERARQUIA DE LOAD-BEARING (forte → fraca):
+     transito_em_julgado >> acordao (2g+) >> sentenca (1g) >>
+     decisao homologatoria >> decisao interlocutoria
+
+   REGRA DE PERMANENCIA: uma sentenca/acordao passada CONTINUA sendo
+   decisao_vigente ate que ela seja:
+     (a) reformada por instancia superior (nova sentenca/acordao substituindo), OU
+     (b) transitada em julgado (vira o estado final), OU
+     (c) substituida por outra decisao de mesmo OU maior nivel hierarquico.
+   Interlocutorias RECENTES (suspensao, conclusao, despacho, penhora online,
+   bloqueio, novo prazo) NAO substituem decisao de merito anterior — elas
+   apenas MODULAM o estado_processual. Reflete-as em estado_processual com
+   contexto, mas mantenha decisao_vigente ancorada na ultima decisao de merito.
+
+   EXEMPLO CONCRETO: processo tem sentenca de improcedencia de Embargos em 2022
+   + apelacao pendente + decisao interlocutoria de bloqueio online em 2024.
+   decisao_vigente = a SENTENCA DE 2022 (sentido desfavoravel ao Tomador
+   embargante), NAO a interlocutoria de 2024. O bloqueio entra no
+   estado_processual ("execucao em curso com bloqueio determinado").
+
    - sentido: favoravel | desfavoravel | parcial | neutro (DO PONTO DE VISTA DO TOMADOR;
      aplique a REGRA DE LEITURA DE POLOS acima — NAO assuma Fazenda=autor por default)
    - instancia: 1g | 2g | stj | stf
@@ -545,8 +567,10 @@ e a natureza eh 'procedente', a Camada 1 errou — corrija no estado_processual
    - data: YYYY-MM-DD
    - transito_certificado: true SO se ha mov certificando transito
    - recorrida: true se houve recurso interposto contra esta decisao
-   - Se NAO ha decisao de merito, deixe sentido/natureza=null. Use interlocutoria
-     somente se ha decisao interlocutoria relevante (liminar, tutela, etc).
+   - Se NAO ha decisao de merito (sentenca/acordao/homologatoria), deixe
+     sentido/natureza=null. Use interlocutoria SOMENTE se TOTAL ausencia de
+     decisao de merito E a interlocutoria for relevante (liminar concedida,
+     tutela antecipada, etc — algo com substancia decisoria, NAO procedural).
 
 3. lifecycle_garantia: timeline ordenada por data dos eventos da garantia neste processo.
    Cada evento tem: data, mov_id, evento (apresentacao/aceitacao/recusa/levantamento/...),
@@ -605,6 +629,18 @@ E. Suspensao e ambigua: explicite POR QUE no estado_processual (acordo/RJ/prejud
 F. Quando ha autos raw disponivel, USE pra confirmar/refutar inferencias dos factsheets.
    Se o autos mostra dispositivo de sentenca mas nenhum factsheet capturou, registre na
    justificativa que o autos foi load-bearing.
+
+G. ESTABILIDADE TEMPORAL — decisao_vigente NAO deve oscilar entre cuts/snapshots
+   sucessivos do MESMO processo so porque chegaram movs procedurais novos.
+   Backtest 2026-05-24 detectou padrao de instabilidade: cuts antigos
+   classificaram corretamente (ancorados em sentenca/acordao), cut recente
+   trocou pra interlocutoria nova (despacho/conclusao/bloqueio) e mudou
+   sentido — gerando "miss" mesmo sem nada de merito ter mudado.
+   Pergunta de auto-check antes de emitir decisao_vigente:
+     "Esta decisao_vigente que estou propondo eh a mesma que eu proporia
+      se nao tivesse os ultimos 6 meses de movs procedurais? Se NAO,
+      e a decisao de merito anterior continua valida (nao reformada/
+      transitada), MANTENHA a anterior."
 
 === FORMATO DE SAIDA ===
 
