@@ -279,16 +279,31 @@ deixar natureza=null com sentido preenchido — L2 amarra via decisao_vigente.
 </regra_recursos>
 
 <regra_extincao_sem_merito>
-Quando natureza='extinto_sem_merito', sentido DEVE ser 'neutro', NUNCA
-'desfavoravel'. Extincao sem merito significa que o juiz NAO julgou o conteudo
-da causa — pode ser ausencia de pressuposto processual, ilegitimidade de
-parte, falta de interesse, transacao, desistencia, perempcao, etc. NAO
-consolida divida nem julga risco.
+DEFAULT (classes Tomador-REU como Execucao Fiscal): natureza='extinto_sem_merito'
+=> sentido='neutro'. Extincao sem merito significa que juiz NAO julgou conteudo
+da causa — ausencia de pressuposto, ilegitimidade, falta de interesse, transacao,
+desistencia, perempcao, etc. NAO consolida divida nem julga risco. Mesmo se
+processo for direcionado pra EF posterior, a EXTINCAO nao move risco — o que
+move risco eh a EF subsequente. transito_certificado='true' aplica mas sentido
+continua 'neutro' — extincao transitada NAO equivale improcedencia transitada.
 
-Mesmo se o processo for direcionado pra Execucao Fiscal posterior, a EXTINCAO
-nao move risco — o que move risco eh a Execucao Fiscal subsequente.
-transito_certificado='true' aplica a extincao mas sentido continua 'neutro' —
-extincao transitada NAO equivale a improcedencia transitada.
+EXCECAO (classes Tomador-AUTOR — Anulatoria, MS, Declaratoria, Repetitorio,
+Tutela Cautelar/Antecipada Antecedente, Embargos a Execucao, Excecao Pre-
+Executividade, Acao Rescisoria): natureza='extinto_sem_merito' => sentido=
+'desfavoravel' (NAO neutro). Quando o Tomador propos a acao e ela foi extinta
+SEM julgamento do conteudo (perda de objeto, carencia, abandono, ilegitimidade,
+nao ajuizamento principal no prazo CPC 308 em cautelar antecedente), Tomador
+PERDEU sem julgamento. A pretensao do Tomador (suspender exigibilidade, anular
+debito, restituir indebito) NAO foi acolhida. A exigibilidade da Fazenda
+CONTINUA. Equivale a derrota processual.
+
+So eh 'neutro' em classe Tomador-autor quando extincao foi POR FAVOR ao Tomador
+(homologacao de acordo, desistencia da Fazenda) — situacoes raras.
+
+CASO PARADIGMA: Tutela Cautelar Antecedente proposta pelo Tomador pra suspender
+exigibilidade tributaria, extinta por perda de objeto (Tomador nao ajuizou
+principal no prazo CPC 308). Tomador PERDEU a cautelar — exigibilidade nao
+foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
 </regra_extincao_sem_merito>
 
 </regras_criticas>
@@ -328,7 +343,7 @@ extincao transitada NAO equivale a improcedencia transitada.
    - natureza: procedente | improcedente | parcialmente_procedente | extinto_sem_merito |
      homologatoria | interlocutoria
    - transito_certificado: true SO se a mov CERTIFICA transito em julgado
-   (Ver <regra_extincao_sem_merito> acima quando natureza='extinto_sem_merito'.)
+   (Ver <regra_extincao_sem_merito> acima — regra dura por classe processual.)
 
 5. evento_garantia:
    - tipo: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço | nenhum

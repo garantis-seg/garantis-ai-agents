@@ -1,0 +1,235 @@
+# Polo-regression suite L1 mov_factsheet v1 — 10 cards curados manualmente
+# cobrindo casos críticos historicamente buggy.
+#
+# Diferente do snapshot_v1 (sample random do banco), aqui cada caso eh
+# CURADO com expected correto, validado contra a REGRA DE LEITURA DE POLOS
+# do prompt L1 v2.1. Funciona como GATE DE REGRESSAO — se algum desses casos
+# regredir, alguma mudanca no prompt quebrou a regra critica.
+#
+# Cobertura:
+#   1-2: EF Tomador-executado, sentenca improcedente da execucao (Tomador GANHOU)
+#   3-4: EF Tomador-executado, sentenca procedente da execucao (Tomador PERDEU)
+#   5-6: Embargos Tomador-embargante, sentenca improcedente (Tomador PERDEU)
+#   7-8: Anulatoria/MS Tomador-autor, sentenca procedente (Tomador GANHOU)
+#   9:   Tutela Cautelar Antecedente extinta por perda objeto (Tomador-autor PERDEU)
+#   10:  Recurso GOL/Uniao nao provido (paradigma 2026-05-25 — Uniao perdeu => GOL ganhou)
+
+- description: "[POLO-REG 1] EF Tomador-executado: 'julgo improcedente a presente execucao fiscal' = sentido FAVORAVEL ao Tomador"
+  vars:
+    processo:
+      cnj: "0000001-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Uniao Federal - Fazenda Nacional"
+      polo_passivo: "EMPRESA EXEMPLO LTDA"
+    mov:
+      mov_id: "polo-reg-1"
+      data: "2024-08-15"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Apos analise dos autos, reconheço a prescricao da pretensao executoria. Diante disso, JULGO IMPROCEDENTE a presente execucao fiscal. Custas pela exequente."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "favoravel"
+        natureza: "improcedente"
+        instancia: "1g"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+      peca_pivo:
+        e_pivo: true
+
+- description: "[POLO-REG 2] EF Tomador-executado, extincao por pagamento (art. 924, II CPC) = sentido NEUTRO (debito quitado, sem reversao possivel)"
+  vars:
+    processo:
+      cnj: "0000002-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Uniao Federal - PGFN"
+      polo_passivo: "BANCO XPTO S.A."
+    mov:
+      mov_id: "polo-reg-2"
+      data: "2024-09-10"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Comprovado o pagamento integral do debito conforme guia DARF juntada. EXTINGO a execucao fiscal nos termos do art. 924, II do CPC. Transitada em julgado, baixe-se."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "neutro"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 3] EF Tomador-executado: 'julgo procedente a execucao' = sentido DESFAVORAVEL"
+  vars:
+    processo:
+      cnj: "0000003-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Uniao Federal - Fazenda Nacional"
+      polo_passivo: "EMPRESA EXEMPLO LTDA"
+    mov:
+      mov_id: "polo-reg-3"
+      data: "2024-10-20"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Verificada a higidez da CDA, JULGO PROCEDENTE a execucao fiscal. Prossiga-se com os atos expropriatorios. Intime-se a executada."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "desfavoravel"
+        natureza: "procedente"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 4] EF Tomador-executado, intimacao para pagamento = sinal DESFAVORAVEL"
+  vars:
+    processo:
+      cnj: "0000004-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Estado de Sao Paulo - PGE"
+      polo_passivo: "EMPRESA EXEMPLO LTDA"
+    mov:
+      mov_id: "polo-reg-4"
+      data: "2025-01-15"
+      tipo: "DECISAO"
+      texto: "Decisao. Intime-se a executada para pagamento da divida no prazo de 5 dias, sob pena de penhora. Indeferido o pedido de parcelamento por intempestividade."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "desfavoravel"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 5] Embargos Tomador-embargante: 'julgo improcedentes os embargos' = sentido DESFAVORAVEL pro Tomador (perdeu defesa)"
+  vars:
+    processo:
+      cnj: "0000005-12.2020.4.03.6100"
+      classe: "Embargos a Execucao Fiscal"
+      classe_cnj_code: 1118
+      polo_ativo: "EMPRESA EMBARGANTE LTDA"
+      polo_passivo: "Uniao Federal - Fazenda Nacional"
+    mov:
+      mov_id: "polo-reg-5"
+      data: "2024-11-05"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Os argumentos da embargante nao prosperam. JULGO IMPROCEDENTES os presentes embargos a execucao fiscal opostos por EMPRESA EMBARGANTE LTDA. Mantida a CDA. Custas pela embargante."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "desfavoravel"
+        natureza: "improcedente"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 6] Embargos Tomador-embargante: 'julgo procedentes os embargos' = sentido FAVORAVEL ao Tomador (ganhou defesa)"
+  vars:
+    processo:
+      cnj: "0000006-12.2020.4.03.6100"
+      classe: "Embargos a Execucao Fiscal"
+      classe_cnj_code: 1118
+      polo_ativo: "EMPRESA EMBARGANTE LTDA"
+      polo_passivo: "Uniao Federal - Fazenda Nacional"
+    mov:
+      mov_id: "polo-reg-6"
+      data: "2024-12-10"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Acolho a tese de inconstitucionalidade do tributo objeto da CDA. JULGO PROCEDENTES os embargos a execucao, declarando inexigivel o credito tributario. Custas pela embargada."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "favoravel"
+        natureza: "procedente"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 7] Anulatoria Tomador-autor: 'julgo procedente a anulatoria' = sentido FAVORAVEL ao Tomador (ganhou)"
+  vars:
+    processo:
+      cnj: "0000007-12.2020.4.03.6100"
+      classe: "Acao Anulatoria de Debito Fiscal"
+      classe_cnj_code: 1117
+      polo_ativo: "EMPRESA ANULATORIA LTDA"
+      polo_passivo: "Uniao Federal - Fazenda Nacional"
+    mov:
+      mov_id: "polo-reg-7"
+      data: "2024-09-25"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Constatada a nulidade do lancamento por vicio formal, JULGO PROCEDENTE o pedido na presente acao anulatoria, declarando a inexistencia da relacao juridico-tributaria. Suspensa a exigibilidade do credito."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "favoravel"
+        natureza: "procedente"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 8] MS Tomador-impetrante: 'concedo a seguranca' = sentido FAVORAVEL"
+  vars:
+    processo:
+      cnj: "0000008-12.2020.4.03.6100"
+      classe: "Mandado de Seguranca Coletivo"
+      classe_cnj_code: 120
+      polo_ativo: "GRUPO IMPETRANTE LTDA"
+      polo_passivo: "Estado de Sao Paulo - Secretario da Fazenda"
+    mov:
+      mov_id: "polo-reg-8"
+      data: "2024-06-30"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Demonstrado o direito liquido e certo da impetrante. CONCEDO A SEGURANCA pleiteada, determinando que a autoridade coatora se abstenha de exigir o ICMS-ST nas operacoes descritas na inicial. Custas ex lege."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "favoravel"
+        natureza: "procedente"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 9] Tutela Cautelar Antecedente Tomador-autor extinta por perda de objeto = sentido DESFAVORAVEL (NAO neutro — regra EXTINCAO TOMADOR-AUTOR)"
+  vars:
+    processo:
+      cnj: "0000009-12.2020.4.03.6100"
+      classe: "Tutela Cautelar Antecedente"
+      classe_cnj_code: 12377
+      polo_ativo: "EMPRESA REQUERENTE LTDA"
+      polo_passivo: "Estado de Sao Paulo - PGE"
+    mov:
+      mov_id: "polo-reg-9"
+      data: "2025-02-20"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Considerando que a requerente nao ajuizou a acao principal no prazo do art. 308 do CPC, OPEROU-SE A PERDA DE OBJETO. JULGO EXTINTO o feito SEM resolucao de merito, com fundamento no art. 485, VI do CPC. Custas pela requerente."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "desfavoravel"
+        natureza: "extinto_sem_merito"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 10] Recurso da Uniao NAO provido em MS Tomador-impetrante = sentido FAVORAVEL (paradigma 2026-05-25 GOL/Uniao bug)"
+  vars:
+    processo:
+      cnj: "0000010-12.2020.4.03.6100"
+      classe: "Mandado de Seguranca"
+      classe_cnj_code: 120
+      polo_ativo: "GOL LINHAS AEREAS S.A."
+      polo_passivo: "Uniao Federal - Receita Federal do Brasil"
+    mov:
+      mov_id: "polo-reg-10"
+      data: "2025-03-15"
+      tipo: "ACORDAO"
+      texto: "Acordao. Vistos, relatados e discutidos estes autos, ACORDAM os membros da Turma, por unanimidade, em CONHECER do recurso interposto pela Uniao Federal e, no merito, NEGAR-LHE PROVIMENTO, mantendo integralmente a sentenca de primeira instancia que concedeu a seguranca pleiteada pela impetrante."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        sentido: "favoravel"
+        instancia: "2g"
+      categoria: "acordao"
+      relevancia_merito: "alta"

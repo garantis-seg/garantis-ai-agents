@@ -42,7 +42,19 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #   - <lembrete_final> no fim como recency anchor pras 3 regras criticas.
 #   - Eliminado bloco duplicado "REGRA DURA EXTINCAO" dentro de INSTRUCOES POR
 #     CAMPO (single source of truth: <regra_extincao_sem_merito>).
-PROMPT_VERSION = "mov_factsheet.v2.1"
+#
+# v2.2 (2026-05-25, polo-regression suite detectou contradicao L1 vs L2):
+#   - <regra_extincao_sem_merito> ENRIQUECIDA com EXCECAO Tomador-AUTOR.
+#     Antes L1 sempre forçava sentido='neutro' em extincao_sem_merito. MAS L2
+#     prompt v2.2 ja tinha <regra_extincao_tomador_autor> dizendo o OPOSTO
+#     pra classes Tomador-autor (Anulatoria/MS/Tutela Cautelar Antecedente/
+#     Embargos): sentido='desfavoravel'. Resultava em contradicao silenciosa
+#     onde card L1 marcava neutro e L2 corrigia pra desfavoravel.
+#   - Fix: L1 agora aplica mesma regra que L2 — DEFAULT neutro pra classes
+#     Tomador-reu, EXCECAO desfavoravel pra classes Tomador-autor. Caso
+#     paradigma: Tutela Cautelar Antecedente extinta por perda de objeto
+#     (CPC 308) = sentido='desfavoravel' (Tomador perdeu).
+PROMPT_VERSION = "mov_factsheet.v2.2"
 
 
 async def classify_mov_factsheet(

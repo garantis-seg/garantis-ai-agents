@@ -11,9 +11,13 @@ prompts:
   # é construído dentro do agente por build_mov_factsheet_prompt(). Stub.
   - "{{processo.cnj}}::{{mov.mov_id}}"
 
-# Golden snapshot: tests = lista de cases lidos do snapshot YAML.
-# Cada case tem `vars` (processo, mov, docs, fb_ctx) + `expected` (card alvo).
-tests: file://golden/snapshot_v1.yaml
+# Golden suites — 2 fontes:
+# 1. snapshot_v1.yaml: 30 cases random do banco (regression no-drift)
+# 2. polo_regression_v1.yaml: 10 cards CURADOS pros casos criticos polo
+#    (gate forte contra regressao em REGRA DE LEITURA DE POLOS)
+tests:
+  - file://golden/snapshot_v1.yaml
+  - file://golden/polo_regression_v1.yaml
 
 defaultTest:
   assert:
@@ -21,39 +25,72 @@ defaultTest:
     - type: is-json
       weight: 1
 
-    # Campos categóricos críticos — exact match
+    # Campos categóricos — asserts CONDITIONAL: so falha quando expected
+    # definiu o campo. Permite que goldens parciais (polo_regression cura
+    # so o que importa) coexistam com goldens completos (snapshot_v1 do banco).
+    # Quando expected NAO define um campo, assert passa por default — sem
+    # mascarar regressao se golden tiver o campo.
     - type: javascript
       weight: 5
       value: |
         const out = JSON.parse(output);
-        const exp = context.vars.expected;
+        const exp = context.vars.expected || {};
+        if (exp.decisao?.sentido === undefined) return true;
         return out.decisao?.sentido === exp.decisao?.sentido;
     - type: javascript
       weight: 5
       value: |
         const out = JSON.parse(output);
-        const exp = context.vars.expected;
+        const exp = context.vars.expected || {};
+        if (exp.decisao?.transito_certificado === undefined) return true;
         return out.decisao?.transito_certificado === exp.decisao?.transito_certificado;
     - type: javascript
       weight: 4
       value: |
         const out = JSON.parse(output);
-        return out.categoria === context.vars.expected.categoria;
+        const exp = context.vars.expected || {};
+        if (exp.categoria === undefined || exp.categoria === null) return true;
+        return out.categoria === exp.categoria;
     - type: javascript
       weight: 3
       value: |
         const out = JSON.parse(output);
-        return out.relevancia_merito === context.vars.expected.relevancia_merito;
+        const exp = context.vars.expected || {};
+        if (exp.relevancia_merito === undefined || exp.relevancia_merito === null) return true;
+        return out.relevancia_merito === exp.relevancia_merito;
     - type: javascript
       weight: 3
       value: |
         const out = JSON.parse(output);
-        return out.peca_pivo?.e_pivo === context.vars.expected.peca_pivo?.e_pivo;
+        const exp = context.vars.expected || {};
+        if (exp.peca_pivo?.e_pivo === undefined) return true;
+        return out.peca_pivo?.e_pivo === exp.peca_pivo?.e_pivo;
     - type: javascript
       weight: 2
       value: |
         const out = JSON.parse(output);
-        return out.delta_risco?.direcao === context.vars.expected.delta_risco?.direcao;
+        const exp = context.vars.expected || {};
+        if (exp.delta_risco?.direcao === undefined || exp.delta_risco?.direcao === null) return true;
+        return out.delta_risco?.direcao === exp.delta_risco?.direcao;
+
+    # decisao.natureza (so quando golden definiu — polo_regression usa pra
+    # garantir que extincao_sem_merito eh detectado)
+    - type: javascript
+      weight: 3
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected || {};
+        if (exp.decisao?.natureza === undefined || exp.decisao?.natureza === null) return true;
+        return out.decisao?.natureza === exp.decisao?.natureza;
+
+    # decisao.instancia (so quando golden definiu)
+    - type: javascript
+      weight: 2
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected || {};
+        if (exp.decisao?.instancia === undefined || exp.decisao?.instancia === null) return true;
+        return out.decisao?.instancia === exp.decisao?.instancia;
 
     # Texto-livre — variance residual aceitavel, so checa que NAO esta vazio.
     # Pra similarity real (embedding), precisaria provider de embeddings — fica
