@@ -216,6 +216,67 @@ REGRA DURA — 3 PASSOS pra preencher decisao.sentido:
 3. Se NAO conseguir identificar com confianca em qual polo o Tomador esta:
    sentido=null + confianca <=0.5. NUNCA chute "Fazenda autora" como default.
 
+=== RECURSOS — REGRA CRITICA pra "Recurso X provido / nao provido" ===
+
+ATOS DE RECURSO sao distintos de sentencas/acordaos de merito direto.
+Pra recursos, sentido NAO depende de "procedente/improcedente" — depende
+de QUEM eh o RECORRENTE + se o recurso foi PROVIDO ou NAO PROVIDO.
+
+PASSO 1: identifique o RECORRENTE no texto.
+Procure por:
+- "Recurso da [PARTE]" / "Apelacao interposta por [PARTE]"
+- "Recorrente: [PARTE]" / "(Juizo Recorrente)" / "Apelante: [PARTE]"
+- "Embargos de declaracao opostos por [PARTE]"
+- Quando nao explicito mas tem mov anterior com "Apelacao interposta
+  pela Uniao Federal" e a mov atual diz "Recurso conhecido e nao provido",
+  o recorrente eh a Uniao.
+
+PASSO 2: mapeie PROVIDO/NAO PROVIDO -> sentido pro Tomador.
+
+Termos equivalentes a PROVIDO (recurso aceito):
+  "deu-se provimento", "recurso provido", "dou provimento", "acolho o recurso"
+
+Termos equivalentes a NAO PROVIDO (recurso negado):
+  "nao provido", "negado provimento", "nego provimento", "rejeitado o
+  recurso", "improvido", "desprovido", "improvi o recurso"
+
+REGRA:
+  - Recorrente = TOMADOR (ou alguem do MESMO lado do Tomador):
+    recurso PROVIDO -> sentido=favoravel
+    recurso NAO PROVIDO -> sentido=desfavoravel
+
+  - Recorrente = LADO OPOSTO ao Tomador (Fazenda, exequente contrario,
+    parte adversa):
+    recurso PROVIDO -> sentido=desfavoravel (a parte contraria ganhou)
+    recurso NAO PROVIDO -> sentido=FAVORAVEL (a parte contraria perdeu,
+                            o Tomador mantem a vantagem)
+
+CASO PARADIGMA 1 (paradigma de bug 2026-05-25):
+  Mandado de Seguranca: GOL Linhas Aereas (polo_ativo, Tomador/impetrante)
+  vs Uniao Federal (polo_passivo, Fazenda/coatora).
+  Mov: "Recurso da Uniao Federal foi conhecido e nao provido."
+  Recorrente = Uniao = LADO OPOSTO ao Tomador GOL.
+  Nao provido => Uniao PERDEU => GOL GANHOU.
+  sentido=FAVORAVEL (NAO desfavoravel — erro classico do LLM).
+
+CASO PARADIGMA 2:
+  Execucao Fiscal: Fazenda (polo_ativo, exequente) vs Tomador (polo_passivo,
+  executado). Mov: "Recurso do executado provido."
+  Recorrente = executado = Tomador.
+  Provido => Tomador GANHOU.
+  sentido=FAVORAVEL.
+
+PASSO 3: se NAO conseguir identificar o recorrente com confianca:
+  sentido=null + confianca <=0.5. NUNCA assuma "Fazenda eh sempre quem
+  recorre" — em MS / Anulatoria, geralmente quem recorre eh a Fazenda
+  apos perder em 1g; em EF, geralmente o executado/Tomador recorre.
+
+PASSO 4: natureza pra movs de recurso:
+  Use 'interlocutoria' SO se nao houve merito recursal (ex: nao conhecimento
+  por preliminar). Quando o recurso entra no merito (provido/nao provido),
+  prefira deixar natureza=null com sentido preenchido — o L2 vai amarrar
+  via decisao_vigente.
+
 === INSTRUCOES POR CAMPO ===
 
 1. resumo_ato (~50 palavras PT-BR): O QUE aconteceu + DOC anexo se mencionado + PROXIMO PASSO se claro.
