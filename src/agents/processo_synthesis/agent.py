@@ -27,7 +27,21 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # Bump quando alterar build_processo_synthesis_prompt, build_probabilidade_exito_prompt
 # OU ProcessoSynthesisCard schema. Usado em leads.engine_llm_calls.prompt_version.
-PROMPT_VERSION = "processo_synthesis.v1.0"
+#
+# v2.1 (2026-05-25, P1+P2 do prompt-engineering FINDINGS):
+#   - Adicionado response_schema=ProcessoSynthesisCard / =ProbabilidadeExito nos
+#     2 LLM calls (synthesis + prob_exito). Antes so response_mime_type=json.
+#   - Removido bloco FORMATO DE SAIDA dos 2 prompts (~80 linhas duplicando shape).
+#   - Enriquecido Field(description=...) em schemas.py com semantica que vivia
+#     no prompt (decisao_vigente.sentido, risco_processo_intermediario,
+#     trajetoria_dentro_processo, peca_pivo_candidata, valores).
+#   - REGRA DE LEITURA DE POLOS movida do meio pro TOPO em <regras_criticas>
+#     XML. <lembrete_final> no fim como recency anchor.
+#   - Tipo-specific blocks (FISCAL/TRABALHISTA/CIVEL) mantidos no meio
+#     (sao contextuais por bucket, nao competem com regras universais).
+#   - REGRA G ESTABILIDADE TEMPORAL mantida em REGRAS DE OURO (mais tecnica,
+#     ligada ao campo decisao_vigente — nao precisa estar no topo).
+PROMPT_VERSION = "processo_synthesis.v2.1"
 
 
 async def classify_processo_synthesis(
@@ -77,13 +91,18 @@ async def classify_processo_synthesis(
 async def _call_synthesis(llm_provider, request, model, provider) -> dict:
     """Call A — synthesis sem prob_exito.
 
+    v2.1: response_schema=ProcessoSynthesisCard enforcement (Gemini structured
+    output nativo). Antes era so response_mime_type=json. Schema atual tem
+    Optional[str] em campos enum (sentido/instancia/natureza) por decisao
+    historica — descriptions ricas em Field guiam o LLM.
+
     Determinismo Bug 4 handoff: temperature=0.0 (era 0.1) + thinking_budget=0
     em gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
     """
     prompt = build_processo_synthesis_prompt(request)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt, model=model, temperature=0.0,
-        response_mime_type="application/json",
+        response_schema=ProcessoSynthesisCard,
         thinking_budget=0,
     )
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
@@ -92,12 +111,15 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
 async def _call_probabilidade_exito(llm_provider, request, model, provider) -> dict:
     """Call B — probabilidade_exito Daycoval focused.
 
+    v2.1: response_schema=ProbabilidadeExito enforcement (Gemini structured
+    output). Antes era so response_mime_type=json.
+
     Determinismo Bug 4: temperature=0.0 (era 0.1) + thinking_budget=0.
     """
     prompt = build_probabilidade_exito_prompt(request)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt, model=model, temperature=0.0,
-        response_mime_type="application/json",
+        response_schema=ProbabilidadeExito,
         thinking_budget=0,
     )
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}

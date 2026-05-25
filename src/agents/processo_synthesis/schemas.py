@@ -15,40 +15,107 @@ from pydantic import BaseModel, Field
 class DecisaoVigente(BaseModel):
     """Decisao judicial atualmente em vigor neste processo.
 
-    Literais foram afrouxados pra Optional[str] (LLM gera valores fora-da-lista
-    ocasionalmente; melhor recordar que falhar parse).
+    v2.1: APERTADO pra Literal[...] depois que descobrimos que Optional[str]
+    com response_schema + descriptions longas causava loop infinito de \\n
+    no Gemini 2.5 Flash (decoder sem ancora pra fechar o campo). Com Literal
+    enum, decoder eh forcado a escolher dentro da lista — sem ambiguidade.
+
+    Caveat historico: comentario anterior dizia "afrouxado porque LLM gera
+    fora-da-lista" — isso era SEM response_schema. Com schema enforcement
+    nativo, o Gemini respeita o enum.
     """
 
-    sentido: Optional[str] = None  # ideal: favoravel | desfavoravel | parcial | neutro
-    instancia: Optional[str] = None  # ideal: 1g | 2g | stj | stf
-    natureza: Optional[str] = None  # ideal: procedente | improcedente | parcialmente_procedente | extinto_sem_merito | homologatoria | interlocutoria
+    sentido: Optional[Literal["favoravel", "desfavoravel", "parcial", "neutro"]] = Field(
+        default=None,
+        description=(
+            "Sentido DO PONTO DE VISTA DO TOMADOR. Em EF: procedente=desfavoravel; "
+            "em Embargos/MS/Anulatoria: procedente=favoravel. null quando nao ha decisao de merito."
+        ),
+    )
+    instancia: Optional[Literal["1g", "2g", "stj", "stf"]] = Field(
+        default=None,
+        description="Instancia da decisao vigente.",
+    )
+    natureza: Optional[Literal[
+        "procedente", "improcedente", "parcialmente_procedente",
+        "extinto_sem_merito", "homologatoria", "interlocutoria",
+    ]] = Field(
+        default=None,
+        description="Natureza juridica da decisao.",
+    )
     data: Optional[str] = Field(default=None, description="YYYY-MM-DD da decisao")
-    transito_certificado: bool = False
+    transito_certificado: bool = Field(
+        default=False,
+        description="True SO se ha mov certificando transito em julgado.",
+    )
     recorrida: bool = Field(
         default=False,
-        description="True se houve recurso interposto contra a decisao vigente",
+        description="True se houve recurso interposto contra a decisao vigente.",
     )
 
 
 class LifecycleGarantiaEvent(BaseModel):
-    """Evento no ciclo de vida da garantia/apolice neste processo."""
+    """Evento no ciclo de vida da garantia/apolice neste processo.
+
+    v2.1: APERTADO pra Literal[...] (mesmo motivo de DecisaoVigente — evita
+    loop do decoder Gemini sob response_schema).
+    """
 
     data: Optional[str] = Field(default=None, description="YYYY-MM-DD")
     mov_id: Optional[str] = None
-    evento: Optional[str] = None  # ideal: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço
-    tipo_garantia: Optional[str] = None  # ideal: seguro_garantia | fianca_bancaria | carta_fianca | deposito_judicial | penhora | fiduciaria | outras
-    status_pos: Optional[str] = None  # ideal: apresentado | aceito | recusado | levantado | substituido | nenhum
+    evento: Optional[Literal[
+        "apresentacao", "aceitacao", "recusa", "levantamento",
+        "substituicao", "reforço",
+    ]] = None
+    tipo_garantia: Optional[Literal[
+        "seguro_garantia", "fianca_bancaria", "carta_fianca",
+        "deposito_judicial", "penhora", "fiduciaria", "outras",
+    ]] = None
+    status_pos: Optional[Literal[
+        "apresentado", "aceito", "recusado", "levantado", "substituido", "nenhum",
+    ]] = None
     motivo_recusa: Optional[str] = None
+
+
+class EvidenceArtifact(BaseModel):
+    """Citacao de factsheet/autos que sustenta a sintese L2.
+
+    Substitui o legacy list[dict[str, Any]] que Gemini API rejeitava com
+    'additionalProperties is not supported' quando exposto via response_schema.
+    """
+
+    mov_id: Optional[str] = Field(
+        default=None,
+        description="ID do mov_factsheet ou referencia ao monolith/day citado.",
+    )
+    snippet: Optional[str] = Field(
+        default=None,
+        description="Snippet curto (max ~200 chars) do factsheet/autos que sustenta a sintese.",
+    )
+    weight: Optional[Literal["high", "medium", "low"]] = Field(
+        default=None,
+        description="Peso da evidencia.",
+    )
 
 
 class PecaPivoCandidata(BaseModel):
     """Candidata a peca-pivo dentro deste processo (input pro merito_synthesis decidir)."""
 
-    mov_id: Optional[str] = None
-    data: Optional[str] = None
+    mov_id: Optional[str] = Field(
+        default=None,
+        description="ID do mov_factsheet com e_pivo=true mais load-bearing. null se nenhum.",
+    )
+    data: Optional[str] = Field(
+        default=None,
+        description="YYYY-MM-DD do mov pivo.",
+    )
     motivo: Optional[str] = Field(
         default=None,
-        description="Por que esta mov define o estado atual do processo",
+        description=(
+            "1 frase explicando por que esta mov define o estado atual do processo. "
+            "Quando varios candidatos: escolha o mais 'load-bearing' "
+            "(sentenca > acordao > decisao interlocutoria > peticao)."
+        ),
     )
 
 
@@ -67,13 +134,14 @@ class ProbabilidadeExito(BaseModel):
     A camada 3 (merito_synthesis) usa probabilidade_exito como input forte
     pro risco final do merito.
 
-    Literais afrouxados pra Optional[str] (LLM ocasionalmente gera valores
-    fora da lista; defensive default).
+    v2.1: APERTADO pra Literal[...] (mesmo motivo de DecisaoVigente).
     """
 
-    classificacao: Optional[str] = Field(
+    classificacao: Optional[Literal[
+        "provavel", "possivel", "poucas_chances", "remota",
+    ]] = Field(
         default=None,
-        description="provavel | possivel | poucas_chances | remota. Pesos respectivos: 1.0 / 0.7 / 0.4 / 0.0001",
+        description="Classificacao Daycoval. Pesos: provavel=1.0 | possivel=0.7 | poucas_chances=0.4 | remota=0.0001",
     )
     score: Optional[float] = Field(
         default=None,
@@ -110,7 +178,11 @@ class ProcessoSynthesisCard(BaseModel):
     # Campo 1: estado processual
     estado_processual: Optional[str] = Field(
         default="",
-        description="1-2 frases PT-BR descrevendo o estado atual do processo",
+        description=(
+            "1-2 frases PT-BR descrevendo o estado ATUAL do processo. Cite: "
+            "(a) instancia atual (1g/2g/etc) e fase (instrucao/sentenca/recurso/execucao/transito); "
+            "(b) sentido da decisao vigente; (c) se a garantia esta aceita ou nao."
+        ),
     )
 
     # Campo 2: decisao vigente
@@ -119,19 +191,41 @@ class ProcessoSynthesisCard(BaseModel):
     # Campo 3: lifecycle da garantia
     lifecycle_garantia: list[LifecycleGarantiaEvent] = Field(
         default_factory=list,
-        description="Timeline ordenada por data dos eventos de garantia neste processo",
+        description=(
+            "Timeline ordenada por data dos eventos de garantia neste processo. "
+            "Reconstrua dos factsheets com evento_garantia.tipo != 'nenhum'. "
+            "[] se nenhum factsheet menciona apolice."
+        ),
     )
 
     # Campo 4: risco intermediario do processo
-    risco_processo_intermediario: Optional[str] = Field(
+    risco_processo_intermediario: Optional[Literal[
+        "Baixo", "Medio", "Alto", "Altissimo",
+    ]] = Field(
         default="Baixo",
-        description="Risco SO deste processo (Baixo|Medio|Alto|Altissimo). NAO e o risco do merito (esse e camada 3)."
+        description=(
+            "Risco SO deste processo (NAO o risco do MERITO — esse e camada 3). "
+            "Baixo: pendente sem decisao desfavoravel; embargos nao julgados; acordo vigente; "
+            "extinto sem merito; suspensao por causa externa (RJ). "
+            "Medio: improcedente em 1a inst COM apelacao pendente (efeito suspensivo CPC 1.012), "
+            "EXCETO sinais explicitos de irregularidade (penhora, intimacao pagamento). "
+            "Alto: sentenca desfavoravel SEM recurso; mantido em 2a inst sem transito. "
+            "Altissimo: transito desfavoravel certificado; cumprimento determinado."
+        ),
     )
 
     # Campo 5: trajetoria dentro do processo
-    trajetoria_dentro_processo: Optional[str] = Field(
+    trajetoria_dentro_processo: Optional[Literal[
+        "estavel", "deteriorando", "melhorando", "indefinida",
+    ]] = Field(
         default="indefinida",
-        description="Sentido da evolucao (estavel|deteriorando|melhorando|indefinida)",
+        description=(
+            "Sentido da evolucao olhando para a sequencia de delta_risco nos factsheets. "
+            "'estavel': sem movs com delta_risco.mudou=true. "
+            "'deteriorando': maioria dos deltas aumentou. "
+            "'melhorando': maioria dos deltas diminuiu. "
+            "'indefinida': misto/insuficiente."
+        ),
     )
 
     # Campo 6: peca-pivo candidata
@@ -140,17 +234,23 @@ class ProcessoSynthesisCard(BaseModel):
     # Campo 7: valores
     valor_em_disputa: Optional[float] = Field(
         default=None,
-        description="Melhor evidencia de valor em disputa (BRL). null se nao identificavel.",
+        description=(
+            "Melhor evidencia de valor em disputa (BRL). Use o MAIS RECENTE/MAIOR entre "
+            "valor_causa e valor_debito_executado dos factsheets. null se nenhum disponivel."
+        ),
     )
     valor_garantia: Optional[float] = Field(
         default=None,
-        description="Valor da apolice/garantia depositada neste processo (BRL). null se nao identificavel.",
+        description=(
+            "Valor da apolice/garantia depositada neste processo (BRL). Prefira apolices[].valor_is. "
+            "Fallback: valores.valor_garantia dos factsheets. null se nao identificavel."
+        ),
     )
 
     # Campo 8: tipo judicial (determinado upstream por classify_tipo_judicial)
-    tipo_judicial: Optional[str] = Field(
+    tipo_judicial: Optional[Literal["fiscal", "trabalhista", "civel"]] = Field(
         default="civel",
-        description="Tipo do processo (echo do request). Define qual matriz Daycoval aplicar. Valores ideais: fiscal | trabalhista | civel",
+        description="Tipo do processo (echo do request). Define qual matriz Daycoval aplicar.",
     )
 
     # Campo 9: probabilidade de exito (Matriz Daycoval 2026-05-21)
@@ -162,9 +262,12 @@ class ProcessoSynthesisCard(BaseModel):
     # Meta
     movs_processed: int = Field(default=0, description="Numero de mov_factsheets considerados")
     confianca: float = Field(default=0.7, ge=0.0, le=1.0)
-    evidence_artifacts: list[dict[str, Any]] = Field(
+    evidence_artifacts: list[EvidenceArtifact] = Field(
         default_factory=list,
-        description="Lista de {mov_id, snippet, weight} citando movs que sustentam a sintese",
+        description=(
+            "Lista de 3-5 factsheets que sustentam a sintese. Cada item: "
+            "{mov_id, snippet (curto), weight: 'high'|'medium'|'low'}."
+        ),
     )
 
 

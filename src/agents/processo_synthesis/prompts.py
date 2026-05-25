@@ -2,6 +2,16 @@
 
 REV2 2026-05-20 PM: aceita autos_raw_excerpt (primeiras 10 + ultimas 50 pgs do
 autos.zip) pra 207/237 procs Monit com extraction_completed. DD6 do plano.
+
+REV3 2026-05-25 (P1+P2 do prompt-engineering FINDINGS — v2.1):
+- Removido bloco "=== FORMATO DE SAIDA ===" dos 2 prompts (~80 linhas
+  duplicando shape JSON). Output enforced via response_schema=
+  ProcessoSynthesisCard / ProbabilidadeExito em agent.py.
+- REGRA DE LEITURA DE POLOS movida do meio (era linha 618-651) pro TOPO
+  em bloco <regras_criticas> XML. Combate Lost-in-the-Middle.
+- <lembrete_final> no fim como recency anchor.
+- Tipo-specific blocks (FISCAL/TRABALHISTA/CIVEL) mantidos no meio — sao
+  contextuais por bucket, nao competem com regras universais.
 """
 
 import json
@@ -219,16 +229,8 @@ DO TOMADOR TER EXITO neste processo. Sao 4 buckets — escolha 1.
 4. justificativa: 1-3 frases PT-BR amarrando os criterios ao caso concreto
    (cite factsheet/autos quando relevante).
 
-=== FORMATO DE SAIDA ===
-
-Retorne APENAS JSON valido seguindo este shape:
-
-{{
-  "classificacao": "provavel|possivel|poucas_chances|remota",
-  "score": 1.0,
-  "criterios_aplicados": ["bullet literal copiado da matriz"],
-  "justificativa": "1-3 frases amarrando criterios ao caso concreto"
-}}
+Output: JSON estruturado conforme schema ProbabilidadeExito (enforced via
+response_schema do Gemini — nao precisa formato textual no prompt).
 """
 
 
@@ -498,24 +500,12 @@ Civel eh categoria heterogenea — varia muito por sub-dominio:
      incidentais; quando perdem, valores altos).
    - Familia/Sucessoes: improvavel ter apolice — fora do escopo normal.
 
-6. EXTINCAO SEM MERITO EM ACAO TOMADOR-AUTOR = DESFAVORAVEL:
-   Quando o Tomador propos a acao (Anulatoria, MS, Declaratoria,
-   Repetitorio, Tutela Cautelar Antecedente, Embargos a Execucao,
-   Excecao Pre-Executividade) e ela foi extinta SEM RESOLUCAO DE MERITO
-   (CPC 485 — perda de objeto, carencia de acao, ausencia das condicoes
-   da acao, abandono, ilegitimidade, etc), Tomador PERDEU sem julgamento.
-   A pretensao do Tomador (suspender exigibilidade, anular debito,
-   restituir indebito) NAO foi acolhida. O credito/exigibilidade da
-   Fazenda CONTINUA. decisao_vigente.sentido = 'desfavoravel' (NAO neutro,
-   NAO favoravel). natureza = 'extinto_sem_merito'.
-
-   Caso paradigma: Tutela Cautelar Antecedente proposta pelo Tomador pra
-   suspender exigibilidade tributaria, extinta por perda de objeto (porque
-   Tomador nao ajuizou a acao principal no prazo CPC 308). Tomador PERDEU
-   a cautelar — a exigibilidade nao foi suspensa. Sentido='desfavoravel'.
-
-   So eh 'neutro' quando a extincao foi POR FAVOR ao Tomador (homologacao
-   de acordo, desistencia da Fazenda) — situacoes raras em Tomador-autor."""
+6. EXTINCAO SEM MERITO EM ACAO TOMADOR-AUTOR:
+   Ver <regra_extincao_tomador_autor> no topo. Caso paradigma: Tutela Cautelar
+   Antecedente proposta pelo Tomador, extinta por perda de objeto (Tomador
+   nao ajuizou principal no prazo CPC 308). Tomador PERDEU sem julgamento —
+   a exigibilidade nao foi suspensa. Sentido='desfavoravel', natureza=
+   'extinto_sem_merito'."""
 
 
 def _build_tipo_specific_block(tipo: str | None) -> str:
@@ -574,10 +564,6 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     monolith_block = _build_monolith_block(req)
     tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
 
-    classe_json = f'"{req.classe}"' if req.classe else "null"
-    classe_code_json = req.classe_cnj_code if req.classe_cnj_code is not None else "null"
-    role_json = f'"{req.role_no_merito}"' if req.role_no_merito else "null"
-
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
 Sua tarefa: sintetizar o estado atual do PROCESSO a partir dos FACTSHEETS da Camada 1
@@ -590,6 +576,54 @@ de extracao FACTUAL com acesso ao texto. Sua tarefa eh AGREGAR + INTERPRETAR.
 
 NOTA: `probabilidade_exito` (Matriz Daycoval) e calculada em CALL SEPARADA do C2;
 NAO inclua esse campo neste output.
+
+<regras_criticas>
+
+<regra_polos>
+PRINCIPIO: o Tomador da apolice pode estar em QUALQUER polo dependendo da classe
+processual. Identifique ONDE o Tomador esta ANTES de mapear decisao_vigente.sentido.
+
+PASSO 1 — Bucket pela classe:
+- Execucao Fiscal, Cumprimento de Sentenca, Acao Monitoria contra o Tomador:
+  polo_ativo = Fazenda/Credor; polo_passivo = TOMADOR (executado).
+  Procedente da execucao = TOMADOR PERDEU. Improcedente = TOMADOR GANHOU.
+- Embargos a Execucao, Excecao de Pre-Executividade:
+  polo_ativo = TOMADOR (embargante); polo_passivo = Fazenda/credor.
+  Procedente dos embargos = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
+- Acao Anulatoria, Mandado de Seguranca, Acao Declaratoria, Repetitorio
+  de Indebito, Acao Ordinaria Tributaria, Tutela Antecipada/Cautelar Antecedente:
+  polo_ativo = TOMADOR (autor/impetrante); polo_passivo = Fazenda (re/coatora).
+  Procedente = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
+- Procedimento Comum Civel generico: identifique pelo objeto + quem moveu.
+
+PASSO 2 — Identifique o Tomador (cruze CNPJ/nome em apolice/factsheet com
+polo_ativo e polo_passivo do header).
+
+PASSO 3 — Mapeie "procedente/improcedente" RELATIVO ao polo do Tomador:
+procedente = autor venceu; improcedente = autor perdeu. Se nao identificar
+com confianca: sentido=null + confianca<=0.5. NUNCA chute "polo_ativo=Fazenda
+default".
+
+CAVEAT — Camada 1 pode ter classificado decisao.sentido errado. Releia os
+factsheets com lente de polo: se um factsheet trouxer sentido='desfavoravel'
+em Anulatoria onde Tomador eh autor e natureza='procedente', Camada 1 errou —
+corrija no estado_processual + decisao_vigente.sentido.
+</regra_polos>
+
+<regra_extincao_tomador_autor>
+Em classes onde Tomador eh AUTOR (Anulatoria, MS, Declaratoria, Repetitorio,
+Tutela Antecedente, Embargos a Execucao, Excecao Pre-Executividade) e a
+acao foi extinta SEM RESOLUCAO DE MERITO (CPC 485 — perda de objeto, carencia
+de acao, abandono, ilegitimidade, etc): Tomador PERDEU sem julgamento.
+A pretensao do Tomador NAO foi acolhida. A exigibilidade da Fazenda CONTINUA.
+decisao_vigente.sentido = 'desfavoravel' (NAO neutro, NAO favoravel).
+natureza = 'extinto_sem_merito'.
+
+So eh 'neutro' quando a extincao foi POR FAVOR ao Tomador (homologacao de
+acordo, desistencia da Fazenda) — raras em Tomador-autor.
+</regra_extincao_tomador_autor>
+
+</regras_criticas>
 
 === PROCESSO ===
   {header_block}
@@ -614,41 +648,6 @@ NAO inclua esse campo neste output.
 
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{monolith_block}
-
-=== REGRA DE LEITURA DE POLOS (CRITICA — leia antes de classificar decisao_vigente.sentido) ===
-
-O Tomador da apolice eh o cliente da seguradora — pode estar em QUALQUER polo
-dependendo da classe processual. NAO assuma defaults.
-
-- Execucao Fiscal, Cumprimento de Sentenca, Acao Monitoria contra o Tomador:
-  polo_ativo = Fazenda/Credor; polo_passivo = TOMADOR (executado).
-  Procedente da execucao = TOMADOR PERDEU. Improcedente = TOMADOR GANHOU.
-
-- Embargos a Execucao, Excecao de Pre-Executividade:
-  polo_ativo = TOMADOR (embargante); polo_passivo = Fazenda/credor.
-  Procedente dos embargos = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
-
-- Acao Anulatoria de Debito Fiscal, Mandado de Seguranca, Acao Declaratoria,
-  Repetitorio de Indebito, Acao Ordinaria Tributaria:
-  polo_ativo = TOMADOR (autor/impetrante); polo_passivo = Fazenda (re/coatora).
-  Procedente da anulatoria/MS = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
-
-- Procedimento Comum Civel generico: identifique pelo objeto + quem moveu.
-
-REGRA DURA — 3 PASSOS pra decisao_vigente.sentido (e p/ ler factsheets que
-trazem decisao.sentido invertido por erro de leitura da Camada 1):
-1. Identifique o Tomador (cruze CNPJ/nome em uma apolice/factsheet com
-   polo_ativo e polo_passivo do header).
-2. Mapeie "procedente/improcedente" RELATIVO ao polo onde o Tomador esta:
-   procedente = autor venceu; improcedente = autor perdeu.
-3. Se nao identificar Tomador com confianca: sentido=null + confianca <=0.5.
-   NUNCA chute "polo_ativo=Fazenda" como default.
-
-CAVEAT — Camada 1 pode ter classificado decisao.sentido errado neste mesmo
-processo (mesmo bug). Releia os factsheets com lente de polo: se um factsheet
-trouxer sentido='desfavoravel' em um caso de Anulatoria onde Tomador eh autor
-e a natureza eh 'procedente', a Camada 1 errou — corrija no estado_processual
-+ decisao_vigente.sentido.
 
 {tipo_specific_block}
 
@@ -765,37 +764,17 @@ G. ESTABILIDADE TEMPORAL — decisao_vigente NAO deve oscilar entre cuts/snapsho
       e a decisao de merito anterior continua valida (nao reformada/
       transitada), MANTENHA a anterior."
 
-=== FORMATO DE SAIDA ===
+<lembrete_final>
+Antes de emitir decisao_vigente.sentido: cheque <regra_polos> no topo (Tomador
+em qual polo? procedente=quem venceu?).
+Extincao SEM merito em Tomador-AUTOR: ver <regra_extincao_tomador_autor> —
+sentido='desfavoravel', NAO 'neutro'.
+decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA G).
+</lembrete_final>
 
-Retorne APENAS JSON valido seguindo este shape exato:
-
-{{
-  "processo_numero": "{req.processo_numero}",
-  "classe": {classe_json},
-  "classe_cnj_code": {classe_code_json},
-  "role_no_merito": {role_json},
-  "tipo_judicial": "{req.tipo_judicial}",
-  "estado_processual": "1-2 frases descrevendo o estado atual (OBRIGATORIO, nao deixar vazio)",
-  "decisao_vigente": {{
-    "sentido": null,
-    "instancia": null,
-    "natureza": null,
-    "data": null,
-    "transito_certificado": false,
-    "recorrida": false
-  }},
-  "risco_processo_intermediario": "Baixo|Medio|Alto|Altissimo",
-  "lifecycle_garantia": [],
-  "trajetoria_dentro_processo": "estavel|deteriorando|melhorando|indefinida",
-  "peca_pivo_candidata": {{
-    "mov_id": null,
-    "data": null,
-    "motivo": null
-  }},
-  "valor_em_disputa": null,
-  "valor_garantia": null,
-  "movs_processed": {len(factsheets_capped)},
-  "confianca": 0.7,
-  "evidence_artifacts": []
-}}
+Output: JSON estruturado conforme schema ProcessoSynthesisCard (enforced via
+response_schema do Gemini — nao precisa formato textual no prompt). Cada campo
+tem descricao especifica no Pydantic. Echo de processo_numero/classe/classe_cnj_code/
+role_no_merito/tipo_judicial deste input. estado_processual eh OBRIGATORIO
+(nao deixar vazio). movs_processed = {len(factsheets_capped)}.
 """
