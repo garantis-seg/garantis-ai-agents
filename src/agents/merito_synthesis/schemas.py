@@ -7,7 +7,7 @@ Spec canonica: c:/Users/Eltonxp/.claude/plans/risk-engine-v6-meritos.md
 """
 
 from typing import Any, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── Sub-objetos ───────────────────────────────────────────────────────────
@@ -44,7 +44,12 @@ class CicloGarantiaEvent(BaseModel):
 
 
 class PecaPivoMerito(BaseModel):
-    """A movimentacao mais decisiva do merito inteiro (cross-processo)."""
+    """A movimentacao mais decisiva do merito inteiro (cross-processo).
+
+    `mov_id` aceita int OR str — Gemini retorna inteiro quando o mov_id na
+    timeline e numerico (ex: 27283057972), causando ValidationError quando
+    schema exigia str. Coerce via validator pra normalizar str.
+    """
 
     processo_numero: Optional[str] = None
     mov_id: Optional[str] = None
@@ -53,6 +58,13 @@ class PecaPivoMerito(BaseModel):
         default=None,
         description="1-2 frases explicando por que esta mov define o estado do merito",
     )
+
+    @field_validator("mov_id", mode="before")
+    @classmethod
+    def _coerce_mov_id(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        return str(v) if not isinstance(v, str) else v
 
 
 class ProbabilidadeExitoMerito(BaseModel):
@@ -163,10 +175,33 @@ class MeritoSynthesisCard(BaseModel):
     # Meta
     confidence: float = Field(default=0.7, ge=0.0, le=1.0)
     evidence_artifacts: list[EvidenceArtifact] = Field(default_factory=list)
-    cards_index: dict[str, int] = Field(
+    cards_index: dict[str, Any] = Field(
         default_factory=dict,
-        description="Contagem de cards consumidos por kind",
+        description="Contagem de cards consumidos por kind. Aceita Any porque "
+                    "Gemini ocasionalmente retorna dict aninhado ao inves de int "
+                    "(ex: {'processo_X': {'mov_factsheets': 12}}); validator "
+                    "normaliza pra int via _normalize_cards_index_value below.",
     )
+
+    @field_validator("cards_index", mode="before")
+    @classmethod
+    def _normalize_cards_index(cls, v: Any) -> dict[str, Any]:
+        if not isinstance(v, dict):
+            return {}
+        out: dict[str, Any] = {}
+        for key, val in v.items():
+            if isinstance(val, int):
+                out[key] = val
+            elif isinstance(val, dict):
+                # Gemini retornou dict aninhado — somar valores int filhos
+                total = sum(x for x in val.values() if isinstance(x, int))
+                out[key] = total
+            else:
+                try:
+                    out[key] = int(val)
+                except (TypeError, ValueError):
+                    out[key] = 0
+        return out
 
 
 # ── Request / Response ────────────────────────────────────────────────────
