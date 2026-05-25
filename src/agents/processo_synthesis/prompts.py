@@ -407,6 +407,107 @@ def _summarize_day_factsheet(d: DayFactSheetMin) -> str:
     return " | ".join(parts)
 
 
+_TIPO_RULES_FISCAL = """=== REGRAS TIPO-SPECIFIC (FISCAL) ===
+
+Dinamica de execucao fiscal/contencioso tributario tem ritos proprios:
+
+1. LEI 6.830/80: Execucao Fiscal exige garantia obrigatoria pra Embargos.
+   Embargos NAO recebem efeito suspensivo automatico — depende do juiz
+   (CPC 919, ja com Lei 6.830 art. 16 §1o). Embargos opostos SEM garantia
+   sao indeferidos liminarmente.
+
+2. CDA tem PRESUNCAO DE LIQUIDEZ E CERTEZA (Lei 6.830 art. 3o). Defesa do
+   Tomador exige PROVA INEQUIVOCA de extincao/quitacao/nulidade. Despachos
+   "rejeito a alegacao de [X]" tipicamente confirmam validade da CDA — sinal
+   pro_fazenda.
+
+3. ORDEM DE PREFERENCIA DA GARANTIA (Lei 6.830 art. 11): dinheiro > titulos
+   da divida publica > pedras/metais > imoveis > moveis > direitos. Seguro
+   garantia equiparado a dinheiro desde 2014 (art. 9o I-A). Recusa do seguro
+   sem motivo proprio (so "prefiro penhora online") eh sinal NEGATIVO pra
+   relacao Tomador-juizo, mas NAO move risco de merito sozinha.
+
+4. PRESCRICAO: quinquenal (CTN art. 174) pra cobranca; intercorrente exige
+   suspensao de 1 ano + 5 anos sem encontrar bens (Lei 6.830 art. 40 §4o,
+   STJ Tema 566). Despachos arquivando provisoriamente sao GATILHO de
+   prescricao — registre no estado_processual.
+
+5. EXTINCAO POR PRESCRICAO INTERCORRENTE = pro_contribuinte (Fazenda perdeu
+   sem julgamento de merito da CDA). NAO confundir com extincao por
+   pagamento (que tambem favorece Tomador mas via quitacao, nao decadencia)."""
+
+_TIPO_RULES_TRABALHISTA = """=== REGRAS TIPO-SPECIFIC (TRABALHISTA) ===
+
+Reclamatoria trabalhista tem dinamica MUITO diferente do fiscal/civel:
+
+1. POLO INVERTIDO PRO TOMADOR: Tomador eh sempre RECLAMADO (empregador),
+   raramente reclamante. Improcedente = TOMADOR GANHOU. Procedente = TOMADOR
+   PERDEU. Quase nunca aplicar regra "polo_ativo=Fazenda" — aqui eh
+   trabalhista, autor eh empregado individual.
+
+2. HIPOSSUFICIENCIA: juiz trabalhista tende a aceitar tese do reclamante
+   em casos duvidosos (presuncao de veracidade pro empregado). Sentencas
+   improcedentes sao mais "fortes" que procedentes (juiz teve que vencer
+   a presuncao). Pesa pro_fazenda quando aparecem.
+
+3. EXECUCAO TRABALHISTA: ja arranca da liquidacao + impulso oficio. Apolice
+   geralmente entra na fase de EXECUCAO (apos sentenca/acordao com valor
+   liquido). Pesquisar mov de "garantia do juizo" + "homologacao calculos".
+
+4. ACORDO HOMOLOGADO: comum em trabalhista (CLT art. 855-B+, conciliacao
+   pre-processual). Acordo eh categoria PROPRIA — NAO conta como
+   procedente/improcedente. Risco apos acordo eh BAIXO se Tomador esta
+   adimplente (parcelas em dia); ALTO se ha inadimplencia (mov de
+   "intimacao pra pagamento de parcela acordada").
+
+5. EXECUCAO PROVISORIA: trabalhista permite execucao provisoria (CLT art.
+   899). Diferente do civel (que exige transito) e fiscal (que exige garantia
+   da Lei 6.830). Risco preditivo sobe COM ACORDAO 2g mesmo SEM transito.
+
+6. EXTINCAO POR ARQUIVAMENTO: ausencia de reclamante em audiencia (CLT 844)
+   = extincao SEM merito = pro_fazenda/Tomador (Tomador ganhou de barato).
+   Re-ajuizamento eh possivel — registre no trajetoria_motivo se houver
+   processos relacionados ja conhecidos."""
+
+_TIPO_RULES_CIVEL = """=== REGRAS TIPO-SPECIFIC (CIVEL) ===
+
+Civel eh categoria heterogenea — varia muito por sub-dominio:
+
+1. POLO AMBIGUO: Tomador pode ser AUTOR (Acao Anulatoria, MS, Declaratoria
+   contra Fazenda) OU REU (Acao Civel Publica, indenizatoria por danos,
+   cobranca contra Tomador). NAO assuma. Sempre cruzar polo com CNPJ/nome
+   do Tomador via apolices/factsheets.
+
+2. APELACAO COM EFEITO SUSPENSIVO AUTOMATICO (CPC art. 1.012): regra geral
+   civel. Sentenca de improcedencia em 1g + apelacao pendente = Medio (NAO
+   Alto). Vira Alto SO com sinal explicito contrario (cumprimento
+   provisorio deferido, penhora online, intimacao pra pagamento).
+
+3. CUMPRIMENTO DEFINITIVO vs PROVISORIO: definitivo (apos transito) = sinal
+   ALTO pro Tomador devedor. Provisorio (durante recurso) = MEDIO se ha
+   garantia, ALTO se nao.
+
+4. SUSPENSAO POR ACORDO: comum em civel (transacao art. 840 CC). Sem
+   inadimplencia = BAIXO; com inadimplencia = volta ao Alto/Medio
+   dependendo do estagio.
+
+5. ESPECIFICIDADES POR SUB-AREA:
+   - Consumerista (CDC): inversao do onus probatorio (CDC 6 VIII) pesa
+     pro_fazenda/Tomador-reu; juros e multas adicionais possiveis.
+   - Empresarial: tende a tecnicidade alta (perdas raras pra Tomador
+     incidentais; quando perdem, valores altos).
+   - Familia/Sucessoes: improvavel ter apolice — fora do escopo normal."""
+
+
+def _build_tipo_specific_block(tipo: str | None) -> str:
+    """Dispatch de regras tipo-specific. Default civel se nao reconhecido."""
+    if tipo == "fiscal":
+        return _TIPO_RULES_FISCAL
+    if tipo == "trabalhista":
+        return _TIPO_RULES_TRABALHISTA
+    return _TIPO_RULES_CIVEL
+
+
 def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     """Build prompt que agrega mov_factsheets + day_factsheets + apolice context + autos_raw_excerpt.
 
@@ -452,6 +553,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     header_block = "\n  ".join(header_lines)
 
     monolith_block = _build_monolith_block(req)
+    tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
 
     classe_json = f'"{req.classe}"' if req.classe else "null"
     classe_code_json = req.classe_cnj_code if req.classe_cnj_code is not None else "null"
@@ -528,6 +630,8 @@ processo (mesmo bug). Releia os factsheets com lente de polo: se um factsheet
 trouxer sentido='desfavoravel' em um caso de Anulatoria onde Tomador eh autor
 e a natureza eh 'procedente', a Camada 1 errou — corrija no estado_processual
 + decisao_vigente.sentido.
+
+{tipo_specific_block}
 
 === INSTRUCOES POR CAMPO ===
 
