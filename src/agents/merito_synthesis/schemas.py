@@ -410,11 +410,7 @@ class MeritoSynthesisRequest(BaseModel):
     tomador: Optional[TomadorCardMin] = None
     cdas: list[CDACardMin] = Field(default_factory=list)
     aiims: list[AIIMCardMin] = Field(default_factory=list)
-    # v2.3 (2026-05-25): campo `jurisprudencia` REMOVIDO. Migrado pra L2 em v2.2
-    # (proposta L2-only); v2.3 limpa o residuo DEPRECATED. risco_processo_inter-
-    # mediario dos processo_syntheses JA absorveu o sinal da juris via L2 prompt
-    # v2.2 regras J/J.1/J.2. Materializer L3 (frontend-api) DEVE parar de passar
-    # `jurisprudencia` no payload em sync com este commit.
+    # jurisprudencia removido — agora vive em L2 ps_card (regras J/J.1/J.2).
     paradigmas: list[ParadigmaMin] = Field(default_factory=list)
 
     # Trajetoria (passado pelo orchestrator antes da call)
