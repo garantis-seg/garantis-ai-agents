@@ -496,7 +496,26 @@ Civel eh categoria heterogenea — varia muito por sub-dominio:
      pro_fazenda/Tomador-reu; juros e multas adicionais possiveis.
    - Empresarial: tende a tecnicidade alta (perdas raras pra Tomador
      incidentais; quando perdem, valores altos).
-   - Familia/Sucessoes: improvavel ter apolice — fora do escopo normal."""
+   - Familia/Sucessoes: improvavel ter apolice — fora do escopo normal.
+
+6. EXTINCAO SEM MERITO EM ACAO TOMADOR-AUTOR = DESFAVORAVEL:
+   Quando o Tomador propos a acao (Anulatoria, MS, Declaratoria,
+   Repetitorio, Tutela Cautelar Antecedente, Embargos a Execucao,
+   Excecao Pre-Executividade) e ela foi extinta SEM RESOLUCAO DE MERITO
+   (CPC 485 — perda de objeto, carencia de acao, ausencia das condicoes
+   da acao, abandono, ilegitimidade, etc), Tomador PERDEU sem julgamento.
+   A pretensao do Tomador (suspender exigibilidade, anular debito,
+   restituir indebito) NAO foi acolhida. O credito/exigibilidade da
+   Fazenda CONTINUA. decisao_vigente.sentido = 'desfavoravel' (NAO neutro,
+   NAO favoravel). natureza = 'extinto_sem_merito'.
+
+   Caso paradigma: Tutela Cautelar Antecedente proposta pelo Tomador pra
+   suspender exigibilidade tributaria, extinta por perda de objeto (porque
+   Tomador nao ajuizou a acao principal no prazo CPC 308). Tomador PERDEU
+   a cautelar — a exigibilidade nao foi suspensa. Sentido='desfavoravel'.
+
+   So eh 'neutro' quando a extincao foi POR FAVOR ao Tomador (homologacao
+   de acordo, desistencia da Fazenda) — situacoes raras em Tomador-autor."""
 
 
 def _build_tipo_specific_block(tipo: str | None) -> str:
