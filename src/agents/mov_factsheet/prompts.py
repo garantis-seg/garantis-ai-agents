@@ -9,6 +9,20 @@ quando caller esta em modo cadenciado, mesmo com docs. Nesse caso o
 prompt acrescenta bloco CONTEXTO ANTERIOR com instrucoes narrowadas
 (uso so pra resolver pronouns/refs, docs prevalecem sobre contexto).
 Memory: engine-v6-piloto-sequencial-l1-2026-05-25.
+
+REV4 2026-05-25 (P1 do prompt-engineering FINDINGS):
+Removido bloco "=== FORMATO DE SAIDA ===" (~50 linhas duplicando shape JSON).
+Output JSON ja eh enforced via response_schema=MovFactSheetCard em agent.py
+(Gemini structured output nativo). Semantica de cada campo agora vive em
+Field(description=...) no schemas.py. PROMPT_VERSION bumped pra v2.0.
+
+REV5 2026-05-25 (P2 do prompt-engineering FINDINGS):
+REGRA DE LEITURA DE POLOS + REGRA RECURSOS + REGRA EXTINCAO SEM MERITO movidas
+do meio do prompt pro TOPO em bloco <regras_criticas>...</regras_criticas>.
+Motivacao: Lost-in-the-Middle (Liu 2023 + MIT 2025) — info critica no meio do
+prompt eh ignorada >30% das vezes. Google recomenda regras no topo + restate
+no fim. <lembrete_final> adicionado no fim como recency anchor. PROMPT_VERSION
+bumped pra v2.1.
 """
 
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
@@ -179,6 +193,106 @@ def build_mov_factsheet_prompt(
 Sua tarefa: extrair um FactSheet ESTRUTURADO de UMA movimentacao processual. Esse FactSheet sera agregado
 pra calcular o risco de acionamento da apolice no merito.
 
+<regras_criticas>
+
+<regra_polos>
+PRINCIPIO: o Tomador da apolice eh o cliente da seguradora — pode estar em
+QUALQUER polo dependendo da classe processual. Identifique ONDE o Tomador esta
+ANTES de mapear sentido.
+
+PASSO 1 — Bucket pela classe:
+- Execucao Fiscal, Cumprimento de Sentenca, Acao Monitoria contra o Tomador:
+  polo_ativo = Fazenda/Credor; polo_passivo = TOMADOR (executado).
+  Procedente da execucao = TOMADOR PERDEU. Improcedente = TOMADOR GANHOU.
+- Embargos a Execucao Fiscal, Excecao de Pre-Executividade:
+  polo_ativo = TOMADOR (embargante); polo_passivo = Fazenda (embargada).
+  Procedente dos embargos = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
+- Acao Anulatoria de Debito Fiscal, Mandado de Seguranca, Acao Declaratoria,
+  Repetitorio de Indebito, Acao Ordinaria Tributaria, Tutela Antecipada
+  Antecedente, Tutela Cautelar Antecedente, Acao Cautelar:
+  polo_ativo = TOMADOR (autor/impetrante/requerente); polo_passivo = Fazenda
+  (re/coatora). Procedente da anulatoria/MS/tutela = TOMADOR GANHOU.
+  Improcedente = TOMADOR PERDEU.
+- Acao Civel Generica ("Procedimento Comum Civel"): identifique pelo objeto da
+  acao + quem moveu. Nao assuma defaults.
+
+PASSO 2 — Classe NAO listada acima:
+NUNCA assuma "Execucao Fiscal default". Cruze polo_ativo/polo_passivo com nome
+do Tomador na publicacao ou resumo do processo:
+  - Tomador em polo_ativo => Tomador eh autor => procedente=favoravel
+  - Tomador em polo_passivo => Tomador eh reu => procedente=desfavoravel
+
+PASSO 3 — Se ambiguo: sentido=null + confianca<=0.5. NUNCA chute "Fazenda
+autora default".
+
+ATENCAO ao RESUMO DO PROCESSO (cascata IA): ele pode usar a preposicao "contra"
+ambigua (ex: "Tutela Antecipada movida contra X" pode significar que X eh quem
+propos a acao). NUNCA confie SO no resumo — sempre cruze com polo_ativo/
+polo_passivo + nome do Tomador.
+</regra_polos>
+
+<regra_recursos>
+PRINCIPIO: atos de RECURSO sao distintos de sentencas/acordaos de merito direto.
+Pra recursos, sentido NAO depende de "procedente/improcedente" — depende de
+QUEM eh o RECORRENTE + se o recurso foi PROVIDO ou NAO PROVIDO.
+
+PASSO 1 — Identifique o RECORRENTE no texto:
+- "Recurso da [PARTE]" / "Apelacao interposta por [PARTE]"
+- "Recorrente: [PARTE]" / "(Juizo Recorrente)" / "Apelante: [PARTE]"
+- "Embargos de declaracao opostos por [PARTE]"
+- Quando nao explicito mas tem mov anterior com "Apelacao interposta pela Uniao
+  Federal" e mov atual diz "Recurso conhecido e nao provido", recorrente = Uniao.
+
+PASSO 2 — Mapeie PROVIDO/NAO PROVIDO -> sentido pro Tomador:
+- PROVIDO (recurso aceito): "deu-se provimento", "recurso provido", "dou
+  provimento", "acolho o recurso"
+- NAO PROVIDO (recurso negado): "nao provido", "negado provimento", "nego
+  provimento", "rejeitado o recurso", "improvido", "desprovido"
+
+REGRA:
+- Recorrente = TOMADOR (ou MESMO lado): provido=favoravel, nao provido=desfavoravel
+- Recorrente = LADO OPOSTO (Fazenda, parte adversa): provido=desfavoravel,
+  nao provido=FAVORAVEL (parte contraria perdeu, Tomador mantem vantagem)
+
+EXEMPLO POSITIVO (MS GOL/Uniao, paradigma 2026-05-25):
+  Mandado de Seguranca: GOL Linhas Aereas (polo_ativo, Tomador/impetrante)
+  vs Uniao (polo_passivo, Fazenda/coatora).
+  Mov: "Recurso da Uniao Federal foi conhecido e nao provido."
+  -> Recorrente=Uniao=LADO OPOSTO -> Nao provido => Uniao PERDEU =>
+     sentido=FAVORAVEL (NAO desfavoravel — erro classico do LLM).
+
+EXEMPLO POSITIVO (EF, executado recorrente):
+  Execucao Fiscal: Fazenda (polo_ativo, exequente) vs Tomador (polo_passivo,
+  executado). Mov: "Recurso do executado provido."
+  -> Recorrente=executado=Tomador -> Provido => sentido=FAVORAVEL.
+
+CONTRAEXEMPLO: NUNCA assuma "Fazenda eh sempre quem recorre". Em MS/Anulatoria
+geralmente quem recorre eh a Fazenda apos perder em 1g; em EF geralmente o
+executado/Tomador recorre. Mas SEMPRE confirme no texto.
+
+PASSO 3 — Se nao consegue identificar o recorrente: sentido=null + confianca<=0.5.
+
+PASSO 4 — Natureza pra movs de recurso:
+Use 'interlocutoria' SO se nao houve merito recursal (ex: nao conhecimento por
+preliminar). Quando o recurso entra no merito (provido/nao provido), prefira
+deixar natureza=null com sentido preenchido — L2 amarra via decisao_vigente.
+</regra_recursos>
+
+<regra_extincao_sem_merito>
+Quando natureza='extinto_sem_merito', sentido DEVE ser 'neutro', NUNCA
+'desfavoravel'. Extincao sem merito significa que o juiz NAO julgou o conteudo
+da causa — pode ser ausencia de pressuposto processual, ilegitimidade de
+parte, falta de interesse, transacao, desistencia, perempcao, etc. NAO
+consolida divida nem julga risco.
+
+Mesmo se o processo for direcionado pra Execucao Fiscal posterior, a EXTINCAO
+nao move risco — o que move risco eh a Execucao Fiscal subsequente.
+transito_certificado='true' aplica a extincao mas sentido continua 'neutro' —
+extincao transitada NAO equivale a improcedencia transitada.
+</regra_extincao_sem_merito>
+
+</regras_criticas>
+
 === PROCESSO ===
   {proc_block}
 
@@ -187,111 +301,6 @@ pra calcular o risco de acionamento da apolice no merito.
 
   texto da publicacao (snippet):
   {texto}{docs_section}{processo_section}{mov_anterior_section}{contexto_extra_section}
-
-=== REGRA DE LEITURA DE POLOS (CRITICA — leia antes de classificar sentido) ===
-
-O Tomador da apolice eh o cliente da seguradora — pode estar em QUALQUER polo
-dependendo da classe processual:
-
-- Execucao Fiscal, Cumprimento de Sentenca, Acao Monitoria contra o Tomador:
-  polo_ativo = Fazenda/Credor; polo_passivo = TOMADOR (executado).
-  Procedente da execucao = TOMADOR PERDEU. Improcedente = TOMADOR GANHOU.
-
-- Embargos a Execucao Fiscal, Excecao de Pre-Executividade:
-  polo_ativo = TOMADOR (embargante); polo_passivo = Fazenda (embargada).
-  Procedente dos embargos = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
-
-- Acao Anulatoria de Debito Fiscal, Mandado de Seguranca, Acao Declaratoria,
-  Repetitorio de Indebito, Acao Ordinaria Tributaria, Tutela Antecipada
-  Antecedente, Tutela Cautelar Antecedente, Acao Cautelar:
-  polo_ativo = TOMADOR (autor/impetrante/requerente); polo_passivo =
-  Fazenda (re/coatora).
-  Procedente da anulatoria/MS/tutela = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
-
-- Acao Civel Generica ("Procedimento Comum Civel"): identifique pelo objeto da
-  acao + quem moveu (autor pediu o que?). Nao assuma defaults.
-
-REGRA DURA — CLASSE NAO LISTADA ACIMA:
-Se a classe do processo NAO esta em nenhum dos buckets acima, NUNCA
-assuma "Execucao Fiscal default". Em vez disso, cruze polo_ativo /
-polo_passivo com o nome do Tomador na publicacao OU resumo do processo
-pra identificar onde o Tomador esta:
-  - Tomador em polo_ativo => Tomador eh autor => procedente=favoravel
-  - Tomador em polo_passivo => Tomador eh reu => procedente=desfavoravel
-Se ambiguo, sentido=null + confianca <=0.5.
-
-ATENCAO ao RESUMO DO PROCESSO (cascata IA): ele pode usar a preposicao
-"contra" ambigua (ex: "Tutela Antecipada movida contra X" pode significar
-que X eh quem propos a acao). NUNCA confie SO no resumo — sempre cruze
-com polo_ativo/polo_passivo + nome do Tomador.
-
-REGRA DURA — 3 PASSOS pra preencher decisao.sentido:
-1. Identifique o Tomador (cruze CNPJ/nome da publicacao com polo_ativo/polo_passivo).
-2. Mapeie "procedente/improcedente" RELATIVO ao polo onde o Tomador esta.
-   Em sentido juridico tradicional: procedente = autor venceu; improcedente = autor perdeu.
-3. Se NAO conseguir identificar com confianca em qual polo o Tomador esta:
-   sentido=null + confianca <=0.5. NUNCA chute "Fazenda autora" como default.
-
-=== RECURSOS — REGRA CRITICA pra "Recurso X provido / nao provido" ===
-
-ATOS DE RECURSO sao distintos de sentencas/acordaos de merito direto.
-Pra recursos, sentido NAO depende de "procedente/improcedente" — depende
-de QUEM eh o RECORRENTE + se o recurso foi PROVIDO ou NAO PROVIDO.
-
-PASSO 1: identifique o RECORRENTE no texto.
-Procure por:
-- "Recurso da [PARTE]" / "Apelacao interposta por [PARTE]"
-- "Recorrente: [PARTE]" / "(Juizo Recorrente)" / "Apelante: [PARTE]"
-- "Embargos de declaracao opostos por [PARTE]"
-- Quando nao explicito mas tem mov anterior com "Apelacao interposta
-  pela Uniao Federal" e a mov atual diz "Recurso conhecido e nao provido",
-  o recorrente eh a Uniao.
-
-PASSO 2: mapeie PROVIDO/NAO PROVIDO -> sentido pro Tomador.
-
-Termos equivalentes a PROVIDO (recurso aceito):
-  "deu-se provimento", "recurso provido", "dou provimento", "acolho o recurso"
-
-Termos equivalentes a NAO PROVIDO (recurso negado):
-  "nao provido", "negado provimento", "nego provimento", "rejeitado o
-  recurso", "improvido", "desprovido", "improvi o recurso"
-
-REGRA:
-  - Recorrente = TOMADOR (ou alguem do MESMO lado do Tomador):
-    recurso PROVIDO -> sentido=favoravel
-    recurso NAO PROVIDO -> sentido=desfavoravel
-
-  - Recorrente = LADO OPOSTO ao Tomador (Fazenda, exequente contrario,
-    parte adversa):
-    recurso PROVIDO -> sentido=desfavoravel (a parte contraria ganhou)
-    recurso NAO PROVIDO -> sentido=FAVORAVEL (a parte contraria perdeu,
-                            o Tomador mantem a vantagem)
-
-CASO PARADIGMA 1 (paradigma de bug 2026-05-25):
-  Mandado de Seguranca: GOL Linhas Aereas (polo_ativo, Tomador/impetrante)
-  vs Uniao Federal (polo_passivo, Fazenda/coatora).
-  Mov: "Recurso da Uniao Federal foi conhecido e nao provido."
-  Recorrente = Uniao = LADO OPOSTO ao Tomador GOL.
-  Nao provido => Uniao PERDEU => GOL GANHOU.
-  sentido=FAVORAVEL (NAO desfavoravel — erro classico do LLM).
-
-CASO PARADIGMA 2:
-  Execucao Fiscal: Fazenda (polo_ativo, exequente) vs Tomador (polo_passivo,
-  executado). Mov: "Recurso do executado provido."
-  Recorrente = executado = Tomador.
-  Provido => Tomador GANHOU.
-  sentido=FAVORAVEL.
-
-PASSO 3: se NAO conseguir identificar o recorrente com confianca:
-  sentido=null + confianca <=0.5. NUNCA assuma "Fazenda eh sempre quem
-  recorre" — em MS / Anulatoria, geralmente quem recorre eh a Fazenda
-  apos perder em 1g; em EF, geralmente o executado/Tomador recorre.
-
-PASSO 4: natureza pra movs de recurso:
-  Use 'interlocutoria' SO se nao houve merito recursal (ex: nao conhecimento
-  por preliminar). Quando o recurso entra no merito (provido/nao provido),
-  prefira deixar natureza=null com sentido preenchido — o L2 vai amarrar
-  via decisao_vigente.
 
 === INSTRUCOES POR CAMPO ===
 
@@ -319,18 +328,7 @@ PASSO 4: natureza pra movs de recurso:
    - natureza: procedente | improcedente | parcialmente_procedente | extinto_sem_merito |
      homologatoria | interlocutoria
    - transito_certificado: true SO se a mov CERTIFICA transito em julgado
-
-   REGRA DURA — EXTINCAO SEM MERITO:
-   Quando natureza='extinto_sem_merito', sentido DEVE ser 'neutro', NUNCA
-   'desfavoravel'. Extincao sem merito significa que o juiz NAO julgou o
-   conteudo da causa — pode ser ausencia de pressuposto processual,
-   ilegitimidade de parte, falta de interesse, transacao, desistencia,
-   perempcao, etc. NAO consolida divida nem julga risco. Mesmo se o
-   processo for direcionado pra Execucao Fiscal posterior, a EXTINCAO
-   nao move risco — o que move risco e a Execucao Fiscal subsequente
-   (que sera classificada quando suas movs aparecerem).
-   transito_certificado='true' aplica a extincao mas sentido continua
-   'neutro' — extincao transitada NAO equivale a improcedencia transitada.
+   (Ver <regra_extincao_sem_merito> acima quando natureza='extinto_sem_merito'.)
 
 5. evento_garantia:
    - tipo: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço | nenhum
@@ -386,7 +384,7 @@ PASSO 4: natureza pra movs de recurso:
 === REGRAS DE OURO ===
 
 A. NAO INVENTE. Se a mov+docs nao mencionam apolice, deixe apolice.numero=null + apresentada=null + aceita=null.
-B. Sentido DO TOMADOR depende do polo (ver REGRA DE LEITURA DE POLOS acima).
+B. Sentido DO TOMADOR depende do polo (ver <regra_polos> no topo).
    - Em EF: Tomador=executado (polo passivo); improcedente da execucao = FAVORAVEL.
    - Em Embargos: Tomador=embargante (polo ativo); improcedente dos embargos = DESFAVORAVEL.
    - Em Anulatoria/MS: Tomador=autor (polo ativo); procedente da anulatoria = FAVORAVEL.
@@ -400,58 +398,13 @@ E. Se a mov e ruido (carga, publicacao sem conteudo) E nao ha doc, use relevanci
 F. Se ha doc anexado, PRIORIZE o conteudo do doc sobre o snippet. O snippet pode ser
    apenas a notificacao da existencia do anexo.
 
-=== FORMATO DE SAIDA ===
+<lembrete_final>
+Antes de classificar decisao.sentido: cheque <regra_polos> no topo deste prompt.
+Atos de recurso ("provido"/"nao provido"): cheque <regra_recursos> primeiro.
+natureza='extinto_sem_merito' SEMPRE forca sentido='neutro' (ver <regra_extincao_sem_merito>).
+</lembrete_final>
 
-Retorne APENAS JSON valido seguindo este shape exato:
-
-{{
-  "mov_id": "{mov.mov_id}",
-  "data": {f'"{mov.data}"' if mov.data else "null"},
-  "tipo_origem": {f'"{mov.tipo}"' if mov.tipo else "null"},
-  "resumo_ato": "...",
-  "categoria": "...",
-  "relevancia_merito": "alta|media|baixa|ruido",
-  "decisao": {{
-    "tem_decisao": false,
-    "sentido": null,
-    "instancia": null,
-    "natureza": null,
-    "transito_certificado": false
-  }},
-  "evento_garantia": {{
-    "tipo": "nenhum",
-    "motivo": null
-  }},
-  "status_garantia_pos_mov": "nenhum",
-  "tipo_garantia": "nenhum",
-  "cda": {{
-    "numeros": [],
-    "ente": null,
-    "tributo": null,
-    "valor_total": null
-  }},
-  "apolice": {{
-    "numero": null,
-    "apresentada": null,
-    "aceita": null
-  }},
-  "delta_risco": {{
-    "mudou": false,
-    "direcao": "inalterado",
-    "motivo": null
-  }},
-  "valores": {{
-    "valor_causa": null,
-    "valor_debito_executado": null,
-    "valor_garantia": null
-  }},
-  "peca_pivo": {{
-    "e_pivo": false,
-    "motivo": null
-  }},
-  "proximos_passos": [],
-  "data_real_ato": null,
-  "processos_conexos_mencionados": [],
-  "confianca": 0.7
-}}
+Output: JSON estruturado conforme schema MovFactSheetCard (enforced via
+response_schema do Gemini — nao precisa formato textual no prompt). Cada campo
+tem descricao especifica no Pydantic. Echo de mov_id/data/tipo_origem deste input.
 """

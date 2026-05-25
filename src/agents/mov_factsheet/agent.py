@@ -28,7 +28,21 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # Bump quando alterar build_mov_factsheet_prompt OR MovFactSheetCard schema.
 # Usado pra drift detection em leads.engine_llm_calls.prompt_version.
-PROMPT_VERSION = "mov_factsheet.v1.0"
+#
+# v2.0 (2026-05-25, P1 do prompt-engineering FINDINGS):
+#   - Removido bloco FORMATO DE SAIDA do prompt (duplicava response_schema).
+#   - Enriquecido Field(description=...) em schemas.py com semantica que vivia
+#     no prompt. Cada campo carrega sua propria guidance via JSON Schema.
+#   - Schema enforcement Gemini cobre estrutura. Prompt cobre semantica do
+#     dominio + regras criticas (POLOS, RECURSOS, EXTINCAO).
+#
+# v2.1 (2026-05-25, P2 do prompt-engineering FINDINGS):
+#   - REGRA DE LEITURA DE POLOS + REGRA RECURSOS + REGRA EXTINCAO movidas do
+#     meio pro TOPO em <regras_criticas> XML. Combate Lost-in-the-Middle.
+#   - <lembrete_final> no fim como recency anchor pras 3 regras criticas.
+#   - Eliminado bloco duplicado "REGRA DURA EXTINCAO" dentro de INSTRUCOES POR
+#     CAMPO (single source of truth: <regra_extincao_sem_merito>).
+PROMPT_VERSION = "mov_factsheet.v2.1"
 
 
 async def classify_mov_factsheet(

@@ -16,17 +16,45 @@ from pydantic import BaseModel, Field
 class DecisaoBlock(BaseModel):
     """Decisao processual presente na mov."""
 
-    tem_decisao: bool = Field(default=False, description="True se a mov contem uma decisao judicial")
+    tem_decisao: bool = Field(
+        default=False,
+        description=(
+            "True SO se a mov contem decisao judicial materialmente "
+            "(sentenca, acordao, decisao_merito, decisao_interlocutoria, homologacao). "
+            "Despachos ordinatorios, publicacoes burocraticas, intimacoes administrativas = false."
+        ),
+    )
     sentido: Optional[Literal["favoravel", "desfavoravel", "parcial", "neutro"]] = Field(
         default=None,
-        description="Sentido do ponto de vista do TOMADOR (executado/embargante/impetrante)",
+        description=(
+            "Sentido DO PONTO DE VISTA DO TOMADOR (executado/embargante/impetrante). "
+            "Em EF: procedente da execucao = desfavoravel; improcedente = favoravel. "
+            "Em Embargos/MS/Anulatoria: procedente = favoravel; improcedente = desfavoravel. "
+            "Extincao SEM merito SEMPRE 'neutro' (NUNCA desfavoravel) — extincao processual "
+            "nao consolida divida nem julga risco. "
+            "Se NAO consegue identificar com confianca em qual polo o Tomador esta: "
+            "null + confianca<=0.5. NUNCA chute 'Fazenda autora default'."
+        ),
     )
-    instancia: Optional[Literal["1g", "2g", "stj", "stf"]] = None
+    instancia: Optional[Literal["1g", "2g", "stj", "stf"]] = Field(
+        default=None,
+        description="Instancia do juizo que prolatou a decisao. null se nao identifica.",
+    )
     natureza: Optional[Literal[
         "procedente", "improcedente", "parcialmente_procedente",
         "extinto_sem_merito", "homologatoria", "interlocutoria",
-    ]] = None
-    transito_certificado: bool = False
+    ]] = Field(
+        default=None,
+        description=(
+            "Natureza juridica da decisao. Para movs de RECURSO (provido/nao provido), "
+            "prefira deixar null com sentido preenchido — L2 amarra via decisao_vigente. "
+            "Use 'interlocutoria' SO se nao houve merito recursal (e.g. nao conhecimento por preliminar)."
+        ),
+    )
+    transito_certificado: bool = Field(
+        default=False,
+        description="True SO se a mov CERTIFICA transito em julgado (texto explicito).",
+    )
 
 
 class EventoGarantia(BaseModel):
@@ -35,20 +63,39 @@ class EventoGarantia(BaseModel):
     tipo: Literal[
         "apresentacao", "aceitacao", "recusa", "levantamento",
         "substituicao", "reforço", "nenhum",
-    ] = Field(default="nenhum")
+    ] = Field(
+        default="nenhum",
+        description=(
+            "Tipo de evento envolvendo a garantia. 'nenhum' quando a mov nao trata da garantia. "
+            "'apresentacao' quando a parte apresenta apolice/garantia. "
+            "'aceitacao'/'recusa' quando o juizo se manifesta sobre a garantia."
+        ),
+    )
     motivo: Optional[str] = Field(
         default=None,
-        description="Quando tipo=recusa: motivo explicito (ex: 'valor insuficiente'). null caso contrario.",
+        description="Quando tipo='recusa': motivo explicito (ex: 'valor insuficiente'). null caso contrario.",
     )
 
 
 class CDABlock(BaseModel):
     """CDAs/inscricoes em divida ativa mencionadas na mov."""
 
-    numeros: list[str] = Field(default_factory=list, description="Numeros literais das CDAs mencionadas")
-    ente: Optional[Literal["estadual", "municipal", "federal_pgfn"]] = None
-    tributo: Optional[str] = Field(default=None, description="ICMS, ISS, IPVA, etc.")
-    valor_total: Optional[float] = Field(default=None, description="Valor total em BRL quando explicito")
+    numeros: list[str] = Field(
+        default_factory=list,
+        description="Numeros literais das CDAs mencionadas no texto. [] se nenhuma CDA mencionada.",
+    )
+    ente: Optional[Literal["estadual", "municipal", "federal_pgfn"]] = Field(
+        default=None,
+        description="Origem da CDA. null se nao identifica.",
+    )
+    tributo: Optional[str] = Field(
+        default=None,
+        description="Sigla do tributo (ICMS, ISS, IPVA, IRPJ, CSLL, etc.). null se nao identifica.",
+    )
+    valor_total: Optional[float] = Field(
+        default=None,
+        description="Valor total em BRL quando explicito no texto. null caso contrario.",
+    )
 
 
 class ApoliceBlock(BaseModel):
@@ -62,29 +109,58 @@ class ApoliceBlock(BaseModel):
 class DeltaRisco(BaseModel):
     """Como esta mov alterou o risco do processo/merito vs o estado anterior."""
 
-    mudou: bool = Field(default=False, description="True se esta mov muda materialmente o risco")
-    direcao: Optional[Literal["aumentou", "diminuiu", "inalterado"]] = None
+    mudou: bool = Field(
+        default=False,
+        description="True se esta mov muda materialmente o risco de acionamento da apolice.",
+    )
+    direcao: Optional[Literal["aumentou", "diminuiu", "inalterado"]] = Field(
+        default=None,
+        description=(
+            "'aumentou' SO com sinal explicito desfavoravel (sentenca desfavoravel sem suspensivo, "
+            "transito desfavoravel, recusa de garantia, intimacao de pagamento). "
+            "'diminuiu' com sinal favoravel (acordo, suspensao por RJ, decisao favoravel, transito favoravel). "
+            "'inalterado' em atos meramente procedimentais. "
+            "ATENCAO: apelacao com efeito suspensivo automatico (CPC art. 1.012) MANTEM inalterado mesmo apos "
+            "sentenca de improcedencia."
+        ),
+    )
     motivo: Optional[str] = Field(
         default=None,
-        description="1 frase PT-BR explicando POR QUE mudou (ou nao)",
+        description="1 frase PT-BR explicando POR QUE mudou (ou nao).",
     )
 
 
 class ValoresBlock(BaseModel):
     """Valores monetarios extraidos da mov."""
 
-    valor_causa: Optional[float] = None
-    valor_debito_executado: Optional[float] = None
-    valor_garantia: Optional[float] = None
+    valor_causa: Optional[float] = Field(
+        default=None,
+        description="Valor da causa em BRL quando explicito no texto. null caso contrario.",
+    )
+    valor_debito_executado: Optional[float] = Field(
+        default=None,
+        description="Valor do debito executado em BRL quando explicito. null caso contrario.",
+    )
+    valor_garantia: Optional[float] = Field(
+        default=None,
+        description="Valor da garantia/apolice em BRL quando explicito. null caso contrario.",
+    )
 
 
 class PecaPivo(BaseModel):
     """Indica se esta mov e candidata a peca-pivo do processo/merito."""
 
-    e_pivo: bool = Field(default=False)
+    e_pivo: bool = Field(
+        default=False,
+        description=(
+            "True SO se esta mov muda DECISIVAMENTE o estado do merito "
+            "(sentenca, acordao, transito em julgado, homologacao de acordo, recusa de garantia). "
+            "Despachos, intimacoes, peticoes intermediarias = false."
+        ),
+    )
     motivo: Optional[str] = Field(
         default=None,
-        description="Por que esta mov e (ou nao) pivo. null se e_pivo=false e motivo trivial.",
+        description="1 frase PT-BR explicando por que esta mov e (ou nao) pivo. null se e_pivo=false e motivo trivial.",
     )
 
 
@@ -115,16 +191,38 @@ class MovFactSheetCard(BaseModel):
     )
 
     # Campo 1: Resumo + categoria
-    resumo_ato: str = Field(description="~50 palavras PT-BR explicando o ato + anexos + proximo passo")
+    resumo_ato: str = Field(
+        description=(
+            "~50 palavras PT-BR explicando O QUE aconteceu NESTA mov "
+            "+ doc anexo se mencionado + proximo passo se claro. "
+            "NAO copie literalmente do snippet. Use tecnico-juridico direto. "
+            "NAO repita o RESUMO DO PROCESSO ou MOV ANTERIOR — esse campo descreve "
+            "APENAS esta mov."
+        ),
+    )
     categoria: Literal[
         "decisao_merito", "decisao_interlocutoria", "sentenca", "acordao",
         "despacho", "peticao", "publicacao", "intimacao", "certidao",
         "ato_ordinatorio", "carga", "baixa", "conclusao", "outros",
-    ] = Field(description="Categoria canonica do ato")
+    ] = Field(
+        description=(
+            "Categoria canonica do ato. Use 'outros' SO se nada se encaixar. "
+            "Pista forte: tipo_origem da mov ja indica (DESPACHO -> despacho, "
+            "SENTENCA -> sentenca, etc) — confirme com o conteudo do texto."
+        ),
+    )
 
     # Campo 2: Relevancia pro merito
     relevancia_merito: Literal["alta", "media", "baixa", "ruido"] = Field(
-        description="Quanto este ato influencia a tese/merito do processo principal"
+        description=(
+            "Quanto este ato influencia a TESE/MERITO do processo principal: "
+            "'alta' = decisao de merito, sentenca, acordao, evento de garantia, "
+            "intimacao DE PAGAMENTO, transito. "
+            "'media' = peticoes recursais, despachos saneadores, atos que viram "
+            "o jogo procedural. "
+            "'baixa' = despachos ordinatorios, publicacoes burocraticas, atos de cartorio. "
+            "'ruido' = cargas, baixas administrativas, intimacoes burocraticas SEM conteudo."
+        ),
     )
 
     # Campo 3: Decisao (sub-objeto)
@@ -136,13 +234,22 @@ class MovFactSheetCard(BaseModel):
     # Campo 5: Status da garantia pos-mov
     status_garantia_pos_mov: Literal[
         "apresentado", "aceito", "recusado", "levantado", "substituido", "nenhum",
-    ] = Field(default="nenhum")
+    ] = Field(
+        default="nenhum",
+        description=(
+            "Estado da garantia DEPOIS desta mov. Se a mov so APRESENTOU mas nao foi aceita, "
+            "status='apresentado' (NAO 'aceito'). 'nenhum' quando a mov nao trata da garantia."
+        ),
+    )
 
     # Campo 6: Tipo da garantia
     tipo_garantia: Literal[
         "seguro_garantia", "fianca_bancaria", "carta_fianca",
         "deposito_judicial", "penhora", "fiduciaria", "outras", "nenhum",
-    ] = Field(default="nenhum")
+    ] = Field(
+        default="nenhum",
+        description="Tipo da garantia quando mencionada. 'nenhum' se a mov nao trata de garantia.",
+    )
 
     # Campo 7: CDA
     cda: CDABlock = Field(default_factory=CDABlock)
@@ -162,22 +269,35 @@ class MovFactSheetCard(BaseModel):
     # Campo 12: Proximos passos
     proximos_passos: list[str] = Field(
         default_factory=list,
-        description="Acoes esperadas a partir deste ato (ex: 'aguardar manifestacao da exequente')",
+        description=(
+            "Acoes esperadas a partir deste ato. Ex: 'aguardar manifestacao da exequente', "
+            "'preparar contrarrazoes', 'agendar pericia'. [] se nao ha proximo passo claro."
+        ),
     )
 
     # Campo 13: Datas/conexos/confianca
     data_real_ato: Optional[str] = Field(
         default=None,
-        description="YYYY-MM-DD do ato real se diferir da data de publicacao",
+        description=(
+            "YYYY-MM-DD do ato real SE DIFERIR da data de publicacao. "
+            "Ex: 'sentenca em 10/03/2024 publicada em 15/03/2024' -> data_real_ato='2024-03-10'. "
+            "null se a data do ato e igual a data de publicacao."
+        ),
     )
     processos_conexos_mencionados: list[str] = Field(
         default_factory=list,
-        description="CNJs (formatados ou raw) mencionados no texto",
+        description="CNJs (formato 7-2.4.1.2.4 ou 20 digitos) mencionados literalmente no texto.",
     )
     confianca: float = Field(
         default=0.7,
         ge=0.0, le=1.0,
-        description="Confianca do LLM nesta classificacao (0-1)",
+        description=(
+            "Confianca do LLM nesta classificacao (0-1). "
+            "0.9+ se ha doc anexo com decisao clara. "
+            "0.7-0.8 se snippet detalhado sem doc. "
+            "0.5-0.7 se snippet generico com fallback context. "
+            "<0.5 se ruidoso sem nada mais OU se nao identificou polo do Tomador."
+        ),
     )
 
 
