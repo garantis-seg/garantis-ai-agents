@@ -30,7 +30,21 @@ from .schemas import (
 # Bump quando alterar build_merito_synthesis_prompt OU MeritoSynthesisCard
 # schema. Sufixo `-{tipo}` via _prompt_version_for() rastreia variant em
 # leads.engine_llm_calls.
-PROMPT_VERSION_BASE = "merito_synthesis.v1.1"
+#
+# v2.1 (2026-05-25, P1+P2 do prompt-engineering FINDINGS):
+#   - Reativado response_schema=MeritoSynthesisCard em agent.py (depois que
+#     schema foi reformatado pra eliminar dict[str, Any] que causava
+#     additionalProperties bug). BreakdownProcesso + CardsIndexCount substituem
+#     legacy dict.
+#   - Optional[str] enum apertados pra Literal[...] strict (lição L2 v2.1 —
+#     evita loop infinito do decoder Gemini com response_schema).
+#   - Removido bloco _build_output_schema (=== FORMATO DE SAIDA ===) — Output
+#     enforced via response_schema nativo. Enriquecidas Field(description) em
+#     schemas.py com semantica que vivia no prompt (risco, justificativa, etc).
+#   - L3 ja tinha _build_glossary_roles + _build_consistency_check NO TOPO —
+#     ordem ja seguia a metodologia P2. Adicionado _build_lembrete_final como
+#     recency anchor pras 3 regras criticas.
+PROMPT_VERSION_BASE = "merito_synthesis.v2.1"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -493,52 +507,25 @@ def _build_field_instructions() -> str:
     ref = processo_numero, mov_id, cda_number, cnpj_basico, etc."""
 
 
-def _build_output_schema(req: MeritoSynthesisRequest) -> str:
-    """Template JSON de saida. Schema unificado — variants nao mudam aqui."""
-    return f"""=== FORMATO DE SAIDA ===
+def _build_lembrete_final(req: MeritoSynthesisRequest) -> str:
+    """Recency anchor no fim do prompt — combate Lost-in-the-Middle.
 
-Retorne APENAS JSON valido:
+    v2.1: substitui _build_output_schema legacy (FORMATO DE SAIDA duplicava
+    o que response_schema=MeritoSynthesisCard ja enforça nativamente).
+    Reforça as 3 regras criticas que devem governar a decisao final.
+    """
+    return f"""<lembrete_final>
+Antes de emitir risco final, confirme:
+1. Polos identificados? Tomador eh quem? (releia GLOSSARIO ROLES no topo).
+2. Consistency check OK? Argumentos pro-Alto exigem risco=Alto/Altissimo
+   (releia CONSISTENCY CHECK no topo).
+3. Default = Baixo. Subida requer sinal explicito citando CNJ + evento
+   concreto + bullet da escala (REGRA JUSTIFIQUE A SUBIDA).
 
-{{
-  "merito_id": {req.merito_id},
-  "merito_context": "{req.merito_context}",
-  "risco": "Baixo|Medio|Alto|Altissimo",
-  "justificativa": "...",
-  "narrativa_executiva": "...",
-  "decisao_atual": {{
-    "sentido": null,
-    "instancia": null,
-    "natureza": null,
-    "data": null,
-    "processo_de_origem": null,
-    "transito_certificado": false,
-    "recorrida": false
-  }},
-  "ciclo_garantia": [],
-  "valor_em_disputa_melhor_evidencia": null,
-  "valor_garantia_melhor_evidencia": null,
-  "peca_pivo_merito": {{
-    "processo_numero": null,
-    "mov_id": null,
-    "data": null,
-    "motivo": null
-  }},
-  "proximos_passos_provaveis": [],
-  "probabilidade_exito_merito": {{
-    "classificacao_agregada": "provavel|possivel|poucas_chances|remota",
-    "score_agregado": 0.7,
-    "metodo_agregacao": "media_ponderada_valor_disputa",
-    "breakdown_por_processo": [
-      {{"processo_numero": "...", "role": "principal|conexo",
-        "classificacao": "...", "score": 0.7,
-        "peso_aplicado": 1.0, "valor_em_disputa": null}}
-    ],
-    "contribuicao_no_risco": "..."
-  }},
-  "confidence": 0.7,
-  "evidence_artifacts": [],
-  "cards_index": {{}}
-}}"""
+Output: JSON estruturado conforme schema MeritoSynthesisCard (enforced via
+response_schema do Gemini). merito_id={req.merito_id}, merito_context=
+'{req.merito_context}' devem ser echo do input.
+</lembrete_final>"""
 
 
 # ─── Variant: ESCALA bullets (per tipo_judicial) ───────────────────────────
@@ -1295,7 +1282,7 @@ def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
         _build_snapshot_anterior_block(req),
         _build_protocolo_postura_default(),
         _build_rules(tipo),
-        _build_output_schema(req),
+        _build_lembrete_final(req),
     ]
     return "\n\n".join(p for p in parts if p) + "\n", _prompt_version_for(tipo)
 

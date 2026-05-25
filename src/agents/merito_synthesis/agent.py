@@ -48,16 +48,19 @@ async def classify_merito_synthesis(
     llm_provider = create_provider(provider)
     prompt, prompt_version = build_prompt_and_version(request)
 
-    # NOTA: response_schema dropado (Gemini Developer API rejeita
-    # additionalProperties gerado por dict no schema).
-    # response_mime_type='application/json' forca JSON output sem schema.
-    # Determinismo Bug 4 handoff: temperature=0.0 (era 0.1) + thinking_budget=0
-    # em gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
+    # v2.1: response_schema=MeritoSynthesisCard reativado depois que schema
+    # foi reformatado pra eliminar dict[str, Any] (causa do additionalProperties
+    # bug que tinha levado o response_schema a ser dropado). BreakdownProcesso
+    # + CardsIndexCount substituem os dict legacy. Optional[str] enum
+    # apertados pra Literal[...] strict pra evitar loop infinito decoder Gemini
+    # (lição L2 v2.1).
+    # Determinismo Bug 4 handoff: temperature=0.0 + thinking_budget=0 em
+    # gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt,
         model=model,
         temperature=0.0,
-        response_mime_type="application/json",
+        response_schema=MeritoSynthesisCard,
         thinking_budget=0,
     )
 

@@ -16,13 +16,21 @@ from pydantic import BaseModel, Field, field_validator
 class DecisaoAtual(BaseModel):
     """Decisao judicial atualmente vigente no merito (do processo mais relevante).
 
-    Literais afrouxados pra Optional[str] (LLM gera valores fora-da-lista
-    ocasionalmente).
+    v2.1: APERTADO pra Literal[...] depois que L2 demonstrou que Optional[str]
+    com response_schema causa loop infinito no decoder Gemini 2.5 Flash.
+    Comentario antigo dizia "afrouxado porque LLM gera fora-da-lista" — isso
+    era SEM response_schema. Com enforcement, Gemini respeita o enum.
     """
 
-    sentido: Optional[str] = None  # ideal: favoravel | desfavoravel | parcial | neutro
-    instancia: Optional[str] = None  # ideal: 1g | 2g | stj | stf
-    natureza: Optional[str] = None  # ideal: procedente | improcedente | parcialmente_procedente | extinto_sem_merito | homologatoria | interlocutoria
+    sentido: Optional[Literal["favoravel", "desfavoravel", "parcial", "neutro"]] = Field(
+        default=None,
+        description="Sentido DO PONTO DE VISTA DO TOMADOR (Tomador=devedor/executado).",
+    )
+    instancia: Optional[Literal["1g", "2g", "stj", "stf"]] = Field(default=None)
+    natureza: Optional[Literal[
+        "procedente", "improcedente", "parcialmente_procedente",
+        "extinto_sem_merito", "homologatoria", "interlocutoria",
+    ]] = Field(default=None)
     data: Optional[str] = Field(default=None, description="YYYY-MM-DD")
     processo_de_origem: Optional[str] = Field(
         default=None,
@@ -33,13 +41,24 @@ class DecisaoAtual(BaseModel):
 
 
 class CicloGarantiaEvent(BaseModel):
-    """1 evento cross-processo no ciclo da garantia/apolice neste merito."""
+    """1 evento cross-processo no ciclo da garantia/apolice neste merito.
+
+    v2.1: APERTADO pra Literal[...] (mesmo motivo de DecisaoAtual).
+    """
 
     data: Optional[str] = None
     processo_numero: Optional[str] = None
-    evento: Optional[str] = None  # ideal: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço
-    tipo_garantia: Optional[str] = None
-    status_pos: Optional[str] = None  # ideal: apresentado | aceito | recusado | levantado | substituido | nenhum
+    evento: Optional[Literal[
+        "apresentacao", "aceitacao", "recusa", "levantamento",
+        "substituicao", "reforço",
+    ]] = None
+    tipo_garantia: Optional[Literal[
+        "seguro_garantia", "fianca_bancaria", "carta_fianca",
+        "deposito_judicial", "penhora", "fiduciaria", "outras",
+    ]] = None
+    status_pos: Optional[Literal[
+        "apresentado", "aceito", "recusado", "levantado", "substituido", "nenhum",
+    ]] = None
     motivo_recusa: Optional[str] = None
 
 
@@ -67,6 +86,26 @@ class PecaPivoMerito(BaseModel):
         return str(v) if not isinstance(v, str) else v
 
 
+class BreakdownProcesso(BaseModel):
+    """Breakdown agregacao prob_exito por processo do merito.
+
+    Substitui o legacy list[dict[str, Any]] que Gemini rejeitava com
+    'additionalProperties is not supported' quando exposto via response_schema.
+    """
+
+    processo_numero: Optional[str] = Field(default=None, description="CNJ do processo.")
+    role: Optional[Literal["principal", "conexo"]] = Field(default=None)
+    classificacao: Optional[Literal[
+        "provavel", "possivel", "poucas_chances", "remota",
+    ]] = None
+    score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    peso_aplicado: Optional[float] = Field(
+        default=None,
+        description="Peso aplicado na agregacao (principal=1.0, conexo=0.5).",
+    )
+    valor_em_disputa: Optional[float] = None
+
+
 class ProbabilidadeExitoMerito(BaseModel):
     """Probabilidade de Exito agregada do merito (Matriz Daycoval).
 
@@ -76,11 +115,16 @@ class ProbabilidadeExitoMerito(BaseModel):
 
     Score numerico (0.0001 a 1.0) entra como FATOR no risco de acionamento
     da Camada 3. Inversao monotonica: prob_exito alta → risco baixo.
+
+    v2.1: APERTADO pra Literal[...] + breakdown_por_processo via Pydantic model
+    concreto (BreakdownProcesso) em vez de dict[str, Any].
     """
 
-    classificacao_agregada: Optional[str] = Field(
+    classificacao_agregada: Optional[Literal[
+        "provavel", "possivel", "poucas_chances", "remota",
+    ]] = Field(
         default=None,
-        description="Bucket equivalente ao score (provavel|possivel|poucas_chances|remota)",
+        description="Bucket equivalente ao score (provavel=1.0/possivel=0.7/poucas_chances=0.4/remota=0.0001).",
     )
     score_agregado: Optional[float] = Field(
         default=None,
@@ -91,9 +135,9 @@ class ProbabilidadeExitoMerito(BaseModel):
         default="media_ponderada_valor_disputa",
         description="Metodo usado (V1: media ponderada). Audit trail.",
     )
-    breakdown_por_processo: list[dict[str, Any]] = Field(
+    breakdown_por_processo: list[BreakdownProcesso] = Field(
         default_factory=list,
-        description="Lista de {processo_numero, role, classificacao, score, peso_aplicado, valor_em_disputa}",
+        description="Lista de breakdown por processo. Audit trail da agregacao.",
     )
     contribuicao_no_risco: Optional[str] = Field(
         default=None,
@@ -102,12 +146,36 @@ class ProbabilidadeExitoMerito(BaseModel):
 
 
 class EvidenceArtifact(BaseModel):
-    """Citacao de card consumido pra sustentar a sintese."""
+    """Citacao de card consumido pra sustentar a sintese.
 
-    kind: Optional[str] = None  # ideal: processo_synthesis | mov_factsheet | apolice | conexo | cda | aiim | tomador | merito
+    v2.1: APERTADO pra Literal[...] em kind/weight.
+    """
+
+    kind: Optional[Literal[
+        "processo_synthesis", "mov_factsheet", "apolice", "conexo",
+        "cda", "aiim", "tomador", "merito",
+    ]] = None
     ref: Optional[str] = Field(default=None, description="processo_numero, mov_id, merito_id, ou outro identificador")
     snippet: Optional[str] = Field(default=None, description="Trecho citado (~200 chars)")
-    weight: Optional[str] = None  # ideal: high | medium | low
+    weight: Optional[Literal["high", "medium", "low"]] = None
+
+
+class CardsIndexCount(BaseModel):
+    """Contagem de cards consumidos por kind.
+
+    Substitui dict[str, Any] (que gerava additionalProperties bug + Gemini
+    ocasionalmente retornava dict aninhado). Schema fixo com fields known.
+    Validator legacy em MeritoSynthesisCard ainda normaliza inputs legacy.
+    """
+
+    processo_synthesis: int = 0
+    cda: int = 0
+    aiim: int = 0
+    tomador: int = 0
+    jurisprudencia: int = 0
+    paradigmas: int = 0
+    apolice: int = 0
+    mov_factsheet: int = 0
 
 
 # ── Output card principal ─────────────────────────────────────────────────
@@ -125,17 +193,25 @@ class MeritoSynthesisCard(BaseModel):
     merito_context: Literal["monit_poletto", "global"] = "monit_poletto"
 
     # Output principal - risco + justificativa
-    risco: Optional[str] = Field(
+    risco: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo"]] = Field(
         default="Baixo",
-        description="Risco de acionamento da apolice no MERITO (Baixo|Medio|Alto|Altissimo)"
+        description=(
+            "Risco de acionamento da apolice no MERITO. Default = Baixo. So sobe pra "
+            "Medio/Alto/Altissimo com sinal explicito documentado (vide PROTOCOLO DE "
+            "RISCO BASE + ESCALA EXPLICITA no prompt). NUNCA usar Medio como zona-cinza."
+        ),
     )
     justificativa: Optional[str] = Field(
         default="",
-        description="2-4 paragrafos PT-BR citando evidencias dos cards consumidos"
+        description=(
+            "2-4 paragrafos PT-BR citando evidencias dos cards consumidos. "
+            "Paragrafo 1: estado factual. Paragrafo 2: aspectos suportivos. "
+            "Paragrafo 3: justificativa do nivel vs nivel adjacente. Cite IDs/CNJs."
+        ),
     )
     narrativa_executiva: Optional[str] = Field(
         default=None,
-        description="1 frase resumindo o estado do merito pro time comercial",
+        description="1 frase resumindo o estado do merito pro time comercial.",
     )
 
     # Estado
@@ -169,31 +245,45 @@ class MeritoSynthesisCard(BaseModel):
 
     # Trajetoria - computada externamente baseada em snapshot anterior
     # (LLM NAO preenche esses campos; orchestrator setta antes de persistir)
-    trajetoria: Optional[str] = None  # ideal: estavel | piorou | melhorou | primeira_classificacao
+    trajetoria: Optional[Literal[
+        "estavel", "piorou", "melhorou", "primeira_classificacao",
+    ]] = None
     trajetoria_motivo: Optional[str] = None
 
     # Meta
     confidence: float = Field(default=0.7, ge=0.0, le=1.0)
     evidence_artifacts: list[EvidenceArtifact] = Field(default_factory=list)
-    cards_index: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Contagem de cards consumidos por kind. Aceita Any porque "
-                    "Gemini ocasionalmente retorna dict aninhado ao inves de int "
-                    "(ex: {'processo_X': {'mov_factsheets': 12}}); validator "
-                    "normaliza pra int via _normalize_cards_index_value below.",
+    cards_index: CardsIndexCount = Field(
+        default_factory=CardsIndexCount,
+        description=(
+            "Contagem de cards consumidos por kind (schema fixo via CardsIndexCount). "
+            "Validator legacy normaliza dict aninhado (Gemini ocasionalmente retornava "
+            "{'processo_X': {'mov_factsheets': 12}}) somando os ints filhos."
+        ),
     )
 
     @field_validator("cards_index", mode="before")
     @classmethod
-    def _normalize_cards_index(cls, v: Any) -> dict[str, Any]:
+    def _normalize_cards_index(cls, v: Any) -> Any:
+        """Aceita dict legacy + normaliza pra CardsIndexCount.
+
+        Forma legacy: dict[str, Any] com keys dinamicos e values int|dict.
+        Pydantic constroi CardsIndexCount a partir desse dict (campos extras
+        sao ignorados; valores aninhados sao somados).
+        """
+        if v is None or isinstance(v, CardsIndexCount):
+            return v
         if not isinstance(v, dict):
             return {}
         out: dict[str, Any] = {}
+        # Filter pra keys conhecidos no CardsIndexCount + normaliza values
+        valid_keys = set(CardsIndexCount.model_fields.keys())
         for key, val in v.items():
+            if key not in valid_keys:
+                continue
             if isinstance(val, int):
                 out[key] = val
             elif isinstance(val, dict):
-                # Gemini retornou dict aninhado — somar valores int filhos
                 total = sum(x for x in val.values() if isinstance(x, int))
                 out[key] = total
             else:
