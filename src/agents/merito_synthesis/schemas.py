@@ -410,7 +410,17 @@ class MeritoSynthesisRequest(BaseModel):
     tomador: Optional[TomadorCardMin] = None
     cdas: list[CDACardMin] = Field(default_factory=list)
     aiims: list[AIIMCardMin] = Field(default_factory=list)
-    jurisprudencia: Optional[JurisprudenciaMin] = None
+    jurisprudencia: Optional[JurisprudenciaMin] = Field(
+        default=None,
+        description=(
+            "DEPRECATED v2.2: jurisprudencia migrada pra L2 (proposta L2-only) — "
+            "risco_processo_intermediario dos processo_syntheses JA absorveu o "
+            "sinal da juris via L2 prompt v2.2 regras J/J.1/J.2. Campo mantido "
+            "pra backward-compat do materializer (que ainda passa antigo); SUPRIMIDO "
+            "do prompt — LLM nao ve mais. Quando materializer L3 for atualizado "
+            "(prox refactor), este campo pode ser removido."
+        ),
+    )
     paradigmas: list[ParadigmaMin] = Field(default_factory=list)
 
     # Trajetoria (passado pelo orchestrator antes da call)

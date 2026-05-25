@@ -44,7 +44,20 @@ from .schemas import (
 #   - L3 ja tinha _build_glossary_roles + _build_consistency_check NO TOPO —
 #     ordem ja seguia a metodologia P2. Adicionado _build_lembrete_final como
 #     recency anchor pras 3 regras criticas.
-PROMPT_VERSION_BASE = "merito_synthesis.v2.1"
+#
+# v2.2 (2026-05-25, proposta L2-only jurisprudencia):
+#   - Jurisprudencia MIGRADA pra L2 (Opcao A: single source of truth).
+#   - Removido bloco _build_jurisprudencia_block do prompt.
+#   - Regras G/G.1/G.2 (que aplicavam juris hard) REMOVIDAS dos 4 variants
+#     _build_regras_ouro_{fiscal,trab,civel,misto}. L3 confia 100% em
+#     risco_processo_intermediario do L2 (que ja absorveu juris via
+#     regras J/J.1/J.2 do L2 prompt v2.2).
+#   - Removido `jurisprudencia` do MeritoSynthesisRequest (schema).
+#   - Paradigmas (_build_paradigmas_block) MANTIDOS — sao contexto NARRATIVO
+#     pra defender risco vs cliente cetico, nao regra de decisao.
+#   - Elimina double-counting: jurisprudencia pesava 2x (Matriz Daycoval
+#     implicito em L2 + regras G em L3).
+PROMPT_VERSION_BASE = "merito_synthesis.v2.2"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -351,25 +364,10 @@ def _build_tomador_block_section(req: MeritoSynthesisRequest) -> str:
 
 
 def _build_jurisprudencia_block(req: MeritoSynthesisRequest) -> str:
-    """Jurisprudencia da tese + glossario `resultado_majoritario`."""
-    jur_block = _summarize_jurisprudencia(req.jurisprudencia) if req.jurisprudencia else "  (sem jurisprudencia mapeada)"
-    return f"""=== JURISPRUDENCIA DA TESE ===
-  {jur_block}
-
-  Glossario `resultado_majoritario` (vigente desde 2026-05-25):
-  - pro_contribuinte_firmado: tese STF/STJ vinculante, favoravel ao Tomador (EMPURRA Baixo)
-  - pro_fazenda_firmado: tese STF/STJ vinculante, desfavoravel ao Tomador (EMPURRA Alto)
-  - oscilante: decisoes divididas entre turmas/instancias — sem majoritario claro
-    (NAO move risco; governado pelo estado da causa)
-  - pendente_julgamento_superior: tema afetado, aguarda STF/STJ
-    (estado atual domina, MAS narrativa deve citar julgamento pendente como risco prospectivo)
-  - tese_nova: sem historico significativo (governado pelo estado, baixa confianca)
-  - nao_classificada: catch-all generico, sem mapeamento juridico especifico
-    (governado pelo estado; FLAG na narrativa que falta tese canonica)
-
-  OBS: campo pode vir com multiplos valores comma-separated (string_agg de rows multiplas).
-  Considere o sinal mais forte na precedencia:
-  firmado > oscilante > pendente > tese_nova > nao_classificada."""
+    """DEPRECATED v2.2: jurisprudencia migrada pra L2 (proposta L2-only).
+    Funcao mantida pra backward-compat de imports. Retorna string vazia —
+    suprimida do prompt no `build_prompt_and_version`."""
+    return ""
 
 
 def _build_snapshot_anterior_block(req: MeritoSynthesisRequest) -> str:
@@ -893,43 +891,13 @@ def _build_regras_ouro_fiscal() -> str:
 {_REGRAS_AD_COMUM}
 {_REGRA_F_COMUM}
 
-G. REGRA DURA — TESE STF/STJ FIRMADA CONTRA TOMADOR PREVALECE SOBRE 1g FAVORAVEL:
-   Quando o conjunto:
-     (i)  jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
-          (tese STF/STJ transitada — repetitivo/repercussao geral), AND
-     (ii) prob_exito agregada = "remota" (Daycoval matriz), AND
-     (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
-           (apelacao/agravo/RE/REsp pendente),
-   ENTAO risco = "Alto" (NAO Medio).
-
-   Por que: tese firmada no STF/STJ vincula instancias inferiores pela ratio
-   decidendi. Sentenca 1g favoravel sera revertida em juizo de admissibilidade ou
-   no merito do recurso pela propria corte superior que ja decidiu o tema. O
-   efeito suspensivo de apelacao NAO neutraliza esse risco — apenas adia.
-   Acionamento da apolice fica praticamente certo no medio prazo (3-5 anos).
-
-   "Medio" SO se aplica nesse cenario se houver contrapeso EXPLICITO citado:
-   ex. modulacao temporal pela corte que protege o caso, distinguishing claro
-   nos autos, garantia em renovacao com seguradora muito forte (so isso pra
-   reduzir um patamar; nunca dois). Sem contrapeso explicito = Alto.
-
-   Casos paradigmaticos fiscais: CSLL Tema 372 STF (Lei 7.689/88), IRPJ Stock
-   Options Tema 1226 STJ, ICMS-ST repetitivo, qualquer tese pro_fazenda_firmado
-   julgada com modulacao restritiva.
-
-G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR:
-   'pro_contribuinte_firmado' eh vento de cauda forte: tese STF/STJ transitada
-   favoravel ao Tomador (ex: PIS-COFINS exclusao ICMS, Tema 69 STF). EMPURRA
-   risco pra Baixo mesmo se houver decisao 1g desfavoravel — reversao em
-   instancia superior eh provavel pela mesma ratio decidendi. Aplicar a mesma
-   logica de G em sentido inverso: sem contrapeso explicito = Baixo.
-
-G.2 PENDENTE JULGAMENTO SUPERIOR:
-   'pendente_julgamento_superior' (ex: DIFAL pre-LC 190/2022 ainda em afetacao)
-   NAO move risco diretamente — governado pelo estado atual da causa. Porem
-   REDUZIR confianca em 10-20% e CITAR EXPLICITAMENTE o julgamento pendente
-   na narrativa_executiva + justificativa como risco prospectivo. Cliente
-   precisa ouvir "ha um tema afetado que pode virar o jogo nos proximos meses".
+G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
+   Antes L3 aplicava regras G/G.1/G.2 sobre `jurisprudencia` recebida no
+   payload. v2.2: jurisprudencia migrada pra Camada 2 (regras J/J.1/J.2 do
+   prompt L2 v2.2). risco_processo_intermediario de cada processo JA absorveu
+   o sinal da juris. Confie nele.
+   NAO tente re-aplicar regras de juris aqui — double-counting destroi
+   coerencia entre L2 e L3.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (FISCAL):
    Padrao identificado em ~30 meritos do Monit Poletto Mai/2026: cenarios
@@ -981,52 +949,10 @@ def _build_regras_ouro_trabalhista() -> str:
 {_REGRAS_AD_COMUM}
 {_REGRA_F_COMUM}
 
-G. REGRA DURA — TESE TST/STF FIRMADA CONTRA TOMADOR PREVALECE SOBRE 1g FAVORAVEL:
-   Quando o conjunto:
-     (i)  jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
-          (no contexto trabalhista: tese desfavoravel ao empregador Tomador
-          — Sumula TST consolidada OU Tema STF de repercussao geral firmado
-          OU OJ SDI-1 firmada), AND
-     (ii) prob_exito agregada = "remota" (Daycoval matriz trabalhista), AND
-     (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
-           (recurso ordinario pra TRT pendente OU RR pendente),
-   ENTAO risco = "Alto" (NAO Medio).
-
-   Por que: Sumula TST consolidada vincula as Varas e os TRTs pela ratio
-   decidendi. Tema STF de repercussao geral vincula todo o Judiciario.
-   Sentenca 1g favoravel sera revertida em RR ou no acordao do TRT pela
-   mesma orientacao jurisprudencial firmada no TST/STF. O efeito suspensivo
-   do recurso ordinario NAO neutraliza esse risco — apenas adia.
-
-   "Medio" SO se aplica nesse cenario se houver contrapeso EXPLICITO citado:
-   ex. distinguishing claro nos autos (fato diverso do paradigma da Sumula),
-   modulacao temporal pelo TST/STF que protege o caso, garantia em renovacao
-   com seguradora muito forte. Sem contrapeso explicito = Alto.
-
-   Casos paradigmaticos trabalhistas: Tema 725 STF (Pejotizacao /
-   reconhecimento de vinculo), Tema 1118 STF (Terceirizacao em servico
-   essencial), Sumula 331 TST (Terceirizacao tipica), Sumula 363 TST
-   (responsabilidade subsidiaria por FGTS), OJ 191 SDI-1 TST (responsabilidade
-   solidaria em horas extras habituais).
-
-G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR:
-   'pro_contribuinte_firmado' (no contexto trabalhista: tese favoravel ao
-   empregador) eh vento de cauda forte. Tese STF/TST firmada que afasta
-   ou limita a responsabilidade do Tomador. EMPURRA risco pra Baixo mesmo
-   se houver decisao 1g desfavoravel — reversao em instancia superior eh
-   provavel pela mesma ratio decidendi. Sem contrapeso explicito = Baixo.
-
-   Exemplos: Tema 1046 STF (validade de norma coletiva flexibilizando
-   direitos), Sumulas TST de natureza pro-empregador firmadas, modulacoes
-   temporais do TST.
-
-G.2 PENDENTE JULGAMENTO SUPERIOR:
-   'pendente_julgamento_superior' (tema afetado pelo TST ou pelo STF em
-   repercussao geral) NAO move risco diretamente — governado pelo estado
-   atual da causa. Porem REDUZIR confianca em 10-20% e CITAR EXPLICITAMENTE
-   o julgamento pendente na narrativa_executiva + justificativa como risco
-   prospectivo. Cliente precisa ouvir "ha um tema afetado pelo TST/STF que
-   pode virar o jogo nos proximos meses".
+G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
+   Idem nota G da variant FISCAL. Sumulas TST / Temas STF trabalhistas agora
+   pesam direto em risco_processo_intermediario via L2 prompt v2.2 (regras
+   J/J.1/J.2). NAO re-aplicar aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (TRABALHISTA):
    Padrao analogo ao H fiscal mas adaptado pro contexto trabalhista:
@@ -1075,51 +1001,10 @@ def _build_regras_ouro_civel() -> str:
 {_REGRAS_AD_COMUM}
 {_REGRA_F_COMUM}
 
-G. REGRA DURA — TEMA REPETITIVO STJ OU SUMULA STJ FIRMADA CONTRA TOMADOR
-   PREVALECE SOBRE 1g FAVORAVEL:
-   Quando o conjunto:
-     (i)  jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
-          (no contexto civel: tese desfavoravel ao devedor Tomador — Tema
-          repetitivo STJ firmado OU Sumula STJ consolidada OU Tema STF de
-          repercussao geral firmado contra a posicao do Tomador), AND
-     (ii) prob_exito agregada = "remota" (Daycoval matriz civel), AND
-     (iii) decisao_vigente 1g favoravel ao Tomador SEM transito em julgado
-           (apelacao/agravo/REsp/RE pendente),
-   ENTAO risco = "Alto" (NAO Medio).
-
-   Por que: Tema repetitivo STJ vincula todos os juizes e tribunais pelo
-   sistema de precedentes (CPC art. 927). Sumula STJ consolidada produz
-   o mesmo efeito pratico. Sentenca 1g favoravel sera revertida em
-   instancia superior pela mesma ratio decidendi. Efeito suspensivo de
-   apelacao NAO neutraliza esse risco — apenas adia.
-
-   "Medio" SO se aplica nesse cenario se houver contrapeso EXPLICITO:
-   ex. distinguishing claro do paradigma do Tema/Sumula, modulacao
-   temporal pelo STJ/STF que protege o caso, garantia em renovacao com
-   seguradora muito forte. Sem contrapeso explicito = Alto.
-
-   Casos paradigmaticos civeis: Tema 1.061 STJ (revisao contratual
-   bancaria), Tema 1.075 STJ (responsabilidade civil objetiva em
-   acidente de consumo), Sumula 297 STJ (CDC aplica a relacoes
-   bancarias), Sumula 5/STJ (interpretacao de contrato em REsp),
-   qualquer Tema STF de repercussao geral firmado contrario ao Tomador.
-
-G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR:
-   'pro_contribuinte_firmado' (no contexto civel: tese favoravel ao
-   devedor) eh vento de cauda forte. Tema repetitivo STJ ou Sumula STJ
-   firmada pro Tomador, OU Sumula STF/STJ pro-consumidor (quando
-   Tomador eh consumidor). EMPURRA risco pra Baixo mesmo se houver
-   decisao 1g desfavoravel — reversao em instancia superior eh
-   provavel. Sem contrapeso explicito = Baixo.
-
-G.2 PENDENTE JULGAMENTO SUPERIOR:
-   'pendente_julgamento_superior' (tema afetado pelo STJ em repetitivo
-   ou pelo STF em repercussao geral) NAO move risco diretamente —
-   governado pelo estado atual da causa. Porem REDUZIR confianca em
-   10-20% e CITAR EXPLICITAMENTE o julgamento pendente na
-   narrativa_executiva + justificativa como risco prospectivo. Cliente
-   precisa ouvir "ha um tema afetado pelo STJ/STF que pode virar o
-   jogo nos proximos meses".
+G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
+   Idem nota G das outras variants. Temas repetitivos STJ / Sumulas STJ /
+   Temas STF cíveis agora pesam direto em risco_processo_intermediario via
+   L2 prompt v2.2 (regras J/J.1/J.2). NAO re-aplicar aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (CIVEL):
    Padrao analogo ao H fiscal mas adaptado pro contexto civel:
@@ -1179,34 +1064,11 @@ E. REGRA EXTRA PRA MERITO MISTO — CONFIDENCE REDUZIDO:
    envolve processos [fiscal e civel / trabalhista e civel / ...]
    — confidence reduzida por incerteza estrutural na agregacao".
 
-G. REGRA DURA — TESE FIRMADA CONTRA TOMADOR (regra condicional por tipo):
-   Aplique a regra DO TIPO ESPECIFICO do processo que carrega o sinal:
-   - Pra processo FISCAL: tese STF/STJ firmada (Tema 372 CSLL, Tema 1226
-     IRPJ Stock, ICMS-ST repetitivo) -> "Alto"
-   - Pra processo TRABALHISTA: Sumula TST consolidada OU Tema STF
-     trabalhista firmado (Tema 725 Pejotizacao, Sumula 331 Terceirizacao)
-     -> "Alto"
-   - Pra processo CIVEL: Tema repetitivo STJ OU Sumula STJ firmada contra
-     o Tomador -> "Alto"
-
-   Combinacao: se HA tese contraria firmada em QUALQUER processo do mérito
-   + prob_exito remota + 1g favoravel sem transito -> "Alto" (NAO Medio).
-
-   CITE explicitamente na narrativa qual processo (CNJ) carrega a tese
-   contraria e qual tese (Tema/Sumula). Sem essa citacao, fique em Medio
-   ou Baixo (sem evidencia).
-
-G.1 SINAL INVERSO — TESE FIRMADA PRO TOMADOR (regra condicional):
-   Tese firmada FAVORAVEL ao Tomador em QUALQUER processo do mérito
-   EMPURRA risco pra Baixo, mesmo com decisoes 1g desfavoraveis. Aplica
-   a mesma logica de G em sentido inverso, com vocabulario do tipo
-   especifico do processo.
-
-G.2 PENDENTE JULGAMENTO SUPERIOR:
-   'pendente_julgamento_superior' em qualquer processo do mérito NAO move
-   risco diretamente. REDUZIR confianca em 10-20% (adicional ao -0.10
-   da Regra E pra misto, totalizando -20%/30%) e CITAR EXPLICITAMENTE
-   o julgamento pendente como risco prospectivo.
+G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
+   Idem nota G das outras variants. Cada processo do mérito (mesmo em
+   mérito misto) carrega risco_processo_intermediario JA modulado pela
+   juris da sua tese via L2. Use a agregacao normal pelos N processos.
+   NAO re-aplicar regras de juris aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (MISTO):
    Quando o conjunto:
@@ -1277,7 +1139,7 @@ def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
         _build_cdas_block(req),
         _build_aiims_block(req),
         _build_tomador_block_section(req),
-        _build_jurisprudencia_block(req),
+        # v2.2: _build_jurisprudencia_block dropado (juris vive em L2 agora).
         _build_paradigmas_block(req),
         _build_snapshot_anterior_block(req),
         _build_protocolo_postura_default(),

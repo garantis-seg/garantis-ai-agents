@@ -517,6 +517,31 @@ def _build_tipo_specific_block(tipo: str | None) -> str:
     return _TIPO_RULES_CIVEL
 
 
+def _build_tese_juris_block(tj) -> str:
+    """Renderiza tese_jurisprudencia.
+
+    Quando null (proc sem merito_id OU tese sem mapping): retorna placeholder
+    'sem mapeamento' — engine v6 cai em Matriz Daycoval generica (fallback).
+    Aplicar regras J/J.1/J.2 SO quando ha resultado_majoritario.
+    """
+    if tj is None or not (tj.tese_nome or tj.tema_stj or tj.tema_stf or tj.resultado_majoritario):
+        return (
+            "(sem mapeamento de jurisprudencia — proc sem merito_id OU tese sem "
+            "tese_canonica_id resolvido. Engine cai em Matriz Daycoval generica "
+            "sem aplicar regras J/J.1/J.2.)"
+        )
+    parts = []
+    if tj.tese_nome:
+        parts.append(f"Tese: {tj.tese_nome}")
+    if tj.tema_stj:
+        parts.append(f"STJ Tema {tj.tema_stj}")
+    if tj.tema_stf:
+        parts.append(f"STF {tj.tema_stf}")
+    if tj.resultado_majoritario:
+        parts.append(f"resultado_majoritario: {tj.resultado_majoritario}")
+    return " | ".join(parts)
+
+
 def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     """Build prompt que agrega mov_factsheets + day_factsheets + apolice context + autos_raw_excerpt.
 
@@ -563,6 +588,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     monolith_block = _build_monolith_block(req)
     tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
+    tese_juris_block = _build_tese_juris_block(req.tese_jurisprudencia)
 
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
@@ -623,6 +649,63 @@ So eh 'neutro' quando a extincao foi POR FAVOR ao Tomador (homologacao de
 acordo, desistencia da Fazenda) — raras em Tomador-autor.
 </regra_extincao_tomador_autor>
 
+<regra_jurisprudencia>
+A jurisprudencia da tese canonica (campo tese_jurisprudencia abaixo, quando
+presente) eh INPUT DIRETO no risco_processo_intermediario. Substituiu o
+double-counting antigo (Matriz Daycoval implicito + regras G/G.1/G.2 em L3).
+
+GLOSSARIO `resultado_majoritario` (6 valores):
+- pro_contribuinte_firmado: tese STF/STJ vinculante FAVORAVEL ao Tomador
+  (vento de cauda forte — empurra Baixo)
+- pro_fazenda_firmado: tese STF/STJ vinculante DESFAVORAVEL ao Tomador
+  (vento contra forte — empurra Alto)
+- oscilante: decisoes divididas entre turmas/instancias — sem majoritario
+  claro (NAO move risco; governado pelo estado da causa)
+- pendente_julgamento_superior: tema afetado, aguarda STF/STJ (estado atual
+  domina, MAS cite julgamento pendente como risco prospectivo)
+- tese_nova: sem historico significativo (governado pelo estado, baixa confianca)
+- nao_classificada: catch-all generico, sem mapeamento juridico especifico
+  (governado pelo estado; FLAG na narrativa que falta tese canonica)
+
+NOTA: campo pode vir COMMA-SEPARATED (string_agg de rows multiplas). Considere
+o sinal mais forte na precedencia: firmado > oscilante > pendente > tese_nova
+> nao_classificada.
+
+REGRA J — TESE pro_fazenda_firmado PREVALECE SOBRE 1g FAVORAVEL:
+Quando o conjunto:
+  (i)   tese_jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
+        (tese STF/STJ transitada — repetitivo/repercussao geral), AND
+  (ii)  decisao_vigente 1g FAVORAVEL ao Tomador SEM transito (apelacao/agravo/
+        RE/REsp pendente),
+ENTAO risco_processo_intermediario = "Alto" (NAO Medio).
+
+Por que: tese firmada vincula instancias inferiores pela ratio decidendi.
+Sentenca 1g favoravel sera revertida em juizo de admissibilidade ou no
+merito do recurso. Efeito suspensivo de apelacao NAO neutraliza esse risco
+— apenas adia. Sem contrapeso explicito (modulacao temporal protegendo o
+caso, distinguishing claro, garantia em renovacao com seguradora forte) =
+Alto.
+
+REGRA J.1 — SINAL INVERSO (tese pro_contribuinte_firmado):
+'pro_contribuinte_firmado' eh vento de cauda forte (ex: PIS-COFINS Tema 69
+STF). EMPURRA risco_processo_intermediario pra BAIXO mesmo se houver decisao
+1g desfavoravel — reversao em instancia superior eh provavel pela mesma
+ratio decidendi. Sem contrapeso explicito = Baixo.
+
+REGRA J.2 — PENDENTE JULGAMENTO SUPERIOR:
+'pendente_julgamento_superior' NAO move risco diretamente — governado pelo
+estado atual da causa. Porem REDUZIR confianca em 10-20% e CITAR
+EXPLICITAMENTE o julgamento pendente no estado_processual como risco
+prospectivo.
+
+REGRA J.3 — Tomador-AUTOR vs Tomador-REU (sentido invertido):
+As regras J/J.1 acima assumem que sentido='favoravel' = Tomador GANHOU. Pra
+classes onde Tomador eh AUTOR (Anulatoria/MS/Embargos): procedente=favoravel
+ao Tomador, juris pro_contribuinte_firmado eh aliada. Pra classes onde
+Tomador eh REU (EF, Cumprimento): improcedente=favoravel ao Tomador, mesma
+logica via <regra_polos>.
+</regra_jurisprudencia>
+
 </regras_criticas>
 
 === PROCESSO ===
@@ -648,6 +731,9 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
 
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{monolith_block}
+
+=== JURISPRUDENCIA DA TESE (input direto pra risco_processo_intermediario) ===
+  {tese_juris_block}
 
 {tipo_specific_block}
 

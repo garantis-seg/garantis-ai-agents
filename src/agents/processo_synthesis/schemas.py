@@ -77,6 +77,33 @@ class LifecycleGarantiaEvent(BaseModel):
     motivo_recusa: Optional[str] = None
 
 
+class TeseJurisprudenciaMin(BaseModel):
+    """Jurisprudencia da tese canonica do processo.
+
+    Movida pra L2 em 2026-05-25 (proposta L2-only). Antes vivia so em L3 +
+    regras G/G.1/G.2 aplicavam la — gerava double-counting com Matriz Daycoval
+    (que ja modula prob_exito implicitamente via jurisprudência). Agora L2 ve
+    a juris diretamente + aplica G/G.1/G.2 no nivel do processo individual.
+    L3 NAO recebe mais juris (confia em risco_processo_intermediario do L2).
+    """
+
+    tese_nome: Optional[str] = Field(default=None, description="Nome canonico da tese.")
+    tema_stj: Optional[str] = Field(default=None, description="Numero do Tema STJ (se houver).")
+    tema_stf: Optional[str] = Field(default=None, description="Numero do Tema STF / Repercussao Geral (se houver).")
+    resultado_majoritario: Optional[str] = Field(
+        default=None,
+        description=(
+            "Resultado majoritario da jurisprudencia. Valores possiveis (comma-separated): "
+            "'pro_contribuinte_firmado' (tese STF/STJ vinculante favoravel ao Tomador, empurra Baixo) | "
+            "'pro_fazenda_firmado' (tese vinculante desfavoravel ao Tomador, empurra Alto) | "
+            "'oscilante' (decisoes divididas — nao move risco) | "
+            "'pendente_julgamento_superior' (tema afetado, aguarda STF/STJ) | "
+            "'tese_nova' (sem historico, baixa confianca) | "
+            "'nao_classificada' (catch-all generico)."
+        ),
+    )
+
+
 class EvidenceArtifact(BaseModel):
     """Citacao de factsheet/autos que sustenta a sintese L2.
 
@@ -379,6 +406,17 @@ class ProcessoSynthesisRequest(BaseModel):
                     "Quando present, substitui o legacy autos_raw_excerpt + documents_dos_autos.",
     )
     apolices: list[ApoliceContextMin] = Field(default_factory=list)
+    tese_jurisprudencia: Optional[TeseJurisprudenciaMin] = Field(
+        default=None,
+        description=(
+            "Jurisprudencia da tese canonica do merito ao qual este processo pertence. "
+            "Resolvido upstream (materializer L2) via processos.merito_id -> "
+            "meritos.tese_canonica_id -> ref.tese_jurisprudencia. "
+            "null quando processo sem merito_id ou tese sem mapping. "
+            "Em 2026-05-25 movido de L3 pra L2 — agora SINAL da juris pesa "
+            "risco_processo_intermediario direto, sem double-counting com Matriz Daycoval."
+        ),
+    )
     model: Optional[str] = None
     provider: Optional[str] = None
 

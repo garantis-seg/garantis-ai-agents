@@ -41,7 +41,17 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #     (sao contextuais por bucket, nao competem com regras universais).
 #   - REGRA G ESTABILIDADE TEMPORAL mantida em REGRAS DE OURO (mais tecnica,
 #     ligada ao campo decisao_vigente — nao precisa estar no topo).
-PROMPT_VERSION = "processo_synthesis.v2.1"
+#
+# v2.2 (2026-05-25, proposta L2-only jurisprudencia):
+#   - Adicionado campo tese_jurisprudencia no Request (movido de L3 pra L2).
+#   - Prompt ganhou bloco <regra_jurisprudencia> dentro de <regras_criticas>
+#     no topo + glossario 6 valores resultado_majoritario + REGRAS J/J.1/J.2
+#     (adaptadas das G/G.1/G.2 de L3 pro contexto SINGLE processo, modulando
+#     risco_processo_intermediario em vez de risco merito agregado).
+#   - L3 perdeu juris no payload (Opcao A: single source of truth em L2).
+#   - Elimina double-counting: jurisprudencia pesava 2x antes (Matriz Daycoval
+#     implicito em L2 + regras G/G.1/G.2 explicitas em L3).
+PROMPT_VERSION = "processo_synthesis.v2.2"
 
 
 async def classify_processo_synthesis(
