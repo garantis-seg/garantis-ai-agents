@@ -20,6 +20,7 @@ from .schemas import (
     CDACardMin,
     JurisprudenciaMin,
     MeritoSynthesisRequest,
+    ParadigmaMin,
     PreviousSnapshot,
     ProcessoSynthesisMin,
     TomadorCardMin,
@@ -360,6 +361,40 @@ def _build_jurisprudencia_block(req: MeritoSynthesisRequest) -> str:
 def _build_snapshot_anterior_block(req: MeritoSynthesisRequest) -> str:
     prev_block = _summarize_previous(req.previous_snapshot)
     return f"=== SNAPSHOT ANTERIOR (referencia historica — engine v6 nao usa hoje pra trajetoria; informativo) ===\n{prev_block}"
+
+
+def _format_paradigma(p: ParadigmaMin) -> str:
+    """Formato: '{tribunal} {instancia} ({data}) - {sentido} - {ementa[:200]} | Rel. {relator}'."""
+    ementa = (p.ementa_resumo or "")[:200] or "(sem ementa)"
+    chunks = [p.tribunal or "?"]
+    if p.instancia:
+        chunks.append(p.instancia)
+    if p.data_decisao:
+        chunks.append(f"({p.data_decisao})")
+    chunks.append("-")
+    chunks.append(p.sentido or "?")
+    chunks.append("-")
+    chunks.append(ementa)
+    if p.relator:
+        chunks.append(f"| Rel. {p.relator}")
+    return "  - " + " ".join(chunks)
+
+
+def _build_paradigmas_block(req: MeritoSynthesisRequest) -> str:
+    """Acordaos/sentencas firmes da tese (ref.tese_decisao_individual WHERE
+    eh_paradigma=TRUE).
+
+    Pre-filtrados por tese_canonica_id — tipo-consistent (tese determina tipo
+    judicial), entao mesmo bloco vale pra todas as variants fiscal/trab/civel.
+    Quando vazio (tese sem paradigmas curados), retorna '' e bloco eh suprimido
+    no join. Asymetrico vs outros _build_*_block (que renderizam '(sem X)'
+    placeholder) — paradigmas eh prompt-only e nao informativo quando vazio,
+    so polui contexto."""
+    if not req.paradigmas:
+        return ""
+    lines = ["=== DECISOES PARADIGMA DESTA TESE ==="]
+    lines.extend(_format_paradigma(p) for p in req.paradigmas)
+    return "\n".join(lines)
 
 
 def _build_protocolo_postura_default() -> str:
@@ -1256,12 +1291,13 @@ def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
         _build_aiims_block(req),
         _build_tomador_block_section(req),
         _build_jurisprudencia_block(req),
+        _build_paradigmas_block(req),
         _build_snapshot_anterior_block(req),
         _build_protocolo_postura_default(),
         _build_rules(tipo),
         _build_output_schema(req),
     ]
-    return "\n\n".join(parts) + "\n", _prompt_version_for(tipo)
+    return "\n\n".join(p for p in parts if p) + "\n", _prompt_version_for(tipo)
 
 
 def build_merito_synthesis_prompt(req: MeritoSynthesisRequest) -> str:

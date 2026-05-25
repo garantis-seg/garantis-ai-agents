@@ -279,6 +279,26 @@ class JurisprudenciaMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
+class ParadigmaMin(BaseModel):
+    """Decisao paradigma da tese (1 row de ref.tese_decisao_individual).
+
+    Loaded quando eh_paradigma=TRUE pra ancorar narrativa L3 com exemplos
+    concretos (acordaos/sentencas firmes citaveis). Pre-filtrados por
+    tese_canonica_id — tipo-consistent.
+
+    `sentido` enum em DB: pro_contribuinte | pro_fazenda | dividida | outro.
+    Strings passadas raw pro prompt (LLM entende contexto)."""
+
+    tribunal: Optional[str] = None
+    instancia: Optional[str] = None
+    data_decisao: Optional[str] = None
+    sentido: Optional[str] = None
+    ementa_resumo: Optional[str] = None
+    relator: Optional[str] = None
+
+    model_config = {"extra": "ignore"}
+
+
 class PreviousSnapshot(BaseModel):
     """Snapshot anterior de risco do mesmo merito (pra computar trajetoria)."""
 
@@ -301,6 +321,7 @@ class MeritoSynthesisRequest(BaseModel):
     cdas: list[CDACardMin] = Field(default_factory=list)
     aiims: list[AIIMCardMin] = Field(default_factory=list)
     jurisprudencia: Optional[JurisprudenciaMin] = None
+    paradigmas: list[ParadigmaMin] = Field(default_factory=list)
 
     # Trajetoria (passado pelo orchestrator antes da call)
     previous_snapshot: Optional[PreviousSnapshot] = None
