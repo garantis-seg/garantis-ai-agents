@@ -424,6 +424,69 @@ DEFAULT = "Baixo". So sobe pra Medio/Alto/Altissimo com SINAL EXPLICITO
 documentado nos cards. NUNCA usar "Medio" como zona-cinza/cauteloso."""
 
 
+def _build_regras_anti_falso_alto() -> str:
+    """REGRAS DURAS contra falsos-positivos de subida de risco.
+
+    Adicionado 2026-05-25 apos mass cascade re-run regredir 62.4% -> 57.1%.
+    Diagnostico: 4 padroes principais empurrando risco pra cima sem motivo
+    real. Esta funcao cobre 2 dos 4 (extincao sem merito + termo de penhora).
+
+    Pluggada APOS _build_protocolo_postura_default + ANTES de _build_rules.
+    Aplica a TODOS os tipos (fiscal/trab/civel/misto).
+    """
+    return """=== REGRAS DURAS ANTI FALSO-POSITIVO (CRITICA) ===
+
+REGRA — EXTINCAO SEM MERITO eh PROCESSUAL, NAO move risco isoladamente:
+
+L1/L2 podem mandar decisao_vigente com natureza='extinto_sem_merito' E
+sentido='desfavoravel' quando o Tomador eh AUTOR (Tutela Cautelar,
+Anulatoria, MS, Embargos, Excecao Pre-Executividade, Rescisoria). Esse
+sinal eh CORRETO em nivel de carta (Tomador queria algo, processo
+extinto sem julgar merito = derrota processual).
+
+MAS pro RISCO DE ACIONAMENTO DA APOLICE no MERITO, extincao sem merito
+NAO move risco isoladamente. Razao: extincao sem merito NAO julga o
+conteudo da causa — eh processual. NAO consolida divida nem dispara
+acionamento da apolice por si so.
+
+REGRA DURA: quando o unico sinal "desfavoravel" no merito eh extincao
+sem merito (mesmo transitada), classifique risco como BAIXO. Considere
+risco superior APENAS se houver OUTROS sinais explicitos de merito
+desfavoravel:
+- Execucao Fiscal subsequente com penhora online EFETIVADA, OR
+- Acordao 2g de merito desfavoravel em processo conexo do mesmo merito, OR
+- Intimacao da seguradora pra pagamento ja deferida, OR
+- Transito em julgado de decisao DE MERITO desfavoravel (nao da extincao)
+
+Trate decisao_vigente.sentido='desfavoravel' + natureza='extinto_sem_merito'
+como sinal NEUTRO pra fins de classificacao do MERITO (mesmo que L2 marcou
+desfavoravel corretamente do ponto de vista da carta).
+
+REGRA — TERMO DE PENHORA != PENHORA EFETIVADA:
+
+"Termo de Penhora" no DJe pode ser:
+(a) Termo PROTOCOLAR/CARTORIAL — apenas registro de juntada de termo,
+    sem constricao efetiva. Comum em fases iniciais da execucao.
+(b) Termo de PENHORA EFETIVADA — constricao real, com bens/valores
+    bloqueados/sequestrados. Esse SIM eh gatilho de risco.
+
+Pra distinguir, busque na descricao da mov + docs anexados sinais de
+EFETIVACAO:
+- "valor bloqueado", "valor sequestrado", "transferencia pra conta judicial"
+- "indisponibilidade efetivada", "BACENJUD positivo", "SISBAJUD positivo"
+- "auto de penhora" com bem especifico descrito
+- "constricao judicial deferida E cumprida"
+
+Quando a mov diz APENAS "Juntada de Termo de Penhora" ou similar sem
+sinal de efetivacao, NAO trate como [ALTISSIMO] penhora online deferida.
+Trate como sinal protocolar = NAO move risco isoladamente.
+
+REGRA DURA: bullet "[ALTISSIMO] penhora online deferida" no escala
+fiscal/civel/trab exige EVIDENCIA EXPLICITA de efetivacao (valor
+bloqueado documentado, BACENJUD positivo, etc). Sem evidencia
+explicita, default Baixo."""
+
+
 def _build_justifique_subida() -> str:
     """REGRA DURA — JUSTIFIQUE A SUBIDA. Comum a todos os tipos."""
     return """REGRA DURA — JUSTIFIQUE A SUBIDA:
@@ -1143,6 +1206,7 @@ def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
         _build_paradigmas_block(req),
         _build_snapshot_anterior_block(req),
         _build_protocolo_postura_default(),
+        _build_regras_anti_falso_alto(),
         _build_rules(tipo),
         _build_lembrete_final(req),
     ]
