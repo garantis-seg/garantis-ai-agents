@@ -57,7 +57,7 @@ from .schemas import (
 #     pra defender risco vs cliente cetico, nao regra de decisao.
 #   - Elimina double-counting: jurisprudencia pesava 2x (Matriz Daycoval
 #     implicito em L2 + regras G em L3).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.2"
+PROMPT_VERSION_BASE = "merito_synthesis.v2.3"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -422,6 +422,119 @@ imediato.
 
 DEFAULT = "Baixo". So sobe pra Medio/Alto/Altissimo com SINAL EXPLICITO
 documentado nos cards. NUNCA usar "Medio" como zona-cinza/cauteloso."""
+
+
+def _build_templates_poletto() -> str:
+    """TEMPLATES POLETTO canonicos — classificacao TEMPLATE-FIRST.
+
+    Adicionado v2.3 apos analise side-by-side de 83 justificativas unicas
+    Poletto (124 Baixo + 56 Medio + 55 Alto + 3 Altissimo) revelar que o
+    time Poletto classifica por TEMPLATES estruturais 2-D:
+    eixo 1 = fase processual (sem sentenca -> sentenca -> 2g -> transito ->
+    intimacao seguradora); eixo 2 = direcao (favoravel/desfavoravel Tomador).
+
+    L3 estava fazendo raciocinio livre sobre detalhes isolados (termo
+    penhora, prob_exito=remota, interlocutoria) e perdendo o TEMPLATE
+    estrutural. Pilot 30 acc 20% sem template lookup.
+
+    Estrategia: lookup-first com escape pra raciocinio livre se nenhum
+    template casar."""
+    return """=== TEMPLATE-FIRST POLETTO (PASSO 1 — TENTAR ANTES DE RACIOCINIO LIVRE) ===
+
+REGRA DE OURO: o time Poletto classifica risco por TEMPLATES estruturais
+2-D (fase processual + direcao do resultado). Antes de raciocinar livre
+sobre detalhes, tente classificar este merito em UM dos 9 templates abaixo.
+Se MATCH claro -> use o risco do template e cite o ID na justificativa.
+Se NENHUM match -> caia no raciocinio livre (PROTOCOLO RISCO BASE Default
+Baixo + sinais explicitos pra subir).
+
+────────────────────────────────────────────────────────────────────────
+T-B1 [BAIXO] — Apolice em fase pre-decisao 1g (apresentada/aceita SEM
+sentenca de merito ainda):
+  - Execucao Fiscal com Embargos a Execucao SEM decisao de 1a instancia
+    (Embargos opostos, prazo em curso, ou tramitando sem julgamento)
+  - Acao Anulatoria/Mandado de Seguranca SEM sentenca
+  - Cumprimento (Definitivo ou Provisorio) de Sentenca para apresentacao
+    de embargos a execucao SEM decisao 1g
+  - Execucao de Titulo Extrajudicial SEM decisao 1g sobre embargos
+  - Acao Civil Publica SEM sentenca
+  - EF com prazo em curso pra opor Embargos (Embargos ainda nao distribuidos)
+
+T-B2 [BAIXO] — Apolice + DECISAO FAVORAVEL ao Tomador (mesmo SEM transito):
+  - EF com Embargos julgados TOTALMENTE procedentes (sentenca ou acordao)
+  - Anulatoria/MS com sentenca/acordao FAVORAVEL ao Tomador
+  - EF SUSPENSA aguardando Anulatoria/MS com resultado FAVORAVEL ao Tomador
+  - Anulatoria/MS com resultado favoravel ainda nao transitado
+  - Cumprimento de Sentenca com sentenca favoravel ao Tomador
+  - Sentenca parcialmente procedente ao Tomador determinando suspensao
+
+T-B3 [BAIXO] — Estado pre-aceitacao da apolice:
+  - "Aguarda-se a aceitacao da apolice" (estado inicial)
+  - "Aguarda-se a decisao sobre a aceitacao da apolice"
+  - Tutela cautelar extinta porque EF foi ajuizada (transicao tutela -> EF
+    eh fluxo normal, nao desfavoravel)
+
+T-B4 [BAIXO] — Caso resolvido por outra via:
+  - EF EXTINTA por pagamento, parcelamento, ou anulacao do debito
+  - Tomador informou pagamento integral, aguardando extincao
+  - Adimplido o parcelamento, aguarda manifestacao do exequente
+  - Tomador em Recuperacao Judicial com autos SUSPENSOS por isso
+  - Nao localizada apolice da Seguradora no processo (sem risco de
+    acionamento mesmo havendo decisao adversa, porque nao ha apolice viva)
+
+────────────────────────────────────────────────────────────────────────
+T-M1 [MEDIO] — Sentenca DESFAVORAVEL ao Tomador em 1g + recurso/prazo
+pendente (NAO chegou em 2g ainda):
+  - EF com Embargos julgados improcedentes (ou parcialmente) + prazo em
+    curso pra recorrer da sentenca
+  - EF com Embargos improcedentes + apelacao PENDENTE de julgamento
+  - Anulatoria/MS com sentenca desfavoravel + apelacao pendente
+  - EF SUSPENSA aguardando Anulatoria/MS com sentenca desfavoravel + apelacao
+  - Cumprimento de Sentenca com embargos a execucao improcedentes +
+    recursos pendentes
+
+T-M2 [MEDIO] — Acordo de parcelamento Tomador <-> Segurado em curso:
+  - Execucao suspensa aguardando cumprimento de acordo
+  - Exigibilidade suspensa por parcelamento em cumprimento
+
+────────────────────────────────────────────────────────────────────────
+T-A1 [ALTO] — 2a INSTANCIA confirmou decisao DESFAVORAVEL ao Tomador,
+SEM transito em julgado ainda:
+  - EF com Embargos improcedentes + 2a instancia confirmou (sem transito)
+  - EF SUSPENSA aguardando Anulatoria/MS com sentenca desfavoravel
+    MANTIDA em 2g (sem transito)
+  - Cumprimento de Sentenca com acordao desfavoravel nos embargos +
+    recursos pendentes (REsp/RE)
+  - Apolice em Cumprimento Provisorio com acordao desfavoravel nos embargos
+
+T-A2 [ALTO] — TRANSITO EM JULGADO desfavoravel ao Tomador, SEM intimacao
+formal da Seguradora ainda:
+  - EF com Embargos improcedentes + transito em julgado desfavoravel
+    (Tomador ainda NAO intimado pra pagamento)
+  - Anulatoria/MS com sentenca desfavoravel transitada
+  - Cumprimento de Sentenca com acordao desfavoravel transitado
+
+────────────────────────────────────────────────────────────────────────
+T-AA1 [ALTISSIMO] — Transito desfavoravel + Exequente PETICIONOU intimando
+a Seguradora pra pagar (e/ou ja intimou):
+  - EF + Embargos improcedentes + 2g desfavoravel transitada + Peticao
+    do Exequente requerendo INTIMACAO DA SEGURADORA pra pagamento
+  - Tomador intimado pra pagamento, sem manifestacao
+
+────────────────────────────────────────────────────────────────────────
+ESCAPE — quando IGNORAR o template:
+  - Penhora online EFETIVADA com valor bloqueado documentado (BACENJUD
+    positivo, "valor sequestrado" explicito) num caso classificado T-B*:
+    suba pra Alto.
+  - Recurso com efeito SUSPENSIVO atribuido em caso T-A2: desca pra Medio
+    (a constricao esta sustada).
+  - Tomador-autor em Tutela Cautelar com extincao sem merito ISOLADA (sem
+    EF subsequente): trate como T-B3 (aguarda aceitacao).
+
+OUTPUT: na justificativa, cite o template (ex: "Classificacao Poletto T-B1:
+apolice apresentada em Anulatoria sem sentenca de 1g"). Se nenhum template
+casar, escreva "[sem match com template Poletto]" e prossiga com
+raciocinio livre."""
 
 
 def _build_regras_anti_falso_alto() -> str:
@@ -1206,6 +1319,7 @@ def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
         _build_paradigmas_block(req),
         _build_snapshot_anterior_block(req),
         _build_protocolo_postura_default(),
+        _build_templates_poletto(),
         _build_regras_anti_falso_alto(),
         _build_rules(tipo),
         _build_lembrete_final(req),
