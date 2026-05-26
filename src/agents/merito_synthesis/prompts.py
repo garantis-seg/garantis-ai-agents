@@ -57,7 +57,7 @@ from .schemas import (
 #     pra defender risco vs cliente cetico, nao regra de decisao.
 #   - Elimina double-counting: jurisprudencia pesava 2x (Matriz Daycoval
 #     implicito em L2 + regras G em L3).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.3"
+PROMPT_VERSION_BASE = "merito_synthesis.v2.4"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -535,6 +535,52 @@ OUTPUT: na justificativa, cite o template (ex: "Classificacao Poletto T-B1:
 apolice apresentada em Anulatoria sem sentenca de 1g"). Se nenhum template
 casar, escreva "[sem match com template Poletto]" e prossiga com
 raciocinio livre."""
+
+
+def _build_bloqueio_prob_exito() -> str:
+    """REGRA v2.4: bloqueia `probabilidade_exito` da L2 como sinal de risco.
+
+    Cards L3 v2.3 mostraram L3 citando "prob_exito=remota / score 0.0001"
+    pra subir risco pra Alto em casos que Poletto classificou Baixo
+    (m=90 ENERGISA, m=122 ATACADAO). Esse sinal vem da L2 que computa
+    com base na MATRIZ DAYCOVAL (corretora atual, conservadora por design).
+
+    Poletto eh corretora NOVA, com criterio diferente. Usar prob_exito
+    Daycoval como input ao classificar vs Poletto = viesar TODA classificacao
+    pra ser-mais-Daycoval. Bloquear esse sinal recupera autonomia do L3 pra
+    seguir templates + regras processuais explicitas.
+
+    Pluggada ANTES de _build_templates_poletto (ordem importa — sinal
+    bloqueado precisa estar fora antes do lookup).
+    """
+    return """=== BLOQUEIO DE SINAL Daycoval-residual (CRITICA — v2.4) ===
+
+A L2 pode te entregar campos como `probabilidade_exito` (com valores tipo
+'remota', 'possivel', 'provavel', 'pacifica') ou `score` numerico de 0 a 1.
+Esses campos vem da MATRIZ DAYCOVAL — a corretora ATUAL (em substituicao),
+historicamente conservadora.
+
+REGRA DURA: IGNORE COMPLETAMENTE `probabilidade_exito` e qualquer `score`
+agregado da L2 ao decidir risco. Sao INPUTS CONTEXTUAIS de outro avaliador,
+NAO evidencia processual.
+
+Razao: o gold padrao deste sistema eh a corretora NOVA (Poletto). Usar
+Daycoval-derived signals = enviesar a classificacao pra ser-mais-Daycoval,
+contrariando o objetivo.
+
+VOCE CLASSIFICA RISCO USANDO APENAS:
+1. FASE PROCESSUAL (sem sentenca / sentenca 1g / 2g / transito / intimacao
+   seguradora) — eixo dominante (templates T-B* / T-M* / T-A* / T-AA*)
+2. DIRECAO DE DECISAO de MERITO explicita nos cards de mov
+   (sentenca_favoravel_tomador, sentenca_desfavoravel_tomador, acordao_*)
+3. SINAIS PROCESSUAIS EFETIVOS documentados (penhora online com
+   `valor_bloqueado`, intimacao formal da seguradora, etc)
+
+Se a justificativa que voce escreveria contem a expressao "probabilidade
+de exito remota" / "score X" / "tese desfavoravel pela jurisprudencia" /
+"matriz Daycoval" como motivo de subida — RESCRAVA sem esse motivo. Se
+sem ele a subida nao se justifica por (1)+(2)+(3) acima, classifique como
+o template ou raciocinio livre indicariam (default Baixo)."""
 
 
 def _build_regras_anti_falso_alto() -> str:
@@ -1319,6 +1365,7 @@ def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
         _build_paradigmas_block(req),
         _build_snapshot_anterior_block(req),
         _build_protocolo_postura_default(),
+        _build_bloqueio_prob_exito(),
         _build_templates_poletto(),
         _build_regras_anti_falso_alto(),
         _build_rules(tipo),
