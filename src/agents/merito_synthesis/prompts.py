@@ -12,6 +12,7 @@ Padrao arquitetural: ver memory `engine-v6-prompt-modular-pattern`.
 """
 
 import json
+import os
 from collections import Counter
 from typing import Literal
 
@@ -25,6 +26,18 @@ from .schemas import (
     ProcessoSynthesisMin,
     TomadorCardMin,
 )
+
+
+def _flag_enabled(name: str, default: str = "true") -> bool:
+    """Le env var como bool (default ON). Usado pra feature flags E4/E5/E7
+    no L3 prompt assembly — permite isolar contribuicao de cada bloco DS
+    em A/B testing sem code change.
+
+    Default ON preserva comportamento atual; setar FLAG=false desliga o
+    bloco no prompt. Reads em modulo init time (env vars sao estaticas
+    durante lifetime do container Cloud Run; restart pra rotacionar).
+    """
+    return os.environ.get(name, default).strip().lower() in {"true", "1", "yes", "on"}
 
 
 # Bump quando alterar build_merito_synthesis_prompt OU MeritoSynthesisCard
@@ -401,7 +414,12 @@ def _build_paradigmas_block(req: MeritoSynthesisRequest) -> str:
     Quando vazio (tese sem paradigmas curados), retorna '' e bloco eh suprimido
     no join. Asymetrico vs outros _build_*_block (que renderizam '(sem X)'
     placeholder) — paradigmas eh prompt-only e nao informativo quando vazio,
-    so polui contexto."""
+    so polui contexto.
+
+    Flag E7 PARADIGMAS_BLOCK_ENABLED (default ON): set false pra desligar
+    o bloco em A/B test sem code change."""
+    if not _flag_enabled("PARADIGMAS_BLOCK_ENABLED"):
+        return ""
     if not req.paradigmas:
         return ""
     lines = ["=== DECISOES PARADIGMA DESTA TESE ==="]
@@ -438,7 +456,13 @@ def _build_templates_poletto() -> str:
     estrutural. Pilot 30 acc 20% sem template lookup.
 
     Estrategia: lookup-first com escape pra raciocinio livre se nenhum
-    template casar."""
+    template casar.
+
+    Flag E4 TEMPLATES_POLETTO_ENABLED (default ON): set false pra reverter
+    v2.3 em A/B test sem code change.
+    """
+    if not _flag_enabled("TEMPLATES_POLETTO_ENABLED"):
+        return ""
     return """=== TEMPLATE-FIRST POLETTO (PASSO 1 — TENTAR ANTES DE RACIOCINIO LIVRE) ===
 
 REGRA DE OURO: o time Poletto classifica risco por TEMPLATES estruturais
@@ -552,7 +576,12 @@ def _build_bloqueio_prob_exito() -> str:
 
     Pluggada ANTES de _build_templates_poletto (ordem importa — sinal
     bloqueado precisa estar fora antes do lookup).
+
+    Flag E5 BLOQUEIO_PROB_EXITO_ENABLED (default ON): set false pra reverter
+    v2.4 em A/B test sem code change.
     """
+    if not _flag_enabled("BLOQUEIO_PROB_EXITO_ENABLED"):
+        return ""
     return """=== BLOQUEIO DE SINAL Daycoval-residual (CRITICA — v2.4) ===
 
 A L2 pode te entregar campos como `probabilidade_exito` (com valores tipo

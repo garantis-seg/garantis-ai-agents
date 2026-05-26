@@ -15,9 +15,22 @@ REV3 2026-05-25 (P1+P2 do prompt-engineering FINDINGS — v2.1):
 """
 
 import json
+import os
 from typing import Any
 
 from .schemas import ApoliceContextMin, DayFactSheetMin, MovFactSheetMin, ProcessoSynthesisRequest
+
+
+def _flag_enabled(name: str, default: str = "true") -> bool:
+    """Le env var como bool (default ON). Usado pra feature flag E6
+    JURISPRUDENCIA_BLOCK_ENABLED no L2 prompt assembly — permite isolar
+    contribuicao da jurisprudencia DS em A/B test sem code change.
+
+    Default ON preserva v2.2 (juris L2-only). Setar
+    JURISPRUDENCIA_BLOCK_ENABLED=false desliga o bloco inteiro do prompt
+    (header + content). Reads em modulo init time.
+    """
+    return os.environ.get(name, default).strip().lower() in {"true", "1", "yes", "on"}
 
 
 _MAX_MOVS_INLINE = 50  # cap defensivo no input do prompt
@@ -588,7 +601,16 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     monolith_block = _build_monolith_block(req)
     tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
-    tese_juris_block = _build_tese_juris_block(req.tese_jurisprudencia)
+    # E6 flag JURISPRUDENCIA_BLOCK_ENABLED (default ON): quando off, suprime
+    # header + content da secao inteira (sem deixar header orfao no prompt).
+    # Quando on, mantem v2.2 layout exato: '=== JURISPRUDENCIA DA TESE ... ===\n  <body>\n'.
+    if _flag_enabled("JURISPRUDENCIA_BLOCK_ENABLED"):
+        tese_juris_section = (
+            "=== JURISPRUDENCIA DA TESE (input direto pra risco_processo_intermediario) ===\n"
+            f"  {_build_tese_juris_block(req.tese_jurisprudencia)}\n"
+        )
+    else:
+        tese_juris_section = ""
 
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
@@ -732,9 +754,7 @@ logica via <regra_polos>.
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{monolith_block}
 
-=== JURISPRUDENCIA DA TESE (input direto pra risco_processo_intermediario) ===
-  {tese_juris_block}
-
+{tese_juris_section}
 {tipo_specific_block}
 
 === INSTRUCOES POR CAMPO ===
