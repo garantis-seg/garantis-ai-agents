@@ -130,6 +130,13 @@ class DayDocInput(BaseModel):
     titulo: Optional[str] = None
     tipo: Optional[str] = None
     text_content: str = Field(description="Texto extraido cap'd upstream")
+    gcs_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "gs://bucket/path do PDF original. Consumido apenas quando "
+            "VISION_L1_ENABLED=true — agent lê PDF e passa pro Gemini Vision."
+        ),
+    )
 
     model_config = {"extra": "ignore"}
 

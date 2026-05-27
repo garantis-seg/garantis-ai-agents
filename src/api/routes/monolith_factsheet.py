@@ -32,6 +32,7 @@ async def classify_monolith_factsheet_endpoint(request: MonolithFactsheetRequest
             truncated=request.truncated,
             model=request.model,
             provider=request.provider or "gemini",
+            gcs_url=request.gcs_url,
         )
         card_data = result.get("card", {})
         if isinstance(card_data, dict) and "error" in card_data:

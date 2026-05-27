@@ -159,6 +159,14 @@ class MonolithFactsheetRequest(BaseModel):
     truncated: bool = False
     model: Optional[str] = None
     provider: Optional[str] = None
+    gcs_url: Optional[str] = Field(
+        default=None,
+        description=(
+            "gs://bucket/path do PDF monolitico. Consumido apenas quando "
+            "VISION_L1_ENABLED=true — agent lê PDF e passa pro Gemini Vision "
+            "em vez de serializar autos_text. Backwards-compatible (None OK)."
+        ),
+    )
 
 
 class MonolithFactsheetResponse(BaseModel):

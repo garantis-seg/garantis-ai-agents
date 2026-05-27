@@ -14,6 +14,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
+from .._utils import call_vision_l1, fetch_pdfs_from_gcs, flag_enabled
 from .prompts import build_monolith_factsheet_prompt
 from .schemas import (
     MonolithFactsheetCard,
@@ -26,9 +27,10 @@ logger = logging.getLogger(__name__)
 # Usado pra drift detection em leads.engine_llm_calls.prompt_version.
 PROMPT_VERSION = "monolith_factsheet.v1.0"
 
-# gemini-2.5-flash (nao lite) — sintese de PDF inteiro precisa mais qualidade
-# que mov-by-mov. Custo ainda baixo (~$0.001/proc).
-DEFAULT_MODEL = os.getenv("MONOLITH_FACTSHEET_MODEL", "gemini-2.5-flash")
+# Unificado pra flash-lite (2026-05-27) — apples-to-apples com mov_factsheet e
+# day_factsheet. Permite benchmark Vision vs Text mantendo modelo constante.
+# Override via env MONOLITH_FACTSHEET_MODEL preserva escape hatch.
+DEFAULT_MODEL = os.getenv("MONOLITH_FACTSHEET_MODEL", "gemini-2.5-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 
@@ -40,6 +42,7 @@ async def classify_monolith_factsheet(
     truncated: bool = False,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
+    gcs_url: Optional[str] = None,
 ) -> dict:
     """Extract a MonolithFactsheetCard sintetizando PDF monolitico.
 
@@ -76,12 +79,41 @@ async def classify_monolith_factsheet(
     llm_provider = create_provider(provider)
     prompt = build_monolith_factsheet_prompt(req)
 
-    response: LLMResponse = await llm_provider.agenerate(
-        prompt=prompt,
-        model=model,
-        temperature=0.0,
-        response_schema=MonolithFactsheetCard,
-    )
+    # Vision L1 path — análogo a mov/day factsheet.
+    vision_active = flag_enabled("VISION_L1_ENABLED") and bool(gcs_url)
+
+    response: LLMResponse
+    if vision_active:
+        pdf_bytes_list = await fetch_pdfs_from_gcs([gcs_url])  # type: ignore[list-item]
+        if pdf_bytes_list:
+            response = await call_vision_l1(
+                llm_provider,
+                model=model,
+                prompt=prompt,
+                pdf_bytes_list=pdf_bytes_list,
+                response_schema=MonolithFactsheetCard,
+                temperature=0.0,
+                thinking_budget=0,
+            )
+        else:
+            logger.warning(
+                "[VisionL1] cnj=%s: VISION_L1_ENABLED mas PDF não fetchado de %s; "
+                "fallback pra text-only",
+                processo.cnj, gcs_url,
+            )
+            response = await llm_provider.agenerate(
+                prompt=prompt,
+                model=model,
+                temperature=0.0,
+                response_schema=MonolithFactsheetCard,
+            )
+    else:
+        response = await llm_provider.agenerate(
+            prompt=prompt,
+            model=model,
+            temperature=0.0,
+            response_schema=MonolithFactsheetCard,
+        )
 
     raw_response = response.text
     try:
@@ -102,6 +134,10 @@ async def classify_monolith_factsheet(
         "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
         "model": model,
         "provider": provider,
+        "model_variant": (
+            response.metadata.get("model_variant", "text")
+            if response.metadata else "text"
+        ),
     }
 
     return {

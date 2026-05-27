@@ -12,6 +12,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
+from .._utils import call_vision_l1, fetch_pdfs_from_gcs, flag_enabled
 from .prompts import build_mov_factsheet_prompt
 from .schemas import (
     DocAnexado,
@@ -116,15 +117,50 @@ async def classify_mov_factsheet(
         fallback_context=fb_typed,
     )
 
-    response: LLMResponse = await llm_provider.agenerate(
-        prompt=prompt,
-        model=model,
-        temperature=0.0,
-        response_schema=MovFactSheetCard,
-        # Determinismo Bug 4 handoff: greedy strict + thinking OFF em gemini-2.5-*.
-        # Provider aplica top_p=1.0, top_k=1 automaticamente quando temperature=0.
-        thinking_budget=0,
-    )
+    # Vision L1 path (flag VISION_L1_ENABLED) — quando ON e ≥1 doc tem gcs_url,
+    # envia PDFs direto pro Gemini Vision em vez de serializar text_content no
+    # prompt. Telemetria: metadata.model_variant='vision' vs 'text'.
+    gcs_urls = [d.gcs_url for d in docs_typed if d.gcs_url]
+    vision_active = flag_enabled("VISION_L1_ENABLED") and len(gcs_urls) > 0
+
+    response: LLMResponse
+    if vision_active:
+        pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
+        if pdf_bytes_list:
+            response = await call_vision_l1(
+                llm_provider,
+                model=model,
+                prompt=prompt,
+                pdf_bytes_list=pdf_bytes_list,
+                response_schema=MovFactSheetCard,
+                temperature=0.0,
+                thinking_budget=0,
+            )
+        else:
+            # Fallback silent: nenhum PDF fetchável (todos URLs broken).
+            # Cai pro path text-only pra não falhar a cascade.
+            logger.warning(
+                "[VisionL1] mov_id=%s: VISION_L1_ENABLED mas 0 PDFs fetchados; "
+                "fallback pra text-only",
+                mov.mov_id,
+            )
+            response = await llm_provider.agenerate(
+                prompt=prompt,
+                model=model,
+                temperature=0.0,
+                response_schema=MovFactSheetCard,
+                thinking_budget=0,
+            )
+    else:
+        response = await llm_provider.agenerate(
+            prompt=prompt,
+            model=model,
+            temperature=0.0,
+            response_schema=MovFactSheetCard,
+            # Determinismo Bug 4 handoff: greedy strict + thinking OFF em gemini-2.5-*.
+            # Provider aplica top_p=1.0, top_k=1 automaticamente quando temperature=0.
+            thinking_budget=0,
+        )
 
     raw_response = response.text
     try:
@@ -148,6 +184,10 @@ async def classify_mov_factsheet(
         "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
         "model": model,
         "provider": provider,
+        "model_variant": (
+            response.metadata.get("model_variant", "text")
+            if response.metadata else "text"
+        ),
     }
 
     return {

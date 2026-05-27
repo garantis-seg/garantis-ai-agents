@@ -28,16 +28,16 @@ from .schemas import (
 )
 
 
-def _flag_enabled(name: str, default: str = "true") -> bool:
-    """Le env var como bool (default ON). Usado pra feature flags E4/E5/E7
-    no L3 prompt assembly — permite isolar contribuicao de cada bloco DS
-    em A/B testing sem code change.
+from .._utils import flag_enabled as _flag_enabled_shared
 
-    Default ON preserva comportamento atual; setar FLAG=false desliga o
-    bloco no prompt. Reads em modulo init time (env vars sao estaticas
-    durante lifetime do container Cloud Run; restart pra rotacionar).
+
+def _flag_enabled(name: str, default: str = "true") -> bool:
+    """Wrapper backward-compat com default ON pros flags E4-E7.
+
+    Helper canonical é `agents._utils.flag_enabled` (default OFF). Este wrapper
+    preserva o default ON usado nos flags Sprint 2 P&P.
     """
-    return os.environ.get(name, default).strip().lower() in {"true", "1", "yes", "on"}
+    return _flag_enabled_shared(name, default=default)
 
 
 # Bump quando alterar build_merito_synthesis_prompt OU MeritoSynthesisCard

@@ -13,6 +13,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
+from .._utils import call_vision_l1, fetch_pdfs_from_gcs, flag_enabled
 from .prompts import build_day_factsheet_prompt
 from .schemas import (
     DayDocInput,
@@ -23,8 +24,10 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-# gemini-2.5-flash (nao lite) pq correlacao multi-mov*multi-doc precisa mais qualidade
-DEFAULT_MODEL = os.getenv("DAY_FACTSHEET_MODEL", "gemini-2.5-flash")
+# Unificado pra flash-lite (2026-05-27) — apples-to-apples com mov_factsheet e
+# monolith_factsheet. Permite benchmark Vision vs Text mantendo modelo constante.
+# Override via env DAY_FACTSHEET_MODEL preserva escape hatch.
+DEFAULT_MODEL = os.getenv("DAY_FACTSHEET_MODEL", "gemini-2.5-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # Drift detection em leads.engine_llm_calls.prompt_version (P9).
@@ -76,12 +79,42 @@ async def classify_day_factsheet(
         docs_no_dia=docs_typed,
     )
 
-    response: LLMResponse = await llm_provider.agenerate(
-        prompt=prompt,
-        model=model,
-        temperature=0.0,
-        response_schema=DayFactsheetCard,
-    )
+    # Vision L1 path — análogo a mov_factsheet.
+    gcs_urls = [d.gcs_url for d in docs_typed if d.gcs_url]
+    vision_active = flag_enabled("VISION_L1_ENABLED") and len(gcs_urls) > 0
+
+    response: LLMResponse
+    if vision_active:
+        pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
+        if pdf_bytes_list:
+            response = await call_vision_l1(
+                llm_provider,
+                model=model,
+                prompt=prompt,
+                pdf_bytes_list=pdf_bytes_list,
+                response_schema=DayFactsheetCard,
+                temperature=0.0,
+                thinking_budget=0,
+            )
+        else:
+            logger.warning(
+                "[VisionL1] proc=%s date=%s: VISION_L1_ENABLED mas 0 PDFs fetchados; "
+                "fallback pra text-only",
+                processo.cnj, date,
+            )
+            response = await llm_provider.agenerate(
+                prompt=prompt,
+                model=model,
+                temperature=0.0,
+                response_schema=DayFactsheetCard,
+            )
+    else:
+        response = await llm_provider.agenerate(
+            prompt=prompt,
+            model=model,
+            temperature=0.0,
+            response_schema=DayFactsheetCard,
+        )
 
     raw_response = response.text
     try:
@@ -109,6 +142,10 @@ async def classify_day_factsheet(
         "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
         "model": model,
         "provider": provider,
+        "model_variant": (
+            response.metadata.get("model_variant", "text")
+            if response.metadata else "text"
+        ),
     }
 
     return {
