@@ -95,6 +95,9 @@ async def classify_merito_synthesis(
         "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
         "model": model,
         "provider": provider,
+        # L3 sempre text — não tem Vision path (consume cards L1/L2, não docs raw).
+        # Emite explícito pra observabilidade NULL vs deliberado em engine_llm_calls.
+        "model_variant": "text",
     }
 
     return {

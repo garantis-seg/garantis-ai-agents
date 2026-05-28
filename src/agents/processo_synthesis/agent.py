@@ -223,4 +223,6 @@ def _merge_usage(
         "model": model,
         "provider": provider,
         "calls": 2,
+        # L2 sempre text — não tem Vision path (consume cards L1, não docs raw).
+        "model_variant": "text",
     }
