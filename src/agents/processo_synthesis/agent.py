@@ -17,6 +17,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
+from .._utils import MODEL_VARIANT_TEXT
 from .prompts import build_probabilidade_exito_prompt, build_processo_synthesis_prompt
 from .schemas import ProbabilidadeExito, ProcessoSynthesisCard, ProcessoSynthesisRequest
 
@@ -224,5 +225,5 @@ def _merge_usage(
         "provider": provider,
         "calls": 2,
         # L2 sempre text — não tem Vision path (consume cards L1, não docs raw).
-        "model_variant": "text",
+        "model_variant": MODEL_VARIANT_TEXT,
     }

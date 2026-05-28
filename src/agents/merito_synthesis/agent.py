@@ -15,6 +15,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
+from .._utils import MODEL_VARIANT_TEXT
 from .prompts import build_prompt_and_version
 from .schemas import MeritoSynthesisCard, MeritoSynthesisRequest
 
@@ -96,8 +97,7 @@ async def classify_merito_synthesis(
         "model": model,
         "provider": provider,
         # L3 sempre text — não tem Vision path (consume cards L1/L2, não docs raw).
-        # Emite explícito pra observabilidade NULL vs deliberado em engine_llm_calls.
-        "model_variant": "text",
+        "model_variant": MODEL_VARIANT_TEXT,
     }
 
     return {

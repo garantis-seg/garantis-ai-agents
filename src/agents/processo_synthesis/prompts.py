@@ -21,16 +21,13 @@ from typing import Any
 from .schemas import ApoliceContextMin, DayFactSheetMin, MovFactSheetMin, ProcessoSynthesisRequest
 
 
-def _flag_enabled(name: str, default: str = "true") -> bool:
-    """Le env var como bool (default ON). Usado pra feature flag E6
-    JURISPRUDENCIA_BLOCK_ENABLED no L2 prompt assembly — permite isolar
-    contribuicao da jurisprudencia DS em A/B test sem code change.
+from .._utils import flag_enabled as _flag_enabled_shared
 
-    Default ON preserva v2.2 (juris L2-only). Setar
-    JURISPRUDENCIA_BLOCK_ENABLED=false desliga o bloco inteiro do prompt
-    (header + content). Reads em modulo init time.
-    """
-    return os.environ.get(name, default).strip().lower() in {"true", "1", "yes", "on"}
+
+def _flag_enabled(name: str, default: str = "true") -> bool:
+    """Wrapper backward-compat com default ON pra flag E6
+    JURISPRUDENCIA_BLOCK_ENABLED."""
+    return _flag_enabled_shared(name, default=default)
 
 
 _MAX_MOVS_INLINE = 50  # cap defensivo no input do prompt

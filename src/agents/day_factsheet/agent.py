@@ -13,7 +13,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
-from .._utils import call_vision_l1, fetch_pdfs_from_gcs, flag_enabled
+from .._utils import MODEL_VARIANT_TEXT, call_l1_with_vision_fallback
 from .prompts import build_day_factsheet_prompt
 from .schemas import (
     DayDocInput,
@@ -79,42 +79,14 @@ async def classify_day_factsheet(
         docs_no_dia=docs_typed,
     )
 
-    # Vision L1 path — análogo a mov_factsheet.
-    gcs_urls = [d.gcs_url for d in docs_typed if d.gcs_url]
-    vision_active = flag_enabled("VISION_L1_ENABLED") and len(gcs_urls) > 0
-
-    response: LLMResponse
-    if vision_active:
-        pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
-        if pdf_bytes_list:
-            response = await call_vision_l1(
-                llm_provider,
-                model=model,
-                prompt=prompt,
-                pdf_bytes_list=pdf_bytes_list,
-                response_schema=DayFactsheetCard,
-                temperature=0.0,
-                thinking_budget=0,
-            )
-        else:
-            logger.warning(
-                "[VisionL1] proc=%s date=%s: VISION_L1_ENABLED mas 0 PDFs fetchados; "
-                "fallback pra text-only",
-                processo.cnj, date,
-            )
-            response = await llm_provider.agenerate(
-                prompt=prompt,
-                model=model,
-                temperature=0.0,
-                response_schema=DayFactsheetCard,
-            )
-    else:
-        response = await llm_provider.agenerate(
-            prompt=prompt,
-            model=model,
-            temperature=0.0,
-            response_schema=DayFactsheetCard,
-        )
+    response: LLMResponse = await call_l1_with_vision_fallback(
+        llm_provider,
+        model=model,
+        prompt=prompt,
+        gcs_urls=[d.gcs_url for d in docs_typed if d.gcs_url],
+        response_schema=DayFactsheetCard,
+        log_label=f"proc={processo.cnj} date={date}",
+    )
 
     raw_response = response.text
     try:
@@ -143,8 +115,8 @@ async def classify_day_factsheet(
         "model": model,
         "provider": provider,
         "model_variant": (
-            response.metadata.get("model_variant", "text")
-            if response.metadata else "text"
+            response.metadata.get("model_variant", MODEL_VARIANT_TEXT)
+            if response.metadata else MODEL_VARIANT_TEXT
         ),
     }
 
