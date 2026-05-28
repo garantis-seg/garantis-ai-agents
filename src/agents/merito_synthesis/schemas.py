@@ -190,7 +190,9 @@ class MeritoSynthesisCard(BaseModel):
     """
 
     merito_id: int
-    merito_context: Literal["monit_poletto", "global"] = "monit_poletto"
+    # Literal["monit_poletto","global"] pre-mig 20260528_2000; pos-merge so 'global'.
+    # Mantido o tipo composto pra aceitar valores legacy do worker durante deploy window.
+    merito_context: Literal["monit_poletto", "global"] = "global"
 
     # Output principal - risco + justificativa
     risco: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo"]] = Field(
@@ -399,7 +401,9 @@ class PreviousSnapshot(BaseModel):
 
 class MeritoSynthesisRequest(BaseModel):
     merito_id: int
-    merito_context: Literal["monit_poletto", "global"] = "monit_poletto"
+    # Literal["monit_poletto","global"] pre-mig 20260528_2000; pos-merge so 'global'.
+    # Mantido o tipo composto pra aceitar valores legacy do worker durante deploy window.
+    merito_context: Literal["monit_poletto", "global"] = "global"
     titulo: Optional[str] = None
     tipo_principal: Optional[str] = None
     cnpj_principal: Optional[str] = None
