@@ -174,3 +174,4 @@ class MonolithFactsheetResponse(BaseModel):
     raw_response: Optional[str] = None
     llm_raw_prompt: Optional[str] = None
     usage: Optional[dict[str, Any]] = None
+    prompt_version: Optional[str] = None

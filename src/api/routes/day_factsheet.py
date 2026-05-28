@@ -43,6 +43,7 @@ async def classify_day_factsheet_endpoint(request: DayFactsheetRequest):
             raw_response=result.get("raw_response"),
             llm_raw_prompt=result.get("llm_raw_prompt"),
             usage=result.get("usage", {}),
+            prompt_version=result.get("prompt_version"),
         )
     except HTTPException:
         raise
