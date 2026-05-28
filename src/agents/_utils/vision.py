@@ -2,14 +2,23 @@
 entre mov_factsheet, day_factsheet e monolith_factsheet.
 
 Acionado quando flag VISION_L1_ENABLED=true E o caller fornece pelo menos 1
-gcs_url no input. Caller passa pelo `call_l1_with_vision_fallback` (helper
-high-level) ou pelas funções low-level (`fetch_pdfs_from_gcs` +
-`call_vision_l1`) quando precisa de controle.
+gcs_url no input. Roteamento inline vs Files API decidido per-call por
+tamanho de payload:
+
+  - Total ≤15MB E maior PDF ≤5MB → inline (`types.Blob` direto, latência baixa)
+  - Senão → Files API (`client.aio.files.upload` + `Part.from_uri`,
+    suporta até 2GB per file, ~200-500ms overhead por upload)
+
+Sem essa lógica, PDFs grandes seriam dropados silenciosamente (Gemini inline
+blob limit ~20MB total por request). Files API absorve qualquer tamanho até
+o sanity cap (100MB per PDF).
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import tempfile
 from typing import Any, Literal, Optional
 
 logger = logging.getLogger(__name__)
@@ -25,22 +34,25 @@ _GCS_FETCH_SEMAPHORE_LIMIT = 5
 # Cap de PDFs por chamada Gemini Vision — evita estouro de context window.
 _MAX_PDFS_PER_CALL = 20
 
-# Gemini inline blob limit: ~20MB total por request (somando os PDFs).
-# Acima disso a API rejeita "request entity too large". Cap defensivo em 18MB
-# pra margem. PDFs grandes individualmente são droppados (não dá pra splittar
-# sem perder semântica multi-página).
-_GEMINI_INLINE_TOTAL_BYTES_CAP = 18 * 1024 * 1024
-_GEMINI_INLINE_PER_PDF_BYTES_CAP = 18 * 1024 * 1024
+# Decisão inline vs Files API:
+#   inline → faster (~0 overhead), bom pra caso comum.
+#   Files API → suporta PDFs grandes, ~200-500ms overhead por upload.
+# Caps inline conservadores deixam margem pro buffer da request envelope.
+_INLINE_TOTAL_BYTES_CAP = 15 * 1024 * 1024   # 15MB
+_INLINE_PER_PDF_BYTES_CAP = 5 * 1024 * 1024  # 5MB
 
-# Lazy singleton — storage.Client() faz credential discovery + HTTPS pool setup
-# (~50-200ms em cold path). Reusar entre chamadas economiza 1-4s por cascade
-# com 19 day calls.
+# Sanity guard absoluto. PDF >100MB sinaliza bug upstream (GCS read errado).
+# Dropa esse PDF específico mas NÃO bloqueia a Vision call dos restantes.
+_MAX_PDF_BYTES = 100 * 1024 * 1024
+
+# Concurrent uploads pra Files API (rate-limit defensivo).
+_FILES_API_UPLOAD_SEMAPHORE_LIMIT = 3
+
 _storage_client: Any = None
 
 
 def _get_storage_client() -> Optional[Any]:
-    """Retorna singleton `google.cloud.storage.Client()`. None se lib não
-    instalada (ambiente legado pré-Vision-flag)."""
+    """Singleton `google.cloud.storage.Client()`. None se lib não instalada."""
     global _storage_client
     if _storage_client is not None:
         return _storage_client
@@ -76,10 +88,9 @@ async def _fetch_pdf_bytes(storage_client, gcs_url: str) -> Optional[bytes]:
 
 
 async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
-    """Baixa N PDFs do GCS em paralelo (cap=Semaphore). Filtra:
-    - falhas de fetch (None)
-    - PDFs >18MB individuais (excedem limite inline do Gemini)
-    - bytes adicionais que ultrapassem _GEMINI_INLINE_TOTAL_BYTES_CAP cumulativo
+    """Baixa N PDFs do GCS em paralelo. Aplica APENAS sanity cap por PDF
+    (100MB — defende contra bug de GCS read absurdo). Resto vai pra
+    `call_vision_l1` que decide inline vs Files API.
     """
     if not gcs_urls:
         return []
@@ -103,27 +114,70 @@ async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
     results = await asyncio.gather(*[_bounded(u) for u in capped])
 
     accepted: list[bytes] = []
-    total_bytes = 0
     for b in results:
         if not b:
             continue
-        if len(b) > _GEMINI_INLINE_PER_PDF_BYTES_CAP:
+        if len(b) > _MAX_PDF_BYTES:
             logger.warning(
-                f"[VisionL1] PDF {len(b)} bytes > {_GEMINI_INLINE_PER_PDF_BYTES_CAP} "
-                "cap individual — dropado (use Files API se precisar)"
+                f"[VisionL1] PDF {len(b)}B > {_MAX_PDF_BYTES}B sanity cap — dropado"
             )
             continue
-        if total_bytes + len(b) > _GEMINI_INLINE_TOTAL_BYTES_CAP:
-            logger.warning(
-                f"[VisionL1] cumulative {total_bytes + len(b)} > "
-                f"{_GEMINI_INLINE_TOTAL_BYTES_CAP} cap total — parando antes "
-                f"de adicionar mais ({len(accepted)} já aceitos)"
-            )
-            break
         accepted.append(b)
-        total_bytes += len(b)
 
     return accepted
+
+
+async def _upload_pdf_to_gemini(client, types, pdf_bytes: bytes) -> Any:
+    """Upload PDF via Files API. SDK requer path-like — usa tempfile + cleanup."""
+    fd, path = tempfile.mkstemp(suffix=".pdf")
+    try:
+        os.write(fd, pdf_bytes)
+        os.close(fd)
+        return await client.aio.files.upload(
+            file=path,
+            config=types.UploadFileConfig(mime_type="application/pdf"),
+        )
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
+async def _build_pdf_parts(
+    client, types, pdf_bytes_list: list[bytes],
+) -> tuple[list[Any], str]:
+    """Constrói parts pra contents do Gemini. Retorna (parts, transport).
+
+    transport ∈ {'inline', 'files_api'} — usado pra logging/telemetria.
+    """
+    total_bytes = sum(len(b) for b in pdf_bytes_list)
+    largest = max(len(b) for b in pdf_bytes_list)
+
+    use_inline = (
+        total_bytes <= _INLINE_TOTAL_BYTES_CAP
+        and largest <= _INLINE_PER_PDF_BYTES_CAP
+    )
+
+    if use_inline:
+        parts = [
+            types.Part(inline_data=types.Blob(mime_type="application/pdf", data=b))
+            for b in pdf_bytes_list
+        ]
+        return parts, "inline"
+
+    upload_sem = asyncio.Semaphore(_FILES_API_UPLOAD_SEMAPHORE_LIMIT)
+
+    async def _upload_one(b: bytes) -> Any:
+        async with upload_sem:
+            return await _upload_pdf_to_gemini(client, types, b)
+
+    uploaded = await asyncio.gather(*[_upload_one(b) for b in pdf_bytes_list])
+    parts = [
+        types.Part.from_uri(file_uri=f.uri, mime_type="application/pdf")
+        for f in uploaded
+    ]
+    return parts, "files_api"
 
 
 async def call_vision_l1(
@@ -136,24 +190,20 @@ async def call_vision_l1(
     temperature: float = 0.0,
     thinking_budget: int = 0,
 ) -> Any:
-    """Chama Gemini Vision com PDFs inline + prompt text. Retorna LLMResponse.
+    """Chama Gemini Vision com PDFs + prompt text. Retorna LLMResponse.
 
-    Caller é responsável por garantir `pdf_bytes_list` não-vazio (use
-    `fetch_pdfs_from_gcs` antes pra obter a lista com cap byte budget aplicado).
+    Roteia inline vs Files API automaticamente por tamanho (ver
+    `_build_pdf_parts`). Caller é responsável por garantir `pdf_bytes_list`
+    não-vazio.
     """
     if not pdf_bytes_list:
         raise ValueError("call_vision_l1 requires at least 1 PDF")
 
-    # Provider expõe os tipos Gemini privados; mesmo pattern de pdf_ocr/agent.py.
-    # Bound to GeminiProvider (call_vision_l1 só faz sentido pra Gemini hoje).
     client = provider._client
     types = provider._types
 
-    parts = [
-        types.Part(inline_data=types.Blob(mime_type="application/pdf", data=b))
-        for b in pdf_bytes_list
-    ]
-    parts.append(types.Part.from_text(text=prompt))
+    pdf_parts, transport = await _build_pdf_parts(client, types, pdf_bytes_list)
+    parts = pdf_parts + [types.Part.from_text(text=prompt)]
 
     config_kwargs: dict[str, Any] = {"temperature": temperature}
     if response_schema is not None:
@@ -168,7 +218,7 @@ async def call_vision_l1(
     config = types.GenerateContentConfig(**config_kwargs)
 
     logger.info(
-        f"[VisionL1] Calling Gemini Vision: {len(pdf_bytes_list)} PDFs, "
+        f"[VisionL1] Calling Gemini Vision via {transport}: {len(pdf_bytes_list)} PDFs, "
         f"sum={sum(len(b) for b in pdf_bytes_list)} bytes, model={model}"
     )
 
@@ -202,6 +252,7 @@ async def call_vision_l1(
             "cost_usd": round(cost, 6),
             "model_variant": MODEL_VARIANT_VISION,
             "pdfs_processed": len(pdf_bytes_list),
+            "vision_transport": transport,
         },
     )
 
@@ -223,11 +274,10 @@ async def call_l1_with_vision_fallback(
     - `vision_flag_name` ON + ≥1 gcs_url + ≥1 PDF fetchável → Vision path
     - else → `provider.agenerate(prompt, model, ...)` text-only fallback
 
-    Caller continua responsável por montar o prompt — esse helper só roteia +
-    fetcha PDFs + aplica cap de byte budget. Single source da Vision branch
-    (eliminaria copy-paste de ~30 LoC em cada agent L1).
+    Caller monta o prompt — esse helper só roteia + fetcha PDFs. Single
+    source da Vision branch (elimina copy-paste em cada agent L1).
 
-    `log_label` é appended em warnings de fallback (ex: "mov_id=X" / "proc=Y date=Z").
+    `log_label` é appended em warnings de fallback (ex: "mov_id=X").
     """
     from .feature_flags import flag_enabled
 
