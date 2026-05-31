@@ -421,29 +421,9 @@ def _build_tipo_specific_block(tipo: str | None) -> str:
     return _TIPO_RULES_CIVEL
 
 
-def _build_tese_juris_block(tj) -> str:
-    """Renderiza tese_jurisprudencia.
-
-    Quando null (proc sem merito_id OU tese sem mapping): retorna placeholder
-    'sem mapeamento' — engine v6 cai em Matriz Daycoval generica (fallback).
-    Aplicar regras J/J.1/J.2 SO quando ha resultado_majoritario.
-    """
-    if tj is None or not (tj.tese_nome or tj.tema_stj or tj.tema_stf or tj.resultado_majoritario):
-        return (
-            "(sem mapeamento de jurisprudencia — proc sem merito_id OU tese sem "
-            "tese_canonica_id resolvido. Engine cai em Matriz Daycoval generica "
-            "sem aplicar regras J/J.1/J.2.)"
-        )
-    parts = []
-    if tj.tese_nome:
-        parts.append(f"Tese: {tj.tese_nome}")
-    if tj.tema_stj:
-        parts.append(f"STJ Tema {tj.tema_stj}")
-    if tj.tema_stf:
-        parts.append(f"STF {tj.tema_stf}")
-    if tj.resultado_majoritario:
-        parts.append(f"resultado_majoritario: {tj.resultado_majoritario}")
-    return " | ".join(parts)
+# PR7.2 (2026-05-31): _build_tese_juris_block REMOVIDO. Bloco juris interno
+# (curadoria ref.tese_jurisprudencia) dropado em favor do provider externo
+# jurisprudencias.ai. Substituido por _build_juris_externa_block (abaixo).
 
 
 def _build_juris_externa_block(je) -> str:
@@ -531,27 +511,16 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     monolith_block = _build_monolith_block(req)
     tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
-    # E6 flag JURISPRUDENCIA_BLOCK_ENABLED (default ON): quando off, suprime
-    # header + content da secao inteira (sem deixar header orfao no prompt).
-    # Quando on, mantem v2.2 layout exato: '=== JURISPRUDENCIA DA TESE ... ===\n  <body>\n'.
-    if _flag_enabled("JURISPRUDENCIA_BLOCK_ENABLED"):
-        tese_juris_section = (
-            "=== JURISPRUDENCIA DA TESE (input direto pra risco_processo_intermediario) ===\n"
-            f"  {_build_tese_juris_block(req.tese_jurisprudencia)}\n"
-        )
-    else:
-        tese_juris_section = ""
+    # PR7.2 (2026-05-31): tese_juris_section (bloco JURISPRUDENCIA DA TESE
+    # interno) REMOVIDO. Provider externo jurisprudencias.ai (jurisprudencia_externa)
+    # eh unica fonte. Curadoria interna ref.tese_jurisprudencia DROPPED.
+    tese_juris_section = ""
 
     # PR6 Architecture D: bloco "Decomposicao Orthogonal" SEMPRE renderizado
     # (independente da flag JURISPRUDENCE_PATH_ENABLED). Forca o LLM a emit
-    # risco_factual + risco_jurisprudencial separados em TODOS cascades —
-    # mesmo em flag=off, juris vem da tese_jurisprudencia interna. Isso
-    # destrava L3 A/B test (PR6.4) sem depender de provider externo.
-    #
-    # Header da secao varia conforme presenca de juris externa:
-    #   - juris externa presente -> render bloco do provider + cita ambas fontes
-    #     na instrucao (interno + externo)
-    #   - juris externa AUSENTE -> instrucao cita SO tese_jurisprudencia interno
+    # risco_factual + risco_jurisprudencial separados em TODOS cascades.
+    # PR7.2 (2026-05-31): em flag=off, juris vem APENAS de jurisprudencia_externa
+    # (provider). Quando provider unavailable, LLM emit Indeterminado.
     juris_externa_header = ""
     if req.jurisprudencia_externa is not None:
         juris_externa_header = (
@@ -560,9 +529,9 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         )
 
     juris_sources_clause = (
-        "tese_jurisprudencia INTERNA + jurisprudencia_externa PROVIDER (acima)"
+        "jurisprudencia_externa PROVIDER (acima)"
         if req.jurisprudencia_externa is not None
-        else "tese_jurisprudencia INTERNA (acima)"
+        else "(NENHUMA fonte juris disponivel — emit risco_jurisprudencial=Indeterminado)"
     )
 
     risk_decomposition_section = (

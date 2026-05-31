@@ -21,7 +21,7 @@ from .schemas import (
     CDACardMin,
     JurisprudenciaMin,
     MeritoSynthesisRequest,
-    ParadigmaMin,
+    # PR7.2 (2026-05-31): ParadigmaMin removido (paradigmas Poletto curados drop).
     PreviousSnapshot,
     ProcessoSynthesisMin,
     TomadorCardMin,
@@ -66,8 +66,9 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #     risco_processo_intermediario do L2 (que ja absorveu juris via
 #     regras J/J.1/J.2 do L2 prompt v2.2).
 #   - Removido `jurisprudencia` do MeritoSynthesisRequest (schema).
-#   - Paradigmas (_build_paradigmas_block) MANTIDOS — sao contexto NARRATIVO
-#     pra defender risco vs cliente cetico, nao regra de decisao.
+#   - PR7.2 (2026-05-31): paradigmas REMOVIDOS tambem (curadoria interna
+#     ref.tese_decisao_individual DROPPED). Architecture D promote (mode=new)
+#     assume papel jurisprudencial via matriz determ + provider externo.
 #   - Elimina double-counting: jurisprudencia pesava 2x (Matriz Daycoval
 #     implicito em L2 + regras G em L3).
 PROMPT_VERSION_BASE = "merito_synthesis.v2.4"
@@ -388,43 +389,11 @@ def _build_snapshot_anterior_block(req: MeritoSynthesisRequest) -> str:
     return f"=== SNAPSHOT ANTERIOR (referencia historica — engine v6 nao usa hoje pra trajetoria; informativo) ===\n{prev_block}"
 
 
-def _format_paradigma(p: ParadigmaMin) -> str:
-    """Formato: '{tribunal} {instancia} ({data}) - {sentido} - {ementa[:200]} | Rel. {relator}'."""
-    ementa = (p.ementa_resumo or "")[:200] or "(sem ementa)"
-    chunks = [p.tribunal or "?"]
-    if p.instancia:
-        chunks.append(p.instancia)
-    if p.data_decisao:
-        chunks.append(f"({p.data_decisao})")
-    chunks.append("-")
-    chunks.append(p.sentido or "?")
-    chunks.append("-")
-    chunks.append(ementa)
-    if p.relator:
-        chunks.append(f"| Rel. {p.relator}")
-    return "  - " + " ".join(chunks)
-
-
-def _build_paradigmas_block(req: MeritoSynthesisRequest) -> str:
-    """Acordaos/sentencas firmes da tese (ref.tese_decisao_individual WHERE
-    eh_paradigma=TRUE).
-
-    Pre-filtrados por tese_canonica_id — tipo-consistent (tese determina tipo
-    judicial), entao mesmo bloco vale pra todas as variants fiscal/trab/civel.
-    Quando vazio (tese sem paradigmas curados), retorna '' e bloco eh suprimido
-    no join. Asymetrico vs outros _build_*_block (que renderizam '(sem X)'
-    placeholder) — paradigmas eh prompt-only e nao informativo quando vazio,
-    so polui contexto.
-
-    Flag E7 PARADIGMAS_BLOCK_ENABLED (default ON): set false pra desligar
-    o bloco em A/B test sem code change."""
-    if not _flag_enabled("PARADIGMAS_BLOCK_ENABLED"):
-        return ""
-    if not req.paradigmas:
-        return ""
-    lines = ["=== DECISOES PARADIGMA DESTA TESE ==="]
-    lines.extend(_format_paradigma(p) for p in req.paradigmas)
-    return "\n".join(lines)
+# PR7.2 (2026-05-31): _format_paradigma + _build_paradigmas_block REMOVIDOS.
+# Curadoria interna de paradigmas Poletto (ref.tese_decisao_individual)
+# dropada — Architecture D promote (mode=new) usa matriz determ + LLM prompt
+# rescrito (PR7.1 H1+H2). Bloco <DECISOES PARADIGMA> nao mais injetado
+# no prompt L3.
 
 
 def _build_protocolo_postura_default() -> str:
@@ -1603,7 +1572,9 @@ def build_prompt_and_version(
         _build_aiims_block(req),
         _build_tomador_block_section(req),
         # v2.2: _build_jurisprudencia_block dropado (juris vive em L2 agora).
-        _build_paradigmas_block(req),
+        # PR7.2 (2026-05-31): _build_paradigmas_block REMOVIDO. Curadoria
+        # interna ref.tese_decisao_individual dropada. Architecture D promote
+        # (mode=new) + LLM prompt rescrito assume papel jurisprudencial.
         _build_snapshot_anterior_block(req),
         _build_protocolo_postura_default(),
         _build_bloqueio_prob_exito(),

@@ -393,24 +393,9 @@ class JurisprudenciaMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
-class ParadigmaMin(BaseModel):
-    """Decisao paradigma da tese (1 row de ref.tese_decisao_individual).
-
-    Loaded quando eh_paradigma=TRUE pra ancorar narrativa L3 com exemplos
-    concretos (acordaos/sentencas firmes citaveis). Pre-filtrados por
-    tese_canonica_id — tipo-consistent.
-
-    `sentido` enum em DB: pro_contribuinte | pro_fazenda | dividida | outro.
-    Strings passadas raw pro prompt (LLM entende contexto)."""
-
-    tribunal: Optional[str] = None
-    instancia: Optional[str] = None
-    data_decisao: Optional[str] = None
-    sentido: Optional[str] = None
-    ementa_resumo: Optional[str] = None
-    relator: Optional[str] = None
-
-    model_config = {"extra": "ignore"}
+# PR7.2 (2026-05-31): ParadigmaMin REMOVIDO. Curadoria interna de paradigmas
+# Poletto (ref.tese_decisao_individual, 209 rows curadas) dropada. Architecture
+# D promote (mode=new) + LLM prompt rescrito assume papel jurisprudencial.
 
 
 class PreviousSnapshot(BaseModel):
@@ -437,7 +422,8 @@ class MeritoSynthesisRequest(BaseModel):
     cdas: list[CDACardMin] = Field(default_factory=list)
     aiims: list[AIIMCardMin] = Field(default_factory=list)
     # jurisprudencia removido — agora vive em L2 ps_card (regras J/J.1/J.2).
-    paradigmas: list[ParadigmaMin] = Field(default_factory=list)
+    # PR7.2 (2026-05-31): paradigmas: list[ParadigmaMin] REMOVIDO
+    # (ref.tese_decisao_individual dropped).
 
     # Trajetoria (passado pelo orchestrator antes da call)
     previous_snapshot: Optional[PreviousSnapshot] = None
