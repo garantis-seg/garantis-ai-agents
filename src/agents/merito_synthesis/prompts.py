@@ -1435,12 +1435,21 @@ def _build_rules(tipo: str) -> str:
 AB_TEST_BUCKETS = ("factual_only", "juris_only", "mixed", "derived_only")
 
 
-def _build_ab_test_bucket_block(bucket: str | None) -> str:
+def _build_ab_test_bucket_block(
+    bucket: str | None,
+    derived_aggregate_hint: str | None = None,
+) -> str:
     """Bloco com instrucao por bucket A/B test (PR6 Architecture D).
 
     Quando bucket=None: retorna string vazia (legacy single-prompt cascade).
     Quando bucket presente: injeta instrucao explicita de qual sinal usar/
     ignorar pro card['risco'] final.
+
+    PR6 bugfix 2026-05-31: `derived_only` requer renderizacao explicita do
+    `derived_aggregate_hint` no texto do prompt — antes citava apenas o
+    NOME do campo (`derived_aggregate_hint`), nao o VALOR. LLM nao tinha
+    acesso ao valor injetado em outra parte do payload, entao calculava
+    proprio veredito (efetivamente == mixed).
     """
     if not bucket:
         return ""
@@ -1492,18 +1501,27 @@ def _build_ab_test_bucket_block(bucket: str | None) -> str:
             "</ab_test_bucket>\n"
         )
     if bucket == "derived_only":
+        # PR6 bugfix: render o VALOR do hint inline (antes citava apenas nome
+        # do campo, LLM nao via valor real -> calculava proprio veredito).
+        hint = (derived_aggregate_hint or "Indeterminado").strip()
         return (
             "\n<ab_test_bucket name=\"derived_only\">\n"
             "EXPERIMENTO A/B (Architecture D PR6) — bucket DERIVED_ONLY:\n"
-            "  Pra `risco` final do merito, USE EXATAMENTE o valor injetado em\n"
-            "  `derived_aggregate_hint` (matriz determ 5x5 factual x jurisprudencial,\n"
-            "  pre-calculada pelo materializer L3). Sua tarefa eh JUSTIFICAR esse\n"
-            "  veredito em `contribuicao_no_risco`, citando:\n"
-            "    1. Qual foi o `risco_factual` agregado\n"
-            "    2. Qual foi o `risco_jurisprudencial` agregado\n"
-            "    3. Por que a matriz determ chegou no `derived_aggregate` informado\n"
-            "  NAO substitua o veredito — apenas explique-o. Tipo: 'Esta versao\n"
-            "  reflete a matriz determ Architecture D, sem nuance LLM'.\n"
+            "\n"
+            f"  >>> RISCO PRE-CALCULADO PELA MATRIZ DETERM (5x5): **{hint}** <<<\n"
+            "\n"
+            f"  Sua resposta DEVE conter EXATAMENTE: \"risco\": \"{hint}\".\n"
+            "  NAO recalcule. NAO substitua. NAO emit valor diferente — mesmo\n"
+            "  que voce discorde da matriz determ. Sua tarefa NAO eh classificar,\n"
+            "  eh JUSTIFICAR a classificacao ja feita.\n"
+            "\n"
+            "  Em `probabilidade_exito_merito.contribuicao_no_risco` cite:\n"
+            "    1. Qual foi o `risco_factual` agregado (do payload)\n"
+            "    2. Qual foi o `risco_jurisprudencial` agregado (do payload)\n"
+            f"    3. Por que a matriz determ Architecture D chegou em **{hint}**\n"
+            f"       (tabela: factual_agg x jurisprudencial_agg -> {hint})\n"
+            "  Padrao: 'Esta versao reflete a matriz determ Architecture D, sem\n"
+            "  nuance LLM. Factual=X juris=Y -> matriz={hint}.'\n"
             "</ab_test_bucket>\n"
         )
     # Bucket desconhecido -> trate como mixed (defensive)
@@ -1525,7 +1543,13 @@ def build_prompt_and_version(
     None, comportamento legacy single-prompt.
     """
     tipo = _determine_tipo_dominante(req.processo_syntheses)
-    ab_test_block = _build_ab_test_bucket_block(bucket)
+    # PR6 bugfix: passa derived_aggregate_hint do request pro builder do bloco
+    # (antes o nome do campo era citado mas o valor nao era renderizado no
+    # texto — LLM nao tinha como respeitar o hint).
+    ab_test_block = _build_ab_test_bucket_block(
+        bucket,
+        derived_aggregate_hint=getattr(req, "derived_aggregate_hint", None),
+    )
     parts = [
         _build_intro(),
         _build_glossary_roles(),
