@@ -21,14 +21,9 @@ from typing import Any
 from .schemas import ApoliceContextMin, DayFactSheetMin, MovFactSheetMin, ProcessoSynthesisRequest
 
 
-from .._utils import flag_enabled as _flag_enabled_shared
-
-
-def _flag_enabled(name: str, default: str = "true") -> bool:
-    """Wrapper backward-compat com default ON pra flag E6
-    JURISPRUDENCIA_BLOCK_ENABLED."""
-    return _flag_enabled_shared(name, default=default)
-
+# PR7.3 (2026-05-31): _flag_enabled wrapper removido — unico caller era
+# JURISPRUDENCIA_BLOCK_ENABLED do bloco interno (dropado em PR7.2).
+# Provider externo jurisprudencias.ai eh single source jurisprudencial agora.
 
 _MAX_MOVS_INLINE = 50  # cap defensivo no input do prompt
 _AUTOS_TEXT_CAP_CHARS = 60000  # DD6: cap absoluto 60k chars
