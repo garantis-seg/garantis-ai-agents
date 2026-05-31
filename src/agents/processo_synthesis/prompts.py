@@ -542,25 +542,50 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     else:
         tese_juris_section = ""
 
-    # PR3 Architecture D: bloco juris externa renderizado SOMENTE quando
-    # materializer populou o campo (flag JURISPRUDENCE_PATH_ENABLED != off
-    # + tese_canonica + tribunal mapeado). Quando None -> string vazia,
-    # prompt byte-identical ao legacy (zero risk em flag=off).
+    # PR6 Architecture D: bloco "Decomposicao Orthogonal" SEMPRE renderizado
+    # (independente da flag JURISPRUDENCE_PATH_ENABLED). Forca o LLM a emit
+    # risco_factual + risco_jurisprudencial separados em TODOS cascades —
+    # mesmo em flag=off, juris vem da tese_jurisprudencia interna. Isso
+    # destrava L3 A/B test (PR6.4) sem depender de provider externo.
+    #
+    # Header da secao varia conforme presenca de juris externa:
+    #   - juris externa presente -> render bloco do provider + cita ambas fontes
+    #     na instrucao (interno + externo)
+    #   - juris externa AUSENTE -> instrucao cita SO tese_jurisprudencia interno
+    juris_externa_header = ""
     if req.jurisprudencia_externa is not None:
-        juris_externa_section = (
+        juris_externa_header = (
             "\n=== JURISPRUDENCIA EXTERNA (provider jurisprudencias.ai) ===\n"
             + _build_juris_externa_block(req.jurisprudencia_externa)
-            + "\n\nINSTRUCAO: emita 2 campos NOVOS Architecture D:\n"
-            "  - risco_factual:        derive APENAS do estado processual + tier + decisao_vigente + lifecycle.\n"
-            "                          IGNORE jurisprudencia. Espelha a logica que voce ja usaria em risco_processo_intermediario.\n"
-            "  - risco_jurisprudencial: derive APENAS deste bloco + tese_jurisprudencia legacy.\n"
-            "                          Mapeamento: resultado='pro_contribuinte' -> Baixo; 'pro_fazenda' -> Alto;\n"
-            "                          'dividida' -> Medio; 'indeterminado' (n_hits<3 OU resultado=indeterminado) -> Indeterminado.\n"
-            "  AMBOS sao orthogonal — nao combine sinais cruzados. Camada 3 vai agregar via matriz determ.\n"
-            "  Quando flag estiver em 'shadow' (estado atual), risco_processo_intermediario LEGACY tambem eh emitido pra A/B parity.\n"
         )
-    else:
-        juris_externa_section = ""
+
+    juris_sources_clause = (
+        "tese_jurisprudencia INTERNA + jurisprudencia_externa PROVIDER (acima)"
+        if req.jurisprudencia_externa is not None
+        else "tese_jurisprudencia INTERNA (acima)"
+    )
+
+    risk_decomposition_section = (
+        juris_externa_header
+        + "\n\nINSTRUCAO — DECOMPOSICAO ORTHOGONAL (Architecture D, sempre emit):\n"
+        "  - risco_factual:        derive APENAS do estado processual + tier +\n"
+        "                          decisao_vigente + lifecycle (Matriz Daycoval pura).\n"
+        "                          IGNORE jurisprudencia. Mesma logica que voce usaria\n"
+        "                          em risco_processo_intermediario, mas SEM peso de tese.\n"
+        f"  - risco_jurisprudencial: derive APENAS de {juris_sources_clause}.\n"
+        "                          IGNORE estado processual. Quando NAO ha sinal forte\n"
+        "                          (resultado oscilante/indeterminado, sem mapeamento de\n"
+        "                          tese, n_hits<3 no provider), emit 'Indeterminado' —\n"
+        "                          NUNCA chute Baixo por default.\n"
+        "                          Mapeamento sugerido (provider externo):\n"
+        "                            resultado='pro_contribuinte' -> Baixo\n"
+        "                            resultado='pro_fazenda'      -> Alto\n"
+        "                            resultado='dividida'         -> Medio\n"
+        "                            resultado='indeterminado'    -> Indeterminado\n"
+        "  AMBOS sao orthogonal — NAO combine sinais cruzados. Camada 3 agrega via\n"
+        "  matriz determ + A/B test entre prompts (PR6).\n"
+        "  risco_processo_intermediario LEGACY tambem eh emitido (compat backward).\n"
+    )
 
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
@@ -704,7 +729,7 @@ logica via <regra_polos>.
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{monolith_block}
 
-{tese_juris_section}{juris_externa_section}
+{tese_juris_section}{risk_decomposition_section}
 {tipo_specific_block}
 
 === INSTRUCOES POR CAMPO ===

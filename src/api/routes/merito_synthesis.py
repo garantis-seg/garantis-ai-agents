@@ -28,6 +28,7 @@ async def classify_merito_synthesis_endpoint(request: MeritoSynthesisRequest):
             request=request,
             model=request.model,
             provider=request.provider or "gemini",
+            bucket=request.bucket,
         )
         card_data = result.get("card", {})
         if isinstance(card_data, dict) and "error" in card_data:
@@ -42,6 +43,7 @@ async def classify_merito_synthesis_endpoint(request: MeritoSynthesisRequest):
             llm_raw_prompt=result.get("llm_raw_prompt"),
             prompt_version=result.get("prompt_version"),
             usage=result.get("usage", {}),
+            bucket=result.get("bucket"),
         )
     except HTTPException:
         raise

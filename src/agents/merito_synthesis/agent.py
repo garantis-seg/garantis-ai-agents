@@ -31,14 +31,20 @@ async def classify_merito_synthesis(
     request: MeritoSynthesisRequest | dict,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
+    bucket: Optional[str] = None,
 ) -> dict:
     """Synthesize a merito from its processo_syntheses + context cards.
+
+    PR6 Architecture D: `bucket` opcional dispatcha variant prompt L3
+    (factual_only / juris_only / mixed / derived_only). None = legacy
+    single-prompt — comportamento idêntico ao pré-PR6.
 
     Returns:
         {"card": MeritoSynthesisCard.model_dump() | error_dict,
          "raw_response": str,
          "llm_raw_prompt": str,
-         "usage": dict}
+         "usage": dict,
+         "bucket": str | None}
     """
     if isinstance(request, dict):
         request = MeritoSynthesisRequest(**request)
@@ -47,7 +53,7 @@ async def classify_merito_synthesis(
         model = DEFAULT_MODEL
 
     llm_provider = create_provider(provider)
-    prompt, prompt_version = build_prompt_and_version(request)
+    prompt, prompt_version = build_prompt_and_version(request, bucket=bucket)
 
     # v2.1: response_schema=MeritoSynthesisCard reativado depois que schema
     # foi reformatado pra eliminar dict[str, Any] (causa do additionalProperties
@@ -106,4 +112,5 @@ async def classify_merito_synthesis(
         "llm_raw_prompt": prompt,
         "prompt_version": prompt_version,
         "usage": usage,
+        "bucket": bucket,
     }

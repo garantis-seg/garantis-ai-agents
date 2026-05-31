@@ -612,6 +612,50 @@ sem ele a subida nao se justifica por (1)+(2)+(3) acima, classifique como
 o template ou raciocinio livre indicariam (default Baixo)."""
 
 
+_REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO = """
+
+REGRA — PARADIGMA POLETTO COMO OVERRIDE EM FASE PRE-TRANSITO:
+
+Cards do L2 podem trazer 1+ paradigmas Poletto indicando "Alto" pra tese
+canonica (paradigma.sentido='desfavoravel' ao Tomador). Esses paradigmas
+sao jurisprudencia consolidada da TESE em instancias superiores
+(STF/STJ/TJs majoritarios), nao do CASO individual atual.
+
+REGRA DURA DE OVERRIDE: Quando TODAS as condicoes abaixo aplicam:
+  (i)   ha >=1 paradigma carregado E >=50% dos paradigmas indicam Alto
+        (sentido='desfavoravel'), E
+  (ii)  decisao_vigente.sentido='favoravel' ao Tomador EM 1g (sem
+        transito em julgado certificado), E
+  (iii) ha recurso pendente OU prazo recursal em curso, E
+  (iv)  tese_canonica NAO eh pro_contribuinte_firmado (Tema STF/STJ ou
+        Sumula que mata definitivamente a tese contraria)
+
+ENTAO: ELEVE classificacao UM nivel ACIMA do template que matchou:
+  - Template Baixo (T-B1/T-B2/T-B3) -> MEDIO
+  - Template Medio (T-M1/T-M2) -> ALTO
+  - Template Alto+ (T-A*/T-AA*) -> mantem (ja eh alto)
+
+Cite na justificativa: (a) o template originalmente matchado, (b) o(s)
+paradigma(s) que dispararam o override, (c) por que o override aplica
+(decisao 1g favoravel + paradigma jurisprudencial superior contraria
+indicam risco prospectivo de reversao).
+
+Exemplo m=680006 BANCO MERCANTIL IRPJ Stock Options:
+- 1g procedente (sentido='favoravel', T-B2 indicaria Baixo)
+- 1 paradigma Poletto Alto em Stock Options (STJ majoritario contra)
+- Sem transito em julgado, agravo de instrumento pendente
+- Tese NAO eh pro_contribuinte_firmado
+- OVERRIDE: classifique MEDIO (nao Baixo via T-B2, nao Alto direto)
+- Justificativa: "T-B2 matchou por sentenca 1g favoravel, mas paradigma
+  Poletto consolidado pra Stock Options aponta reversao provavel em
+  STJ -> risco MEDIO ate transito (subida 1 nivel)."
+
+Scope: aplica APENAS a meritos com >=1 paradigma desfavoravel. Meritos
+SEM paradigma permanecem governados pelo template default (nenhum
+override). Paradigmas que apontam Baixo (sentido='favoravel') NAO
+disparam override (paradigma favoravel reforca template Baixo)."""
+
+
 def _build_regras_anti_falso_alto() -> str:
     """REGRAS DURAS contra falsos-positivos de subida de risco.
 
@@ -621,8 +665,14 @@ def _build_regras_anti_falso_alto() -> str:
 
     Pluggada APOS _build_protocolo_postura_default + ANTES de _build_rules.
     Aplica a TODOS os tipos (fiscal/trab/civel/misto).
+
+    2026-05-29: adicionada REGRA paradigma_override_pre_transito (flag E8
+    PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED, default ON). Cobre underpenalty
+    Alto->Baixo identificado na revalidacao 2026-05-29 (m=680006 BANCO
+    MERCANTIL IRPJ Stock Options sample). Memory:
+    revalidation-2026-05-29-gemini-burst-bottleneck.
     """
-    return """=== REGRAS DURAS ANTI FALSO-POSITIVO (CRITICA) ===
+    base = """=== REGRAS DURAS ANTI FALSO-POSITIVO (CRITICA) ===
 
 REGRA — EXTINCAO SEM MERITO eh PROCESSUAL, NAO move risco isoladamente:
 
@@ -673,6 +723,9 @@ REGRA DURA: bullet "[ALTISSIMO] penhora online deferida" no escala
 fiscal/civel/trab exige EVIDENCIA EXPLICITA de efetivacao (valor
 bloqueado documentado, BACENJUD positivo, etc). Sem evidencia
 explicita, default Baixo."""
+    if _flag_enabled("PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED"):
+        base += _REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO
+    return base
 
 
 def _build_justifique_subida() -> str:
@@ -1374,13 +1427,105 @@ def _build_rules(tipo: str) -> str:
 # ─── Main prompt builder ───────────────────────────────────────────────────
 
 
-def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
+# PR6 Architecture D — A/B test buckets do L3.
+# Cada bucket eh um experimento independente: roda L3 N vezes em paralelo,
+# cada call usa instrucao especifica de qual sinal priorizar. Resultados
+# persistidos em card['l3_ab_test'][bucket] pra comparacao com Poletto
+# ground truth + selecao do vencedor.
+AB_TEST_BUCKETS = ("factual_only", "juris_only", "mixed", "derived_only")
+
+
+def _build_ab_test_bucket_block(bucket: str | None) -> str:
+    """Bloco com instrucao por bucket A/B test (PR6 Architecture D).
+
+    Quando bucket=None: retorna string vazia (legacy single-prompt cascade).
+    Quando bucket presente: injeta instrucao explicita de qual sinal usar/
+    ignorar pro card['risco'] final.
+    """
+    if not bucket:
+        return ""
+    if bucket == "factual_only":
+        return (
+            "\n<ab_test_bucket name=\"factual_only\">\n"
+            "EXPERIMENTO A/B (Architecture D PR6) — bucket FACTUAL_ONLY:\n"
+            "  Pra `risco` final do merito, considere APENAS:\n"
+            "    - processo_syntheses[].risco_factual\n"
+            "    - processo_syntheses[].estado_processual\n"
+            "    - processo_syntheses[].decisao_vigente\n"
+            "    - processo_syntheses[].lifecycle_garantia\n"
+            "    - processo_syntheses[].probabilidade_exito (Matriz Daycoval)\n"
+            "  IGNORE COMPLETAMENTE:\n"
+            "    - processo_syntheses[].risco_jurisprudencial\n"
+            "    - tese_jurisprudencia (qualquer fonte)\n"
+            "    - paradigmas_curados (NAO use sinal de tese)\n"
+            "  Justifique em `contribuicao_no_risco` que ignorou juris por design.\n"
+            "  Quando risco_factual = Indeterminado em todos procs -> emit 'Indeterminado'\n"
+            "  (NAO chute Baixo por default).\n"
+            "</ab_test_bucket>\n"
+        )
+    if bucket == "juris_only":
+        return (
+            "\n<ab_test_bucket name=\"juris_only\">\n"
+            "EXPERIMENTO A/B (Architecture D PR6) — bucket JURIS_ONLY:\n"
+            "  Pra `risco` final do merito, considere APENAS:\n"
+            "    - processo_syntheses[].risco_jurisprudencial\n"
+            "    - tese_jurisprudencia (interna + paradigmas curados)\n"
+            "    - top_decisions externas (quando presentes nos processo_syntheses)\n"
+            "  IGNORE COMPLETAMENTE:\n"
+            "    - processo_syntheses[].risco_factual\n"
+            "    - estado_processual + decisao_vigente + lifecycle\n"
+            "    - probabilidade_exito (Matriz Daycoval)\n"
+            "  Quando risco_jurisprudencial = Indeterminado em todos procs OU sem\n"
+            "  tese mapeada -> emit 'Indeterminado' (NAO chute Baixo).\n"
+            "  Justifique em `contribuicao_no_risco` que ignorou estado por design.\n"
+            "</ab_test_bucket>\n"
+        )
+    if bucket == "mixed":
+        return (
+            "\n<ab_test_bucket name=\"mixed\">\n"
+            "EXPERIMENTO A/B (Architecture D PR6) — bucket MIXED (legacy):\n"
+            "  Considere TODOS os sinais (factual + juris + paradigmas + estado +\n"
+            "  Matriz Daycoval). Mesma logica do prompt L3 pre-PR6 — esta variant\n"
+            "  serve como baseline pra comparar contra factual_only/juris_only/\n"
+            "  derived_only. Aplique todas regras anti-falso-alto + bloqueio Daycoval\n"
+            "  + templates Poletto + paradigmas como em producao atual.\n"
+            "</ab_test_bucket>\n"
+        )
+    if bucket == "derived_only":
+        return (
+            "\n<ab_test_bucket name=\"derived_only\">\n"
+            "EXPERIMENTO A/B (Architecture D PR6) — bucket DERIVED_ONLY:\n"
+            "  Pra `risco` final do merito, USE EXATAMENTE o valor injetado em\n"
+            "  `derived_aggregate_hint` (matriz determ 5x5 factual x jurisprudencial,\n"
+            "  pre-calculada pelo materializer L3). Sua tarefa eh JUSTIFICAR esse\n"
+            "  veredito em `contribuicao_no_risco`, citando:\n"
+            "    1. Qual foi o `risco_factual` agregado\n"
+            "    2. Qual foi o `risco_jurisprudencial` agregado\n"
+            "    3. Por que a matriz determ chegou no `derived_aggregate` informado\n"
+            "  NAO substitua o veredito — apenas explique-o. Tipo: 'Esta versao\n"
+            "  reflete a matriz determ Architecture D, sem nuance LLM'.\n"
+            "</ab_test_bucket>\n"
+        )
+    # Bucket desconhecido -> trate como mixed (defensive)
+    return _build_ab_test_bucket_block("mixed")
+
+
+def build_prompt_and_version(
+    req: MeritoSynthesisRequest,
+    bucket: str | None = None,
+) -> tuple[str, str]:
     """Computa (prompt, prompt_version) compartilhando o mesmo tipo dominante.
 
     Single source of truth pro dispatch — garante que `prompt_version` em
     `leads.engine_llm_calls` reflete a variant que efetivamente rodou
-    (sem drift risk se alguem mudar o router no futuro)."""
+    (sem drift risk se alguem mudar o router no futuro).
+
+    PR6: `bucket` opcional injeta bloco <ab_test_bucket> com instrucao
+    especifica (factual_only / juris_only / mixed / derived_only). Quando
+    None, comportamento legacy single-prompt.
+    """
     tipo = _determine_tipo_dominante(req.processo_syntheses)
+    ab_test_block = _build_ab_test_bucket_block(bucket)
     parts = [
         _build_intro(),
         _build_glossary_roles(),
@@ -1398,12 +1543,20 @@ def build_prompt_and_version(req: MeritoSynthesisRequest) -> tuple[str, str]:
         _build_templates_poletto(),
         _build_regras_anti_falso_alto(),
         _build_rules(tipo),
+        ab_test_block,  # PR6 — injetado quando bucket != None
         _build_lembrete_final(req),
     ]
-    return "\n\n".join(p for p in parts if p) + "\n", _prompt_version_for(tipo)
+    version = _prompt_version_for(tipo)
+    if bucket:
+        # Suffix bucket pra rastreabilidade em engine_llm_calls.prompt_version.
+        version = f"{version}__ab_{bucket}"
+    return "\n\n".join(p for p in parts if p) + "\n", version
 
 
-def build_merito_synthesis_prompt(req: MeritoSynthesisRequest) -> str:
+def build_merito_synthesis_prompt(
+    req: MeritoSynthesisRequest,
+    bucket: str | None = None,
+) -> str:
     """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda/aiim
     + jurisprudencia + previous_snapshot pra computar risco do MERITO.
 
@@ -1413,6 +1566,8 @@ def build_merito_synthesis_prompt(req: MeritoSynthesisRequest) -> str:
     - >=80% civel -> vocab Cumprimento de Sentenca, REsp, Tema repetitivo STJ
     - resto -> 'misto' (vocab abstrato + confidence -0.10)
 
+    PR6 `bucket`: ver `_build_ab_test_bucket_block` doc.
+
     Pra telemetria com prompt_version use `build_prompt_and_version()`."""
-    prompt, _ = build_prompt_and_version(req)
+    prompt, _ = build_prompt_and_version(req, bucket=bucket)
     return prompt

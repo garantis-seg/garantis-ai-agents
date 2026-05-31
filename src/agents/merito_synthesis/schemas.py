@@ -318,6 +318,22 @@ class ProcessoSynthesisMin(BaseModel):
         default=None,
         description="Card de probabilidade_exito do processo (Matriz Daycoval). Camada 3 agrega.",
     )
+    # PR6 Architecture D — orthogonal paths emitidos pelo L2 (PR3 schema).
+    # Camada 3 le esses pra rodar A/B test (factual_only / juris_only / mixed /
+    # derived_only). Default None quando card materializado pre-PR3 OU L2
+    # nao conseguiu derivar — L3 trata None como Indeterminado (fallback).
+    risco_factual: Optional[Literal[
+        "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
+    ]] = Field(
+        default=None,
+        description="Risco derivado SO de estado + Matriz Daycoval (Architecture D).",
+    )
+    risco_jurisprudencial: Optional[Literal[
+        "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
+    ]] = Field(
+        default=None,
+        description="Risco derivado SO de tese + ementas (Architecture D).",
+    )
 
     model_config = {"extra": "ignore"}
 
@@ -423,6 +439,22 @@ class MeritoSynthesisRequest(BaseModel):
     model: Optional[str] = None
     provider: Optional[str] = None
 
+    # PR6 Architecture D — A/B test bucket. None = legacy single-prompt.
+    # Quando set, prompts.py injeta instrucao especifica por bucket pra
+    # forcar L3 LLM a usar SO um subset dos sinais. Permite avaliar qual
+    # arquitetura (factual_only / juris_only / mixed / derived_only)
+    # acerta mais Poletto ground truth.
+    bucket: Optional[Literal[
+        "factual_only", "juris_only", "mixed", "derived_only",
+    ]] = None
+
+    # PR6 Architecture D — quando bucket="derived_only", o materializer L3
+    # pre-calcula derived_aggregate via matriz determ 5x5 e injeta aqui pro
+    # LLM justificar (NAO substituir). Ignorado em outros buckets.
+    derived_aggregate_hint: Optional[Literal[
+        "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
+    ]] = None
+
     # Defensive: extra fields ignored (cobre materializer legacy passando
     # `jurisprudencia` antes deste commit; safe pra rollouts staggered).
     model_config = {"extra": "ignore"}
@@ -434,3 +466,6 @@ class MeritoSynthesisResponse(BaseModel):
     llm_raw_prompt: Optional[str] = None
     prompt_version: Optional[str] = None
     usage: Optional[dict[str, Any]] = None
+    # PR6 Architecture D — echo do bucket que rodou (pro materializer L3
+    # persistir card['l3_ab_test'][bucket]).
+    bucket: Optional[str] = None

@@ -19,7 +19,11 @@ groq>=0.4.0
 #   engine_v6/__init__.py virou lazy (PEP 562 __getattr__) — permite importar
 #   matrices sem dragging psycopg2/DBOS deps. SEM esse hotfix, PR2 deploy
 #   ai-agents falha boot em ModuleNotFoundError: psycopg2.
-garantis-shared>=1.62.0
+# 1.65.0 — Architecture D PR6: ai-agents NAO usa direto (mudancas locais em
+# agents/merito_synthesis sao independentes), mas pin alinhado garante que
+# worker rode mesma versao do shared que registra prompt_version no
+# engine_llm_calls (rastreabilidade dos buckets ab test).
+garantis-shared>=1.65.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
