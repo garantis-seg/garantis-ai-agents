@@ -104,6 +104,55 @@ class TeseJurisprudenciaMin(BaseModel):
     )
 
 
+class JurisprudenciaExternaMin(BaseModel):
+    """Jurisprudencia externa da tese × tribunal via provider jurisprudencias.ai.
+
+    Architecture D PR3 (2026-05-31). Populated quando flag JURISPRUDENCE_PATH_ENABLED
+    != off + merito tem tese_canonica_id + tribunal cabe no provider (11 cortes).
+    None quando flag off OR tese unavailable OR tribunal sem mapping (graceful).
+
+    `top_decisions` traz ate 3 ementas (process_number / publication_date / excerpt /
+    url) que o prompt L2 pode citar no field justificativa. cached=True quando veio
+    do cache TTL 30d (sem chamar provider). source='provider' fixo em V1.
+    """
+
+    tribunal: Optional[str] = Field(
+        default=None,
+        description="Tribunal interno (TJSP/STJ/STF/TRF3/...) — mapeado pro provider court_id.",
+    )
+    resultado_majoritario: Optional[str] = Field(
+        default=None,
+        description=(
+            "Heuristic tally: 'pro_contribuinte' (provider mostra majoritariamente "
+            "favoravel ao Tomador) | 'pro_fazenda' (majoritariamente desfavoravel) | "
+            "'dividida' (ambas direcoes presentes) | 'indeterminado' (n_hits=0 ou "
+            "sinal fraco). V1 baseado em regex em excerpt — tuning iterativo "
+            "pos-shadow window."
+        ),
+    )
+    n_hits: Optional[int] = Field(
+        default=None,
+        description="Numero de acordaos retornados pela query (excludente do page>0).",
+    )
+    top_decisions: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description=(
+            "Top 3 ementas: cada item tem process_number, publication_date, excerpt, url. "
+            "Use pra citar evidencia na justificativa do risco_jurisprudencial."
+        ),
+    )
+    source: Optional[str] = Field(
+        default="provider",
+        description="Origem da informacao. V1 sempre 'provider' (jurisprudencias.ai).",
+    )
+    cached: Optional[bool] = Field(
+        default=None,
+        description="True quando veio do cache TTL 30d. False quando fresh provider call.",
+    )
+
+    model_config = {"extra": "ignore"}
+
+
 class EvidenceArtifact(BaseModel):
     """Citacao de factsheet/autos que sustenta a sintese L2.
 
@@ -238,6 +287,34 @@ class ProcessoSynthesisCard(BaseModel):
             "EXCETO sinais explicitos de irregularidade (penhora, intimacao pagamento). "
             "Alto: sentenca desfavoravel SEM recurso; mantido em 2a inst sem transito. "
             "Altissimo: transito desfavoravel certificado; cumprimento determinado."
+        ),
+    )
+
+    # Campos 4b/4c: Architecture D — orthogonal risk paths (PR3 shadow).
+    # Apenas populated quando flag JURISPRUDENCE_PATH_ENABLED != off + payload
+    # tem jurisprudencia_externa (graceful fallback null). L3 PR4 vai aplicar
+    # matriz determ pra agregar em `risco_processo_intermediario` (shadow) ou
+    # substituir (new). Default None pra ficar bovinamente claro no audit
+    # quando flag=off (sem incidente acidental).
+    risco_factual: Optional[Literal[
+        "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
+    ]] = Field(
+        default=None,
+        description=(
+            "Risco derivado SO do estado processual + Matriz Daycoval (factual). "
+            "Ignora jurisprudencia — espelha so a logica determinista de tier+"
+            "decisao_vigente+lifecycle. Quando flag JURISPRUDENCE_PATH_ENABLED=off "
+            "fica null (legacy single-path)."
+        ),
+    )
+    risco_jurisprudencial: Optional[Literal[
+        "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
+    ]] = Field(
+        default=None,
+        description=(
+            "Risco derivado SO da jurisprudencia (tese × tribunal). 'Indeterminado' "
+            "quando n_hits=0 ou resultado_majoritario indeterminado. Quando flag off "
+            "fica null."
         ),
     )
 
@@ -415,6 +492,18 @@ class ProcessoSynthesisRequest(BaseModel):
             "null quando processo sem merito_id ou tese sem mapping. "
             "Em 2026-05-25 movido de L3 pra L2 — agora SINAL da juris pesa "
             "risco_processo_intermediario direto, sem double-counting com Matriz Daycoval."
+        ),
+    )
+    # Architecture D PR3 (2026-05-31): jurisprudencia externa via provider
+    # jurisprudencias.ai. Populated quando flag JURISPRUDENCE_PATH_ENABLED != off
+    # + merito tem tese_canonica_id + tribunal cabe no provider. None em qualquer
+    # outro caso (graceful — prompt L2 nao injeta bloco extra, byte-identical).
+    jurisprudencia_externa: Optional[JurisprudenciaExternaMin] = Field(
+        default=None,
+        description=(
+            "Heuristic do provider jurisprudencias.ai pra (tese × tribunal). "
+            "Substitui curadoria interna apos shadow window 14d + drop PR5. "
+            "null quando flag off OR tese unavailable OR tribunal sem mapping."
         ),
     )
     model: Optional[str] = None

@@ -15,7 +15,11 @@ groq>=0.4.0
 # Bumped 2026-05-31 (Architecture D PR2) — agents/processo_synthesis/prompts.py
 # importa engine_v6.matrices.daycoval (Matriz Daycoval extraida do hardcode).
 # 1.61.0 introduz garantis_shared/engine_v6/matrices/{__init__,daycoval}.py.
-garantis-shared>=1.61.0
+# 1.62.0 — Architecture D PR3 + lazy __init__ hotfix:
+#   engine_v6/__init__.py virou lazy (PEP 562 __getattr__) — permite importar
+#   matrices sem dragging psycopg2/DBOS deps. SEM esse hotfix, PR2 deploy
+#   ai-agents falha boot em ModuleNotFoundError: psycopg2.
+garantis-shared>=1.62.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0

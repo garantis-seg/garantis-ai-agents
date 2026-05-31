@@ -446,6 +446,45 @@ def _build_tese_juris_block(tj) -> str:
     return " | ".join(parts)
 
 
+def _build_juris_externa_block(je) -> str:
+    """Renderiza jurisprudencia externa (provider jurisprudencias.ai) (PR3).
+
+    Architecture D — bloco PARALELO ao tese_jurisprudencia interno. Quando
+    JURISPRUDENCE_PATH_ENABLED=off, este field eh None upstream e este
+    helper nao eh chamado (caller short-circuita). Quando present:
+    header + tally + top 3 ementas (process_number + publication_date +
+    excerpt curto + url). LLM deve emit risco_jurisprudencial baseado nele.
+    """
+    if je is None:
+        # Should not be reached — caller checks before invocation. Guard so
+        # mudancas upstream no schema nao quebrarem byte-identical em off.
+        return "(sem jurisprudencia externa — flag off ou tribunal sem mapping)"
+    lines = []
+    parts = []
+    if je.tribunal:
+        parts.append(f"tribunal={je.tribunal}")
+    if je.resultado_majoritario:
+        parts.append(f"resultado={je.resultado_majoritario}")
+    if je.n_hits is not None:
+        parts.append(f"n_hits={je.n_hits}")
+    if je.cached is not None:
+        parts.append(f"cached={je.cached}")
+    lines.append("  " + " | ".join(parts) if parts else "  (sem metadata)")
+    top = je.top_decisions or []
+    if top:
+        lines.append("  Top 3 ementas (provider):")
+        for i, d in enumerate(top[:3], start=1):
+            pn = d.get("process_number") or "?"
+            pub = d.get("publication_date") or "?"
+            excerpt = (d.get("excerpt") or "").strip().replace("\n", " ")
+            if len(excerpt) > 300:
+                excerpt = excerpt[:300] + "…"
+            lines.append(f"    [{i}] {pn} ({pub}): {excerpt}")
+    else:
+        lines.append("  (sem ementas retornadas pelo provider)")
+    return "\n".join(lines)
+
+
 def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     """Build prompt que agrega mov_factsheets + day_factsheets + apolice context + autos_raw_excerpt.
 
@@ -502,6 +541,26 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         )
     else:
         tese_juris_section = ""
+
+    # PR3 Architecture D: bloco juris externa renderizado SOMENTE quando
+    # materializer populou o campo (flag JURISPRUDENCE_PATH_ENABLED != off
+    # + tese_canonica + tribunal mapeado). Quando None -> string vazia,
+    # prompt byte-identical ao legacy (zero risk em flag=off).
+    if req.jurisprudencia_externa is not None:
+        juris_externa_section = (
+            "\n=== JURISPRUDENCIA EXTERNA (provider jurisprudencias.ai) ===\n"
+            + _build_juris_externa_block(req.jurisprudencia_externa)
+            + "\n\nINSTRUCAO: emita 2 campos NOVOS Architecture D:\n"
+            "  - risco_factual:        derive APENAS do estado processual + tier + decisao_vigente + lifecycle.\n"
+            "                          IGNORE jurisprudencia. Espelha a logica que voce ja usaria em risco_processo_intermediario.\n"
+            "  - risco_jurisprudencial: derive APENAS deste bloco + tese_jurisprudencia legacy.\n"
+            "                          Mapeamento: resultado='pro_contribuinte' -> Baixo; 'pro_fazenda' -> Alto;\n"
+            "                          'dividida' -> Medio; 'indeterminado' (n_hits<3 OU resultado=indeterminado) -> Indeterminado.\n"
+            "  AMBOS sao orthogonal — nao combine sinais cruzados. Camada 3 vai agregar via matriz determ.\n"
+            "  Quando flag estiver em 'shadow' (estado atual), risco_processo_intermediario LEGACY tambem eh emitido pra A/B parity.\n"
+        )
+    else:
+        juris_externa_section = ""
 
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
@@ -645,7 +704,7 @@ logica via <regra_polos>.
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}{monolith_block}
 
-{tese_juris_section}
+{tese_juris_section}{juris_externa_section}
 {tipo_specific_block}
 
 === INSTRUCOES POR CAMPO ===
