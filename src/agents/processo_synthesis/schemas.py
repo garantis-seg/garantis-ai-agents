@@ -256,6 +256,15 @@ class ProcessoSynthesisCard(BaseModel):
     )
 
     # Campo 4: risco intermediario do processo
+    #
+    # DEPRECATED PR7.6 (2026-05-31) — comment-only marker, NAO em Field(description)
+    # pq description vai pro LLM via response_schema (Gemini) e tag de
+    # depreciacao podia ser interpretada como "nao emit" -> silent degradation.
+    # Substituido por orthogonal pair (risco_factual + risco_jurisprudencial)
+    # na Architecture D. Field mantido backward-compat indefinidamente — drop
+    # plan deferido ate L2 schema extendido OU backtest runner migrado pra
+    # L3 snapshots (ver ADR-L2-LEGACY-CLEANUP-PR7.6.md secao "Drop ainda nao
+    # seguro" + "Decisao revisada PR7.6 Item 4 F1 fix").
     risco_processo_intermediario: Optional[Literal[
         "Baixo", "Medio", "Alto", "Altissimo",
     ]] = Field(

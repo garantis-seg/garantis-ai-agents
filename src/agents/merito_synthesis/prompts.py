@@ -624,48 +624,21 @@ COMPATIVEIS, nao concorrentes. Ambos refletem distribuicao empirica de
 acionamento por classe + estado processual. Use em conjunto."""
 
 
-_REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO = """
-
-REGRA — PARADIGMA POLETTO COMO OVERRIDE EM FASE PRE-TRANSITO:
-
-Cards do L2 podem trazer 1+ paradigmas Poletto indicando "Alto" pra tese
-canonica (paradigma.sentido='desfavoravel' ao Tomador). Esses paradigmas
-sao jurisprudencia consolidada da TESE em instancias superiores
-(STF/STJ/TJs majoritarios), nao do CASO individual atual.
-
-REGRA DURA DE OVERRIDE: Quando TODAS as condicoes abaixo aplicam:
-  (i)   ha >=1 paradigma carregado E >=50% dos paradigmas indicam Alto
-        (sentido='desfavoravel'), E
-  (ii)  decisao_vigente.sentido='favoravel' ao Tomador EM 1g (sem
-        transito em julgado certificado), E
-  (iii) ha recurso pendente OU prazo recursal em curso, E
-  (iv)  tese_canonica NAO eh pro_contribuinte_firmado (Tema STF/STJ ou
-        Sumula que mata definitivamente a tese contraria)
-
-ENTAO: ELEVE classificacao UM nivel ACIMA do template que matchou:
-  - Template Baixo (T-B1/T-B2/T-B3) -> MEDIO
-  - Template Medio (T-M1/T-M2) -> ALTO
-  - Template Alto+ (T-A*/T-AA*) -> mantem (ja eh alto)
-
-Cite na justificativa: (a) o template originalmente matchado, (b) o(s)
-paradigma(s) que dispararam o override, (c) por que o override aplica
-(decisao 1g favoravel + paradigma jurisprudencial superior contraria
-indicam risco prospectivo de reversao).
-
-Exemplo m=680006 BANCO MERCANTIL IRPJ Stock Options:
-- 1g procedente (sentido='favoravel', T-B2 indicaria Baixo)
-- 1 paradigma Poletto Alto em Stock Options (STJ majoritario contra)
-- Sem transito em julgado, agravo de instrumento pendente
-- Tese NAO eh pro_contribuinte_firmado
-- OVERRIDE: classifique MEDIO (nao Baixo via T-B2, nao Alto direto)
-- Justificativa: "T-B2 matchou por sentenca 1g favoravel, mas paradigma
-  Poletto consolidado pra Stock Options aponta reversao provavel em
-  STJ -> risco MEDIO ate transito (subida 1 nivel)."
-
-Scope: aplica APENAS a meritos com >=1 paradigma desfavoravel. Meritos
-SEM paradigma permanecem governados pelo template default (nenhum
-override). Paradigmas que apontam Baixo (sentido='favoravel') NAO
-disparam override (paradigma favoravel reforca template Baixo)."""
+# PR7.6 FIX (2026-05-31): _REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO DELETADA.
+# Regra antiga instruia LLM a procurar "paradigmas" em payload + override risco
+# baseado em paradigma.sentido='desfavoravel'. ParadigmaMin foi DROPADO em PR7.2
+# (curadoria interna ref.tese_decisao_individual substituida por provider externo
+# jurisprudencias.ai). LLM ficaria procurando dado que nao chega mais no payload
+# -> overrides confusos / decisoes incoerentes em PROD.
+#
+# Sinal pre-transito agora vem da matriz determ Architecture D PR7.1:
+# risco_factual + risco_jurisprudencial combinados em derived_aggregate (matriz
+# 5x5 leads.jurisprudencia_externa_cache). L3 substitui card.risco pelo derived
+# quando mode=new + derived != Indeterminado. Override pre-transito implicit.
+#
+# Flag PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED dropada do services.yaml +
+# cloudbuild no proximo deploy (mesmo PR).
+_REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO = ""  # noqa: removed pos-PR7.2
 
 
 def _build_regras_anti_falso_alto() -> str:
@@ -735,8 +708,10 @@ REGRA DURA: bullet "[ALTISSIMO] penhora online deferida" no escala
 fiscal/civel/trab exige EVIDENCIA EXPLICITA de efetivacao (valor
 bloqueado documentado, BACENJUD positivo, etc). Sem evidencia
 explicita, default Baixo."""
-    if _flag_enabled("PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED"):
-        base += _REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO
+    # PR7.6 (2026-05-31): _REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO removida
+    # pos-PR7.2 drop de ParadigmaMin. flag PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED
+    # ficou orfa (mesmo se ON, base += '' = no-op). Drop persistido em
+    # services.yaml + cloudbuilds no mesmo PR.
     return base
 
 
@@ -1477,8 +1452,8 @@ def _build_ab_test_bucket_block(
             "    - processo_syntheses[].probabilidade_exito (Matriz Daycoval)\n"
             "  IGNORE COMPLETAMENTE:\n"
             "    - processo_syntheses[].risco_jurisprudencial\n"
-            "    - tese_jurisprudencia (qualquer fonte)\n"
-            "    - paradigmas_curados (NAO use sinal de tese)\n"
+            "    - jurisprudencia_externa (provider jurisprudencias.ai)\n"
+            "    - top_decisions externas (quando presentes)\n"
             "  Justifique em `contribuicao_no_risco` que ignorou juris por design.\n"
             "  Quando risco_factual = Indeterminado em todos procs -> emit 'Indeterminado'\n"
             "  (NAO chute Baixo por default).\n"
@@ -1490,7 +1465,7 @@ def _build_ab_test_bucket_block(
             "EXPERIMENTO A/B (Architecture D PR6) — bucket JURIS_ONLY:\n"
             "  Pra `risco` final do merito, considere APENAS:\n"
             "    - processo_syntheses[].risco_jurisprudencial\n"
-            "    - tese_jurisprudencia (interna + paradigmas curados)\n"
+            "    - jurisprudencia_externa (provider jurisprudencias.ai — single source pos-PR7.2)\n"
             "    - top_decisions externas (quando presentes nos processo_syntheses)\n"
             "  IGNORE COMPLETAMENTE:\n"
             "    - processo_syntheses[].risco_factual\n"
@@ -1505,11 +1480,13 @@ def _build_ab_test_bucket_block(
         return (
             "\n<ab_test_bucket name=\"mixed\">\n"
             "EXPERIMENTO A/B (Architecture D PR6) — bucket MIXED (legacy):\n"
-            "  Considere TODOS os sinais (factual + juris + paradigmas + estado +\n"
-            "  Matriz Daycoval). Mesma logica do prompt L3 pre-PR6 — esta variant\n"
-            "  serve como baseline pra comparar contra factual_only/juris_only/\n"
-            "  derived_only. Aplique todas regras anti-falso-alto + bloqueio Daycoval\n"
-            "  + templates Poletto + paradigmas como em producao atual.\n"
+            "  Considere TODOS os sinais disponiveis no payload (factual + juris\n"
+            "  externa + estado + Matriz Daycoval). Mesma logica do prompt L3\n"
+            "  pos-PR7.2 — esta variant serve como baseline pra comparar contra\n"
+            "  factual_only/juris_only/derived_only. Aplique todas regras anti-\n"
+            "  falso-alto + bloqueio Daycoval + templates Poletto como em\n"
+            "  producao atual (paradigmas curados foram dropados em PR7.2 e nao\n"
+            "  fazem mais parte do payload).\n"
             "</ab_test_bucket>\n"
         )
     if bucket == "derived_only":
