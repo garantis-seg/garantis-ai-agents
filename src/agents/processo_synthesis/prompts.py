@@ -51,127 +51,21 @@ def _short_mov_id(mov_id: str | None) -> str:
 
 
 # ── Matriz Daycoval (Probabilidade de Exito) ─────────────────────────────
-# Criterios objetivos por tipo judicial. Removido criterio "Tese consolidada
-# STJ/STF" da V1 (ambicioso demais, dependeria base externa). Pesos
-# correspondem a score: provavel=1.0 | possivel=0.7 | poucas_chances=0.4 | remota=0.0001.
-
-_DAYCOVAL_FISCAL = {
-    "provavel": [
-        "Matéria com repercussão geral ou repetitivo definitivamente julgado favorável ao contribuinte (Tomador)",
-        "Matéria exclusivamente de direito favorável ao contribuinte (Tomador)",
-        "Inexistência de precedentes contrários à matéria discutida nos autos",
-        "Parecer jurídico ou Perícia técnica conclusivo e favorável ao contribuinte (Tomador)",
-        "Mandado de Segurança antecedente, favorável ao contribuinte (Tomador) para o mesmo objeto",
-        "Decisões anteriores sob a mesma matéria, favoráveis ao contribuinte (Tomador) que NÃO dependam de análise dos fatos e produção de prova",
-    ],
-    "possivel": [
-        "Jurisprudência majoritariamente favorável ao contribuinte (Tomador)",
-        "Precedentes pontuais favoráveis à matéria processual do contribuinte (Tomador)",
-        "Tese favorável ao contribuinte (Tomador) que dependa da produção de provas ou perícia técnica",
-        "Decisões anteriores sob a mesma matéria, favoráveis ao contribuinte (Tomador), porém, depende da análise dos fatos e produção de provas",
-    ],
-    "poucas_chances": [
-        "Matéria com jurisprudência oscilante",
-        "Tema/Matéria não possui tese de recurso repetitivo (IRDR)",
-        "Decisões desfavoráveis ao Tomador em Processo Administrativo que dependam da produção de provas no processo judicial",
-    ],
-    "remota": [
-        "Jurisprudência predominantemente desfavorável ao contribuinte (Tomador)",
-        "Decisões precedentes contrárias à tese do contribuinte (Tomador)",
-        "Tese defensiva residual ou protelatória",
-        "Processo em fase avançada com decisões desfavoráveis ao contribuinte (Tomador)",
-        "Matéria predominantemente de direito desfavorável ao contribuinte (Tomador)",
-    ],
-}
-
-_DAYCOVAL_TRABALHISTA = {
-    "provavel": [
-        "Erro material ou aritmético evidente nos cálculos apresentados",
-        "Extrapolação/violação da coisa julgada em fase de Execução Trabalhista pelo Reclamante (Segurado)",
-        "Matéria exclusivamente de direito favorável ao Reclamado (Tomador)",
-        "Jurisprudência pacificada favorável ao Reclamado (Tomador)",
-        "Prova documental incontestável produzida pelo Reclamado (Tomador)",
-        "Súmulas vinculantes/Orientações Jurisprudenciais favoráveis ao Reclamado (Tomador)",
-    ],
-    "possivel": [
-        "Interpretação do cálculo favorável ao Reclamado (Tomador)",
-        "Jurisprudência majoritariamente favorável que dependa de produção de provas/perícia contábil",
-        "Impugnação/embargos bem fundamentados com tese favorável ao Reclamado (Tomador)",
-    ],
-    "poucas_chances": [
-        "Divergência relevante sobre critérios de cálculo ainda não pacificado por Tribunais Superiores",
-        "Jurisprudência oscilante sobre o índice ou forma de cálculo da condenação",
-    ],
-    "remota": [
-        "Título Executivo definitivo, cuja impugnação tem viés meramente protelatório",
-        "Cálculos da condenação já homologados na Execução Definitiva sem matéria para impugnação",
-        "Impugnações/decisões anteriores desfavoráveis ao Reclamado (Tomador)",
-        "Matéria preclusa impugnada pelo Reclamado (Tomador)",
-        "Penhora ou atos expropriatórios em curso na fase de Execução Definitiva",
-    ],
-}
-
-_DAYCOVAL_CIVEL = {
-    "provavel": [
-        "Matéria com repercussão geral ou repetitivo definitivamente julgado favorável ao garantido (Tomador)",
-        "Matéria exclusivamente de direito, sem necessidade de produção de provas pelo garantido (Tomador)",
-        "Pedido juridicamente impossível, prescrito ou decadente pela parte contrária",
-        "Título Executivo com cláusula contratual expressa, válida e usual, já reconhecida como lícita favorável ao Tomador",
-        "Inexistência de precedentes contrários à matéria discutida nos autos",
-        "Decisões anteriores sob a mesma matéria, favoráveis ao garantido (Tomador) que NÃO dependam de análise dos fatos e produção de provas",
-        "Provas produzidas favoráveis ao garantido (Tomador)",
-        "Parecer jurídico ou Perícia técnica conclusivo e favorável ao garantido (Tomador)",
-    ],
-    "possivel": [
-        "Jurisprudência majoritariamente favorável ao garantido (Tomador)",
-        "Precedentes pontuais favoráveis à matéria processual do garantido (Tomador)",
-        "Ônus da prova não cumprido pela parte contrária e favoráveis ao garantido (Tomador)",
-        "Discussão de mérito (decisões) favoráveis ao Tomador em sede de recursos",
-    ],
-    "poucas_chances": [
-        "Matéria com jurisprudência oscilante",
-        "Tema/Matéria não possui tese de recurso repetitivo (IRDR)",
-        "Discussão processual depende de produção de provas para conclusão da tese",
-    ],
-    "remota": [
-        "Jurisprudência predominantemente desfavorável à tese do garantido (Tomador)",
-        "Decisões anteriores desfavoráveis ao garantido (Tomador)",
-        "Provas produzidas desfavoráveis ao garantido (Tomador)",
-        "Tese defensiva residual ou protelatória",
-        "Penhora ou atos expropriatórios em curso na fase de Execução Definitiva/Cumprimento de Sentença",
-    ],
-}
-
-_DAYCOVAL_MATRIZES = {
-    "fiscal": _DAYCOVAL_FISCAL,
-    "trabalhista": _DAYCOVAL_TRABALHISTA,
-    "civel": _DAYCOVAL_CIVEL,
-}
-
-_SCORE_BY_CLASS = {
-    "provavel": 1.0,
-    "possivel": 0.7,
-    "poucas_chances": 0.4,
-    "remota": 0.0001,
-}
-
-
-def _build_matriz_block(tipo_judicial: str) -> str:
-    """Bloco com criterios objetivos da Matriz Daycoval per tipo."""
-    matriz = _DAYCOVAL_MATRIZES.get(tipo_judicial, _DAYCOVAL_CIVEL)
-    label_map = {"fiscal": "FISCAL", "trabalhista": "TRABALHISTA", "civel": "CIVEL"}
-    label = label_map.get(tipo_judicial, "CIVEL")
-    lines = [f"\n=== MATRIZ DAYCOVAL — PROBABILIDADE DE EXITO ({label}) ==="]
-    lines.append(
-        "Aplique os criterios abaixo (cite literalmente em criterios_aplicados[]).\n"
-        "Score: provavel=1.0 | possivel=0.7 | poucas_chances=0.4 | remota=0.0001.\n"
-    )
-    for cls in ("provavel", "possivel", "poucas_chances", "remota"):
-        score = _SCORE_BY_CLASS[cls]
-        lines.append(f"\n[{cls.upper()}] (score={score}):")
-        for bullet in matriz[cls]:
-            lines.append(f"  - {bullet}")
-    return "\n".join(lines)
+# Extraida em 2026-05-31 (PR2 Architecture D) pra
+# garantis_shared.engine_v6.matrices.daycoval. Mantemos aliases legacy
+# (_DAYCOVAL_*, _SCORE_BY_CLASS, _build_matriz_block) pra calls existentes
+# nesse modulo continuarem funcionando byte-identical. PR3+ remove
+# dependencia se necessario.
+from garantis_shared.engine_v6.matrices import (
+    DAYCOVAL_CIVEL as _DAYCOVAL_CIVEL,
+    DAYCOVAL_FISCAL as _DAYCOVAL_FISCAL,
+    DAYCOVAL_MATRIZES as _DAYCOVAL_MATRIZES,
+    DAYCOVAL_SCORE_BY_CLASS as _SCORE_BY_CLASS,
+    DAYCOVAL_TRABALHISTA as _DAYCOVAL_TRABALHISTA,
+)
+from garantis_shared.engine_v6.matrices.daycoval import (
+    build_matriz_block_compat as _build_matriz_block,
+)
 
 
 def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
