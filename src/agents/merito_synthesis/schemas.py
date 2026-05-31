@@ -195,12 +195,18 @@ class MeritoSynthesisCard(BaseModel):
     merito_context: Literal["monit_poletto", "global"] = "global"
 
     # Output principal - risco + justificativa
-    risco: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo"]] = Field(
+    # PR7.1 (2026-05-31): adicionou 'Indeterminado' ao Literal. Quando Architecture D
+    # mode=new + matriz determ retorna Indeterminado (factual + juris ambos null),
+    # promote logic mantem o veredito LLM como fallback ao inves de forcar 'Baixo'.
+    # Antes, schema rejeitava emit de Indeterminado mesmo quando matriz nao tem
+    # sinal — agora pode emit explicito.
+    risco: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo", "Indeterminado"]] = Field(
         default="Baixo",
         description=(
             "Risco de acionamento da apolice no MERITO. Default = Baixo. So sobe pra "
             "Medio/Alto/Altissimo com sinal explicito documentado (vide PROTOCOLO DE "
-            "RISCO BASE + ESCALA EXPLICITA no prompt). NUNCA usar Medio como zona-cinza."
+            "RISCO BASE + ESCALA EXPLICITA no prompt). 'Indeterminado' permitido SO "
+            "quando ambos factual e juris ausentes e LLM nao consegue desambiguar."
         ),
     )
     justificativa: Optional[str] = Field(

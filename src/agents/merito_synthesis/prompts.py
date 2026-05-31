@@ -428,18 +428,62 @@ def _build_paradigmas_block(req: MeritoSynthesisRequest) -> str:
 
 
 def _build_protocolo_postura_default() -> str:
-    """POSTURA + DEFAULT Baixo. Comum a todos os tipos.
+    """POSTURA + FLOOR MINIMO derivado de probabilidade_exito_merito + Architecture D.
 
-    "Medio" NUNCA como zona-cinza — regra vale pra todos os tipos."""
-    return """=== PROTOCOLO DE RISCO BASE (CRITICA — leia antes de classificar risco) ===
+    PR7.1 (2026-05-31) reescrita radical. Versao anterior tinha DEFAULT=Baixo
+    agressivo com "sem gatilho concreto, NAO HA risco imediato". Workflow deep
+    analysis 8 meritos divergentes do REVISAO_MANUAL identificou esse override
+    como CAUSA RAIZ de 4-5/8 mismatches: LLM via probabilidade_exito=poucas_chances
+    e EXPLICITAMENTE descartava o sinal pra emit Baixo, invocando "ausencia de
+    gatilho" / "fase pre-decisao".
 
-POSTURA: o gatilho de acionamento da apolice de seguro garantia eh a
-EXIGENCIA ATIVA de pagamento ao Tomador (intimacao pra pagar, penhora,
-levantamento, cumprimento de sentenca). Sem gatilho concreto, NAO HA risco
-imediato.
+    Nova regra: floor minimo POR probabilidade_exito_merito.classificacao_agregada.
+    "Ausencia de decisao" NAO eh mais sinal de Baixo — eh sinal NEUTRO; floor
+    minimo do prob_exito agregado domina."""
+    return """=== PROTOCOLO DE RISCO BASE (CRITICA PR7.1 — Architecture D floor) ===
 
-DEFAULT = "Baixo". So sobe pra Medio/Alto/Altissimo com SINAL EXPLICITO
-documentado nos cards. NUNCA usar "Medio" como zona-cinza/cauteloso."""
+POSTURA: o risco do MERITO reflete a PROBABILIDADE DE ACIONAMENTO da apolice
+no horizonte 12-24 meses. Combine TRES sinais hierarquicos: (1) FLOOR MINIMO
+derivado de probabilidade_exito_merito.classificacao_agregada; (2) FASE
+PROCESSUAL via templates T-B*/T-M*/T-A*/T-AA*; (3) DECISAO MERITO explicita.
+
+=== FLOOR MINIMO POR PROBABILIDADE_EXITO_AGREGADA ===
+
+A probabilidade_exito_merito.classificacao_agregada eh INPUT VALIDO pro risco
+(diferente da regra anterior v2.4 que mandava ignorar). Aplique como FLOOR:
+
+  - 'provavel' / 'pacifica':  Baixo  (floor)
+  - 'possivel':               Medio  (floor — NUNCA emit Baixo)
+  - 'poucas_chances':         Medio  (floor — NUNCA emit Baixo)
+  - 'remota':                 Alto   (floor — NUNCA emit Baixo)
+
+=== EXCECOES BAIXADORAS (podem baixar 1 tier abaixo do floor) ===
+
+Aceite Baixo apesar de prob_exito=poucas_chances/remota SOMENTE quando:
+  - T-B2 confirmado (decisao FAVORAVEL ao Tomador em sentenca/acordao/transito)
+  - T-B4 confirmado (caso resolvido: pagamento, parcelamento, RJ)
+  - T-B3 confirmado (estado pre-aceitacao da apolice — apolice ainda nao em risco)
+
+Sem confirmacao explicita de UM dos 3 templates acima, FLOOR domina.
+
+=== EXCECOES SUBIDORAS (sobem 1+ tier acima do floor) ===
+
+  - Penhora online com valor_bloqueado > 0 documentado nos cards
+  - Intimacao formal da seguradora pra pagar
+  - Cumprimento de sentenca contra Tomador com prazo em curso
+  - Transito em julgado DESFAVORAVEL ao Tomador
+  - Decisao 2g DESFAVORAVEL ao Tomador sem recurso pendente
+
+=== ZONA-CINZA / INDETERMINADO ===
+
+"Medio" NUNCA como zona-cinza meramente cauteloso. Medio so vem de floor
+explicito ou template T-M*.
+
+'Indeterminado' permitido APENAS quando TODAS as condicoes abaixo:
+  - probabilidade_exito_merito.classificacao_agregada ausente OU null
+  - factual_agg e juris_agg ambos null/Indeterminado
+  - Nenhum template T-* casa
+  - Cards sem decisao de merito identificada"""
 
 
 def _build_templates_poletto() -> str:
@@ -582,34 +626,33 @@ def _build_bloqueio_prob_exito() -> str:
     """
     if not _flag_enabled("BLOQUEIO_PROB_EXITO_ENABLED"):
         return ""
-    return """=== BLOQUEIO DE SINAL Daycoval-residual (CRITICA — v2.4) ===
+    # PR7.1 (2026-05-31) — REVERSAO da v2.4. Bloco antigo mandava IGNORAR
+    # COMPLETAMENTE probabilidade_exito + score Daycoval, classificando SO
+    # via fase processual + decisao explicita + sinais processuais. Workflow
+    # deep analysis 8 meritos divergentes identificou esse bloqueio como
+    # COMPLICE direto do override Baixo (engine ignorava poucas_chances/remota
+    # como motivo e caia em default Baixo via Protocolo).
+    #
+    # Nova regra: probabilidade_exito EH input valido + define FLOOR MINIMO
+    # (alinhado com PROTOCOLO DE RISCO BASE PR7.1). Architecture D matriz
+    # determ promote (mode=new) usa derived_aggregate como fonte oficial
+    # quando disponivel. Block name preservado pra compat env var.
+    return """=== USO DE PROBABILIDADE_EXITO (PR7.1 — Architecture D compatible) ===
 
-A L2 pode te entregar campos como `probabilidade_exito` (com valores tipo
-'remota', 'possivel', 'provavel', 'pacifica') ou `score` numerico de 0 a 1.
-Esses campos vem da MATRIZ DAYCOVAL — a corretora ATUAL (em substituicao),
-historicamente conservadora.
+A L2 entrega probabilidade_exito_merito.classificacao_agregada (Matriz Daycoval
+agregada via aggregator override). Esse campo eh INPUT VALIDO no risco final
+(reversao da regra v2.4 que mandava ignorar). Use como FLOOR conforme
+PROTOCOLO DE RISCO BASE.
 
-REGRA DURA: IGNORE COMPLETAMENTE `probabilidade_exito` e qualquer `score`
-agregado da L2 ao decidir risco. Sao INPUTS CONTEXTUAIS de outro avaliador,
-NAO evidencia processual.
+Combine com factual_agg + juris_agg (Architecture D) que tambem podem estar
+no payload. Quando flag JURISPRUDENCE_PATH_ENABLED=new estiver ativa, a matriz
+determ Architecture D substitui card.risco AUTOMATICAMENTE (downstream do LLM)
+SO quando derived_aggregate != Indeterminado. Quando Indeterminado, sua resposta
+LLM eh fallback — use o FLOOR de probabilidade_exito agregada como guia.
 
-Razao: o gold padrao deste sistema eh a corretora NOVA (Poletto). Usar
-Daycoval-derived signals = enviesar a classificacao pra ser-mais-Daycoval,
-contrariando o objetivo.
-
-VOCE CLASSIFICA RISCO USANDO APENAS:
-1. FASE PROCESSUAL (sem sentenca / sentenca 1g / 2g / transito / intimacao
-   seguradora) — eixo dominante (templates T-B* / T-M* / T-A* / T-AA*)
-2. DIRECAO DE DECISAO de MERITO explicita nos cards de mov
-   (sentenca_favoravel_tomador, sentenca_desfavoravel_tomador, acordao_*)
-3. SINAIS PROCESSUAIS EFETIVOS documentados (penhora online com
-   `valor_bloqueado`, intimacao formal da seguradora, etc)
-
-Se a justificativa que voce escreveria contem a expressao "probabilidade
-de exito remota" / "score X" / "tese desfavoravel pela jurisprudencia" /
-"matriz Daycoval" como motivo de subida — RESCRAVA sem esse motivo. Se
-sem ele a subida nao se justifica por (1)+(2)+(3) acima, classifique como
-o template ou raciocinio livre indicariam (default Baixo)."""
+Sinais Daycoval (probabilidade_exito) e Architecture D matriz determ sao
+COMPATIVEIS, nao concorrentes. Ambos refletem distribuicao empirica de
+acionamento por classe + estado processual. Use em conjunto."""
 
 
 _REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO = """

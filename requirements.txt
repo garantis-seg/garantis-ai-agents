@@ -23,7 +23,10 @@ groq>=0.4.0
 # agents/merito_synthesis sao independentes), mas pin alinhado garante que
 # worker rode mesma versao do shared que registra prompt_version no
 # engine_llm_calls (rastreabilidade dos buckets ab test).
-garantis-shared>=1.65.0
+# 1.66.0 — Architecture D PR7.1: ai-agents nao usa direto (mudancas locais
+# em agents/merito_synthesis/prompts.py + schemas.py sao independentes), mas
+# pin alinhado garante coerencia com worker que faz PROMOTE matriz determ.
+garantis-shared>=1.66.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
