@@ -291,10 +291,12 @@ class ProcessoSynthesisCard(BaseModel):
     ]] = Field(
         default=None,
         description=(
-            "Risco derivado SO do estado processual + Matriz Daycoval (factual). "
-            "Ignora jurisprudencia — espelha so a logica determinista de tier+"
-            "decisao_vigente+lifecycle. Quando flag JURISPRUDENCE_PATH_ENABLED=off "
-            "fica null (legacy single-path)."
+            "OBRIGATORIO emitir SEMPRE — escolha um dos 5 valores. Risco derivado "
+            "SO do estado processual + Matriz Daycoval (factual). Ignora "
+            "jurisprudencia — espelha a logica determinista de tier + "
+            "decisao_vigente + lifecycle. Use 'Indeterminado' quando ha realmente "
+            "ausencia de sinal factual (cards L1 vazios, sem decisao, sem "
+            "lifecycle); NAO emit null."
         ),
     )
     risco_jurisprudencial: Optional[Literal[
@@ -302,9 +304,10 @@ class ProcessoSynthesisCard(BaseModel):
     ]] = Field(
         default=None,
         description=(
-            "Risco derivado SO da jurisprudencia (tese × tribunal). 'Indeterminado' "
-            "quando n_hits=0 ou resultado_majoritario indeterminado. Quando flag off "
-            "fica null."
+            "OBRIGATORIO emitir SEMPRE — escolha um dos 5 valores. Risco derivado "
+            "SO da jurisprudencia (tese × tribunal). 'Indeterminado' quando n_hits=0 "
+            "OR resultado_majoritario indeterminado OR provider indisponivel; NAO "
+            "emit null."
         ),
     )
 
