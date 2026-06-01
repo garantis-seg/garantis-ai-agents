@@ -59,3 +59,22 @@ async def list_agents():
     """
     loader = PromptLoader()
     return loader.list_agents()
+
+
+@router.get("/engine-v6/raw-templates")
+async def engine_v6_raw_templates():
+    """Templates CRUS dos prompts engine v6 (L1 mov/day/monolith + L2 + L3).
+
+    Retorna `{layer: template}` onde `layer` espelha leads.engine_llm_calls
+    (layer1_mov_factsheet, layer1_day_factsheet, layer1_monolith_factsheet,
+    layer2_processo_synthesis, layer3_merito_synthesis).
+
+    Cada template eh o ESQUELETO do prompt — instrucoes/regras estaticas — sem
+    dados do caso, com `{{campo}}` nas injecoes. Gerado reaproveitando os
+    proprios builders de prompt (zero-drift). Consumido pela aba "Prompt Raw"
+    do debug-llm no garantis-app (via proxy frontend-api /api/risk-v6/prompt-
+    templates). Estatico — pode ser cacheado agressivamente pelo caller.
+    """
+    from ...agents._raw_templates import get_raw_prompt_templates
+
+    return get_raw_prompt_templates()
