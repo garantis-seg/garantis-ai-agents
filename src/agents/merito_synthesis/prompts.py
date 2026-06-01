@@ -171,18 +171,26 @@ def _summarize_aiim(aiim: AIIMCardMin) -> str:
 
 
 def _summarize_tomador(tom: TomadorCardMin) -> str:
+    """Renderiza summary tomador pro prompt L3.
+
+    PR7.7 P0f (2026-06-02): REMOVED 4 signals selection-biased:
+      - total_processos_vivos (so vemos processos monitorados Garantis)
+      - total_apolices_ativas (so apolices Garantis, nao outras seguradoras)
+      - taxa_apolice_recusada (so recusas que registramos)
+      - taxa_descumprimento_acordo (so descumprimentos que vimos)
+    User policy: nao usar esses signals pq nao temos visao 100% do mercado.
+    Engine deve confiar em jurisprudencia externa (provider) + state
+    processual + Matriz Daycoval — Architecture D core.
+
+    Signals mantidos (info externa legitima OR identity):
+      - nome / cnpj_basico (identity)
+      - rj_atual (publico via CVM/JUCESP)
+      - alertas (vem de fontes externas Predictus/etc, NAO selection-biased)
+    """
     parts = [f"  Tomador: {tom.nome or tom.cnpj_basico or '?'}"]
     h = tom.historico or {}
     if h.get("rj_atual"):
         parts.append("RJ atual = TRUE")
-    if h.get("total_processos_vivos"):
-        parts.append(f"{h['total_processos_vivos']} processos vivos")
-    if h.get("total_apolices_ativas"):
-        parts.append(f"{h['total_apolices_ativas']} apolices ativas")
-    if h.get("taxa_apolice_recusada") is not None:
-        parts.append(f"taxa recusa {h['taxa_apolice_recusada']:.0%}")
-    if h.get("taxa_descumprimento_acordo") is not None:
-        parts.append(f"taxa descumprimento {h['taxa_descumprimento_acordo']:.0%}")
     if tom.alertas:
         parts.append("ALERTAS: " + ", ".join(tom.alertas))
     return " | ".join(parts)
@@ -319,11 +327,14 @@ def _build_consistency_check() -> str:
 4. Se voce esta inclinado a atribuir Medio APESAR de argumentos pro-Alto na
    redacao, voce tem 2 opcoes (NUNCA contradicao silenciosa):
    - OPCAO A: reescreva justificativa/contribuicao_no_risco/narrativa
-     EXPLICITANDO os contrapesos que justificam Medio (ex: "garantia em
-     renovacao com seguradora forte", "tomador com historico solido de
-     liquidez", "prazo longo ate transito permitindo recomposicao",
-     "1g consolidada favoravel ao Tomador pesa contra reversao automatica
-     pela jurisprudencia superior").
+     EXPLICITANDO os contrapesos que justificam Medio (ex: "garantia
+     juridicamente solida ja aceita pelo Juizo + apelacao com efeito
+     suspensivo CPC 1.012", "prazo longo ate transito permitindo
+     recomposicao", "1g consolidada favoravel ao Tomador pesa contra
+     reversao automatica pela jurisprudencia superior", "jurisprudencia
+     externa do tribunal mostra resultado dividido"). NAO cite "tomador
+     solido" ou "historico de liquidez" — pos-PR7.7 P0f, NAO temos visao
+     100% do mercado e esses signals foram removidos por selection bias.
    - OPCAO B: eleve risco final pra "Alto" (mais honesto que negar a
      argumentacao escrita).
 
