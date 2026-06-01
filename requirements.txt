@@ -26,7 +26,7 @@ groq>=0.4.0
 # 1.66.0 — Architecture D PR7.1: ai-agents nao usa direto (mudancas locais
 # em agents/merito_synthesis/prompts.py + schemas.py sao independentes), mas
 # pin alinhado garante coerencia com worker que faz PROMOTE matriz determ.
-garantis-shared>=1.71.2
+garantis-shared>=1.71.3
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
