@@ -26,7 +26,12 @@ groq>=0.4.0
 # 1.66.0 — Architecture D PR7.1: ai-agents nao usa direto (mudancas locais
 # em agents/merito_synthesis/prompts.py + schemas.py sao independentes), mas
 # pin alinhado garante coerencia com worker que faz PROMOTE matriz determ.
-garantis-shared>=1.71.3
+# Pinned == (not >=) 2026-06-01: a >= floor meant a garantis-shared publish did
+# NOT change this file, so Kaniko's deps layer cache-hit and ai-agents kept the
+# OLD shared wheel baked in until the 168h cache TTL — diverging from frontend-api
+# (which pins ==). Exact pin keeps both consumers on the same shared version.
+# When bumping garantis-shared: publish it, then bump this pin (and fe-api's).
+garantis-shared==1.74.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
