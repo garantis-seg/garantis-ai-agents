@@ -24,8 +24,8 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-# Unificado pra flash-lite (2026-05-27) — apples-to-apples com mov_factsheet e
-# monolith_factsheet. Permite benchmark Vision vs Text mantendo modelo constante.
+# Unificado pra flash-lite (2026-05-27) — apples-to-apples com mov_factsheet.
+# Permite benchmark Vision vs Text mantendo modelo constante.
 # Override via env DAY_FACTSHEET_MODEL preserva escape hatch.
 DEFAULT_MODEL = os.getenv("DAY_FACTSHEET_MODEL", "gemini-2.5-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")

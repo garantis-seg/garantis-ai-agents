@@ -1,5 +1,5 @@
 """Helper Vision L1 — chamadas multimodais (PDF→Gemini Vision) compartilhadas
-entre mov_factsheet, day_factsheet e monolith_factsheet.
+entre mov_factsheet e day_factsheet.
 
 Acionado quando flag VISION_L1_ENABLED=true E o caller fornece pelo menos 1
 gcs_url no input. Roteamento inline vs Files API decidido per-call por
@@ -268,7 +268,7 @@ async def call_l1_with_vision_fallback(
     log_label: str = "",
     thinking_budget: int = 0,
 ) -> Any:
-    """High-level helper pros 3 agents L1 (mov/day/monolith).
+    """High-level helper pros agents L1 (mov/day).
 
     Roteia entre Vision e Text:
     - `vision_flag_name` ON + ≥1 gcs_url + ≥1 PDF fetchável → Vision path

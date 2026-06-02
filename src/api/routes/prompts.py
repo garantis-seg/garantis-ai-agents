@@ -63,10 +63,10 @@ async def list_agents():
 
 @router.get("/engine-v6/raw-templates")
 async def engine_v6_raw_templates():
-    """Templates CRUS dos prompts engine v6 (L1 mov/day/monolith + L2 + L3).
+    """Templates CRUS dos prompts engine v6 (L1 mov/day + L2 + L3).
 
     Retorna `{layer: template}` onde `layer` espelha leads.engine_llm_calls
-    (layer1_mov_factsheet, layer1_day_factsheet, layer1_monolith_factsheet,
+    (layer1_mov_factsheet, layer1_day_factsheet,
     layer2_processo_synthesis, layer3_merito_synthesis).
 
     Cada template eh o ESQUELETO do prompt — instrucoes/regras estaticas — sem

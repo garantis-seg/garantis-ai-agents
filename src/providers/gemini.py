@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 #   - flash-lite global: 30k RPM = 500 RPS
 #   - ai-agents max_instances=100 (worst case scaling)
 #   - per-process: 500 / 100 = 5 RPS sustained
-#   - burst 10: cobre L1 3-way gather (mov + day + monolith) com Semaphore(5)
+#   - burst 10: cobre L1 gather (mov + day) com Semaphore(5)
 #
 # Override via env GEMINI_RATE_LIMIT_RPS / GEMINI_RATE_LIMIT_BURST se preciso
 # ajustar sem redeploy (e.g. degrade rapido em incident).

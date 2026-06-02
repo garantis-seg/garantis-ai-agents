@@ -1,4 +1,4 @@
-"""Templates CRUS dos prompts engine v6 (L1 mov/day/monolith + L2 + L3).
+"""Templates CRUS dos prompts engine v6 (L1 mov/day + L2 + L3).
 
 Objetivo: expor o ESQUELETO de cada prompt — instrucoes/regras estaticas —
 SEM os dados do caso, com `{{campo}}` no lugar de cada injecao. Consumido pela
@@ -96,25 +96,6 @@ def _day_factsheet_template() -> str:
         )
     ]
     return build_day_factsheet_prompt(processo, "{{date}}", movs, docs)
-
-
-def _monolith_factsheet_template() -> str:
-    from .monolith_factsheet.prompts import build_monolith_factsheet_prompt
-    from .monolith_factsheet.schemas import (
-        MonolithFactsheetRequest,
-        ProcessoContextMin,
-    )
-
-    req = MonolithFactsheetRequest(
-        processo=ProcessoContextMin(
-            cnj="{{cnj}}",
-            classe="{{classe}}",
-            polo_ativo="{{polo_ativo}}",
-            polo_passivo="{{polo_passivo}}",
-        ),
-        autos_text="{{texto_extraido_do_pdf_monolitico}}",
-    )
-    return build_monolith_factsheet_prompt(req)
 
 
 def _processo_synthesis_template() -> str:
@@ -228,7 +209,6 @@ def _merito_synthesis_template() -> str:
 _BUILDERS = {
     "layer1_mov_factsheet": _mov_factsheet_template,
     "layer1_day_factsheet": _day_factsheet_template,
-    "layer1_monolith_factsheet": _monolith_factsheet_template,
     "layer2_processo_synthesis": _processo_synthesis_template,
     "layer3_merito_synthesis": _merito_synthesis_template,
 }

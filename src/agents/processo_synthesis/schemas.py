@@ -143,7 +143,7 @@ class EvidenceArtifact(BaseModel):
 
     mov_id: Optional[str] = Field(
         default=None,
-        description="ID do mov_factsheet ou referencia ao monolith/day citado.",
+        description="ID do mov_factsheet ou referencia ao day citado.",
     )
     snippet: Optional[str] = Field(
         default=None,
@@ -429,30 +429,6 @@ class ApoliceContextMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
-class MonolithFactsheetMin(BaseModel):
-    """Subset do MonolithFactsheetCard (camada 1 tier monolitico) pra alimentar
-    processo_synthesis.
-
-    Full-RAG (memory engine-v6-pipeline-quality-tiers): substitui o legacy
-    AutosRawExcerpt + DocAutos no L2. L1 monolith_factsheet ja sintetizou o
-    PDF inteiro em campos estruturados — L2 consome esse card, nao o raw.
-    """
-
-    processo_numero: Optional[str] = None
-    resumo_executivo: Optional[str] = None
-    decisao_vigente: Optional[dict[str, Any]] = None
-    eventos_principais: Optional[list[dict[str, Any]]] = None
-    lifecycle_garantia: Optional[list[dict[str, Any]]] = None
-    valor_em_disputa: Optional[float] = None
-    valor_garantia: Optional[float] = None
-    peca_pivo: Optional[dict[str, Any]] = None
-    proximos_passos_provaveis: Optional[list[str]] = None
-    confianca: Optional[float] = None
-    pages_used: Optional[int] = None
-
-    model_config = {"extra": "ignore"}
-
-
 class ProcessoSynthesisRequest(BaseModel):
     processo_numero: str
     classe: Optional[str] = None
@@ -469,11 +445,6 @@ class ProcessoSynthesisRequest(BaseModel):
         default_factory=list,
         description="Cards camada 1 alternativa (1 por dia) quando proc tier=por_dia. "
                     "Consumir junto com mov_factsheets (intra-proc mixed tier).",
-    )
-    monolith_factsheet: Optional[MonolithFactsheetMin] = Field(
-        default=None,
-        description="Card camada 1 tier monolitico — sintese do PDF inteiro. "
-                    "Quando present, substitui o legacy autos_raw_excerpt + documents_dos_autos.",
     )
     apolices: list[ApoliceContextMin] = Field(default_factory=list)
     # PR7.2 (2026-05-31): tese_jurisprudencia: Optional[TeseJurisprudenciaMin]

@@ -81,7 +81,6 @@ def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
     timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_capped) \
         or "(sem movimentacoes)"
 
-    monolith_block = _build_monolith_block(req)
     matriz_block = _build_matriz_block(req.tipo_judicial)
 
     header_parts = [f"CNJ: {req.processo_numero}"]
@@ -102,7 +101,6 @@ DO TOMADOR TER EXITO neste processo. Sao 4 buckets — escolha 1.
 
 === TIMELINE DE FACTSHEETS (ordenados por data ASC) ===
   {timeline_block}
-{monolith_block}
 {matriz_block}
 
 === INSTRUCOES ===
@@ -205,84 +203,6 @@ def _summarize_apolice(ap: ApoliceContextMin) -> str:
     if ap.is_central_for_merito:
         parts.append("(central no merito)")
     return " | ".join(parts)
-
-
-def _build_monolith_block(req: ProcessoSynthesisRequest) -> str:
-    """Bloco MONOLITH FACTSHEET quando proc tier=monolitico (PDF blob sintetizado
-    pela Camada 1 monolith_factsheet em 1 card estruturado).
-
-    Full-RAG (memory engine-v6-pipeline-quality-tiers): SUBSTITUI os legacy
-    _build_documents_block + _build_autos_block. L2 NAO recebe mais raw —
-    monolith_factsheet (L1) ja fez essa sintese e expoe campos estruturados.
-
-    Retorna string vazia quando proc nao esta em tier monolitico.
-    """
-    mf = req.monolith_factsheet
-    if not mf:
-        return ""
-
-    lines = []
-    if mf.resumo_executivo:
-        lines.append(f"  resumo_executivo: {mf.resumo_executivo}")
-
-    dv = mf.decisao_vigente or {}
-    if dv.get("tem_decisao"):
-        d_parts = [f"DECISAO_VIGENTE {dv.get('natureza') or '?'}"]
-        if dv.get("instancia"):
-            d_parts.append(dv["instancia"])
-        if dv.get("sentido"):
-            d_parts.append(dv["sentido"])
-        if dv.get("data"):
-            d_parts.append(f"({dv['data']})")
-        if dv.get("transito_certificado"):
-            d_parts.append("[TRANSITO CERTIFICADO]")
-        lines.append("  " + " ".join(d_parts))
-
-    eventos = mf.eventos_principais or []
-    if eventos:
-        ev_str = "; ".join(
-            f"[{e.get('data','?')}] {e.get('tipo','?')}: {(e.get('descricao') or '')[:80]}"
-            for e in eventos[:10]
-        )
-        lines.append(f"  eventos: {ev_str}")
-
-    lc = mf.lifecycle_garantia or []
-    if lc:
-        lc_str = "; ".join(
-            f"[{e.get('data','?')}] {e.get('evento','?')}/{e.get('tipo_garantia','?')}"
-            for e in lc[:5]
-        )
-        lines.append(f"  lifecycle_garantia: {lc_str}")
-
-    if mf.valor_em_disputa is not None:
-        lines.append(f"  valor_em_disputa: R$ {mf.valor_em_disputa:,.2f}")
-    if mf.valor_garantia is not None:
-        lines.append(f"  valor_garantia: R$ {mf.valor_garantia:,.2f}")
-
-    pivo = mf.peca_pivo or {}
-    if pivo.get("descricao"):
-        lines.append(f"  peca_pivo: [{pivo.get('data','?')}] {pivo['descricao']}")
-
-    if mf.proximos_passos_provaveis:
-        lines.append(f"  proximos_passos: {'; '.join(mf.proximos_passos_provaveis)}")
-
-    if mf.confianca is not None:
-        lines.append(f"  confianca: {mf.confianca}")
-
-    pages_note = f" ({mf.pages_used} pgs lidas)" if mf.pages_used else ""
-    body = "\n".join(lines) if lines else "  (monolith_factsheet vazio)"
-    return (
-        f"\n\n=== MONOLITH FACTSHEET (tier monolitico, PDF inteiro sintetizado{pages_note}) ===\n"
-        f"{body}\n\n"
-        "INSTRUCOES PARA monolith_factsheet:\n"
-        "- Sintese ja-feita pela Camada 1 do PDF MONOLITICO inteiro (sem per-doc).\n"
-        "- Confianca menor (~0.4-0.7) por construcao — leitura de PDF inteiro\n"
-        "  sem mov-by-mov tem ruido. Mas eh sintese ESTRUTURADA, nao raw.\n"
-        "- Use em complemento aos mov_factsheets + day_factsheets. Quando ambos\n"
-        "  existem, factsheets per-mov/dia tem mais granularidade — prefira.\n"
-        "- Quando monolith_factsheet eh a UNICA fonte (sem mov/day), use ele\n"
-        "  como base, propagando a confianca menor pro card de saida."
-    )
 
 
 def _summarize_day_factsheet(d: DayFactSheetMin) -> str:
@@ -504,7 +424,6 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         header_lines.append(f"Polo passivo: {req.polo_passivo}")
     header_block = "\n  ".join(header_lines)
 
-    monolith_block = _build_monolith_block(req)
     tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
     # PR7.2 (2026-05-31): tese_juris_section (bloco JURISPRUDENCIA DA TESE
     # interno) REMOVIDO. Provider externo jurisprudencias.ai (jurisprudencia_externa)
@@ -554,7 +473,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
 Sua tarefa: sintetizar o estado atual do PROCESSO a partir dos FACTSHEETS da Camada 1
-(mov_factsheet + day_factsheet + monolith_factsheet) + contexto da(s) apolice(s).
+(mov_factsheet + day_factsheet) + contexto da(s) apolice(s).
 Output sera consumido pela camada 3 (merito_synthesis) pra agregar risco do MERITO.
 
 ARQUITETURA FULL-RAG: voce SO recebe cards estruturados ja-sintetizados pela Camada 1
@@ -691,7 +610,7 @@ logica via <regra_polos>.
   - Confianca menor (~0.5-0.7) — correlacao multi-mov*multi-doc tem ruido.
 
 === APOLICE(S) ATRELADA(S) ===
-  {apolice_block}{monolith_block}
+  {apolice_block}
 
 {tese_juris_section}{risk_decomposition_section}
 {tipo_specific_block}
