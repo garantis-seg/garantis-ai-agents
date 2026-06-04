@@ -7,6 +7,11 @@ pydantic>=2.10.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 
+# Gate de OCR/Vision (L1 v7) — rmgarbage + página-imagem por área.
+# PyMuPDF tem wheels manylinux (sem apt extra); pypdf é puro-Python.
+PyMuPDF>=1.24.0
+pypdf>=4.0.0
+
 # Optional LLM providers (uncomment as needed)
 openai>=1.0.0
 groq>=0.4.0
@@ -31,7 +36,7 @@ groq>=0.4.0
 # OLD shared wheel baked in until the 168h cache TTL — diverging from frontend-api
 # (which pins ==). Exact pin keeps both consumers on the same shared version.
 # When bumping garantis-shared: publish it, then bump this pin (and fe-api's).
-garantis-shared==1.74.0
+garantis-shared==1.93.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
