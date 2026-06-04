@@ -267,6 +267,7 @@ async def call_l1_with_vision_fallback(
     vision_flag_name: str = "VISION_L1_ENABLED",
     log_label: str = "",
     thinking_budget: int = 0,
+    docs_text: Optional[list[tuple[Optional[str], Optional[str]]]] = None,
 ) -> Any:
     """High-level helper pros agents L1 (mov/day).
 
@@ -277,13 +278,34 @@ async def call_l1_with_vision_fallback(
     Caller monta o prompt — esse helper só roteia + fetcha PDFs. Single
     source da Vision branch (elimina copy-paste em cada agent L1).
 
+    GATE DE OCR (L1 v7): se `docs_text` (lista de (text_content, gcs_url)) for
+    passado, aplica o gate por documento (ocr_gate.precisa_vision) — só os docs com
+    texto-lixo OU página-imagem vão pro Vision; os demais ficam no texto do prompt.
+    Sem `docs_text` (callers legados como day), mantém o comportamento atual (todos
+    os gcs_urls fetchados vão pro Vision). Fallback seguro em qualquer falha do gate.
+
     `log_label` é appended em warnings de fallback (ex: "mov_id=X").
     """
     from .feature_flags import flag_enabled
 
     pdf_bytes_list: list[bytes] = []
     if gcs_urls and flag_enabled(vision_flag_name):
-        pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
+        if docs_text:
+            # GATE por documento: baixa e filtra só os que o gate aprova.
+            from .ocr_gate import precisa_vision
+            for text_content, gcs_url in docs_text:
+                if not gcs_url:
+                    continue
+                try:
+                    raw = await fetch_pdfs_from_gcs([gcs_url])
+                    pdf_bytes = raw[0] if raw else None
+                except Exception:
+                    pdf_bytes = None
+                manda, info = precisa_vision(text_content, pdf_bytes)
+                if manda:
+                    pdf_bytes_list.append(info.get("_pdf_bytes") or pdf_bytes)
+        else:
+            pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
 
     if pdf_bytes_list:
         return await call_vision_l1(

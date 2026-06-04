@@ -14,6 +14,7 @@ from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT, call_l1_with_vision_fallback
 from .prompts import build_mov_factsheet_prompt
+from .fundacao import derivar_categoria, derivar_status_garantia
 from .schemas import (
     DocAnexado,
     FallbackContext,
@@ -63,7 +64,16 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #     foi julgamento de merito que acolheu a tese. Distincao chave: extincao
 #     da EF correlata como CONSEQUENCIA da procedencia eh efeito reflexo,
 #     nao transforma a sentenca em extinto_sem_merito.
-PROMPT_VERSION = "mov_factsheet.v2.3"
+# v3 (2026-06-04, integração L1 v7): fundação resolvida no prompt (Tomador no polo /
+#   infere grupo econômico), taxonomia tipo_doc(34) substitui categoria (derivada por
+#   código), evento_garantia.numero_apolice, bug "extincao SEMPRE neutro" corrigido
+#   (condicional ao polo), classe 1A-1D (órfão tratado), resumo proporcional, E as
+#   CIRURGIAS do POC validado (fundacao.py): TRAVA_DECISAO (mero expediente ≠ decisão;
+#   acionamento=risco máximo), REGRA_TITULARIDADE (verbo de resultado sem dono→neutro),
+#   MODULO_TRABALHISTA (condicional; TST≠stj; Tomador pode ser reclamante). v2.3 PURO
+#   reprovou (memory l1-teste-reprova) — estas cirurgias são as melhorias comprovadas.
+#   Ver memory l1-fase-b-decisao-v3 / l1-invariante-fundacao.
+PROMPT_VERSION = "mov_factsheet.v3"
 
 
 async def classify_mov_factsheet(
@@ -73,6 +83,7 @@ async def classify_mov_factsheet(
     fallback_context: FallbackContext | dict | None = None,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
+    classe: Optional[str] = None,
 ) -> dict:
     """Extract a 13-field FactSheet from a single mov.
 
@@ -115,6 +126,7 @@ async def classify_mov_factsheet(
         processo, mov,
         documentos_anexados=docs_typed,
         fallback_context=fb_typed,
+        classe=classe,
     )
 
     response: LLMResponse = await call_l1_with_vision_fallback(
@@ -122,6 +134,9 @@ async def classify_mov_factsheet(
         model=model,
         prompt=prompt,
         gcs_urls=[d.gcs_url for d in docs_typed if d.gcs_url],
+        # GATE DE OCR (L1 v7): pares (text_content, gcs_url) por doc — o gate decide
+        # por documento se manda pro Vision (texto-lixo OU pagina-imagem). Ver ocr_gate.
+        docs_text=[(d.text_content, d.gcs_url) for d in docs_typed if d.gcs_url],
         response_schema=MovFactSheetCard,
         log_label=f"mov_id={mov.mov_id}",
         thinking_budget=0,
@@ -136,6 +151,15 @@ async def classify_mov_factsheet(
             parsed["data"] = mov.data
         if mov.tipo and not parsed.get("tipo_origem"):
             parsed["tipo_origem"] = mov.tipo
+        # DERIVACAO POR CODIGO (L1 v7): o LLM emite tipo_doc(34) e evento_garantia.tipo;
+        # categoria(14) e status_garantia_pos_mov sao DERIVADOS — fonte unica da verdade,
+        # zero contradicao. ★ ARMADILHA #1: derivar ANTES de instanciar (categoria e lida
+        # pela L2; se ficar None o sinal some). Ver memory l1-divida-categoria-tipodoc.
+        if not parsed.get("categoria"):
+            parsed["categoria"] = derivar_categoria(parsed.get("tipo_doc"))
+        _eg_tipo = (parsed.get("evento_garantia") or {}).get("tipo")
+        if not parsed.get("status_garantia_pos_mov") or parsed.get("status_garantia_pos_mov") == "nenhum":
+            parsed["status_garantia_pos_mov"] = derivar_status_garantia(_eg_tipo)
         card = MovFactSheetCard(**parsed)
         card_data = card.model_dump()
     except (json.JSONDecodeError, Exception) as e:

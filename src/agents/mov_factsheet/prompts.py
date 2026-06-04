@@ -26,6 +26,16 @@ bumped pra v2.1.
 """
 
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
+from .fundacao import (
+    MODULO_TRABALHISTA,
+    REGRA_TITULARIDADE,
+    RELEVANTE_GARANTIA,
+    TAXONOMIA_TIPO_DOC,
+    TRAVA_DECISAO,
+    bloco_fundacao,
+    eh_trabalhista,
+    familia_block,
+)
 
 
 # Cap por doc anexado no prompt (Flash Lite 1M context aguenta, mas economiza)
@@ -89,29 +99,120 @@ def _mov_anterior_block(ctx: FallbackContext | None) -> str:
     )
 
 
+def _build_orfao_prompt(
+    processo: ProcessoContext,
+    mov: MovInput,
+    documentos_anexados: list[DocAnexado],
+) -> str:
+    """Prompt pro DOCUMENTO ÓRFÃO (classe 1D) — doc sem ato processual vinculado.
+
+    Saída = MovFactSheetCard (mesmo schema; sem OrphanDocCard separado). O conceito
+    natureza de_fluxo/acessorio entra como RACIOCÍNIO (orienta a data e se há
+    decisão), não como campo. resumo vai em resumo_ato; tem_decisao=false salvo se
+    o doc for uma peça decisória. Porte do POC l1_comum._build_orfao."""
+    # o texto do órfão vem como o 1º doc anexado (o shared monta assim) ou no texto da mov
+    txt = ""
+    if documentos_anexados:
+        txt = (documentos_anexados[0].text_content or "").strip()
+    if not txt:
+        txt = (mov.texto or "").strip()
+    trunc = "\n  [TRUNCADO]" if len(txt) > _DOC_TEXT_CAP_CHARS else ""
+    txt = txt[:_DOC_TEXT_CAP_CHARS].replace("\n", "\n  ")
+
+    return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
+
+Este e um DOCUMENTO ORFAO — NAO vinculado a nenhum movimento processual. Classifique-o
+e produza o FactSheet (mesmo schema dos demais).
+
+RACIOCINIO sobre a NATUREZA do documento (orienta data e se ha decisao):
+- PECA DESTE PROCESSO ('de_fluxo'): tem ato/momento processual proprio nestes autos
+  (peticao, decisao, sentenca, despacho, acordao, certidao deste juizo). Tem data
+  processual propria.
+- ANEXO ('acessorio'): juntado como prova/instrucao, SEM ato proprio nestes autos
+  (contrato, apolice, procuracao, nota fiscal, guia, situacao cadastral). PRINCIPIO
+  FIRME: se o documento CLARAMENTE pertence a OUTRO orgao/autarquia/rito (PROCON,
+  INSS, Receita, junta comercial, agencia reguladora) — e 'acessorio', MESMO com
+  forma de ato (ata, oficio, decisao administrativa). So e 'de_fluxo' o produzido
+  DENTRO deste processo judicial.
+- Para 'acessorio' / documento de fora: tem_decisao=FALSE (nao e decisao DESTE juizo).
+  Para 'de_fluxo' que SEJA peca decisoria (sentenca/decisao/acordao deste processo):
+  tem_decisao pode ser true, com sentido pela fundacao abaixo.
+
+{('=== CONTEXTO DA GARANTIA ===' + chr(10) + bloco_fundacao(processo) + familia_block(processo))}
+
+=== DOCUMENTO ORFAO ===
+  id: {mov.mov_id}
+  texto:
+  {txt}{trunc}
+
+=== CLASSIFICACAO ===
+{TAXONOMIA_TIPO_DOC}
+
+{RELEVANTE_GARANTIA}
+
+=== CAMPOS A EMITIR (MovFactSheetCard) ===
+- resumo_ato: resumo fiel PT-BR ACENTUADO, TAMANHO PROPORCIONAL A RELEVANCIA (doc
+  trivial/acessorio = poucas palavras; peca decisoria/apolice/prova central = ate
+  ~400 palavras). Teto e ESPACO, nao meta. A analise seguinte so vera este resumo.
+- tipo_doc: um dos valores da taxonomia acima.
+- relevante_garantia: bool (ver regra acima).
+- relevancia_merito: alta|media|baixa|ruido.
+- decisao.tem_decisao: false p/ acessorio/anexo; true SO se o doc e peca decisoria
+  DESTE processo (entao preencha sentido pela fundacao; senao sentido/instancia/
+  natureza = null).
+- evento_garantia: se o doc e apolice/fianca/deposito/recusa, preencha tipo; senao 'nenhum'.
+- data_real_ato: data do ato/protocolo SE explicita no texto (YYYY-MM-DD); null se nao.
+- confianca: 0-1.
+
+EXCECAO de idioma: valores de ENUM (tipo_doc, sentido, etc.) sao ASCII, nunca
+acentuados. So o texto livre (resumo_ato) leva acento.
+
+Output: JSON conforme schema MovFactSheetCard (enforced via response_schema do Gemini).
+Echo de mov_id deste input.
+"""
+
+
 def build_mov_factsheet_prompt(
     processo: ProcessoContext,
     mov: MovInput,
     documentos_anexados: list[DocAnexado] | None = None,
     fallback_context: FallbackContext | None = None,
+    classe: str | None = None,
 ) -> str:
-    """Single-step prompt pra extrair 13 campos de UMA movimentacao.
+    """Single-step prompt pra extrair o FactSheet de UMA movimentacao.
 
     Quando documentos_anexados nao vazio: bloco DOCUMENTOS ANEXADOS no prompt,
     LLM le o doc text. Quando vazio: bloco FALLBACK CONTEXT com processo summary
     + mov anterior, LLM processa só metadata.
+
+    classe (L1 v7): '1A'/'1B'/'1C' (mov) ou '1D' (documento orfao, sem ato
+    processual). Pro 1D, o ramo de prompt e diferente (ver build no fim).
     """
     documentos_anexados = documentos_anexados or []
     has_docs = len(documentos_anexados) > 0
 
-    proc_lines = [f"CNJ: {processo.cnj}"]
-    if processo.classe:
-        proc_lines.append(f"Classe: {processo.classe}")
-    if processo.polo_ativo:
-        proc_lines.append(f"Polo ativo: {processo.polo_ativo}")
-    if processo.polo_passivo:
-        proc_lines.append(f"Polo passivo: {processo.polo_passivo}")
-    proc_block = "\n  ".join(proc_lines)
+    # RAMO 1D — DOCUMENTO ÓRFÃO (doc sem ato processual vinculado). Schema de
+    # saída continua MovFactSheetCard (decisão l1-schema-unico: tudo vira MOV_SCHEMA;
+    # NÃO criar OrphanDocCard). natureza de_fluxo/acessorio entra como RACIOCÍNIO
+    # (afeta data/tratamento), não como campo. resumo vai em resumo_ato.
+    if classe == "1D":
+        return _build_orfao_prompt(processo, mov, documentos_anexados)
+
+    # FUNDACAO RESOLVIDA (L1 v7): em vez de polos crus, entrega o lado do Tomador
+    # ja resolvido (ou instrucao de inferir grupo economico — caso Casas Bahia/
+    # Via S.A) + a familia por materia. Ver fundacao.py + memory l1-invariante-fundacao.
+    proc_block = (
+        "=== CONTEXTO DA GARANTIA ===\n"
+        + bloco_fundacao(processo)
+        + familia_block(processo)
+    )
+
+    # CIRURGIAS do POC (l1_prompt_v2) — as melhorias COMPROVADAS sobre o v2.3 puro
+    # (que reprovou; ver memory l1-teste-reprova). Injetadas no FIM de <regras_criticas>
+    # (recência). Trabalhista só quando a matéria/classe indica (viés a injetar).
+    _cirurgias = TRAVA_DECISAO + REGRA_TITULARIDADE
+    if eh_trabalhista(processo):
+        _cirurgias += MODULO_TRABALHISTA
 
     mov_meta_lines = [f"id: {mov.mov_id}"]
     if mov.data:
@@ -305,11 +406,10 @@ exigibilidade tributaria, extinta por perda de objeto (Tomador nao ajuizou
 principal no prazo CPC 308). Tomador PERDEU a cautelar — exigibilidade nao
 foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
 </regra_extincao_sem_merito>
-
+{_cirurgias}
 </regras_criticas>
 
-=== PROCESSO ===
-  {proc_block}
+{proc_block}
 
 === MOVIMENTACAO ===
   {mov_meta}
@@ -319,12 +419,15 @@ foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
 
 === INSTRUCOES POR CAMPO ===
 
-1. resumo_ato (~50 palavras PT-BR): O QUE aconteceu + DOC anexo se mencionado + PROXIMO PASSO se claro.
-   NAO copie literalmente. Use tecnico-juridico direto.
+1. resumo_ato (PT-BR ACENTUADO, TAMANHO PROPORCIONAL A RELEVANCIA): ato trivial = 1 frase;
+   decisao/sentenca/evento de garantia = ate ~400 palavras se houver substancia. Teto e ESPACO,
+   nao meta. O QUE aconteceu + DOC anexo se mencionado + PROXIMO PASSO se claro. NAO copie
+   literalmente. Use tecnico-juridico direto.
 
-2. categoria: classifique em UMA das opcoes (use 'outros' so se nada se encaixar):
-   sentenca | acordao | decisao_merito | decisao_interlocutoria | despacho | peticao | publicacao
-   intimacao | certidao | ato_ordinatorio | carga | baixa | conclusao | outros
+2. {TAXONOMIA_TIPO_DOC}
+
+   {RELEVANTE_GARANTIA}
+   (NAO emita 'categoria' — ela e derivada por codigo a partir do tipo_doc.)
 
 3. relevancia_merito: quanto este ato influencia a TESE/MERITO do processo principal:
    - alta: decisao de merito, sentenca, acordao, evento de garantia, intimacao de pagamento, transito
@@ -338,7 +441,8 @@ foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
      - favoravel: julga procedente embargos / improcedente execucao / concede liminar pro tomador
      - desfavoravel: rejeita defesa, mantem execucao, julga improcedente embargos
      - parcial: parte favoravel, parte nao
-     - neutro: meramente processual sem ganhador claro (extincao SEM merito SEMPRE neutro)
+     - neutro: meramente processual sem ganhador claro (extincao SEM merito: neutro SE o Tomador
+       e REU/executado; DESFAVORAVEL se o Tomador e AUTOR — ver <regra_extincao_sem_merito>)
    - instancia: 1g (juizo) | 2g (TJ/TRF) | stj | stf
    - natureza: procedente | improcedente | parcialmente_procedente | extinto_sem_merito |
      homologatoria | interlocutoria
@@ -363,28 +467,14 @@ foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
    transacao homologatoria sem analise de tese.
 
 5. evento_garantia:
-   - tipo: apresentacao | aceitacao | recusa | levantamento | substituicao | reforço | nenhum
+   - tipo: apresentacao | aceitacao | recusa | levantamento | substituicao | reforco | nenhum
+   - numero_apolice: numero da apolice no formato SUSEP (~24 digitos) se explicito; null se nao.
+     NUNCA escreva a palavra 'string'.
    - motivo (SO quando tipo=recusa): "valor insuficiente", "seguradora nao admitida",
      "apolice vencida", etc. null caso contrario.
 
-6. status_garantia_pos_mov: estado da garantia DEPOIS desta mov:
-   apresentado | aceito | recusado | levantado | substituido | nenhum
-   (nenhum quando a mov nao trata da garantia)
-
-7. tipo_garantia: quando mencionado:
-   seguro_garantia | fianca_bancaria | carta_fianca | deposito_judicial | penhora |
-   fiduciaria | outras | nenhum
-
-8. cda:
-   - numeros: lista de numeros literais de CDAs mencionados ([] se nenhum)
-   - ente: estadual | municipal | federal_pgfn (null se nao identifica)
-   - tributo: ICMS, ISS, IPVA, IRPJ, etc. (null se nao identifica)
-   - valor_total: valor total em BRL quando explicito (null caso contrario)
-
-9. apolice:
-   - numero: numero literal mencionado (null se nao)
-   - apresentada: true se a mov registra apresentacao (null se nao trata disso)
-   - aceita: true se aceita pelo juizo, false se recusada, null se ambiguo/nao trata
+   (NAO emita 'status_garantia_pos_mov' nem 'tipo_garantia' nem 'cda' nem 'apolice'
+    nem 'proximos_passos' — sao derivados/nao-usados nesta versao. Foque nos campos abaixo.)
 
 10. delta_risco: como esta mov muda o RISCO DE ACIONAMENTO da apolice vs estado anterior:
     - mudou: true | false
@@ -401,15 +491,10 @@ foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
     - e_pivo: true se esta mov muda DECISIVAMENTE o estado do merito (sentenca, transito, acordo)
     - motivo: 1 frase explicando por que e (ou nao) pivo
 
-13. proximos_passos: lista de acoes esperadas a partir deste ato.
-    Ex: ["aguardar manifestacao da exequente", "preparar contrarrazoes", "agendar pericia"]
-
-14. data_real_ato (YYYY-MM-DD): se o texto menciona uma data ESPECIFICA do ato (sentenca em DD/MM/YYYY,
+13. data_real_ato (YYYY-MM-DD): se o texto menciona uma data ESPECIFICA do ato (sentenca em DD/MM/YYYY,
     acordo em DD/MM/YYYY) diferente da data de publicacao, registre aqui. null se igual a data.
 
-15. processos_conexos_mencionados: lista de CNJs (formato 7-2.4.1.2.4 ou 20 digitos) mencionados literalmente.
-
-16. confianca (0.0-1.0): confianca do LLM nesta classificacao. Use 0.9+ se ha doc anexo com decisao clara,
+14. confianca (0.0-1.0): confianca do LLM nesta classificacao. Use 0.9+ se ha doc anexo com decisao clara,
     0.7-0.8 se snippet detalhado sem doc, 0.5-0.7 se snippet generico com fallback context,
     < 0.5 se snippet ruidoso sem nada mais.
 
@@ -433,7 +518,7 @@ F. Se ha doc anexado, PRIORIZE o conteudo do doc sobre o snippet. O snippet pode
 <lembrete_final>
 Antes de classificar decisao.sentido: cheque <regra_polos> no topo deste prompt.
 Atos de recurso ("provido"/"nao provido"): cheque <regra_recursos> primeiro.
-natureza='extinto_sem_merito' SEMPRE forca sentido='neutro' (ver <regra_extincao_sem_merito>).
+natureza='extinto_sem_merito': sentido='neutro' SE Tomador-REU; 'desfavoravel' SE Tomador-AUTOR (ver <regra_extincao_sem_merito>).
 </lembrete_final>
 
 Output: JSON estruturado conforme schema MovFactSheetCard (enforced via

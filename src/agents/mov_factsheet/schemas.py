@@ -62,13 +62,20 @@ class EventoGarantia(BaseModel):
 
     tipo: Literal[
         "apresentacao", "aceitacao", "recusa", "levantamento",
-        "substituicao", "reforço", "nenhum",
+        "substituicao", "reforco", "nenhum",
     ] = Field(
         default="nenhum",
         description=(
             "Tipo de evento envolvendo a garantia. 'nenhum' quando a mov nao trata da garantia. "
             "'apresentacao' quando a parte apresenta apolice/garantia. "
             "'aceitacao'/'recusa' quando o juizo se manifesta sobre a garantia."
+        ),
+    )
+    numero_apolice: Optional[str] = Field(
+        default=None,
+        description=(
+            "Numero da apolice no formato SUSEP (SSSSSAAAAFFFFRRRRNNNNNNN, ~24 digitos) "
+            "quando explicito no texto. null se nao houver. NUNCA escreva a palavra 'string'."
         ),
     )
     motivo: Optional[str] = Field(
@@ -193,23 +200,43 @@ class MovFactSheetCard(BaseModel):
     # Campo 1: Resumo + categoria
     resumo_ato: str = Field(
         description=(
-            "~50 palavras PT-BR explicando O QUE aconteceu NESTA mov "
-            "+ doc anexo se mencionado + proximo passo se claro. "
-            "NAO copie literalmente do snippet. Use tecnico-juridico direto. "
-            "NAO repita o RESUMO DO PROCESSO ou MOV ANTERIOR — esse campo descreve "
-            "APENAS esta mov."
+            "Resumo PT-BR ACENTUADO do que aconteceu NESTA mov (+ doc anexo + proximo "
+            "passo se claro). TAMANHO PROPORCIONAL A RELEVANCIA: ato trivial (guia, "
+            "certidao) = 1 frase; decisao/sentenca/evento de garantia = ate ~400 palavras "
+            "se houver substancia. O teto e ESPACO, nao meta — nao force nem encha "
+            "linguica. NAO copie literalmente do snippet; tecnico-juridico direto. NAO "
+            "repita o RESUMO DO PROCESSO nem a MOV ANTERIOR — descreve APENAS esta mov."
         ),
     )
-    categoria: Literal[
+    # tipo_doc: taxonomia v1 (34 valores) — o LLM EMITE este campo (substitui o
+    # papel de `categoria` no prompt). `categoria` (14 valores, lida pela L2) é
+    # DERIVADA de tipo_doc por código no agent (derivar_categoria), pós-LLM.
+    tipo_doc: Literal[
+        "sentenca", "acordao", "decisao_interlocutoria", "despacho", "voto",
+        "peticao_inicial", "peticao", "contestacao", "recurso", "embargos",
+        "contrarrazoes", "certidao", "intimacao", "citacao", "oficio", "mandado",
+        "carta_precatoria", "ata_audiencia", "procuracao", "substabelecimento",
+        "apolice_seguro_garantia", "fianca_bancaria", "deposito_judicial", "penhora",
+        "recusa_aceitacao_garantia", "cda", "guia_recolhimento", "comprovante_pagamento",
+        "planilha_calculo", "parecer", "laudo_pericial", "prova_anexa", "ilegivel", "outros",
+    ] = Field(
+        description="Tipo da peca/documento — UM dos valores da taxonomia v1.",
+    )
+    relevante_garantia: bool = Field(
+        default=False,
+        description="true se este ato toca o risco da apolice (garantia/deposito/fianca/caucao/acionamento).",
+    )
+    # categoria (14 valores canonicos da L2): DERIVADA de tipo_doc no agent
+    # (derivar_categoria), NAO emitida pelo LLM. Optional+default=None pra NAO
+    # forcar HTTP 500 quando o LLM nao emite (ARMADILHA #1 do blueprint). A L2 le
+    # fs.categoria — por isso o agent preenche por codigo antes de instanciar.
+    categoria: Optional[Literal[
         "decisao_merito", "decisao_interlocutoria", "sentenca", "acordao",
         "despacho", "peticao", "publicacao", "intimacao", "certidao",
         "ato_ordinatorio", "carga", "baixa", "conclusao", "outros",
-    ] = Field(
-        description=(
-            "Categoria canonica do ato. Use 'outros' SO se nada se encaixar. "
-            "Pista forte: tipo_origem da mov ja indica (DESPACHO -> despacho, "
-            "SENTENCA -> sentenca, etc) — confirme com o conteudo do texto."
-        ),
+    ]] = Field(
+        default=None,
+        description="DERIVADO de tipo_doc pelo agent (nao emitir). Categoria canonica usada pela L2.",
     )
 
     # Campo 2: Relevancia pro merito
@@ -312,13 +339,22 @@ class MovInput(BaseModel):
 
 
 class ProcessoContext(BaseModel):
-    """Contexto minimo do processo pra desambiguar mov isolada."""
+    """Contexto minimo do processo pra desambiguar mov isolada.
+
+    FIX CRÍTICO (L1 v7): materia/nm_tomador/cnpj_tomador SÃO enviados pelo shared
+    (fetch_processo_context) mas pydantic v2 DESCARTAVA por não serem declarados
+    aqui → a fundação (de que lado o Tomador está / grupo econômico) NUNCA chegava
+    ao LLM (caso Casas Bahia/Via S.A quebrava). Declarar os 3 campos conserta o
+    /classify E a /triage. Ver memory l1-invariante-fundacao."""
 
     cnj: str
     classe: Optional[str] = None
     classe_cnj_code: Optional[int] = None
     polo_ativo: Optional[str] = None
     polo_passivo: Optional[str] = None
+    materia: Optional[str] = None
+    nm_tomador: Optional[str] = None
+    cnpj_tomador: Optional[str] = None
 
 
 class DocAnexado(BaseModel):
@@ -370,6 +406,14 @@ class FallbackContext(BaseModel):
 class MovFactSheetRequest(BaseModel):
     processo: ProcessoContext
     mov: MovInput
+    classe: Optional[str] = Field(
+        default=None,
+        description=(
+            "Classe da unidade enviada pelo shared: '1A' (mov sem doc), '1B' (mov+1 doc), "
+            "'1C' (mov+N docs), '1D' (documento orfao, sem ato processual). O prompt trata 1D "
+            "diferente (doc sem ato). None = trata como mov comum."
+        ),
+    )
     documentos_anexados: list[DocAnexado] = Field(
         default_factory=list,
         description="Docs vinculados a esta mov via document_movement_links. Vazio = sem doc.",
