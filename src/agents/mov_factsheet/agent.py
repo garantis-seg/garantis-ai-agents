@@ -73,7 +73,13 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #   MODULO_TRABALHISTA (condicional; TST≠stj; Tomador pode ser reclamante). v2.3 PURO
 #   reprovou (memory l1-teste-reprova) — estas cirurgias são as melhorias comprovadas.
 #   Ver memory l1-fase-b-decisao-v3 / l1-invariante-fundacao.
-PROMPT_VERSION = "mov_factsheet.v3"
+# v4 (2026-06-06): REGRA DURA SUSPENSAO DE SEGURANCA/LIMINAR — "deferir suspensao
+#   de seguranca/liminar" (incidente do ente publico, Lei 8.437/12.016, decidido
+#   pela presidencia do tribunal) e DESFAVORAVEL ao Tomador (sustou a protecao),
+#   nao confundir com "deferir liminar pro tomador" (favoravel) nem com "suspensao
+#   da exigibilidade" art.151 CTN (favoravel). Furo achado em checagem juridica
+#   do ancora (sinal de risco invertido). Ver memory l1-furo-sinal-risco-suspensao.
+PROMPT_VERSION = "mov_factsheet.v4"
 
 
 async def classify_mov_factsheet(

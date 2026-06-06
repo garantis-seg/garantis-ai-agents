@@ -449,6 +449,20 @@ foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
    - transito_certificado: true SO se a mov CERTIFICA transito em julgado
    (Ver <regra_extincao_sem_merito> acima — regra dura por classe processual.)
 
+   REGRA DURA — SUSPENSAO DE SEGURANCA/LIMINAR (incidente do ente publico):
+   Quando o tribunal "DEFERE/CONCEDE a SUSPENSAO de liminar/seguranca/sentenca"
+   (pedido de Suspensao de Seguranca pela Fazenda/ente publico — Lei 8.437 art.4
+   ou Lei 12.016 art.15, decidido pela PRESIDENCIA do tribunal), o ato e
+   DESFAVORAVEL ao Tomador: a protecao que ele tinha foi SUSTADA. sentido=
+   'desfavoravel', delta_risco aumentou. NAO confunda o verbo "deferir" (positivo
+   gramatical) com favoravel — quem foi atendido foi a Fazenda, contra o Tomador.
+   ESPELHO: se o tribunal NEGA/INDEFERE a suspensao de seguranca, ou CASSA a
+   suspensao antes deferida, isso e FAVORAVEL ao Tomador (mantem a protecao).
+   NAO confundir com 'suspensao da EXIGIBILIDADE do credito' (art.151 CTN, via
+   deposito/liminar/seguro) — ESSA e FAVORAVEL ao Tomador (paralisa a cobranca).
+   Resumo: suspensao da PROTECAO do Tomador = desfavoravel; suspensao da
+   COBRANCA contra o Tomador = favoravel.
+
    REGRA DURA — INEXIGIBILIDADE NAO eh EXTINCAO SEM MERITO:
    Quando uma sentenca em Embargos/Anulatoria/MS/Declaratoria ACOLHE A TESE
    do Tomador (inconstitucionalidade, nulidade da CDA, decadencia, prescricao
