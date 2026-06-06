@@ -1,6 +1,6 @@
 """Gera golden snapshot YAML pro PromptFoo regression suite L1 mov_factsheet.
 
-Lê cards atuais de leads.dossier_artifacts (kind='mov_factsheet') + reconstroi
+Lê cards atuais de leitura_conexos.dossier_artifacts (kind='mov_factsheet') + reconstroi
 inputs (processo + mov + fb_ctx) via SQL direto. Cada test case do YAML carrega
 `vars` (input pro agente) + `expected` (card atual = gabarito).
 
@@ -51,7 +51,7 @@ WITH sampled AS (
         pec.descricao_canonical as mov_texto,
         pec.occurred_at::date::text as mov_data,
         p.resumo_ia as processo_resumo_ia
-    FROM leads.dossier_artifacts da
+    FROM leitura_conexos.dossier_artifacts da
     JOIN leads.processos_canonical pc
       ON pc.processo_numero_normalized = da.entity_id
     LEFT JOIN leads.processos p
