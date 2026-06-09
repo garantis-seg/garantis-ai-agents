@@ -13,6 +13,7 @@ from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT, call_l1_with_vision_fallback
+from .._utils.feature_flags import flag_enabled
 from .prompts import build_mov_factsheet_prompt
 from .fundacao import derivar_categoria, derivar_status_garantia
 from .schemas import (
@@ -84,6 +85,37 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #   Asserts do eval nao tocam nenhum campo removido/suprimido. Decisao Elton 2026-06-09.
 PROMPT_VERSION = "mov_factsheet.v3.1"
 
+# FASE 2 redesign L1 — caminho v4 (fatos neutros + derivacoes) sob flag, default OFF.
+# Flag ON => a LLM emite SO fatos neutros (schemas_v4) com prompt neutro (prompts_v4);
+# sentido/categoria/status/peca_pivo viram DERIVED (garantis_shared.derivacoes). Shadow:
+# coexiste com v3.1 (default), nada de prod muda ate o flip (F1). Ver
+# ~/.claude/plans/l1-fase2-kickoff-2026-06-09.md.
+L1_NEUTRAL_FLAG = "L1_NEUTRAL_ENABLED"
+
+
+def _build_card_v4(parsed: dict, mov: "MovInput") -> dict:
+    """Caminho v4 (fatos neutros): valida o card, injeta identidade pos-parse (mov_id/data
+    NAO sao emitidos pela LLM — ficam fora do response_schema) e aplica os derivados
+    sujeito-INDEPENDENTES no ponto comum G6 (categoria/status_garantia/relevante/peca_pivo).
+    sentido/delta_risco NAO entram no card — sao parte_seguravel-dependentes, computados
+    on-read na Fase 3.
+
+    Imports lazy: schemas_v4 + garantis_shared.derivacoes so sao tocados sob flag, pra o
+    caminho v3.1 default nunca depender do shared pin novo (derivacoes ainda nao publicado
+    no wheel). Ver ordem de deploy: publish shared -> bump pin -> flip flag."""
+    from .schemas_v4 import MovFactSheetCardV4
+    from garantis_shared.engine_v6.layer1_mov_factsheet.derivacoes import (
+        aplicar_derivados_sujeito_indep,
+    )
+
+    card = MovFactSheetCardV4(**parsed)          # valida fatos neutros; pydantic descarta extras
+    card_data = card.model_dump()
+    card_data["mov_id"] = mov.mov_id             # identidade injetada (nao LLM-emitida)
+    if mov.data:
+        card_data["data"] = mov.data
+    aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
+    return card_data
+
 
 async def classify_mov_factsheet(
     processo: ProcessoContext | dict,
@@ -130,13 +162,34 @@ async def classify_mov_factsheet(
     if model is None:
         model = DEFAULT_MODEL
 
+    use_v4 = flag_enabled(L1_NEUTRAL_FLAG)
+    prompt_version = PROMPT_VERSION
+
     llm_provider = create_provider(provider)
-    prompt = build_mov_factsheet_prompt(
-        processo, mov,
-        documentos_anexados=docs_typed,
-        fallback_context=fb_typed,
-        classe=classe,
-    )
+
+    if use_v4:
+        # Caminho neutro (Fase 2): prompt + response_schema v4, imports lazy (isolam o
+        # caminho v3.1 default do shared pin novo). Mesmo envelope de input (processo/
+        # mov/docs/fallback/classe) — so o card emitido muda.
+        from .prompts_v4 import build_mov_factsheet_prompt_v4
+        from .schemas_v4 import MovFactSheetCardV4, PROMPT_VERSION_V4
+
+        prompt_version = PROMPT_VERSION_V4
+        prompt = build_mov_factsheet_prompt_v4(
+            processo, mov,
+            documentos_anexados=docs_typed,
+            fallback_context=fb_typed,
+            classe=classe,
+        )
+        response_schema = MovFactSheetCardV4
+    else:
+        prompt = build_mov_factsheet_prompt(
+            processo, mov,
+            documentos_anexados=docs_typed,
+            fallback_context=fb_typed,
+            classe=classe,
+        )
+        response_schema = MovFactSheetCard
 
     response: LLMResponse = await call_l1_with_vision_fallback(
         llm_provider,
@@ -146,7 +199,7 @@ async def classify_mov_factsheet(
         # GATE DE OCR (L1 v7): pares (text_content, gcs_url) por doc — o gate decide
         # por documento se manda pro Vision (texto-lixo OU pagina-imagem). Ver ocr_gate.
         docs_text=[(d.text_content, d.gcs_url) for d in docs_typed if d.gcs_url],
-        response_schema=MovFactSheetCard,
+        response_schema=response_schema,
         log_label=f"mov_id={mov.mov_id}",
         thinking_budget=0,
     )
@@ -154,23 +207,28 @@ async def classify_mov_factsheet(
     raw_response = response.text
     try:
         parsed = parse_llm_json(raw_response)
-        # Echo input identifiers em caso de LLM reset
-        parsed.setdefault("mov_id", mov.mov_id)
-        if mov.data and not parsed.get("data"):
-            parsed["data"] = mov.data
-        if mov.tipo and not parsed.get("tipo_origem"):
-            parsed["tipo_origem"] = mov.tipo
-        # DERIVACAO POR CODIGO (L1 v7): o LLM emite tipo_doc(34) e evento_garantia.tipo;
-        # categoria(14) e status_garantia_pos_mov sao DERIVADOS — fonte unica da verdade,
-        # zero contradicao. ★ ARMADILHA #1: derivar ANTES de instanciar (categoria e lida
-        # pela L2; se ficar None o sinal some). Ver memory l1-divida-categoria-tipodoc.
-        if not parsed.get("categoria"):
-            parsed["categoria"] = derivar_categoria(parsed.get("tipo_doc"))
-        _eg_tipo = (parsed.get("evento_garantia") or {}).get("tipo")
-        if not parsed.get("status_garantia_pos_mov") or parsed.get("status_garantia_pos_mov") == "nenhum":
-            parsed["status_garantia_pos_mov"] = derivar_status_garantia(_eg_tipo)
-        card = MovFactSheetCard(**parsed)
-        card_data = card.model_dump()
+        if use_v4:
+            # v4: fatos neutros + derivados sujeito-independentes (G6). Identidade injetada
+            # dentro do helper (mov_id/data fora do response_schema).
+            card_data = _build_card_v4(parsed, mov)
+        else:
+            # Echo input identifiers em caso de LLM reset
+            parsed.setdefault("mov_id", mov.mov_id)
+            if mov.data and not parsed.get("data"):
+                parsed["data"] = mov.data
+            if mov.tipo and not parsed.get("tipo_origem"):
+                parsed["tipo_origem"] = mov.tipo
+            # DERIVACAO POR CODIGO (L1 v7): o LLM emite tipo_doc(34) e evento_garantia.tipo;
+            # categoria(14) e status_garantia_pos_mov sao DERIVADOS — fonte unica da verdade,
+            # zero contradicao. ★ ARMADILHA #1: derivar ANTES de instanciar (categoria e lida
+            # pela L2; se ficar None o sinal some). Ver memory l1-divida-categoria-tipodoc.
+            if not parsed.get("categoria"):
+                parsed["categoria"] = derivar_categoria(parsed.get("tipo_doc"))
+            _eg_tipo = (parsed.get("evento_garantia") or {}).get("tipo")
+            if not parsed.get("status_garantia_pos_mov") or parsed.get("status_garantia_pos_mov") == "nenhum":
+                parsed["status_garantia_pos_mov"] = derivar_status_garantia(_eg_tipo)
+            card = MovFactSheetCard(**parsed)
+            card_data = card.model_dump()
     except (json.JSONDecodeError, Exception) as e:
         logger.error(f"mov_factsheet parse failed mov_id={mov.mov_id}: {repr(e)}")
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
@@ -192,6 +250,6 @@ async def classify_mov_factsheet(
         "card": card_data,
         "raw_response": raw_response,
         "llm_raw_prompt": prompt,
-        "prompt_version": PROMPT_VERSION,
+        "prompt_version": prompt_version,
         "usage": usage,
     }
