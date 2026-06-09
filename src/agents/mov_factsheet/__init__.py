@@ -1,10 +1,10 @@
 """Mov FactSheet Agent (engine v6_meritos camada 1).
 
-Extrai 13 campos estruturados de UMA movimentacao processual. Output cabe em
+Extrai campos estruturados de UMA movimentacao processual. Output cabe em
 leads.dossier_artifacts com kind='mov_factsheet'.
 
 Single-step Flash Lite call. Mais rico que mov_summarizer (kind='movimentacao'):
-inclui evento_garantia, delta_risco, valores, peca_pivo, proximos_passos, etc.
+inclui evento_garantia, delta_risco, valores, peca_pivo, etc.
 
 Usado pela engine v6 como input da camada 2 (processo_synthesis).
 """

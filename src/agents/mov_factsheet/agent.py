@@ -73,7 +73,16 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #   MODULO_TRABALHISTA (condicional; TST≠stj; Tomador pode ser reclamante). v2.3 PURO
 #   reprovou (memory l1-teste-reprova) — estas cirurgias são as melhorias comprovadas.
 #   Ver memory l1-fase-b-decisao-v3 / l1-invariante-fundacao.
-PROMPT_VERSION = "mov_factsheet.v3"
+#
+# v3.1 (2026-06-09, L1 DS cleanup — Lote 1): removidos campos MORTOS do schema
+#   (= response_schema do Gemini): 'apolice' (ApoliceBlock — redundante com
+#   evento_garantia + o card autoritativo kind='apolice') e 'proximos_passos'
+#   (sem consumidor; a UI mostra proximos_passos_provaveis, campo da L3, NAO este).
+#   'processos_conexos_mencionados' SUPRIMIDO via prompt (campo mantido no schema;
+#   re-ligado gated na peticao inicial no Lote 3 / FASE 4). tipo_garantia NAO
+#   mexido aqui — sera REALOCADO pra dentro de evento_garantia no Lote 2.
+#   Asserts do eval nao tocam nenhum campo removido/suprimido. Decisao Elton 2026-06-09.
+PROMPT_VERSION = "mov_factsheet.v3.1"
 
 
 async def classify_mov_factsheet(
