@@ -1,1831 +1,2026 @@
-# Golden snapshot — baseline PROMPT_VERSION mov_factsheet.v2.1
-# Generated: 2026-05-25
-# Cases: 30 (updated 30 with v2.1 outputs)
-# Refresh: rode build_golden_snapshot.py + atualize esse arquivo apos
-# nova baseline ser merged em prod.
-- description: L1 peticao/ruido — MOVIMENTO - Movimento Processual Retificado 09/11/2020 16:25 - Juntada de Petiçã
-  vars:
-    processo:
-      cnj: 7039582-95.2020.8.22.0001
-      classe: EXECUÇÃO FISCAL (1116)
-      classe_cnj_code: 0
-      polo_ativo: Estado de Rondonia / Procuradoria Geral do Estado Pge
-      polo_passivo: Energisa Rondonia
-    mov:
-      mov_id: 91a3edad-83fa-4ff9-8a00-53bb0c559d7d
-      data: '2020-11-09'
-      tipo: peticao
-      texto: MOVIMENTO - Movimento Processual Retificado 09/11/2020 16:25 - Juntada de Petição de Petição (outras)
-    documentos_anexados: []
-    expected:
-      mov_id: 91a3edad-83fa-4ff9-8a00-53bb0c559d7d
-      data: '2020-11-09'
-      tipo_origem: peticao
-      resumo_ato: Juntada de petição de natureza diversa (outras) aos autos processuais. Movimentação de caráter meramente
-        administrativo, sem análise de mérito ou garantia.
-      categoria: peticao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: null
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 outros/ruido — ANEXO JUNTADO - Apresentação de Substabelecimento com Reserva de Poderes | Apres
-  vars:
-    processo:
-      cnj: 1000100-12.2018.5.02.0232
-      classe: Ação Trabalhista - Rito Ordinário
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: GRUPO CASAS BAHIA S/A
-    mov:
-      mov_id: e97f6d3c-0453-4d2e-9aa1-02c7df1da331
-      data: '2018-03-22'
-      tipo: juntada
-      texto: ANEXO JUNTADO - Apresentação de Substabelecimento com Reserva de Poderes | Apresentação de Substabelecimento
-        com Reserva de Poderes
-    documentos_anexados: []
-    expected:
-      mov_id: e97f6d3c-0453-4d2e-9aa1-02c7df1da331
-      data: '2018-03-22'
-      tipo_origem: juntada
-      resumo_ato: Apresentação de substabelecimento com reserva de poderes pela parte autora. Movimentação de natureza meramente
-        processual, sem impacto direto no mérito ou na garantia.
-      categoria: peticao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente processual de juntada de documento sem impacto no mérito da causa.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Movimentação de natureza administrativa/processual, sem decisão de mérito.
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: 'L1 publicacao/ruido — CERTIDAO DE REMESSA DA INTIMACAO PARA O PORTAL ELETRONICO EXPEDIDA - Certidão - '
-  vars:
-    processo:
-      cnj: 1555432-24.2018.8.26.0090
-      classe: Execução Fiscal
-      classe_cnj_code: 0
-      polo_ativo: Prefeitura Municipal de São Paulo
-      polo_passivo: Faculdades Metropolitanas Unidas Educacionais Ltda
-    mov:
-      mov_id: 6880211b-78ce-4823-984b-8a7d2eb274d4
-      data: '2018-10-23'
-      tipo: publicacao
-      texto: CERTIDAO DE REMESSA DA INTIMACAO PARA O PORTAL ELETRONICO EXPEDIDA - Certidão - Remessa da Intimação para o Portal
-        Eletrônico
-    documentos_anexados: []
-    expected:
-      mov_id: 6880211b-78ce-4823-984b-8a7d2eb274d4
-      data: '2018-10-23'
-      tipo_origem: publicacao
-      resumo_ato: Publicação de certidão informando a expedição de intimação para o portal eletrônico. Não há decisão judicial
-        ou ato que impacte o mérito ou a garantia.
-      categoria: publicacao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente processual de publicação sem impacto no mérito ou na garantia.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Movimentação de publicação sem conteúdo decisório ou de mérito.
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 peticao/ruido — ANEXO JUNTADO - TST - Comprovante Interno de Recebimento de Petição Eletrônica |
-  vars:
-    processo:
-      cnj: 1001327-90.2018.5.02.0473
-      classe: Ação Trabalhista - Rito Ordinário
-      classe_cnj_code: 0
-      polo_ativo: Jacomo Joel Cortezi
-      polo_passivo: 3Con Consultoria e Sistemas S.A / Grupo Casas Bahia S.A
-    mov:
-      mov_id: d7714efd-3399-45a9-94e1-d5ec9b5c2ad1
-      data: '2022-01-18'
-      tipo: peticao
-      texto: ANEXO JUNTADO - TST - Comprovante Interno de Recebimento de Petição Eletrônica | Documento Diverso
-    documentos_anexados: []
-    expected:
-      mov_id: d7714efd-3399-45a9-94e1-d5ec9b5c2ad1
-      data: '2022-01-18'
-      tipo_origem: peticao
-      resumo_ato: Juntada de comprovante interno de recebimento de petição eletrônica ao TST, referente a documento diverso.
-        Não há decisão judicial ou alteração de mérito nesta movimentação.
-      categoria: peticao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: null
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 publicacao/ruido — Decorrido - Decorrido o prazo de RODRIGO BARBOSA FARIA em 07/10/2025
-  vars:
-    processo:
-      cnj: 0101035-89.2019.5.01.0064
-      classe: Cumprimento de sentença
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: GRUPO MUBADALA
-    mov:
-      mov_id: 5a907bc9-cc04-49d3-a946-c557db678d3d
-      data: '2025-10-08'
-      tipo: outro
-      texto: Decorrido - Decorrido o prazo de RODRIGO BARBOSA FARIA em 07/10/2025
-    documentos_anexados: []
-    expected:
-      mov_id: 5a907bc9-cc04-49d3-a946-c557db678d3d
-      data: '2025-10-08'
-      tipo_origem: outro
-      resumo_ato: Prazo processual de RODRIGO BARBOSA FARIA decorrido em 07/10/2025. Movimentacao meramente administrativa,
-        sem impacto no mérito ou na garantia.
-      categoria: ato_ordinatorio
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente ordinatório sem impacto no mérito ou na garantia.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Movimentação ordinatória sem conteúdo decisório ou de mérito.
-      proximos_passos:
-      - Aguardar nova movimentação processual.
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: "L1 despacho/ruido — DESPACHO - Fls. 859/860 -\r 1) Anote-se onde couber.\r 2) Voltem conclusos."
-  vars:
-    processo:
-      cnj: 0011534-49.2010.8.19.0045
-      classe: Execução Fiscal
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: DELGA PARTICIPAÇÕES S.A.
-    mov:
-      mov_id: 1bbe60b0-f3d4-4a1a-9b48-a4b2d9ee6790
-      data: '2014-06-24'
-      tipo: despacho
-      texto: "DESPACHO - Fls. 859/860 -\r\n1) Anote-se onde couber.\r\n2) Voltem conclusos."
-    documentos_anexados: []
-    expected:
-      mov_id: 1bbe60b0-f3d4-4a1a-9b48-a4b2d9ee6790
-      data: '2014-06-24'
-      tipo_origem: despacho
-      resumo_ato: Juiz determinou a anotação nos autos e que os autos retornem conclusos para nova deliberação. Não há decisão
-        de mérito ou evento de garantia.
-      categoria: despacho
-      relevancia_merito: baixa
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente processual sem impacto no mérito ou na garantia.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Despacho ordinatório sem alteração decisiva no mérito.
-      proximos_passos:
-      - Aguardar nova deliberação judicial
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: 'L1 peticao/ruido — Tipo do Movimento: Juntada - Petição Data da juntada: 26/04/2023 Descrição da Ju'
-  vars:
-    processo:
-      cnj: 0149489-40.2022.8.19.0001
-      classe: Execução Fiscal
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: LIGHT S/A - EM RECUPERACAO JUDICIAL
-    mov:
-      mov_id: 69b46f2b-ece3-42a0-9288-185b0eb966e2
-      data: '2023-04-26'
-      tipo: peticao
-      texto: 'Tipo do Movimento: Juntada - Petição
-
-        Data da juntada: 26/04/2023
-
-        Descrição da Juntada: Documento eletrônico juntado de forma automática.'
-    documentos_anexados: []
-    expected:
-      mov_id: 69b46f2b-ece3-42a0-9288-185b0eb966e2
-      data: '2023-04-26'
-      tipo_origem: peticao
-      resumo_ato: Juntada de petição eletrônica automática. Não há informações sobre o conteúdo da petição ou próximos passos
-        claros.
-      categoria: peticao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: null
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 publicacao/ruido — DECORRIDO - Decorrido o prazo de MARCOS ROBERTO DIAS em 29/09/2017 23:59:59
-  vars:
-    processo:
-      cnj: 0011248-88.2016.5.03.0067
-      classe: Ação Trabalhista - Rito Ordinário
-      classe_cnj_code: 0
-      polo_ativo: Joubert Madson da Silva
-      polo_passivo: Grupo Casas Bahia S.A
-    mov:
-      mov_id: 87f285c2-611c-4edd-9845-b99a18dfaccb
-      data: '2017-09-30'
-      tipo: outro
-      texto: DECORRIDO - Decorrido o prazo de MARCOS ROBERTO DIAS em 29/09/2017 23:59:59
-    documentos_anexados: []
-    expected:
-      mov_id: 87f285c2-611c-4edd-9845-b99a18dfaccb
-      data: '2017-09-30'
-      tipo_origem: outro
-      resumo_ato: O prazo processual de MARCOS ROBERTO DIAS decorreu em 29/09/2017. Nao ha decisao judicial ou ato de garantia
-        nesta movimentacao.
-      categoria: outros
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: null
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 ato_ordinatorio/baixa — LEVANTAMENTO - Levantamento da Suspensão ou Dessobrestamento
-  vars:
-    processo:
-      cnj: 5021166-04.2018.4.02.5101
-      classe: Execução Fiscal
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: GRUPO CONSTANTINO
-    mov:
-      mov_id: 774dad56-372d-46a4-84ad-341eb9abc231
-      data: '2025-03-28'
-      tipo: outro
-      texto: LEVANTAMENTO - Levantamento da Suspensão ou Dessobrestamento
-    documentos_anexados: []
-    expected:
-      mov_id: 774dad56-372d-46a4-84ad-341eb9abc231
-      data: '2025-03-28'
-      tipo_origem: outro
-      resumo_ato: Movimentação de levantamento da suspensão ou dessobrestamento de valores no processo de Execução Fiscal.
-        Não há indicação de decisão judicial ou alteração de mérito.
-      categoria: outros
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: A movimentação trata de um ato administrativo/processual sem impacto direto no mérito ou na garantia.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: A movimentação não representa uma decisão de mérito ou evento crucial para o desfecho do processo.
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: 'L1 publicacao/ruido — Tipo do Movimento: Envio de Documento Eletrônico Data da remessa: 03/03/2023'
-  vars:
-    processo:
-      cnj: 0003474-97.2021.8.19.0014
-      classe: Execução Fiscal
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: MAKRO ATACADISTA S.A.
-    mov:
-      mov_id: 810ee23f-8952-481e-a5b3-afb9048fab60
-      data: '2023-03-03'
-      tipo: outro
-      texto: 'Tipo do Movimento: Envio de Documento Eletrônico
-
-        Data da remessa: 03/03/2023'
-    documentos_anexados: []
-    expected:
-      mov_id: 810ee23f-8952-481e-a5b3-afb9048fab60
-      data: '2023-03-03'
-      tipo_origem: outro
-      resumo_ato: Movimentação de envio de documento eletrônico com data de remessa em 03/03/2023. Trata-se de ato meramente
-        administrativo sem conteúdo decisório ou impacto no mérito.
-      categoria: publicacao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato de envio de documento sem conteúdo decisório ou de mérito.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Movimentação de envio de documento sem impacto decisório no mérito.
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 outros/ruido — Anexo Juntado - Comprovante de Depósito Judicial | Comprovante de Depósito Judic
+- description: L1 outros/baixa — ANEXO JUNTADO - Atualização | Planilha de Atualização de Cálculos
   vars:
     processo:
       cnj: 0000488-04.2015.5.09.0664
       classe: Ação Trabalhista - Rito Ordinário
       classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: SERCOMTEL S/A TELECOMUNICAÇÕES
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
     mov:
-      mov_id: 0df63bca-0bdd-4ea6-9c41-4d78906e982f
-      data: '2026-02-11'
+      mov_id: e5aeef48-9450-5148-abfd-1162ae8efe76
+      data: '2023-08-16'
       tipo: juntada
-      texto: Anexo Juntado - Comprovante de Depósito Judicial | Comprovante de Depósito Judicial
+      texto: ANEXO JUNTADO - Atualização | Planilha de Atualização de Cálculos
     documentos_anexados: []
     expected:
-      mov_id: 0df63bca-0bdd-4ea6-9c41-4d78906e982f
-      data: '2026-02-11'
-      tipo_origem: juntada
-      resumo_ato: Comprovante de depósito judicial foi juntado aos autos. O próximo passo provável é a análise do comprovante
-        pelo juízo ou pela parte contrária.
-      categoria: outros
-      relevancia_merito: ruido
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2023-08-16'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: e5aeef48-9450-5148-abfd-1162ae8efe76
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
       decisao:
-        tem_decisao: false
         sentido: null
-        instancia: null
         natureza: null
+        instancia: null
+        tem_decisao: false
         transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: planilha_calculo
+      categoria: outros
+      confianca: 0.5
+      peca_pivo:
+        e_pivo: false
+        motivo: A juntada de uma planilha de cálculos é um ato processual de andamento, não decisório sobre o mérito principal.
+      resumo_ato: Juntada de planilha de atualização de cálculos.
+      delta_risco:
+        mudou: false
+        motivo: Movimentação de juntada de planilha de cálculos, sem impacto direto no mérito ou na garantia.
+        direcao: inalterado
+      tipo_origem: juntada
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 outros/baixa — Comprovante de Depósito 23.05.2022 | Comprovante de Depósito Judicial (RESTRITO)
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: dfd35527-408a-5518-8bd5-96fb25781e6a
+      data: '2022-05-27'
+      tipo: outro
+      texto: Comprovante de Depósito 23.05.2022 | Comprovante de Depósito Judicial (RESTRITO)
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2022-05-27'
+      _meta:
+        classe: 1A
+        porque: garantia/exec
+        caminho: completo
+      mov_id: dfd35527-408a-5518-8bd5-96fb25781e6a
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: deposito_judicial
+      categoria: outros
+      confianca: 0.7
+      peca_pivo:
+        e_pivo: false
+        motivo: A juntada de um comprovante de depósito não é um ato decisivo para o mérito do processo.
+      resumo_ato: Comprovante de depósito judicial referente a 23/05/2022 foi juntado aos autos.
+      delta_risco:
+        mudou: false
+        motivo: Apresentação de comprovante de depósito judicial não altera o risco de acionamento da apólice.
+        direcao: inalterado
+      tipo_origem: outro
+      data_real_ato: '2022-05-23'
+      tipo_garantia: deposito_judicial
       evento_garantia:
         tipo: apresentacao
         motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: true
       status_garantia_pos_mov: apresentado
-      tipo_garantia: deposito_judicial
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: true
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: A juntada de um comprovante de depósito judicial é um ato processual que não altera o mérito da causa nem
-          o risco de acionamento da apólice.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: A juntada de um comprovante de depósito judicial é um ato meramente processual e não decide o mérito da causa.
-      proximos_passos:
-      - Aguardar análise do comprovante de depósito judicial pelo juízo ou parte contrária.
-      data_real_ato: null
       processos_conexos_mencionados: []
-      confianca: 0.6
-- description: L1 decisao_merito/baixa — PREJUDICADO S - Prejudicado(s) o(s) Agravo de Petição de Banco Fibra S.A.
+- description: 'L1 acordao/alta — FASE: Julgamento - Com Resolução do Mérito - Não-Provimento - Conhecido o Recurs'
   vars:
     processo:
-      cnj: 0001052-77.2010.5.04.0023
-      classe: Ação Trabalhista - Rito Ordinário
+      cnj: 0062508-79.2020.8.19.0000
+      classe: AGRAVO DE INSTRUMENTO - CÍVEL
       classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: BANCO FIBRA SA
+      polo_ativo: Ministerio Publico do Estado do Rio de Janeiro
+      polo_passivo: Light Serviços de Eletricidade S.A
     mov:
-      mov_id: 519a8c27-0f7b-4f4a-97ce-76fb6bc83c1d
-      data: '2021-08-26'
-      tipo: peticao
-      texto: PREJUDICADO S - Prejudicado(s) o(s) Agravo de Petição de Banco Fibra S.A.
+      mov_id: 59717773-2eeb-5081-918a-3b28da20ef49
+      data: '2022-03-08'
+      tipo: acordao
+      texto: 'FASE: Julgamento - Com Resolução do Mérito - Não-Provimento - Conhecido o Recurso e Não-Provido - Unanimidade
+
+        Data do Movimento: 08/03/2022 12:00
+
+        Resultado: Com Resolução do Mérito
+
+        Motivo: Não-Provimento
+
+        COMPL.3: Conhecido o Recurso e Não-Provido - Unanimidade
+
+        Resultado: Com Resolução do Mérito
+
+        Motivo: Não-Provimento
+
+        COMPL.3: Conhecido o Recurso e Não-Provido - Unanimidade
+
+        Data da Sessão: 08/03/2022 12:00
+
+        Antecipação de Tutela: Não
+
+        Liminar: Não
+
+        Presidente: DES. ADRIANO CELSO GUIMARAES
+
+        Relator: DES. ADRIANO CELSO GUIMARAES
+
+        Designado p/ Acórdão: DES. ADRIANO CELSO GUIMARAES
+
+        Votação: Por Unanimidade
+
+        Decisão: Conhecido o Recurso e Não-Provido - Unanimidade
+
+        Texto: POR UNANIMIDADE DE VOTOS NEGOU-SE PROVIMENTO AO RECURSO NOS TERMOS DO VOTO DO E.DES. RELATOR.'
     documentos_anexados: []
     expected:
-      mov_id: 519a8c27-0f7b-4f4a-97ce-76fb6bc83c1d
-      data: '2021-08-26'
-      tipo_origem: peticao
-      resumo_ato: Agravo de Petição interposto pelo BANCO FIBRA SA foi julgado prejudicado. Não houve decisão de mérito sobre
-        o recurso.
-      categoria: outros
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
       cda:
-        numeros: []
         ente: null
+        numeros: []
         tributo: null
         valor_total: null
+      data: '2022-03-08'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 59717773-2eeb-5081-918a-3b28da20ef49
+      origem: mov
       apolice:
+        aceita: null
         numero: null
         apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente processual de julgamento de recurso prejudicado, sem análise de mérito.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: O recurso foi julgado prejudicado, sem adentrar o mérito da causa principal.
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.6
-- description: L1 publicacao/ruido — DECORRIDO - Decorrido o prazo de JOSE CARLOS DAS NEVES CARRAMAO JUNIOR em 20/11/
-  vars:
-    processo:
-      cnj: 1000535-34.2020.5.02.0064
-      classe: Ação Trabalhista - Rito Ordinário
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: DIA BRASIL SOCIEDADE LTDA EM RECUPERAÇÃO JUDICIAL
-    mov:
-      mov_id: 0c35db5e-4975-40a9-bb14-9c4953409889
-      data: '2020-11-21'
-      tipo: outro
-      texto: DECORRIDO - Decorrido o prazo de JOSE CARLOS DAS NEVES CARRAMAO JUNIOR em 20/11/2020
-    documentos_anexados: []
-    expected:
-      mov_id: 0c35db5e-4975-40a9-bb14-9c4953409889
-      data: '2020-11-21'
-      tipo_origem: outro
-      resumo_ato: Prazo de JOSE CARLOS DAS NEVES CARRAMAO JUNIOR decorrido em 20/11/2020. Trata-se de ato meramente processual
-        sem decisao de merito ou impacto direto na garantia.
-      categoria: ato_ordinatorio
-      relevancia_merito: ruido
       decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente processual, sem impacto no merito ou na garantia.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Ato meramente processual, sem decisao de merito.
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: 'L1 publicacao/ruido — DECORRIDO - Decorrido prazo de MAKRO ATACADISTA SOCIEDADE ANONIMA em 18/06/2025 '
-  vars:
-    processo:
-      cnj: 5030993-34.2020.8.13.0702
-      classe: Procedimento Comum Cível
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: MAKRO ATACADISTA S.A.
-    mov:
-      mov_id: 6369286d-ae91-4592-a58f-5788fd6e56c7
-      data: '2025-06-19'
-      tipo: outro
-      texto: DECORRIDO - Decorrido prazo de MAKRO ATACADISTA SOCIEDADE ANONIMA em 18/06/2025 23:59.
-    documentos_anexados: []
-    expected:
-      mov_id: 6369286d-ae91-4592-a58f-5788fd6e56c7
-      data: '2025-06-19'
-      tipo_origem: outro
-      resumo_ato: Decorreu o prazo de 18/06/2025 para a parte MAKRO ATACADISTA SOCIEDADE ANONIMA. Nao ha indicacao de proximo
-        passo ou decisao judicial.
-      categoria: publicacao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: A movimentacao apenas certifica o decurso de prazo, sem impacto no merito ou risco.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: A movimentacao e meramente administrativa, sem carater decisorio sobre o merito.
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 outros/ruido — ANEXO JUNTADO - vol 1 procuração_2 | Documento Diverso
-  vars:
-    processo:
-      cnj: 0100819-20.2023.5.01.0281
-      classe: Agravo de Petição
-      classe_cnj_code: 0
-      polo_ativo: COMPANHIA ESTADUAL DE AGUAS E ESGOTOS CEDAE
-      polo_passivo: AILTON SILVA MACIEL / ALAIR MARTINS DE ALMEIDA / ALBERTO JORGE SA VIANA DA SILVA / ALBERTO LUIS BARRETO
-        / ALDECY MENEZES DA COSTA / ALUISIO PINHEIRO / ALUISIO SOARES DE SIQUEIRA / AMARO BARRETO DA SILVA / ANAGIR MACHADO
-        DE VASCONCELOS / ANSELMO RIBEIRO DIAS / ANTONIO CARLOS MANHAES SILVA JUNIOR / ANTONIO DE OLIVEIRA BARRETO / ARIALDO
-        PEREIRA DE OLIVEIRA / ARI FERREIRA / ARLINDO RIBEIRO MOCO
-    mov:
-      mov_id: 71aa1e58-53b2-4f22-92f3-b0727835f357
-      data: '2023-10-11'
-      tipo: juntada
-      texto: ANEXO JUNTADO - vol 1 procuração_2 | Documento Diverso
-    documentos_anexados: []
-    expected:
-      mov_id: 71aa1e58-53b2-4f22-92f3-b0727835f357
-      data: '2023-10-11'
-      tipo_origem: juntada
-      resumo_ato: Juntada de procuração e documento diverso ao volume 1 dos autos. Não há decisão judicial ou ato que impacte
-        o mérito ou a garantia.
-      categoria: outros
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: null
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 outros/baixa — ANEXO JUNTADO - 01 Ato do TST - Seguro garantia | Documento Diverso
-  vars:
-    processo:
-      cnj: 0001826-28.2012.5.02.0465
-      classe: Ação Trabalhista - Rito Ordinário
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: GRUPO FORD
-    mov:
-      mov_id: 9f60ff20-b854-4e7d-82cc-bfd355c9ec37
-      data: '2020-07-06'
-      tipo: juntada
-      texto: ANEXO JUNTADO - 01 Ato do TST - Seguro garantia | Documento Diverso
-    documentos_anexados: []
-    expected:
-      mov_id: 9f60ff20-b854-4e7d-82cc-bfd355c9ec37
-      data: '2020-07-06'
-      tipo_origem: juntada
-      resumo_ato: Juntada de documento diverso referente a seguro garantia, com origem no TST. O documento anexado é um ato
-        do Tribunal Superior do Trabalho.
-      categoria: outros
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: A juntada de um documento diverso, mesmo que relacionado a seguro garantia, não altera o risco de acionamento
-          da apólice sem informações adicionais sobre seu conteúdo.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: A juntada de um documento diverso não representa uma decisão de mérito ou evento que mude decisivamente o
-          estado do processo.
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: "L1 peticao/ruido — PETICAO JUNTADA - Nº Protocolo: WEFE.16.70049595-4\r Tipo da Petição: Primeiro Pe"
-  vars:
-    processo:
-      cnj: 1523629-96.2014.8.26.0014
-      classe: Execução Fiscal
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: TIM S.A.
-    mov:
-      mov_id: 8afe94ce-b1f8-402b-a995-761c39f948cc
-      data: '2016-02-26'
-      tipo: peticao
-      texto: "PETICAO JUNTADA - Nº Protocolo: WEFE.16.70049595-4\r\nTipo da Petição: Primeiro Pedido de Bloqueio de Valores\
-        \ - Sistema BACENJUD\r\nData: 26/02/2016 14:32"
-    documentos_anexados: []
-    expected:
-      mov_id: 8afe94ce-b1f8-402b-a995-761c39f948cc
-      data: '2016-02-26'
-      tipo_origem: peticao
-      resumo_ato: Petição de bloqueio de valores via Bacenjud protocolada pela parte autora. O próximo passo esperado é a
-        análise do pedido de bloqueio pelo juízo.
-      categoria: peticao
-      relevancia_merito: media
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente processual de petição de bloqueio de valores, sem decisão de mérito.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Petição de bloqueio de valores não altera decisivamente o mérito do processo.
-      proximos_passos:
-      - Análise do pedido de bloqueio de valores pelo juízo.
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.6
-- description: L1 decisao_interlocutoria/media — RECEBIMENTO - 1. Intime-se o executado para apresentação de embargos, conforme
-    j
-  vars:
-    processo:
-      cnj: 0030842-28.2018.8.19.0001
-      classe: Execução Fiscal
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: LIGHT S/A - EM RECUPERACAO JUDICIAL
-    mov:
-      mov_id: 624209da-2aa5-4fbb-b072-1195456c0578
-      data: '2024-10-30'
-      tipo: decisao
-      texto: RECEBIMENTO - 1. Intime-se o executado para apresentação de embargos, conforme já determinado na decisão retro.
-        2. Sem prejuízo, observe-se a existência da ação anulatória. 0030842-28.2018.8.19.0001
-    documentos_anexados: []
-    expected:
-      mov_id: 624209da-2aa5-4fbb-b072-1195456c0578
-      data: '2024-10-30'
-      tipo_origem: decisao
-      resumo_ato: Juiz intima o executado (LIGHT S/A) para apresentar embargos à execução fiscal, conforme decisão anterior.
-        Ato processual ordinatório sem análise de mérito.
-      categoria: despacho
-      relevancia_merito: baixa
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente ordinatório, sem impacto no mérito ou risco da apólice.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Trata-se de despacho ordinatório para apresentação de defesa, não de decisão de mérito.
-      proximos_passos:
-      - Aguardar apresentação de embargos pelo executado (LIGHT S/A).
-      data_real_ato: null
-      processos_conexos_mencionados:
-      - 0030842-28.2018.8.19.0001
-      confianca: 0.7
-- description: L1 despacho/baixa — PODER JUDICIÁRIO 5ª Vara de Execuções Fiscais Federal de São Paulo Rua João Guim
-  vars:
-    processo:
-      cnj: 5029146-88.2022.4.03.6182
-      classe: Embargos à Execução Fiscal
-      classe_cnj_code: 0
-      polo_ativo: Claro S.A
-      polo_passivo: Agencia Nacional de Telecomunicacoes
-    mov:
-      mov_id: 7d7c08d5-92ab-4481-a643-f439d3e1855f
-      data: '2026-05-13'
-      tipo: publicacao
-      texto: 'PODER JUDICIÁRIO 5ª Vara de Execuções Fiscais Federal de São Paulo Rua João Guimarães Rosa, 215, Consolação,
-        São Paulo - SP - CEP: 01303-030 https://www.trf3.jus.br/balcao-virtual EMBARGOS À EXECUÇÃO FISCAL (1118) Nº 5029146-88.2022.4.03.6182
-        EMBARGANTE: CLARO S.A. ADVOGADO do(a) EMBARGANTE: ANDRE MENDES MOREIRA - SP250627-A EMBARGADO: AGENCIA NACIONAL DE
-        TELECOMUNICACOES - ANATEL DESPACHO Vistos em Inspeção. Em atenção ao princípio do contraditório, manifeste-se a embargante
-        sobre a manifestação de Id 561270312. Prazo: 10 (dez) dias. Após, conclusos. São Paulo, data da assinatura eletrônica.'
-    documentos_anexados: []
-    expected:
-      mov_id: 7d7c08d5-92ab-4481-a643-f439d3e1855f
-      data: '2026-05-13'
-      tipo_origem: publicacao
-      resumo_ato: Juiz determina que a embargante (Claro S.A.) se manifeste sobre manifestação anterior da ANATEL, concedendo
-        prazo de 10 dias. Próximo passo é a conclusão para nova decisão.
-      categoria: despacho
-      relevancia_merito: baixa
-      decisao:
-        tem_decisao: true
-        sentido: neutro
-        instancia: 1g
-        natureza: interlocutoria
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente processual, sem impacto no mérito ou na garantia.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Despacho de mero expediente, sem alteração decisiva no mérito.
-      proximos_passos:
-      - Aguardar manifestação da embargante (Claro S.A.) sobre a manifestação da ANATEL.
-      - Conclusão dos autos para nova decisão.
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.7
-- description: L1 publicacao/ruido — Decorrido - Decorrido prazo de ESTADO DA BAHIA em 24/11/2025 23:59.
-  vars:
-    processo:
-      cnj: 8129725-87.2020.8.05.0001
-      classe: TUTELA CÍVEL (12233)
-      classe_cnj_code: 0
-      polo_ativo: Braskem S.A
-      polo_passivo: Estado da Bahia
-    mov:
-      mov_id: 8c2e9d33-9b6b-4328-9be0-06cdc3090cd1
-      data: '2025-11-25'
-      tipo: outro
-      texto: Decorrido - Decorrido prazo de ESTADO DA BAHIA em 24/11/2025 23:59.
-    documentos_anexados: []
-    expected:
-      mov_id: 8c2e9d33-9b6b-4328-9be0-06cdc3090cd1
-      data: '2025-11-25'
-      tipo_origem: outro
-      resumo_ato: Prazo processual do Estado da Bahia decorrido em 24/11/2025. Aguarda-se nova movimentacao ou conclusao para
-        decisao.
-      categoria: publicacao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente processual de decurso de prazo, sem impacto no merito.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Ato de decurso de prazo nao altera decisivamente o merito.
-      proximos_passos:
-      - Aguardar nova movimentacao ou conclusao para decisao.
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 publicacao/ruido — DISPONIBILIZADO - Disponibilizado (a) o(a) intimação no Diário da Justiça Eletrô
-  vars:
-    processo:
-      cnj: 1000146-26.2021.5.02.0319
-      classe: Cumprimento Provisório de Sentença
-      classe_cnj_code: 0
-      polo_ativo: Carlos Alberto Rampi
-      polo_passivo: Azul Linhas Aéreas Brasileiras S.A / Rafael Molan Salvadori
-    mov:
-      mov_id: e4c46bc1-39fd-4448-a158-d8e760e1f65b
-      data: '2022-02-25'
-      tipo: publicacao
-      texto: DISPONIBILIZADO - Disponibilizado (a) o(a) intimação no Diário da Justiça Eletrônico
-    documentos_anexados: []
-    expected:
-      mov_id: e4c46bc1-39fd-4448-a158-d8e760e1f65b
-      data: '2022-02-25'
-      tipo_origem: publicacao
-      resumo_ato: Publicação de intimação no Diário da Justiça Eletrônico. Não há decisão judicial ou informação sobre apólice
-        ou garantia nesta movimentação.
-      categoria: publicacao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: null
-      proximos_passos: []
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 publicacao/ruido — PUBLICADO A - Publicado(a) o(a) intimação em 21/06/2022
-  vars:
-    processo:
-      cnj: 0010891-91.2021.5.03.0016
-      classe: Cumprimento Provisório de Sentença
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: BANCO FIBRA SA
-    mov:
-      mov_id: 23aa9897-948c-4179-a81c-dd7fe3a78757
-      data: '2022-06-21'
-      tipo: publicacao
-      texto: PUBLICADO A - Publicado(a) o(a) intimação em 21/06/2022
-    documentos_anexados: []
-    expected:
-      mov_id: 23aa9897-948c-4179-a81c-dd7fe3a78757
-      data: '2022-06-21'
-      tipo_origem: publicacao
-      resumo_ato: Publicada intimação referente ao cumprimento provisório de sentença. O próximo passo esperado é a manifestação
-        das partes sobre o ato publicado.
-      categoria: publicacao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: null
-      proximos_passos:
-      - aguardar manifestacao das partes
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 peticao/baixa — JUNTADA - PETICAO - APELACAO - Juntada -> Petição -> Apelação
-  vars:
-    processo:
-      cnj: 5135953-94.2022.8.09.0051
-      classe: Mandado de Segurança Cível
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: GRUPO CASAS BAHIA S/A
-    mov:
-      mov_id: 99e7af75-c70b-4918-bb50-a50cd8d02f65
-      data: '2024-06-27'
-      tipo: peticao
-      texto: JUNTADA - PETICAO - APELACAO - Juntada -> Petição -> Apelação
-    documentos_anexados: []
-    expected:
-      mov_id: 99e7af75-c70b-4918-bb50-a50cd8d02f65
-      data: '2024-06-27'
-      tipo_origem: peticao
-      resumo_ato: Juntada de petição de apelação. O próximo passo provável é a análise do recurso pela parte contrária ou
-        pelo tribunal.
-      categoria: peticao
-      relevancia_merito: media
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: A juntada de uma apelação é um ato processual que não altera o mérito ou o risco da apólice neste momento.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: A juntada de uma apelação é um ato processual, mas a decisão sobre o mérito do recurso ainda não ocorreu.
-      proximos_passos:
-      - Aguardar análise do recurso pelo tribunal ou manifestação da parte contrária.
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.6
-- description: L1 publicacao/alta — A C Ó R D Ã O   (5ª Turma)   GMMAR/arcs/abn      AGRAVO EM AGRAVO DE INSTRUMENTO
-  vars:
-    processo:
-      cnj: 0001826-28.2012.5.02.0465
-      classe: Ação Trabalhista - Rito Ordinário
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: GRUPO FORD
-    mov:
-      mov_id: 9c251417-a595-40ae-8321-711b2e66a539
-      data: '2025-02-21'
-      tipo: publicacao
-      texto: 'A C Ó R D Ã O
-
-
-
-        (5ª Turma)
-
-
-
-        GMMAR/arcs/abn
-
-
-
-
-
-
-        AGRAVO EM AGRAVO DE INSTRUMENTO EM RECURSO DE REVISTA. ACÓRDÃO REGIONAL PUBLICADO NA VIGÊNCIA DA LEI Nº 13.467/2017.
-        EXECUÇÃO. FATO NOVO. ADESÃO A PROGRAMA DE DESLIGAMENTO VOLUNTÁRIO. ACORDO EXTRAJUDICIAL. QUITAÇÃO. EFEITOS. INEXISTÊNCIA
-        DE PREVISÃO EM NORMA COLETIVA. REEXAME DE FATOS E PROVAS. IMPOSSIBILIDADE. ÓBICE DA SÚMULA 126 DO TST. TRANSCENDÊNCIA
-        NÃO RECONHECIDA. 1. A finalidade precípua desta Corte Superior, na uniformização de teses jurídicas, não autoriza
-        a revisão do conjunto fático-probatório já analisado pelo Tribunal Regional, na esteira do entendimento consolidado
-        pela Súmula 126/TST. 2. As alegações recursais da parte, no sentido de que há previsão de quitação geral do contrato
-        de trabalho no acordo coletivo e no termo de adesão não encontram amparo no quadro fático delineado no acórdão regional
-        no qual ausente registro de previsão em instrumento coletivo, com cláusula de quitação ampla e irrestrita. Desse modo,
-        o acolhimento de suas pretensões demandaria necessariamente o reexame do acervo probatório, procedimento vedado nesta
-        esfera extraordinária. 3. Assim, o Regional, ao concluir pela inexistência de quitação total do contrato de trabalho,
-        decidiu de acordo com a Orientação Jurisprudencial 270 da SBDI-1. 4. Acrescente-se que em relação ao pleito sucessivo
-        de compensação ou dedução, o acórdão regional está em consonância com a Orientação Jurisprudencial 356 da SBDI-1.
-        Mantém-se a decisão recorrida. Agravo conhecido e desprovido.
-
-
-
-
-
-
-
-
-        Vistos, relatados e discutidos estes autos de Agravo em Agravo de Instrumento em Recurso de Revista n° TST-Ag-AIRR-1826-28.2012.5.02.0465,
-        em que é Agravante FORD MOTOR COMPANY BRASIL LTDA. e é Agravado CARLOS ENRIQUE SALAMANCA GAETE.
-
-
-
-
-
-
-        Por meio da decisão monocrática ora atacada, neguei provimento ao agravo de instrumento.
-
-
-
-        Irresignada, a executada interpôs agravo.
-
-
-
-        Intimado, o agravado apresentou impugnação.
-
-
-
-        É o relatório.
-
-
-
-
-
-        V O T O
-
-
-
-
-
-        ADMISSIBILIDADE
-
-
-
-        Pr'
-    documentos_anexados: []
-    expected:
-      mov_id: 9c251417-a595-40ae-8321-711b2e66a539
-      data: '2025-02-21'
-      tipo_origem: publicacao
-      resumo_ato: Acórdão da 5ª Turma do TST nega provimento a agravo de instrumento em recurso de revista da executada Ford
-        Motor Company, mantendo decisão que não reconheceu a transcendência e a impossibilidade de reexame de fatos e provas.
-        O Tribunal manteve a decisão regional que considerou inexistente a previsão de quitação geral do contrato de trabalho
-        em norma coletiva.
-      categoria: acordao
-      relevancia_merito: alta
-      decisao:
-        tem_decisao: true
         sentido: desfavoravel
-        instancia: stf
         natureza: null
+        instancia: 2g
+        tem_decisao: true
         transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: acordao
+      categoria: acordao
+      confianca: 0.8
+      peca_pivo:
+        e_pivo: true
+        motivo: Decisão de tribunal em recurso que mantém a decisão desfavorável ao tomador, impactando diretamente o mérito
+          e o risco.
+      resumo_ato: Acórdão unânime que conheceu e negou provimento ao recurso interposto pela Light Serviços de Eletricidade
+        S.A. contra decisão anterior, mantendo a deliberação que determinou a realização de perícia técnica e a suspensão
+        da execução para análise de descumprimento de sentença coletiva.
       delta_risco:
         mudou: true
+        motivo: Recurso da Light (polo passivo) foi negado, mantendo a decisão desfavorável que pode levar ao acionamento
+          da garantia.
         direcao: aumentou
-        motivo: Acórdão manteve decisão desfavorável à executada, negando provimento ao recurso e mantendo a impossibilidade
-          de reexame de fatos e provas, o que aumenta o risco de acionamento da garantia.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: true
-        motivo: Acórdão que nega provimento a recurso de revista em matéria trabalhista, mantendo a decisão de instância inferior,
-          representa um marco decisivo no mérito da causa.
-      proximos_passos:
-      - Aguardar trânsito em julgado do acórdão.
-      - Verificar se há novas manifestações ou recursos cabíveis.
+      tipo_origem: acordao
       data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.8
-- description: L1 publicacao/alta — TRANSITADO EM JULGADO - Transitado em Julgado TRÂNSITO EM JULGADO - 21/09/2022
-  vars:
-    processo:
-      cnj: 5135953-94.2022.8.09.0051
-      classe: Mandado de Segurança Cível
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: GRUPO CASAS BAHIA S/A
-    mov:
-      mov_id: 9bd70952-eaf8-42af-8086-6161862a387a
-      data: '2022-09-21'
-      tipo: decisao
-      texto: TRANSITADO EM JULGADO - Transitado em Julgado TRÂNSITO EM JULGADO - 21/09/2022
-    documentos_anexados: []
-    expected:
-      mov_id: 9bd70952-eaf8-42af-8086-6161862a387a
-      data: '2022-09-21'
-      tipo_origem: decisao
-      resumo_ato: Processo transitou em julgado em 21/09/2022. Nao ha informacoes sobre apolice ou garantia nesta movimentacao.
-      categoria: publicacao
-      relevancia_merito: alta
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: true
+      tipo_garantia: nenhum
       evento_garantia:
         tipo: nenhum
         motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: A publicacao de transito em julgado, por si so, nao altera o risco de acionamento da apolice sem informacoes
-          adicionais sobre o merito da decisao.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: true
-        motivo: A certificacao de transito em julgado marca o fim da fase de conhecimento ou recursal, sendo um marco decisivo
-          para o processo.
-      proximos_passos:
-      - Aguardar inicio da fase de cumprimento de sentenca, se aplicavel.
-      data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.7
-- description: L1 publicacao/ruido — DECORRIDO - Decorrido prazo de CERVEJARIA PETROPOLIS S/A em 20/09/2022 23:59.
-  vars:
-    processo:
-      cnj: 1002058-75.2020.4.01.3400
-      classe: Tutela Cautelar Antecedente
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: ZUQUETTI & MARZOLA PARTICIPAÇÕES E REPRESENTAÇÕES LTDA - EM RECUPERAÇÃO JUDICIAL
-    mov:
-      mov_id: 519e5963-b836-4b86-87f1-00f34eed4645
-      data: '2022-09-21'
-      tipo: outro
-      texto: DECORRIDO - Decorrido prazo de CERVEJARIA PETROPOLIS S/A em 20/09/2022 23:59.
-    documentos_anexados: []
-    expected:
-      mov_id: 519e5963-b836-4b86-87f1-00f34eed4645
-      data: '2022-09-21'
-      tipo_origem: outro
-      resumo_ato: Prazo processual da CERVEJARIA PETROPOLIS S/A decorrido em 20/09/2022. Movimentacao meramente administrativa,
-        sem impacto no mérito ou garantia.
-      categoria: publicacao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: Ato meramente ordinatório de decurso de prazo, sem alteração no mérito ou risco processual.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Movimentação de natureza administrativa (decurso de prazo) sem impacto decisivo no mérito.
+        numero_apolice: null
       proximos_passos: []
-      data_real_ato: null
+      relevancia_merito: alta
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
       processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 outros/ruido — ANEXO JUNTADO - Comprovante de Depósito Recursal | Comprovante de Depósito Recur
+- description: L1 outros/baixa — Comprovante de Depósito Judicial | Comprovante de Depósito Judicial (RESTRITO)
   vars:
     processo:
-      cnj: 1000100-12.2018.5.02.0232
+      cnj: 0000488-04.2015.5.09.0664
       classe: Ação Trabalhista - Rito Ordinário
       classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: GRUPO CASAS BAHIA S/A
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
     mov:
-      mov_id: be6423f3-8eac-474a-b221-2728e5e48db8
-      data: '2018-04-25'
+      mov_id: 205d4344-5fcf-54b5-b515-38ddf18a3180
+      data: '2025-09-02'
+      tipo: outro
+      texto: Comprovante de Depósito Judicial | Comprovante de Depósito Judicial (RESTRITO)
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2025-09-02'
+      _meta:
+        classe: 1A
+        porque: garantia/exec
+        caminho: completo
+      mov_id: 205d4344-5fcf-54b5-b515-38ddf18a3180
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: deposito_judicial
+      categoria: outros
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: Ato de depósito judicial não é decisivo para o mérito do processo.
+      resumo_ato: Apresentado comprovante de depósito judicial, sem teor decisório ou impacto direto no mérito da causa.
+      delta_risco:
+        mudou: false
+        motivo: Apresentação de comprovante de depósito judicial não altera o risco de acionamento da apólice.
+        direcao: inalterado
+      tipo_origem: outro
+      data_real_ato: null
+      tipo_garantia: deposito_judicial
+      evento_garantia:
+        tipo: apresentacao
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: true
+      status_garantia_pos_mov: apresentado
+      processos_conexos_mencionados: []
+- description: L1 despacho/baixa — PROFERIDO DESPACHO DE MERO EXPEDIENTE - Vistos. Considerando o proferimento da s
+  vars:
+    processo:
+      cnj: 0808411-20.2022.8.12.0001
+      classe: Mandado de Segurança Cível
+      classe_cnj_code: 0
+      polo_ativo: Via S.A / Via Varejo S.A
+      polo_passivo: Estado de Mato Grosso do Sul / Superintendente da Superintendência da Administração Tributária da Secretaria
+        da Fazenda do Estado do Mato Grosso do Sul
+    mov:
+      mov_id: fb5593b3-6b25-5784-8ad6-5cadeddae6be
+      data: '2022-07-08'
+      tipo: sentenca
+      texto: PROFERIDO DESPACHO DE MERO EXPEDIENTE - Vistos. Considerando o proferimento da sentença, para evitar tumulto
+        processual, redistribua o pedido de tutela de urgência de fls. 459-471 como cumprimento provisório de sentença, com
+        urgência. No mais, aguarde-se o decurso de prazo recursal.
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2022-07-08'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: fb5593b3-6b25-5784-8ad6-5cadeddae6be
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: despacho
+      categoria: despacho
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: Trata-se de um despacho de mero expediente para organização processual, sem julgamento de mérito ou alteração
+          significativa no curso do processo.
+      resumo_ato: Proferido despacho de mero expediente determinando a redistribuição de pedido de tutela de urgência como
+        cumprimento provisório de sentença, para evitar tumulto processual, e aguardando o decurso de prazo recursal.
+      delta_risco:
+        mudou: false
+        motivo: A movimentação consiste em um despacho de mero expediente para organização processual, sem alteração no mérito
+          ou risco da causa.
+        direcao: inalterado
+      tipo_origem: sentenca
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 despacho/baixa — EMISSAO DA RELACAO - ... ISTO POSTO, e pelo mais que dos autos consta, hei por b
+  vars:
+    processo:
+      cnj: 0808411-20.2022.8.12.0001
+      classe: Mandado de Segurança Cível
+      classe_cnj_code: 0
+      polo_ativo: Via S.A / Via Varejo S.A
+      polo_passivo: Estado de Mato Grosso do Sul / Superintendente da Superintendência da Administração Tributária da Secretaria
+        da Fazenda do Estado do Mato Grosso do Sul
+    mov:
+      mov_id: 5183974c-51fb-5b4a-bd1f-354b58623a75
+      data: '2022-07-29'
+      tipo: outro
+      texto: EMISSAO DA RELACAO - ... ISTO POSTO, e pelo mais que dos autos consta, hei por bem indeferir os requerimentos
+        de fls. 575/591. Transcorridos os prazos, remetam-se os presentes autos ao Egrégio Tribunal de Justiça do Estado para
+        processamento do apelo, a quem compete, inclusive, verificar a presença dos requisitos de admissibilidade recursal.
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2022-07-29'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 5183974c-51fb-5b4a-bd1f-354b58623a75
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: neutro
+        natureza: interlocutoria
+        instancia: 1g
+        tem_decisao: true
+        transito_certificado: false
+      valores:
+        valor_causa: 11706522.93
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: despacho
+      categoria: despacho
+      confianca: 0.7
+      peca_pivo:
+        e_pivo: false
+        motivo: O ato é de natureza interlocutória, remetendo o processo para análise recursal, sem julgar o mérito principal.
+      resumo_ato: O juiz indeferiu os requerimentos das partes e determinou a remessa dos autos ao Tribunal de Justiça para
+        processamento do apelo, cabendo ao tribunal a análise dos requisitos de admissibilidade recursal.
+      delta_risco:
+        mudou: false
+        motivo: A movimentacao consiste em um despacho que indeferiu requerimentos e remeteu os autos ao tribunal, sem alterar
+          o mérito ou o risco da apólice.
+        direcao: inalterado
+      tipo_origem: outro
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 outros/baixa — Apresentação de Laudo Pericial | Apresentação de Laudo Pericial (RESTRITO)
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 6b583934-73be-5733-9e42-967d74f73596
+      data: '2026-01-02'
+      tipo: outro
+      texto: Apresentação de Laudo Pericial | Apresentação de Laudo Pericial (RESTRITO)
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2026-01-02'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 6b583934-73be-5733-9e42-967d74f73596
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: laudo_pericial
+      categoria: outros
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: Apresentação de laudo pericial não é um ato decisivo para o mérito.
+      resumo_ato: Apresentação de laudo pericial nos autos.
+      delta_risco:
+        mudou: false
+        motivo: Apresentação de laudo pericial não altera o risco de acionamento da apólice.
+        direcao: inalterado
+      tipo_origem: outro
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 outros/alta — ANEXO JUNTADO - Comprovante de Depósito Recursal | Comprovante de Depósito Recur
+  vars:
+    processo:
+      cnj: 0010163-41.2017.5.15.0021
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Leandro Faustino Moura / Vutto Consultoria Empresarial Eireli / União Federal
+      polo_passivo: Grupo Casas Bahia S.A
+    mov:
+      mov_id: 8afb2ab5-64be-58cd-b856-3829515f70c4
+      data: '2018-06-26'
       tipo: juntada
       texto: ANEXO JUNTADO - Comprovante de Depósito Recursal | Comprovante de Depósito Recursal
     documentos_anexados: []
     expected:
-      mov_id: be6423f3-8eac-474a-b221-2728e5e48db8
-      data: '2018-04-25'
-      tipo_origem: juntada
-      resumo_ato: Comprovante de depósito recursal foi juntado aos autos. O próximo passo provável é a análise deste comprovante
-        pelo juízo.
-      categoria: outros
-      relevancia_merito: ruido
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2018-06-26'
+      _meta:
+        classe: 1A
+        porque: garantia/exec
+        caminho: completo
+      mov_id: 8afb2ab5-64be-58cd-b856-3829515f70c4
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
       decisao:
-        tem_decisao: false
         sentido: null
-        instancia: null
         natureza: null
+        instancia: null
+        tem_decisao: false
         transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: deposito_judicial
+      categoria: outros
+      confianca: 0.7
+      peca_pivo:
+        e_pivo: false
+        motivo: Apresentação de depósito recursal é um ato processual relevante, mas não decisivo para o mérito principal.
+      resumo_ato: Comprovante de depósito recursal juntado aos autos.
+      delta_risco:
+        mudou: true
+        motivo: Apresentação de depósito recursal, que garante o juízo em caso de eventual condenação, aumentando o risco
+          de acionamento da garantia.
+        direcao: aumentou
+      tipo_origem: juntada
+      data_real_ato: null
+      tipo_garantia: seguro_garantia
       evento_garantia:
         tipo: apresentacao
         motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: alta
+      relevante_garantia: true
       status_garantia_pos_mov: apresentado
-      tipo_garantia: seguro_garantia
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: true
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: inalterado
-        motivo: A juntada de comprovante de depósito recursal é um ato processual que não altera o mérito da causa.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: A juntada de um comprovante de depósito recursal não é um ato decisório que altera o mérito do processo.
-      proximos_passos:
-      - Aguardar análise do comprovante de depósito recursal pelo juízo.
-      data_real_ato: null
       processos_conexos_mencionados: []
-      confianca: 0.6
-- description: L1 publicacao/baixa — Cumprimento de Levantamento da Suspensão ou Dessobrestamento
+- description: L1 outros/ruido — ANEXO JUNTADO - 0027_Outros-documentos-de-prova_2015-09-23.pdf | Manifestação
   vars:
     processo:
-      cnj: 5025435-80.2019.4.03.6182
-      classe: Execução Fiscal
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
       classe_cnj_code: 0
-      polo_ativo: UNIAO FEDERAL - FAZENDA NACIONAL
-      polo_passivo: BANCO PINE S/A
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
     mov:
-      mov_id: 78371778-bd4a-4c72-8f35-a72848b32956
-      data: '2023-09-14'
-      tipo: outro
-      texto: Cumprimento de Levantamento da Suspensão ou Dessobrestamento
+      mov_id: ad6f75a4-f3a5-521c-9642-fcd43bbd1844
+      data: '2019-12-13'
+      tipo: peticao
+      texto: ANEXO JUNTADO - 0027_Outros-documentos-de-prova_2015-09-23.pdf | Manifestação
     documentos_anexados: []
     expected:
-      mov_id: 78371778-bd4a-4c72-8f35-a72848b32956
-      data: '2023-09-14'
-      tipo_origem: outro
-      resumo_ato: Movimentação processual referente ao cumprimento de levantamento de suspensão ou dessobrestamento. Não há
-        indicação de decisão judicial ou alteração de mérito.
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2019-12-13'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: ad6f75a4-f3a5-521c-9642-fcd43bbd1844
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: prova_anexa
       categoria: outros
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
-      evento_garantia:
-        tipo: nenhum
-        motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
+      confianca: 0.5
+      peca_pivo:
+        e_pivo: false
+        motivo: Ato de juntada de documento probatório, sem caráter decisório ou de encerramento de fase processual.
+      resumo_ato: Anexado documento de prova (Outros-documentos-de-prova_2015-09-23.pdf) referente a manifestação.
       delta_risco:
         mudou: false
+        motivo: Movimentação de juntada de documento sem impacto direto no mérito ou na garantia.
         direcao: inalterado
-        motivo: A movimentação trata de cumprimento de levantamento de suspensão, sem impacto direto no mérito ou risco da
-          apólice.
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: Movimentação de natureza administrativa/processual sem alteração decisiva no mérito.
-      proximos_passos: []
+      tipo_origem: peticao
       data_real_ato: null
-      processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 publicacao/ruido — DISPONIBILIZADO - Disponibilizado (a) o(a) intimação no Diário da Justiça Eletrô
-  vars:
-    processo:
-      cnj: 0010552-02.2021.5.15.0113
-      classe: Cumprimento de sentença
-      classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: OI S.A. - EM RECUPERAÇÃO JUDICIAL
-    mov:
-      mov_id: c7819acc-2836-4ab6-bbcc-eb0074519cf5
-      data: '2022-08-11'
-      tipo: publicacao
-      texto: 'DISPONIBILIZADO - Disponibilizado
-
-        (a) o(a) intimação no Diário da Justiça Eletrônico'
-    documentos_anexados: []
-    expected:
-      mov_id: c7819acc-2836-4ab6-bbcc-eb0074519cf5
-      data: '2022-08-11'
-      tipo_origem: publicacao
-      resumo_ato: Publicação de intimação no Diário da Justiça Eletrônico. Movimentação de caráter meramente administrativo,
-        sem conteúdo decisório ou impacto direto no mérito.
-      categoria: publicacao
-      relevancia_merito: ruido
-      decisao:
-        tem_decisao: false
-        sentido: null
-        instancia: null
-        natureza: null
-        transito_certificado: false
+      tipo_garantia: nenhum
       evento_garantia:
         tipo: nenhum
         motivo: null
-      status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
-      cda:
-        numeros: []
-        ente: null
-        tributo: null
-        valor_total: null
-      apolice:
-        numero: null
-        apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
-      valores:
-        valor_causa: null
-        valor_debito_executado: null
-        valor_garantia: null
-      peca_pivo:
-        e_pivo: false
-        motivo: null
+        numero_apolice: null
       proximos_passos: []
-      data_real_ato: null
+      relevancia_merito: ruido
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
       processos_conexos_mencionados: []
-      confianca: 0.5
-- description: L1 publicacao/ruido — DISPONIBILIZADO - Disponibilizado (a) o(a) intimação no Diário da Justiça Eletrô
+- description: 'L1 peticao/ruido — Alterado o tipo de petição de Embargos de Declaração (ID: 5c529ec) para Manifest'
   vars:
     processo:
-      cnj: 0010552-02.2021.5.15.0113
-      classe: Cumprimento de sentença
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
       classe_cnj_code: 0
-      polo_ativo: ''
-      polo_passivo: OI S.A. - EM RECUPERAÇÃO JUDICIAL
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
     mov:
-      mov_id: 16d0e949-48d1-43b7-8213-2af493d74c4b
-      data: '2022-09-24'
-      tipo: publicacao
-      texto: DISPONIBILIZADO - Disponibilizado (a) o(a) intimação no Diário da Justiça Eletrônico
+      mov_id: a7668b96-b896-56fe-8a37-3562e6cf8faf
+      data: '2024-07-17'
+      tipo: peticao
+      texto: 'Alterado o tipo de petição de Embargos de Declaração (ID: 5c529ec) para Manifestação'
     documentos_anexados: []
     expected:
-      mov_id: 16d0e949-48d1-43b7-8213-2af493d74c4b
-      data: '2022-09-24'
-      tipo_origem: publicacao
-      resumo_ato: Publicação no Diário da Justiça Eletrônico de intimação disponibilizada. Não há decisão judicial ou evento
-        de garantia nesta movimentação.
-      categoria: publicacao
-      relevancia_merito: ruido
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2024-07-17'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: a7668b96-b896-56fe-8a37-3562e6cf8faf
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
       decisao:
-        tem_decisao: false
         sentido: null
-        instancia: null
         natureza: null
+        instancia: null
+        tem_decisao: false
         transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: peticao
+      categoria: peticao
+      confianca: 0.5
+      peca_pivo:
+        e_pivo: false
+        motivo: A alteração do tipo de petição é um ato processual de andamento, sem impacto decisivo no mérito.
+      resumo_ato: 'A petição de Embargos de Declaração (ID: 5c529ec) foi alterada para Manifestação.'
+      delta_risco:
+        mudou: false
+        motivo: A alteração do tipo de petição não impacta o mérito ou o risco do processo.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
       evento_garantia:
         tipo: nenhum
         motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: ruido
+      relevante_garantia: false
       status_garantia_pos_mov: nenhum
-      tipo_garantia: nenhum
+      processos_conexos_mencionados: []
+- description: L1 peticao/baixa — ANEXO JUNTADO - Agravo de Petição | Agravo de Petição
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: a8031e1a-20c3-50af-ba34-78bb570320f8
+      data: '2022-03-28'
+      tipo: peticao
+      texto: ANEXO JUNTADO - Agravo de Petição | Agravo de Petição
+    documentos_anexados: []
+    expected:
       cda:
-        numeros: []
         ente: null
+        numeros: []
         tributo: null
         valor_total: null
+      data: '2022-03-28'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: a8031e1a-20c3-50af-ba34-78bb570320f8
+      origem: mov
       apolice:
+        aceita: null
         numero: null
         apresentada: null
-        aceita: null
-      delta_risco:
-        mudou: false
-        direcao: null
-        motivo: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
       valores:
         valor_causa: null
-        valor_debito_executado: null
         valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: recurso
+      categoria: peticao
+      confianca: 0.6
       peca_pivo:
         e_pivo: false
-        motivo: null
-      proximos_passos: []
+        motivo: A juntada de um agravo de petição é um ato processual que não decide o mérito da causa.
+      resumo_ato: Juntada de Agravo de Petição.
+      delta_risco:
+        mudou: false
+        motivo: A juntada de um agravo de petição é um ato processual que não altera o mérito da causa nem o risco da apólice.
+        direcao: inalterado
+      tipo_origem: peticao
       data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
       processos_conexos_mencionados: []
+- description: L1 outros/baixa — Atualização | Planilha de Atualização de Cálculos (RESTRITO)
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 67661951-5c56-5635-ac39-52a058db9d90
+      data: '2023-05-30'
+      tipo: outro
+      texto: Atualização | Planilha de Atualização de Cálculos (RESTRITO)
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2023-05-30'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 67661951-5c56-5635-ac39-52a058db9d90
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: planilha_calculo
+      categoria: outros
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: A atualização de planilha de cálculos não representa um marco decisório no mérito do processo.
+      resumo_ato: Movimentação de atualização de planilha de cálculos, com o documento marcado como restrito.
+      delta_risco:
+        mudou: false
+        motivo: A movimentação consiste na atualização de planilha de cálculos, sem impacto direto no mérito ou na garantia
+          processual.
+        direcao: inalterado
+      tipo_origem: outro
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 outros/baixa — ANEXO JUNTADO - 0018_Contrato-de-trabalho-e-termos-aditivos-ficha-funcional_2015
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 68be5aa5-22a9-5d6c-88a2-6f4a0e2cf3f3
+      data: '2019-12-13'
+      tipo: peticao
+      texto: ANEXO JUNTADO - 0018_Contrato-de-trabalho-e-termos-aditivos-ficha-funcional_2015-09-23.pdf | Manifestação
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2019-12-13'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 68be5aa5-22a9-5d6c-88a2-6f4a0e2cf3f3
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: prova_anexa
+      categoria: outros
       confianca: 0.5
+      peca_pivo:
+        e_pivo: false
+        motivo: Movimentação de juntada de documento, sem caráter decisório ou de mérito.
+      resumo_ato: Juntada de documento referente a contrato de trabalho e termos aditivos, ficha funcional, com manifestação.
+      delta_risco:
+        mudou: false
+        motivo: Ato de juntada de documento sem teor decisório ou de mérito.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 outros/media — DESPACHO EM AUDIENCIA - "...FOI FEITA A PROPOSTA DE UM ACORDO A SER ELABORADO EM
+  vars:
+    processo:
+      cnj: 0092148-52.2005.8.19.0001
+      classe: Ação Civil Pública
+      classe_cnj_code: 0
+      polo_ativo: Ministério Público
+      polo_passivo: Light Serviços de Eletricidade S.A
+    mov:
+      mov_id: 415b6b55-5d46-5cd2-98c5-434f1f152d91
+      data: '2006-04-25'
+      tipo: despacho
+      texto: DESPACHO EM AUDIENCIA - "...FOI FEITA A PROPOSTA DE UM ACORDO A SER ELABORADO EM QUINZE DIAS, CABENDO A LIGHT
+        ENCAMINHAR OS TERMOS AO MINISTERIO PUBLICO, APOS O QUE VIRA OS AUTOS PARA A DEVIDA HOMOLOGACAO..."(INTEGRA NOS AUTOS)
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2006-04-25'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 415b6b55-5d46-5cd2-98c5-434f1f152d91
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: neutro
+        natureza: homologatoria
+        instancia: 1g
+        tem_decisao: true
+        transito_certificado: false
+      valores:
+        valor_causa: 1334063.96
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: ata_audiencia
+      categoria: outros
+      confianca: 0.7
+      peca_pivo:
+        e_pivo: true
+        motivo: Ato que define o próximo passo para um acordo, com potencial de encerrar o litígio.
+      resumo_ato: Em audiência, foi proposta a elaboração de um acordo em quinze dias, cabendo à Light S/A encaminhar os termos
+        ao Ministério Público para posterior homologação.
+      delta_risco:
+        mudou: false
+        motivo: Ato meramente procedimental de acordo em audiência, sem definição de mérito ou impacto direto na garantia.
+        direcao: inalterado
+      tipo_origem: despacho
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: media
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 outros/baixa — ANEXO JUNTADO - Comprovante de Depósito Judicial | Comprovante de Depósito Judic
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: a06db1b3-403f-5134-82f5-410a64fbad79
+      data: '2024-08-06'
+      tipo: juntada
+      texto: ANEXO JUNTADO - Comprovante de Depósito Judicial | Comprovante de Depósito Judicial
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2024-08-06'
+      _meta:
+        classe: 1A
+        porque: garantia/exec
+        caminho: completo
+      mov_id: a06db1b3-403f-5134-82f5-410a64fbad79
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: deposito_judicial
+      categoria: outros
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: A juntada de um comprovante de depósito judicial é um ato processual de andamento, não decisório sobre o mérito
+          da causa.
+      resumo_ato: Comprovante de depósito judicial foi juntado aos autos.
+      delta_risco:
+        mudou: false
+        motivo: A juntada de um comprovante de depósito judicial não altera o risco de acionamento da apólice, apenas formaliza
+          uma garantia já existente ou a ser apresentada.
+        direcao: inalterado
+      tipo_origem: juntada
+      data_real_ato: null
+      tipo_garantia: deposito_judicial
+      evento_garantia:
+        tipo: apresentacao
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: true
+      status_garantia_pos_mov: apresentado
+      processos_conexos_mencionados: []
+- description: L1 outros/baixa — ANEXO JUNTADO - Seguro Garantia Judicial ALFREDO | Seguro Garantia Judicial
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 301dae77-9589-5c94-8a75-de89a87d36f2
+      data: '2022-03-10'
+      tipo: juntada
+      texto: ANEXO JUNTADO - Seguro Garantia Judicial ALFREDO | Seguro Garantia Judicial
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2022-03-10'
+      _meta:
+        classe: 1A
+        porque: garantia/exec
+        caminho: completo
+      mov_id: 301dae77-9589-5c94-8a75-de89a87d36f2
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: apolice_seguro_garantia
+      categoria: outros
+      confianca: 0.7
+      peca_pivo:
+        e_pivo: false
+        motivo: Apresentacao de garantia nao altera o merito do processo.
+      resumo_ato: Anexado documento referente a Seguro Garantia Judicial.
+      delta_risco:
+        mudou: false
+        motivo: Apresentacao de garantia sem alteracao de merito.
+        direcao: inalterado
+      tipo_origem: juntada
+      data_real_ato: null
+      tipo_garantia: seguro_garantia
+      evento_garantia:
+        tipo: apresentacao
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: true
+      status_garantia_pos_mov: apresentado
+      processos_conexos_mencionados: []
+- description: 'L1 peticao/ruido — Alterado o tipo de petição de Embargos à Execução (ID: 6559ab8) para Impugnação'
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: da3ab655-654b-5f06-872e-08d87e39c859
+      data: '2022-12-15'
+      tipo: peticao
+      texto: 'Alterado o tipo de petição de Embargos à Execução (ID: 6559ab8) para Impugnação'
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2022-12-15'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: da3ab655-654b-5f06-872e-08d87e39c859
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: peticao
+      categoria: peticao
+      confianca: 0.5
+      peca_pivo:
+        e_pivo: false
+        motivo: A alteração do tipo de petição não representa um marco decisivo no mérito do processo.
+      resumo_ato: Alterado o tipo da petição de Embargos à Execução para Impugnação.
+      delta_risco:
+        mudou: false
+        motivo: A movimentação se trata de uma alteração de tipo de petição, sem impacto no mérito ou na garantia.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: ruido
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 peticao/baixa — ANEXO JUNTADO - 0118_Termo-de-Autuacao-Agravo-de-Instrumento-em-Recurso-de-Revis
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 9f2aff85-26f9-5e35-b72c-98379e01b1a8
+      data: '2019-12-13'
+      tipo: peticao
+      texto: ANEXO JUNTADO - 0118_Termo-de-Autuacao-Agravo-de-Instrumento-em-Recurso-de-Revist_2017-10-25.pdf | Manifestação
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2019-12-13'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 9f2aff85-26f9-5e35-b72c-98379e01b1a8
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: peticao
+      categoria: peticao
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: Ato de juntada de documento processual, sem caráter decisório ou de mérito.
+      resumo_ato: Anexado termo de autuação de Agravo de Instrumento em Recurso de Revista.
+      delta_risco:
+        mudou: false
+        motivo: Movimentacao de juntada de documento sem impacto direto no mérito ou na garantia.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 peticao/ruido — ANEXO JUNTADO - Reitera pedido de homologação | Manifestação
+  vars:
+    processo:
+      cnj: 0010163-41.2017.5.15.0021
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Leandro Faustino Moura / Vutto Consultoria Empresarial Eireli / União Federal
+      polo_passivo: Grupo Casas Bahia S.A
+    mov:
+      mov_id: bbdac84d-2ecc-5cb6-a82c-f6934d55e946
+      data: '2021-11-08'
+      tipo: peticao
+      texto: ANEXO JUNTADO - Reitera pedido de homologação | Manifestação
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2021-11-08'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: bbdac84d-2ecc-5cb6-a82c-f6934d55e946
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: peticao
+      categoria: peticao
+      confianca: 0.5
+      peca_pivo:
+        e_pivo: false
+        motivo: Ato processual sem conteúdo decisório ou de mérito.
+      resumo_ato: Anexada manifestação da parte reiterando pedido de homologação.
+      delta_risco:
+        mudou: false
+        motivo: Movimentação de natureza meramente processual, sem impacto no mérito ou na garantia.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: ruido
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: "L1 decisao_interlocutoria/alta — RELACAO ENCAMINHADA AO D J - Relação: 0175/2022\r Teor do ato: Vistos. Defiro\
+    \ o d"
+  vars:
+    processo:
+      cnj: 0808411-20.2022.8.12.0001
+      classe: Mandado de Segurança Cível
+      classe_cnj_code: 0
+      polo_ativo: Via S.A / Via Varejo S.A
+      polo_passivo: Estado de Mato Grosso do Sul / Superintendente da Superintendência da Administração Tributária da Secretaria
+        da Fazenda do Estado do Mato Grosso do Sul
+    mov:
+      mov_id: a6f8fb68-f80a-5bc3-bfb8-a453add5e520
+      data: '2022-08-30'
+      tipo: publicacao
+      texto: "RELACAO ENCAMINHADA AO D J - Relação: 0175/2022\r\nTeor do ato: Vistos. Defiro o depósito pretendido pelas impetrantes,\
+        \ para fins de suspensão da exigibilidade dos débitos referentes ao ICMS/DIFAL em discussão nestes autos, conforme\
+        \ disposto no art. 151, inc. II, do Código Tributário Nacional. Os depósitos judiciais realizados, aliás, destinam-se\
+        \ a afastar o ônus da mora em face da Fazenda Pública, eis que equivalem ao recolhimento do tributo devido nas hipóteses\
+        \ descritas nos autos, não podendo as impetrantes, por conseguinte, sofrerem quaisquer restrições ou sanções impostas\
+        \ pelo Fisco Estadual, como por exemplo apreensão de mercadorias, inclusão dos débitos nas guias de imposto e apuração\
+        \ de ICMS, inscrição em órgão de proteção ao crédito etc. Considerando a interposição de recursos de apelação, intimem-se,\
+        \ com urgência os recorridos para, querendo, oferecer contrarrazões, no prazo legal, nos termos do art. 1.010, § 1°,\
+        \ do CPC, observando a prerrogativa do art. 183 do mesmo códex. Apresentadas estas, observe a escrivania ao disposto\
+        \ no do art. 1.009, § 2º, do CPC. Em caso de interposição de apelação adesiva pelo apelado, deverá o apelante ser\
+        \ intimado para contra-arrazoar, conforme disposto no art. 1.010, § 2°, do mesmo códex. Após, transcorridos os prazos,\
+        \ remetam-se os presentes autos ao Egrégio Tribunal de Justiça deste Estado, independentemente de novas conclusões,\
+        \ para processamento do apelo, a quem compete, inclusive, verificar a presença dos requisitos de admissibilidade recursal.\
+        \ Cumpra-se.\r\nAdvogados(s): Bruna Dias Miguel (OAB 299816/SP)"
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2022-08-30'
+      _meta:
+        classe: 1A
+        porque: merito+garantia/exec
+        caminho: completo
+      mov_id: a6f8fb68-f80a-5bc3-bfb8-a453add5e520
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: favoravel
+        natureza: interlocutoria
+        instancia: 1g
+        tem_decisao: true
+        transito_certificado: false
+      valores:
+        valor_causa: 11706522.93
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: decisao_interlocutoria
+      categoria: decisao_interlocutoria
+      confianca: 0.8
+      peca_pivo:
+        e_pivo: true
+        motivo: A decisão de deferir o depósito judicial para suspender a exigibilidade do débito tributário é um ato decisório
+          relevante que impacta diretamente a garantia e o mérito do processo.
+      resumo_ato: O juiz deferiu o depósito judicial pretendido pelas impetrantes (Via S.A e Via Varejo S.A) para suspender
+        a exigibilidade dos débitos de ICMS/DIFAL, conforme art. 151, II, do CTN. Determinou que as impetrantes não sofram
+        restrições fiscais. Intimou os recorridos para contrarrazões de apelação, com remessa posterior ao Tribunal de Justiça.
+      delta_risco:
+        mudou: false
+        motivo: A decisão de deferir o depósito judicial para suspender a exigibilidade do débito tributário, embora relevante
+          para o processo, não altera o risco de acionamento da apólice de seguro garantia, pois o depósito cumpre a função
+          de garantia.
+        direcao: inalterado
+      tipo_origem: publicacao
+      data_real_ato: null
+      tipo_garantia: deposito_judicial
+      evento_garantia:
+        tipo: apresentacao
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: alta
+      relevante_garantia: true
+      status_garantia_pos_mov: apresentado
+      processos_conexos_mencionados: []
+- description: L1 peticao/alta — JULGADO S - Julgado(s) procedente(s) em parte o(s) pedido(s) ( / Embargos à Exec
+  vars:
+    processo:
+      cnj: 0010163-41.2017.5.15.0021
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Leandro Faustino Moura / Vutto Consultoria Empresarial Eireli / União Federal
+      polo_passivo: Grupo Casas Bahia S.A
+    mov:
+      mov_id: 6762fe01-9b40-52c9-bc54-4ab64e76abd6
+      data: '2023-01-20'
+      tipo: decisao
+      texto: JULGADO S - Julgado(s) procedente(s) em parte o(s) pedido(s) ( / Embargos à Execução) de VIA S.A.
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2023-01-20'
+      _meta:
+        classe: 1A
+        porque: merito+garantia/exec
+        caminho: completo
+      mov_id: 6762fe01-9b40-52c9-bc54-4ab64e76abd6
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: parcial
+        natureza: parcialmente_procedente
+        instancia: 1g
+        tem_decisao: true
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: 3246016.93
+      tipo_doc: embargos
+      categoria: peticao
+      confianca: 0.8
+      peca_pivo:
+        e_pivo: true
+        motivo: Decisão de mérito em Embargos à Execução que altera o valor do débito executado.
+      resumo_ato: Embargos à Execução movidos pela VIA S.A. foram julgados parcialmente procedentes.
+      delta_risco:
+        mudou: true
+        motivo: Embargos à Execução foram parcialmente procedentes, indicando que parte do débito executado pode ser indevido,
+          mas mantendo parte do risco para o tomador.
+        direcao: aumentou
+      tipo_origem: decisao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: alta
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 peticao/ruido — Juntada a petição de Manifestação (Retificação ao Plano de Pagamento)
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 84257018-f631-5e2c-8ddd-7132c79a82fa
+      data: '2022-05-13'
+      tipo: peticao
+      texto: Juntada a petição de Manifestação (Retificação ao Plano de Pagamento)
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2022-05-13'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 84257018-f631-5e2c-8ddd-7132c79a82fa
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: peticao
+      categoria: peticao
+      confianca: 0.5
+      peca_pivo:
+        e_pivo: false
+        motivo: Ato de juntada de petição intercorrente, sem caráter decisório ou de mérito.
+      resumo_ato: Juntada de petição de manifestação referente a Retificação ao Plano de Pagamento.
+      delta_risco:
+        mudou: false
+        motivo: Movimentação de juntada de petição sem teor decisório ou de mérito.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: ruido
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 peticao/ruido — ANEXO JUNTADO - Pedido de Homologação de Cessão de Credito | Manifestação
+  vars:
+    processo:
+      cnj: 0010163-41.2017.5.15.0021
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Leandro Faustino Moura / Vutto Consultoria Empresarial Eireli / União Federal
+      polo_passivo: Grupo Casas Bahia S.A
+    mov:
+      mov_id: 9eed743c-3b52-532e-b1dd-3bd0867f12f2
+      data: '2021-10-25'
+      tipo: peticao
+      texto: ANEXO JUNTADO - Pedido de Homologação de Cessão de Credito | Manifestação
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2021-10-25'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 9eed743c-3b52-532e-b1dd-3bd0867f12f2
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: peticao
+      categoria: peticao
+      confianca: 0.5
+      peca_pivo:
+        e_pivo: false
+        motivo: Ato de juntada de petição intercorrente, sem caráter decisório ou de mérito.
+      resumo_ato: Anexado pedido de homologação de cessão de crédito e manifestação.
+      delta_risco:
+        mudou: false
+        motivo: Movimentação de juntada de petição sem teor decisório ou de mérito.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: ruido
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 outros/baixa — ANEXO JUNTADO - Comprovante de Depósito Judicial | Comprovante de Depósito Judic
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: e775c26a-7c3e-56af-ae0f-5c9b5ab6c652
+      data: '2025-09-02'
+      tipo: juntada
+      texto: ANEXO JUNTADO - Comprovante de Depósito Judicial | Comprovante de Depósito Judicial
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2025-09-02'
+      _meta:
+        classe: 1A
+        porque: garantia/exec
+        caminho: completo
+      mov_id: e775c26a-7c3e-56af-ae0f-5c9b5ab6c652
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: deposito_judicial
+      categoria: outros
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: A juntada de um comprovante de depósito judicial é um ato processual de formalização e não um evento que decide
+          o mérito da causa.
+      resumo_ato: Comprovante de depósito judicial foi juntado aos autos.
+      delta_risco:
+        mudou: false
+        motivo: A juntada de um comprovante de depósito judicial não altera o risco de acionamento da apólice, pois apenas
+          formaliza um ato já realizado.
+        direcao: inalterado
+      tipo_origem: juntada
+      data_real_ato: null
+      tipo_garantia: deposito_judicial
+      evento_garantia:
+        tipo: apresentacao
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: true
+      status_garantia_pos_mov: apresentado
+      processos_conexos_mencionados: []
+- description: L1 decisao_interlocutoria/baixa — DECISAO - DECISAO INTERLOCUTORIA - OUTRAS - ´DESIGNO AUDIENCIA ESPECIAL DE
+    CONCI
+  vars:
+    processo:
+      cnj: 0092148-52.2005.8.19.0001
+      classe: Ação Civil Pública
+      classe_cnj_code: 0
+      polo_ativo: Ministério Público
+      polo_passivo: Light Serviços de Eletricidade S.A
+    mov:
+      mov_id: 345a9d54-c246-51bf-8838-4a5329058d8b
+      data: '2006-03-13'
+      tipo: decisao
+      texto: "DECISAO - DECISAO INTERLOCUTORIA - OUTRAS - ´DESIGNO AUDIENCIA ESPECIAL DE CONCILIACAO PARA 25\r\n/4/2006, AS\
+        \ 14 H. INTIME-SE A RE PARA COMPARECER C\r\nOM PREPOSTO COM PODER PARA TRANSIGIR.´"
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2006-03-13'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 345a9d54-c246-51bf-8838-4a5329058d8b
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: neutro
+        natureza: interlocutoria
+        instancia: 1g
+        tem_decisao: true
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: decisao_interlocutoria
+      categoria: decisao_interlocutoria
+      confianca: 0.7
+      peca_pivo:
+        e_pivo: false
+        motivo: A designação de audiência de conciliação não é um ato decisivo para o mérito do processo.
+      resumo_ato: Designada audiência especial de conciliação para 25/04/2006, às 14h. A parte ré (Light Serviços de Eletricidade
+        S.A.) foi intimada a comparecer com preposto com poderes para transigir.
+      delta_risco:
+        mudou: false
+        motivo: A designação de audiência de conciliação é um ato processual que não altera o mérito da causa nem o risco
+          da apólice.
+        direcao: inalterado
+      tipo_origem: decisao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: 'L1 despacho/baixa — complemento:    Intimado(s)/Citado(s):  - ROBENS ANTONIO PADUANO   PODER JUDICIÁ'
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 99559f7d-b482-537d-9f9a-20fed4333d5e
+      data: '2021-06-14'
+      tipo: publicacao
+      texto: "complemento:  \n Intimado(s)/Citado(s):  - ROBENS ANTONIO PADUANO \n PODER JUDICIÁRIO \n JUSTIÇA DO \n INTIMAÇÃO\
+        \ \n Fica V. Sa. intimado para tomar ciência do Despacho ID d8404ff\n proferido nos autos. \n CONCLUSÃO \n Nesta data,\
+        \ faço os presentes autos conclusos ao MM. Juiz do\n Trabalho desta Vara, em razão do protocolo ID 43b3320. \n Em\
+        \ 14 de junho de 2021. \n Eliana Hanai da Silva\n Técnico Judiciário \n Vistos etc. \n 1. Defiro o requerimento das\
+        \ partes para dilação do prazo de\n suspensão da execução,a fim darem continuidade às tratativas em\n busca de uma\
+        \ conciliação, por mais dez dias. \n 2.Intimem-se. \n LONDRINA/PR, 14 de junho de 2021. \n ROBERTO JOAQUIM DE SOUZA\
+        \ \n Juiz do Trabalho Substituto"
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2021-06-14'
+      _meta:
+        classe: 1A
+        porque: merito+garantia/exec
+        caminho: completo
+      mov_id: 99559f7d-b482-537d-9f9a-20fed4333d5e
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: neutro
+        natureza: interlocutoria
+        instancia: 1g
+        tem_decisao: true
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: despacho
+      categoria: despacho
+      confianca: 0.7
+      peca_pivo:
+        e_pivo: false
+        motivo: Ato processual ordinatório que prorroga prazo para conciliação, sem decisão de mérito.
+      resumo_ato: Juiz defere pedido das partes para prorrogar por mais dez dias o prazo de suspensão da execução, a fim de
+        dar continuidade às tratativas de conciliação. Autos conclusos para nova deliberação.
+      delta_risco:
+        mudou: false
+        motivo: Ato meramente processual de prorrogação de prazo para conciliação, sem alteração no mérito ou na garantia.
+        direcao: inalterado
+      tipo_origem: publicacao
+      data_real_ato: '2021-06-14'
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: 'L1 despacho/media — complemento:    Intimado(s)/Citado(s):   - SERCOMTEL S.A. - TELECOMUNICACOES   P'
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 7aa731ad-cff4-51ea-bd92-40dc2a70e27c
+      data: '2023-09-14'
+      tipo: publicacao
+      texto: "complemento:  \n Intimado(s)/Citado(s): \n - SERCOMTEL S.A. - TELECOMUNICACOES \n PODER JUDICIÁRIO \n JUSTIÇA\
+        \ DO \n INTIMAÇÃO \n Fica V. Sa. intimado para tomar ciência do Despacho ID 5ed4fbd\n proferido nos autos. \n CONCLUSÃO\
+        \ \n Nesta data, faço os presentes autos conclusos ao MM. Juiz do\n Trabalho desta Vara, em razão do resultado negativo\
+        \ da\n tentativa de conciliação. \n Em 14 de setembro de 2023. \n Eliana Hanai da Silva\n Técnico Judiciário \n Vistos\
+        \ etc. \n 1.Diante da tentativa frustrada de acordo, voltem os autos\n conclusos para apreciação dos Embargos à Execução\
+        \ de ID\n 4b40108 e da Impugnação à Sentença de Liquidação de ID \n 3f0aef4, observando-se a garantia do juízo mediante\
+        \ a apólice\n de seguro de ID 4b40108. \n 2.Intimem-se. \n LONDRINA/PR, 14 de setembro de 2023. \n ROBERTO JOAQUIM\
+        \ DE SOUZA \n Juiz do Trabalho Substituto \n complemento:  \n Intimado(s)/Citado(s): \n - ROBENS ANTONIO PADUANO \n\
+        \ PODER JUDICIÁRIO \n JUSTIÇA DO \n INTIMAÇÃO \n Fica V. Sa. intimado para tomar ciência do Despacho ID 5ed4fbd\n\
+        \ proferido nos autos. \n CONCLUSÃO \n Nesta data, faço os presentes autos conclusos ao MM. Juiz do\n Trabalho desta\
+        \ Vara, em razão do resultado negativo da\n tentativa de conciliação. \n Em 14 de setembro de 2023. \n Eliana Hanai\
+        \ da Silva\n Técnico Judiciário \n Vistos etc. \n 1.Diante da tentativa frustrada de acordo, voltem os autos\n conclusos\
+        \ para apreciação dos Embargos à Execução de ID\n 4b40108 e da Impugnação à Sentença de Liquidação de ID\n 3f0aef4,\
+        \ observando-se a garantia do juízo mediante a apólice\n de seguro de ID 4b40108. \n 2.Intimem-se. \n LONDRINA/PR,\
+        \ 14 de setembro de 2023. \n ROBERTO JOAQUIM DE SOUZA \n Juiz do Trabalho Substituto"
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2023-09-14'
+      _meta:
+        classe: 1A
+        porque: merito+garantia/exec
+        caminho: completo
+      mov_id: 7aa731ad-cff4-51ea-bd92-40dc2a70e27c
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: neutro
+        natureza: interlocutoria
+        instancia: 1g
+        tem_decisao: true
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: despacho
+      categoria: despacho
+      confianca: 0.7
+      peca_pivo:
+        e_pivo: false
+        motivo: O despacho apenas impulsiona o processo para análise de embargos e impugnação, não sendo um ato terminativo
+          ou de mérito.
+      resumo_ato: Intimação para ciência de despacho que, diante da tentativa frustrada de acordo, determinou a conclusão
+        dos autos para apreciação dos Embargos à Execução e Impugnação à Sentença de Liquidação, observando a garantia do
+        juízo mediante apólice de seguro.
+      delta_risco:
+        mudou: false
+        motivo: Ato meramente processual que impulsiona o feito para análise de embargos e impugnação, sem alteração do mérito
+          ou da garantia.
+        direcao: inalterado
+      tipo_origem: publicacao
+      data_real_ato: '2023-09-14'
+      tipo_garantia: seguro_garantia
+      evento_garantia:
+        tipo: apresentacao
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: media
+      relevante_garantia: true
+      status_garantia_pos_mov: apresentado
+      processos_conexos_mencionados: []
+- description: L1 outros/alta — Acordo Judicial Sobrepartilha | Documento Diverso (RESTRITO)
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: d0a3d738-8c7a-5501-a5e2-1bf94ac1c181
+      data: '2022-10-26'
+      tipo: outro
+      texto: Acordo Judicial Sobrepartilha | Documento Diverso (RESTRITO)
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2022-10-26'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: d0a3d738-8c7a-5501-a5e2-1bf94ac1c181
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: neutro
+        natureza: homologatoria
+        instancia: 1g
+        tem_decisao: true
+        transito_certificado: false
+      valores:
+        valor_causa: 2908462.39
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: ata_audiencia
+      categoria: outros
+      confianca: 0.8
+      peca_pivo:
+        e_pivo: true
+        motivo: A homologacao de um acordo judicial representa um desfecho para a disputa, alterando decisivamente o estado
+          do merito.
+      resumo_ato: Acordo Judicial Sobrepartilha realizado.
+      delta_risco:
+        mudou: false
+        motivo: A homologacao de acordo judicial nao altera o risco de acionamento da apolice.
+        direcao: inalterado
+      tipo_origem: outro
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: alta
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 peticao/baixa — Juntada a petição de Manifestação (Proposta de acordo)
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 535ce11f-f469-5b6c-a75a-c83cd39edb48
+      data: '2021-11-09'
+      tipo: peticao
+      texto: Juntada a petição de Manifestação (Proposta de acordo)
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2021-11-09'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 535ce11f-f469-5b6c-a75a-c83cd39edb48
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: 2908462.39
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: peticao
+      categoria: peticao
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: A juntada de uma proposta de acordo, por si só, não é um evento decisivo para o mérito do processo.
+      resumo_ato: Juntada de petição contendo proposta de acordo entre as partes.
+      delta_risco:
+        mudou: false
+        motivo: Apresentação de proposta de acordo não altera o risco de acionamento da apólice neste momento.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
+- description: L1 peticao/baixa — ANEXO JUNTADO - 0121_Protocolo-apresentada-contraminuta_2017-11-29.pdf | Manifes
+  vars:
+    processo:
+      cnj: 0000488-04.2015.5.09.0664
+      classe: Ação Trabalhista - Rito Ordinário
+      classe_cnj_code: 0
+      polo_ativo: Robens Antonio Paduano
+      polo_passivo: Sercomtel S.A Telecomunicações
+    mov:
+      mov_id: 9dbe3285-249b-5ec6-a372-306cae90b9a6
+      data: '2019-12-13'
+      tipo: peticao
+      texto: ANEXO JUNTADO - 0121_Protocolo-apresentada-contraminuta_2017-11-29.pdf | Manifestação
+    documentos_anexados: []
+    expected:
+      cda:
+        ente: null
+        numeros: []
+        tributo: null
+        valor_total: null
+      data: '2019-12-13'
+      _meta:
+        classe: 1A
+        porque: merito
+        caminho: completo
+      mov_id: 9dbe3285-249b-5ec6-a372-306cae90b9a6
+      origem: mov
+      apolice:
+        aceita: null
+        numero: null
+        apresentada: null
+      decisao:
+        sentido: null
+        natureza: null
+        instancia: null
+        tem_decisao: false
+        transito_certificado: false
+      valores:
+        valor_causa: null
+        valor_garantia: null
+        valor_debito_executado: null
+      tipo_doc: peticao
+      categoria: peticao
+      confianca: 0.6
+      peca_pivo:
+        e_pivo: false
+        motivo: Trata-se de juntada de contraminuta, ato processual intermediario.
+      resumo_ato: Juntada de contraminuta em recurso.
+      delta_risco:
+        mudou: false
+        motivo: Ato processual de manifestacao de parte, sem impacto direto no merito ou na garantia.
+        direcao: inalterado
+      tipo_origem: peticao
+      data_real_ato: null
+      tipo_garantia: nenhum
+      evento_garantia:
+        tipo: nenhum
+        motivo: null
+        numero_apolice: null
+      proximos_passos: []
+      relevancia_merito: baixa
+      relevante_garantia: false
+      status_garantia_pos_mov: nenhum
+      processos_conexos_mencionados: []
