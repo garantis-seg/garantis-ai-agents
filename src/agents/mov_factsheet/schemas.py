@@ -1,6 +1,6 @@
 """Pydantic schemas pro mov_factsheet agent (engine v6_meritos).
 
-Output rico (13 campos) que substitui o mov_summarizer simples. Cabe em
+Output rico que substitui o mov_summarizer simples. Cabe em
 leads.dossier_artifacts com kind='mov_factsheet'.
 
 Spec canonica do plano: c:/Users/Eltonxp/.claude/plans/risk-engine-v6-meritos.md
@@ -105,14 +105,6 @@ class CDABlock(BaseModel):
     )
 
 
-class ApoliceBlock(BaseModel):
-    """Apolice envolvida nesta mov especifica."""
-
-    numero: Optional[str] = None
-    apresentada: Optional[bool] = Field(default=None, description="True se a mov registra apresentacao")
-    aceita: Optional[bool] = Field(default=None, description="True se aceita pelo juizo, False se recusada")
-
-
 class DeltaRisco(BaseModel):
     """Como esta mov alterou o risco do processo/merito vs o estado anterior."""
 
@@ -175,7 +167,7 @@ class PecaPivo(BaseModel):
 
 
 class MovFactSheetCard(BaseModel):
-    """FactSheet rico de uma movimentacao. 13 campos.
+    """FactSheet rico de uma movimentacao.
 
     Cabe em dossier_artifacts.summary com kind='mov_factsheet'.
 
@@ -184,7 +176,6 @@ class MovFactSheetCard(BaseModel):
     - Delta de risco (sinal explicito de mudanca)
     - Peca-pivo flag (input pra processo_synthesis decidir destaque)
     - Valores monetarios extraidos
-    - Proximos passos previstos
 
     Usado pela engine v6_meritos como camada 1 de 3.
     """
@@ -281,9 +272,6 @@ class MovFactSheetCard(BaseModel):
     # Campo 7: CDA
     cda: CDABlock = Field(default_factory=CDABlock)
 
-    # Campo 8: Apolice
-    apolice: ApoliceBlock = Field(default_factory=ApoliceBlock)
-
     # Campo 9: Delta de risco
     delta_risco: DeltaRisco = Field(default_factory=DeltaRisco)
 
@@ -292,15 +280,6 @@ class MovFactSheetCard(BaseModel):
 
     # Campo 11: Peca-pivo
     peca_pivo: PecaPivo = Field(default_factory=PecaPivo)
-
-    # Campo 12: Proximos passos
-    proximos_passos: list[str] = Field(
-        default_factory=list,
-        description=(
-            "Acoes esperadas a partir deste ato. Ex: 'aguardar manifestacao da exequente', "
-            "'preparar contrarrazoes', 'agendar pericia'. [] se nao ha proximo passo claro."
-        ),
-    )
 
     # Campo 13: Datas/conexos/confianca
     data_real_ato: Optional[str] = Field(

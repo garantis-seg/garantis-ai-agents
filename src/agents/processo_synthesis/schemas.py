@@ -390,7 +390,6 @@ class MovFactSheetMin(BaseModel):
     delta_risco: Optional[dict[str, Any]] = None
     valores: Optional[dict[str, Any]] = None
     peca_pivo: Optional[dict[str, Any]] = None
-    proximos_passos: Optional[list[str]] = None
 
     model_config = {"extra": "ignore"}
 

@@ -473,8 +473,9 @@ foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
    - motivo (SO quando tipo=recusa): "valor insuficiente", "seguradora nao admitida",
      "apolice vencida", etc. null caso contrario.
 
-   (NAO emita 'status_garantia_pos_mov' nem 'tipo_garantia' nem 'cda' nem 'apolice'
-    nem 'proximos_passos' — sao derivados/nao-usados nesta versao. Foque nos campos abaixo.)
+   (NAO emita 'status_garantia_pos_mov' nem 'tipo_garantia' nem 'cda' nem
+    'processos_conexos_mencionados' — sao derivados, nao-usados ou desligados nesta versao.
+    Foque nos campos abaixo.)
 
 10. delta_risco: como esta mov muda o RISCO DE ACIONAMENTO da apolice vs estado anterior:
     - mudou: true | false
@@ -500,7 +501,7 @@ foi suspensa. sentido='desfavoravel', natureza='extinto_sem_merito'.
 
 === REGRAS DE OURO ===
 
-A. NAO INVENTE. Se a mov+docs nao mencionam apolice, deixe apolice.numero=null + apresentada=null + aceita=null.
+A. NAO INVENTE. Se a mov+docs nao mencionam garantia/apolice, deixe evento_garantia.tipo='nenhum' e numero_apolice=null.
 B. Sentido DO TOMADOR depende do polo (ver <regra_polos> no topo).
    - Em EF: Tomador=executado (polo passivo); improcedente da execucao = FAVORAVEL.
    - Em Embargos: Tomador=embargante (polo ativo); improcedente dos embargos = DESFAVORAVEL.
