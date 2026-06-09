@@ -60,7 +60,13 @@ WITH sampled AS (
       ON pec.cluster_id::text = (da.raw_ref->>'mov_id')
     WHERE da.kind = 'mov_factsheet'
       AND da.entity_type = 'processo'
+      AND da.superseded_at IS NULL
       AND da.raw_ref->>'fallback_used' = 'true'
+      -- SO cards do caminho 'completo' (LLM full). O eval chama classify_mov_factsheet
+      -- (agent completo); cards 'enxuto' carregam valores DETERMINISTICOS do gate de
+      -- triage (relevancia='baixa' etc.) que o agent completo NUNCA reproduz -> mismatch
+      -- sistematico de metodologia (~9 em 10 cards enxuto, medido 2026-06-09), nao regressao.
+      AND da.summary->'_meta'->>'caminho' = 'completo'
       AND pec.descricao_canonical IS NOT NULL
       AND LENGTH(pec.descricao_canonical) >= 50
       AND da.summary->>'error' IS NULL
