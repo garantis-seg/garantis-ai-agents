@@ -6,7 +6,6 @@ from fastapi import APIRouter, HTTPException
 
 from ...agents.mov_factsheet.agent import classify_mov_factsheet
 from ...agents.mov_factsheet.schemas import (
-    MovFactSheetCard,
     MovFactSheetRequest,
     MovFactSheetResponse,
 )
@@ -45,8 +44,11 @@ async def classify_mov_factsheet_endpoint(request: MovFactSheetRequest):
                 detail=f"LLM parse error: {card_data.get('error')}",
             )
 
+        # card_data já validado dentro de classify (v3.1=MovFactSheetCard,
+        # v4=MovFactSheetCardV4) — passa o dict direto, SEM re-coercir via
+        # MovFactSheetCard (que dropava os fatos crus v4). Ver schemas.MovFactSheetResponse.
         return MovFactSheetResponse(
-            card=MovFactSheetCard(**card_data),
+            card=card_data,
             raw_response=result.get("raw_response"),
             llm_raw_prompt=result.get("llm_raw_prompt"),
             prompt_version=result.get("prompt_version"),

@@ -406,7 +406,11 @@ class MovFactSheetRequest(BaseModel):
 
 
 class MovFactSheetResponse(BaseModel):
-    card: MovFactSheetCard
+    # card: dict (NÃO MovFactSheetCard) — o card já foi validado+dumpado dentro de
+    # classify_mov_factsheet (v3.1 = MovFactSheetCard, v4 = MovFactSheetCardV4). Tipá-lo
+    # como MovFactSheetCard aqui RE-COERCIA o card v4 de volta pro shape v3.1 (dropava
+    # recorrente_polo/provido/… e re-adicionava sentido/cda/confianca). Pass-through.
+    card: dict[str, Any]
     raw_response: Optional[str] = None
     llm_raw_prompt: Optional[str] = None
     prompt_version: Optional[str] = None
