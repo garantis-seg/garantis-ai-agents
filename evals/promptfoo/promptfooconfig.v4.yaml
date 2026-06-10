@@ -1,0 +1,87 @@
+description: Engine v6 L1 mov_factsheet — variante v4 (fatos neutros) / FASE 2 shadow
+
+# Provider v4: força L1_NEUTRAL_ENABLED=true → o agent emite o card v4 (fatos neutros)
+# + derivados sujeito-independentes. Roda EM PARALELO ao promptfooconfig.yaml (v3.1) e é
+# WARNING-ONLY (não gateia o deploy) enquanto v3.1 é o default.
+providers:
+  - id: 'python:providers/mov_factsheet_v4_provider.py'
+    label: l1-mov-factsheet-v4-neutral
+
+prompts:
+  # Stub — o provider custom constrói o prompt internamente (build_mov_factsheet_prompt_v4).
+  - "{{processo.cnj}}::{{mov.mov_id}}"
+
+# Reusa os MESMOS goldens do v3.1 (snapshot do banco + curados de polo).
+tests:
+  - file://golden/snapshot_v1.yaml
+  - file://golden/polo_regression_v1.yaml
+
+# Asserts: SÓ os campos que o card v4 carrega + que são apples-to-apples com o golden v3.1.
+# NÃO assertados de propósito (e por quê):
+#   - decisao.sentido / delta_risco → DROPADOS do card v4; derivados ON-READ na Fase 3.
+#     A acurácia de sentido (derivar vs rótulo) é o gate F1, não este eval.
+#   - peca_pivo.e_pivo → agora DERIVADO determinístico (garantis_shared.derivacoes);
+#     coberto por tests/test_derivacoes.py (truth-table), não comparável ao e_pivo
+#     LLM-emitido do golden v3.1.
+# categoria FICA: é função de tipo_doc (mesmo mapa do v3.1) → testa a extração de tipo_doc.
+defaultTest:
+  assert:
+    - type: is-json
+      weight: 1
+
+    # decisao.natureza (só quando golden definiu)
+    - type: javascript
+      weight: 5
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected || {};
+        if (exp.decisao?.natureza === undefined || exp.decisao?.natureza === null) return true;
+        return out.decisao?.natureza === exp.decisao?.natureza;
+
+    # decisao.transito_certificado (só quando golden definiu)
+    - type: javascript
+      weight: 4
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected || {};
+        if (exp.decisao?.transito_certificado === undefined) return true;
+        return out.decisao?.transito_certificado === exp.decisao?.transito_certificado;
+
+    # decisao.instancia (só quando golden definiu)
+    - type: javascript
+      weight: 2
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected || {};
+        if (exp.decisao?.instancia === undefined || exp.decisao?.instancia === null) return true;
+        return out.decisao?.instancia === exp.decisao?.instancia;
+
+    # categoria (DERIVADA de tipo_doc — mesmo mapa do v3.1; testa extração de tipo_doc)
+    - type: javascript
+      weight: 4
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected || {};
+        if (exp.categoria === undefined || exp.categoria === null) return true;
+        return out.categoria === exp.categoria;
+
+    # relevancia_merito (julgamento genuíno — fica na LLM no v4)
+    - type: javascript
+      weight: 3
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected || {};
+        if (exp.relevancia_merito === undefined || exp.relevancia_merito === null) return true;
+        return out.relevancia_merito === exp.relevancia_merito;
+
+    # resumo_ato não-vazio
+    - type: javascript
+      weight: 1
+      value: |
+        const out = JSON.parse(output);
+        return (out.resumo_ato || '').length > 10;
+
+sharing: false
+
+outputPath:
+  - results_v4.json

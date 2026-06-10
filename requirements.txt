@@ -36,7 +36,7 @@ groq>=0.4.0
 # OLD shared wheel baked in until the 168h cache TTL — diverging from frontend-api
 # (which pins ==). Exact pin keeps both consumers on the same shared version.
 # When bumping garantis-shared: publish it, then bump this pin (and fe-api's).
-garantis-shared==1.106.0
+garantis-shared==1.127.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
