@@ -48,7 +48,13 @@ steps:
 
 availableSecrets:
   secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/GEMINI_API_KEY/versions/latest
+    # GEMINI_API_KEY_EVAL: key DEDICADA do eval (API key GCP restrita a
+    # generativelanguage.googleapis.com, quota separada). NUNCA usar a
+    # GEMINI_API_KEY de prod aqui — o promptfoo roda direto do build container
+    # (bypassa o rate-limiter do ai-agents) a cada push em master, e dividir a
+    # key saturava a quota do cascade user-facing (incidente fila congelada
+    # 2026-06-10, findings dbos-cascade-resilience-2026-06-10).
+    - versionName: projects/$PROJECT_ID/secrets/GEMINI_API_KEY_EVAL/versions/latest
       env: 'GEMINI_API_KEY'
 
 options:
