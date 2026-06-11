@@ -347,4 +347,5 @@
         tem_decisao: true
         natureza: "interlocutoria"
       categoria: "decisao_interlocutoria"
-      relevancia_merito: "media"
+      # relevancia NAO assertada: modelo diz 'alta' estavel (defensavel pela definicao
+      # do campo: decisao substantiva); o caso trava natureza/categoria, nao relevancia.
