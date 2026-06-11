@@ -292,12 +292,21 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
   NESTAS INSTRUÇÕES — só o que está no documento. Campo crítico `papel`:
   · 'originario' — o contexto indica o processo de ORIGEM desta ação: 'distribuição por
     dependência', 'Processo de Origem', 'processo originário', 'nos autos da Execução
-    Fiscal nº', 'em apenso a'. É o sinal de ouro — só marque com gatilho textual claro.
+    Fiscal nº', 'em apenso a'. É o sinal de ouro — só marque com GATILHO TEXTUAL claro.
+    Processo PARADIGMA / prova emprestada / caso de outro autor citado como exemplo NÃO
+    é originário (mesmo que envolva a mesma empresa) => 'jurisprudencia' ou 'incerto'.
   · 'jurisprudencia' — CNJ dentro de ementa/precedente citado (assinaturas: 'Rel. Des.',
     'Relator:', 'Data de Julgamento', Turma/Câmara, sufixo de 2ª instância).
-  · 'derivado'/'incidente' — outra ação derivada/incidental mencionada pela petição.
-  · 'incerto' — não dá pra classificar com segurança (a integração decide depois).
+  · 'derivado'/'incidente' — outra ação derivada/incidental LIGADA A ESTE processo,
+    envolvendo a MESMA empresa/parte privada (a parte pública pode variar: Fazenda,
+    autoridade coatora, ente). Se o contexto mostra caso de OUTRA empresa/parte citado
+    como exemplo ou precedente, NÃO é derivado => 'jurisprudencia' (se em ementa) ou
+    'incerto'.
+  · 'incerto' — não dá pra classificar com segurança (a integração decide depois com
+    dados que você não tem — na dúvida, prefira 'incerto' a chutar papel relacional).
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
+  NÃO converta números incompletos pra 20 dígitos: se o número no documento não está
+  no formato CNJ completo (RE/AREsp/ADI/registros curtos), NÃO o estique — ignore.
 - NÃO deduza direção do par (quem é mais novo/velho) — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores (texto limpo=alta; OCR
   ruidoso/citações ambíguas=baixa).
