@@ -87,14 +87,30 @@ def main() -> int:
     if not os.environ.get("GEMINI_API_KEY"):
         raise SystemExit("GEMINI_API_KEY não setada (use a GEMINI_API_KEY_EVAL)")
 
+    # Dir nomeado (não auto-removido): preserva runs parciais se um run travar
+    # (quota/timeout) e evita o PermissionError do cleanup com node órfão
+    # segurando o .log no Windows.
+    td = Path(tempfile.gettempdir()) / "gate_v4_runs"
+    td.mkdir(exist_ok=True)
     runs: list[dict[str, dict]] = []
-    with tempfile.TemporaryDirectory() as td:
-        for i in range(args.runs):
-            out = Path(td) / f"run{i}.json"
-            log = Path(td) / f"run{i}.log"
-            print(f"[gate] run {i + 1}/{args.runs}...", flush=True)
+    for i in range(args.runs):
+        out = td / f"run{i}.json"
+        log = td / f"run{i}.log"
+        out.unlink(missing_ok=True)
+        print(f"[gate] run {i + 1}/{args.runs}...", flush=True)
+        try:
             run_eval(out, log)
-            runs.append(parse_results(out))
+        except SystemExit as e:
+            # Tolera run perdido (quota/timeout): melhor decidir com N-1 runs
+            # do que abortar o gate inteiro.
+            print(f"[gate] run {i + 1} FALHOU ({e}); seguindo com os demais", flush=True)
+            continue
+        runs.append(parse_results(out))
+    if len(runs) < 2:
+        raise SystemExit(f"só {len(runs)} run(s) válidos — sem maioria possível; aborta")
+    if len(runs) != args.runs:
+        print(f"[gate] AVISO: maioria sobre {len(runs)}/{args.runs} runs válidos", flush=True)
+    args.runs = len(runs)
 
     keys = sorted(runs[0].keys())
     summary: dict[str, dict] = {}
