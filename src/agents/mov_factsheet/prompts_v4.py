@@ -223,6 +223,89 @@ Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o text
 o resto null."""
 
 
+# Guarda de janela do ramo petição (peticao_extract.v1): petições reais têm 100k+ chars
+# e os conectores (CDA em planilha, citações) podem estar em qualquer ponto — cap alto
+# alinhado à decisão "sem limite primeiro, qualidade > custo" (2026-06-11), limitado só
+# pela janela do flash-lite (1M tokens ≈ 4M chars; 200k chars ≈ 50k tokens, cobre p99).
+_PETICAO_TEXT_CAP_CHARS = 200_000
+
+
+def _build_peticao_prompt_v4(
+    processo: ProcessoContext,
+    mov: MovInput,
+    documentos_anexados: list[DocAnexado],
+) -> str:
+    """Prompt do ramo PETIÇÃO INICIAL (peticao_extract.v1) — FASE 4 conexos.
+
+    Diferenças vs o ramo DOCUMENTO: contexto AFIRMATIVO (a integração já identificou
+    que ESTE doc é a petição inicial — identify_peticao_doc metadata-first) + extração
+    DIRIGIDA dos conectores (cdas + processos_citados com papel), conforme o contrato
+    `prompts/fase4-alfredo-handoff-peticao-extraction.md`. Escopo = SÓ petição inicial:
+    fora dela a precisão das citações despenca (validação Onda 1).
+
+    PROMPT v0 (esqueleto) — as regras jurídicas de `papel` são DS do Alfredo; iterar
+    aqui + mini-eval de petições rotuladas antes de plugar no sink.
+    """
+    doc = documentos_anexados[0] if documentos_anexados else None
+    txt = (doc.text_content or "").strip() if doc else ""
+    if not txt:
+        txt = (mov.texto or "").strip()
+
+    meta_bits = []
+    if doc:
+        if doc.titulo:
+            meta_bits.append(f"titulo: {doc.titulo}")
+        if doc.data_documento:
+            meta_bits.append(f"data_documento: {doc.data_documento}")
+        if doc.provider:
+            meta_bits.append(f"fonte: {doc.provider}")
+    meta_line = ("\n  " + " | ".join(meta_bits)) if meta_bits else ""
+
+    fam = _familia_key(processo)
+
+    return f"""Você é um extrator de FATOS NEUTROS de peças judiciais brasileiras.
+RELATE objetivamente — NÃO julgue se algo é bom ou ruim para alguém. A composição dos
+polos já vem pronta no CONTEXTO DO PROCESSO abaixo. O julgamento é feito por outro sistema.
+
+Este documento É a PETIÇÃO INICIAL deste processo (já identificada pela integração —
+confie nisso). Sua missão tem DUAS partes:
+
+PARTE 1 — FactSheet da peça (campos do card):
+- tipo_doc='peticao_inicial'. tem_decisao=false e decisao toda null (petição é pedido da
+  parte, não decisão judicial).
+- resumo_ato: a TESE e o PEDIDO da inicial em até ~150 palavras (quem pede, o quê, com
+  que fundamento principal).
+- evento_garantia: SÓ se a petição OFERECE garantia (seguro garantia/fiança/depósito) —
+  tipo='apresentacao' + subtipo. Senão 'nenhum'.
+- valores: valor_debito_executado/valor_garantia quando explícitos.
+
+PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
+- cdas[]: TODOS os números de CDA/inscrição em dívida ativa que ESTE processo executa ou
+  discute (corpo da petição E planilhas/listas anexas ao texto). Número LITERAL como está
+  no texto + ente/tributo/valor quando explícitos. NÃO normalize o número.
+- processos_citados[]: TODO CNJ citado, com o campo crítico `papel`:
+  · 'originario' — o contexto indica o processo de ORIGEM desta ação: 'distribuição por
+    dependência', 'Processo de Origem', 'processo originário', 'nos autos da Execução
+    Fiscal nº', 'em apenso a'. É o sinal de ouro — só marque com gatilho textual claro.
+  · 'jurisprudencia' — CNJ dentro de ementa/precedente citado (assinaturas: 'Rel. Des.',
+    'Relator:', 'Data de Julgamento', Turma/Câmara, sufixo de 2ª instância).
+  · 'derivado'/'incidente' — outra ação derivada/incidental mencionada pela petição.
+  · 'incerto' — não dá pra classificar com segurança (a integração decide depois).
+  Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
+- NÃO deduza direção do par (quem é mais novo/velho) — a integração resolve por data.
+- confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores (texto limpo=alta; OCR
+  ruidoso/citações ambíguas=baixa).
+
+{_contexto_processo_block(processo)}
+
+{VOCAB_FAMILIA[fam]}
+
+=== PETIÇÃO INICIAL (id {mov.mov_id}) ==={meta_line}
+{txt[:_PETICAO_TEXT_CAP_CHARS]}
+
+Extraia no schema PeticaoExtractCardV4. Preencha SÓ o que o texto sustenta; o resto null."""
+
+
 def build_mov_factsheet_prompt_v4(
     processo: ProcessoContext,
     mov: MovInput,
@@ -233,9 +316,13 @@ def build_mov_factsheet_prompt_v4(
     """Prompt v4 (fatos neutros) pra extrair o FactSheet de UMA movimentação.
 
     Drop-in da assinatura de `build_mov_factsheet_prompt` (v3.1) — o agente troca a função
-    sob flag. classe '1D' = documento órfão (ramo neutro próprio).
+    sob flag. classe '1D' = ramo DOCUMENTO (doc avulso); classe 'peticao' = ramo PETIÇÃO
+    INICIAL (peticao_extract.v1, opt-in do caller — prod nunca envia hoje).
     """
     documentos_anexados = documentos_anexados or []
+
+    if classe == "peticao":
+        return _build_peticao_prompt_v4(processo, mov, documentos_anexados)
 
     if classe == "1D":
         return _build_orfao_prompt_v4(processo, mov, documentos_anexados)
