@@ -281,9 +281,15 @@ PARTE 1 — FactSheet da peça (campos do card):
 
 PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
 - cdas[]: TODOS os números de CDA/inscrição em dívida ativa que ESTE processo executa ou
-  discute (corpo da petição E planilhas/listas anexas ao texto). Número LITERAL como está
-  no texto + ente/tributo/valor quando explícitos. NÃO normalize o número.
-- processos_citados[]: TODO CNJ citado, com o campo crítico `papel`:
+  discute (corpo da petição E planilhas/listas anexas ao texto), ESCRITOS no documento.
+  Número LITERAL como está no texto + ente/tributo/valor quando explícitos. NÃO normalize
+  o número. Artigo de lei NÃO é CDA.
+- processos_citados[]: SÓ números de PROCESSO JUDICIAL no formato CNJ
+  (NNNNNNN-DD.AAAA.J.TR.OOOO, ou 20 dígitos contínuos) que estejam ESCRITOS no
+  documento. NÃO são processos: artigos de lei (CF/CPC/CTN), números de lei ou LC
+  (ex: Lei 12.016, LC 190/22), súmulas, e registros de tribunal superior fora do
+  formato CNJ (RE/AREsp/ADI + número curto). NUNCA extraia números mencionados
+  NESTAS INSTRUÇÕES — só o que está no documento. Campo crítico `papel`:
   · 'originario' — o contexto indica o processo de ORIGEM desta ação: 'distribuição por
     dependência', 'Processo de Origem', 'processo originário', 'nos autos da Execução
     Fiscal nº', 'em apenso a'. É o sinal de ouro — só marque com gatilho textual claro.

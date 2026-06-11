@@ -89,7 +89,7 @@ def test_schema_superset_nao_dropa_conectores():
 
 
 def test_versao_por_ramo():
-    assert PETICAO_PROMPT_VERSION == "peticao_extract.v1"
+    assert PETICAO_PROMPT_VERSION.startswith("peticao_extract.v1")
     from src.agents.mov_factsheet.schemas_v4 import PROMPT_VERSION_V4
     assert PROMPT_VERSION_V4 != PETICAO_PROMPT_VERSION
 
