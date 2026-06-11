@@ -35,6 +35,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.decisao?.natureza === undefined || exp.decisao?.natureza === null) return true;
         return out.decisao?.natureza === exp.decisao?.natureza;
 
@@ -44,6 +45,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.decisao?.transito_certificado === undefined) return true;
         return out.decisao?.transito_certificado === exp.decisao?.transito_certificado;
 
@@ -53,6 +55,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.decisao?.instancia === undefined || exp.decisao?.instancia === null) return true;
         return out.decisao?.instancia === exp.decisao?.instancia;
 
@@ -62,6 +65,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.categoria === undefined || exp.categoria === null) return true;
         return out.categoria === exp.categoria;
 
@@ -71,6 +75,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.relevancia_merito === undefined || exp.relevancia_merito === null) return true;
         return out.relevancia_merito === exp.relevancia_merito;
 

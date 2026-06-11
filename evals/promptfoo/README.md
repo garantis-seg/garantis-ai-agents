@@ -100,3 +100,24 @@ Variáveis disponíveis no step:
 - Texto-livre (`resumo_ato`) tem variance residual (memory
   [engine-v6-gemini-determinism-residual](../../../../.claude/projects/c--Users-Eltonxp-dev-Garantis/memory/engine-v6-gemini-determinism-residual.md))
   — usa similarity threshold 0.80 não exact-match.
+
+## Gate local pra mudança de prompt (gate_v4.py) — 2026-06-11
+
+O exact-match single-run tem 2 modos de ruído provados na forense do prompt-review
+(memory `l1-prompt-review-executado-2026-06-11`): flips TEMPORAIS com bytes idênticos
+e casos KNIFE-EDGE que flipam com qualquer perturbação de byte (marcados
+`_boundary: true` no golden — asserts categóricos viram informacionais neles).
+
+Pra gatear uma mudança de prompt/schema do v4 de forma honesta:
+
+```bash
+export GEMINI_API_KEY=$(gcloud secrets versions access latest --secret=GEMINI_API_KEY_EVAL --project=neqsti)
+# na base (ex: master):
+python gate_v4.py --runs 3 --save baseline_master.json
+# no branch com a mudança:
+python gate_v4.py --runs 3 --compare-to baseline_master.json   # exit 1 = regressão NOVA
+```
+
+Decisão por MAIORIA por caso (3 runs, --no-cache obrigatório — o prompt é construído
+dentro do provider python e a cache-key do promptfoo não muda). Reprova só regressão
+NOVA (majority-PASS no baseline → majority-FAIL no branch), ignorando os `_boundary`.
