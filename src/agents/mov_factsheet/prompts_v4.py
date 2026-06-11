@@ -20,6 +20,11 @@ regras de EXTRAÇÃO dos 6 fatos crus novos · precisão Lei 8.437 (não rotular
 genérica como suspensão de segurança) · taxonomia tipo_doc · rendering de docs/fallback
 (reutilizado de `prompts.py` — comportamento único). Semântica por campo vive no
 response_schema (`schemas_v4` descriptions).
+
+Bloco MOV ANTERIOR: removido do caminho v4 (prompt-review Lote 1/1.3, 2026-06-10).
+Prod roda paralelo sempre (`sequential_l1=False` em todos os callers) → o bloco nunca
+renderizava aqui. O code-path segue vivo no v3.1 (`prompts._mov_anterior_block`) pra
+pilotos sequenciais futuros. Render de prod inalterado (1A/1D byte-idêntico).
 """
 from __future__ import annotations
 
@@ -28,7 +33,6 @@ from typing import Any
 from .fundacao import TAXONOMIA_TIPO_DOC
 from .prompts import (
     _DOC_LIST_CAP,
-    _mov_anterior_block,
     _processo_resumo_block,
     _summarize_doc,
 )
@@ -208,16 +212,15 @@ def build_mov_factsheet_prompt_v4(
         docs_section = ""
 
     processo_section = _processo_resumo_block(fallback_context)
-    mov_anterior_section = _mov_anterior_block(fallback_context)
 
-    # Instruções de uso do contexto — neutras (docs prevalecem; não copie; mov anterior só refs).
+    # Instruções de uso do contexto — neutras (docs prevalecem; não copie).
     instrucoes = []
     if has_docs:
         instrucoes.append(
             "- A informação SUBSTANTIVA está nos DOCUMENTOS ANEXADOS — use o conteúdo deles "
             "pra preencher decisao/valores/evento_garantia.\n"
             "- resumo_ato sintetiza O QUE ESTÁ NESTA MOV (incl. os docs), NÃO copia o resumo do "
-            "processo nem a mov anterior."
+            "processo."
         )
     else:
         instrucoes.append(
@@ -229,11 +232,6 @@ def build_mov_factsheet_prompt_v4(
         instrucoes.append(
             "- RESUMO DO PROCESSO é contexto de FUNDO. NÃO copie pro resumo_ato — esse campo "
             "descreve SOMENTE esta mov."
-        )
-    if mov_anterior_section:
-        instrucoes.append(
-            "- MOV ANTERIOR só resolve REFERÊNCIAS contextuais ('o agravo', 'a decisão'). Conflito "
-            "entre o teor desta mov e a anterior? Esta mov PREVALECE."
         )
     contexto_extra = (
         "\n\n=== INSTRUÇÕES PARA USO DO CONTEXTO ===\n" + "\n".join(instrucoes) if instrucoes else ""
@@ -271,7 +269,7 @@ só resumo_ato leva acento.
   {mov_meta_s}
 
   texto da publicação (snippet):
-  {texto}{docs_section}{processo_section}{mov_anterior_section}{contexto_extra}
+  {texto}{docs_section}{processo_section}{contexto_extra}
 
 Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o texto sustenta;
 o resto null. Echo de mov_id deste input."""
