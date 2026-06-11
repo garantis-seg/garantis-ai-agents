@@ -149,8 +149,10 @@ def _build_orfao_prompt_v4(
     if not txt:
         txt = (mov.texto or "").strip()
     return f"""Você é um extrator de FATOS NEUTROS de documentos judiciais brasileiros.
-RELATE objetivamente o que o documento contém e QUEM está em cada polo — NÃO julgue se
-algo é bom ou ruim para alguém. O julgamento é feito por outro sistema.
+RELATE objetivamente o que o documento contém — NÃO julgue se algo é bom ou ruim para
+alguém. A composição dos polos já vem pronta no CONTEXTO DO PROCESSO abaixo; identifique
+em QUAL POLO ('ativo' ou 'passivo') está cada ator citado no texto. O julgamento é feito
+por outro sistema.
 
 Este é um DOCUMENTO ÓRFÃO — NÃO vinculado a um movimento processual. Classifique-o e
 produza o FactSheet (mesmo schema dos demais).
@@ -174,7 +176,7 @@ RACIOCÍNIO sobre a NATUREZA do documento (orienta data e se há decisão):
 {txt[:8000]}
 
 Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o texto sustenta;
-o resto null. ENUMs em ASCII (sem acento); só resumo_ato leva acento."""
+o resto null."""
 
 
 def build_mov_factsheet_prompt_v4(
@@ -250,12 +252,15 @@ def build_mov_factsheet_prompt_v4(
 
     return f"""Você é um extrator de FATOS NEUTROS de movimentações judiciais brasileiras.
 Sua tarefa NÃO é julgar se algo é bom ou ruim para alguém — é RELATAR objetivamente o que
-aconteceu e QUEM está em cada polo. O julgamento é feito por outro sistema.
+aconteceu. A composição dos polos já vem pronta no CONTEXTO DO PROCESSO abaixo; o seu
+trabalho é identificar em QUAL POLO está cada ator citado no texto ('o agravante',
+'o requerente', 'a executada' → 'ativo' ou 'passivo'). O julgamento é feito por outro
+sistema.
 
 REGRA DE OURO: emita fatos NEUTROS. NÃO escreva 'favorável'/'desfavorável'. Para recursos,
-diga QUAL POLO recorreu (recorrente_polo='ativo' ou 'passivo') e se foi provido — nunca
-relativo a 'cliente'/'parte'. Você não sabe quem é o cliente. ENUMs em ASCII (sem acento);
-só resumo_ato leva acento.
+resolva QUAL POLO recorreu usando o CONTEXTO DO PROCESSO (recorrente_polo='ativo' ou
+'passivo') e diga se foi provido — nunca relativo a 'cliente'/'parte'. Você não sabe quem
+é o cliente.
 
 {_contexto_processo_block(processo)}
 
@@ -272,4 +277,4 @@ só resumo_ato leva acento.
   {texto}{docs_section}{processo_section}{contexto_extra}
 
 Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o texto sustenta;
-o resto null. Echo de mov_id deste input."""
+o resto null."""
