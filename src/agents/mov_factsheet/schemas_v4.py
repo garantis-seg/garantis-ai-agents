@@ -286,7 +286,16 @@ class MovFactSheetCardV4(BaseModel):
 # alucinado de 2 CNJs). Fix: formato CNJ obrigatorio + "so o que esta NO DOCUMENTO" +
 # artigo de lei nao e CDA. Rede determininistica complementar no sink: digitos do cnj
 # devem existir no texto-fonte + len==20 + mod-97.
-PETICAO_PROMPT_VERSION = "peticao_extract.v1.1"
+# v1.2 (2026-06-12, 2a iteracao — auditoria Fable das 6 peticoes + decisao Alfredo):
+# 2 ocorrencias de papel relacional em precedente (paradigma trabalhista->originario;
+# Intermedium->derivado = unica aresta falsa do insumo da formacao). Fix por
+# ESPECIFICACAO da regra existente (nao regra nova): originario nega paradigma/prova
+# emprestada explicitamente; derivado/incidente exige MESMA empresa/parte privada
+# (parte publica varia: Fazenda/autoridade coatora — assimetria do MS apontada pelo
+# Alfredo); na duvida 'incerto' (a integracao decide com company-coherence). + anti-
+# esticamento (nao converter RE/AREsp/ADI pra 20 digitos). Enforcement real continua
+# DETERMINISTICO no sink/formacao (papel = hint, nunca cria aresta sozinho).
+PETICAO_PROMPT_VERSION = "peticao_extract.v1.2"
 
 
 class CdaPeticao(BaseModel):
