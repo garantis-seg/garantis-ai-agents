@@ -1642,6 +1642,12 @@
         \ 14 H. INTIME-SE A RE PARA COMPARECER C\r\nOM PREPOSTO COM PODER PARA TRANSIGIR.´"
     documentos_anexados: []
     expected:
+      # knife-edge TEMPORAL (prompt-review 2026-06-11): flipa em re-runs com prompt
+      # BYTE-IDENTICO entre janelas de tempo (documentado 2x: experimento S2 do Lote 1
+      # e gate do v4.3 — eval emitiu relevancia 'media' 0/3, driver minutos depois
+      # 'baixa' 10/10 nos 2 estados). relevancia baixa vs media e genuinamente fuzzy
+      # ('DESIGNO AUDIENCIA ESPECIAL DE CONCILIACAO'). _boundary: informacional.
+      _boundary: true
       cda:
         ente: null
         numeros: []

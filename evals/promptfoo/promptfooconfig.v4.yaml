@@ -69,6 +69,16 @@ defaultTest:
         if (exp.categoria === undefined || exp.categoria === null) return true;
         return out.categoria === exp.categoria;
 
+    # decisao.motivo_extincao (v4.3 — censo 0-fill: obrigatório quando extinto_sem_merito)
+    - type: javascript
+      weight: 4
+      value: |
+        const out = JSON.parse(output);
+        const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
+        if (exp.decisao?.motivo_extincao === undefined || exp.decisao?.motivo_extincao === null) return true;
+        return out.decisao?.motivo_extincao === exp.decisao?.motivo_extincao;
+
     # relevancia_merito (julgamento genuíno — fica na LLM no v4)
     - type: javascript
       weight: 3

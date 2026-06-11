@@ -52,7 +52,20 @@ from pydantic import BaseModel, Field
 #      Colunas da tabela tipada ficam (viram NULL em cards novos); shared lê via
 #      .get() tolerante — zero mudança fora deste módulo.
 # Gate: gate_v4.py 3-run majority vs baseline v4.1.
-PROMPT_VERSION_V4 = "mov_factsheet.v4.2"
+# v4.3 (2026-06-11, prompt-review parte 4 — decisões #2/#6 aprovadas na sessão):
+#   - motivo_extincao OBRIGATÓRIO quando extinto_sem_merito (censo 4.2: 0/15 preenchidos
+#     — degradava SENTIDO_EXTINCAO on-read). Regra movida pra description de natureza
+#     (onde a LLM decide) + goldens de extinção novos (polo_regression 11-15).
+#   - data_inferida_ato: volta do data_real_ato RENOMEADO (decisão G.2 — é inferência,
+#     não dado autoritativo; emitir SÓ quando difere da publicação). Coluna tipada segue
+#     data_real_ato até follow-up no shared (0 leitores).
+#   - VOCAB fiscal: regra da EXCEÇÃO DE PRÉ-EXECUTIVIDADE (carimbo jurídico Alfredo
+#     2026-06-11): acolhida ≠ 'procedente' (evita inversão de sinal — o autor da EF é a
+#     Fazenda); escopo das regras de inexigibilidade restrito a Embargos/Anulatória/MS.
+#   - Ramo DOCUMENTO (ex-órfão) fechado: ganha VOCAB_FAMILIA + REGRAS_CRUS + metadata
+#     do doc (tipo|titulo|data|provider — censo: metadata jusbrasil 100% preenchida) +
+#     wording 'DOCUMENTO AVULSO'.
+PROMPT_VERSION_V4 = "mov_factsheet.v4.3"
 
 # Taxonomia tipo_doc (34) — idêntica à v3.1 (`schemas.py` / `fundacao.TAXONOMIA_TIPO_DOC`).
 # Mantida aqui pra o módulo v4 ser auto-contido/reversível; insumo de `categoria` (DERIVED).
@@ -91,8 +104,10 @@ class DecisaoBlockV4(BaseModel):
         description=(
             "Natureza jurídica da decisão (NEUTRA — quem ganhou é derivado depois). "
             "'procedente'=pedido do AUTOR acolhido; 'improcedente'=pedido do autor rejeitado. "
-            "Inexigibilidade/nulidade da CDA/prescrição acolhida = 'procedente' (mérito), NÃO "
-            "extinto_sem_merito. Use 'interlocutoria' só p/ decisão sem mérito (liminar, tutela)."
+            "Em Embargos/Anulatória/MS: inexigibilidade/nulidade da CDA/prescrição acolhida = "
+            "'procedente' (mérito), NÃO extinto_sem_merito. Use 'interlocutoria' só p/ decisão "
+            "sem mérito (liminar, tutela). Se emitir 'extinto_sem_merito', PREENCHA SEMPRE "
+            "motivo_extincao (nunca deixe null)."
         ),
     )
     transito_certificado: bool = Field(
@@ -156,10 +171,11 @@ class DecisaoBlockV4(BaseModel):
     ]] = Field(
         default=None,
         description=(
-            "Para natureza='extinto_sem_merito': 'terminativa'=extinção processual (sem resolver "
-            "mérito, ex: ilegitimidade/abandono); 'consensual'=desistência/acordo homologado; "
-            "'satisfacao'=extinção por PAGAMENTO/quitação/satisfação da obrigação (art. 924 II CPC); "
-            "'nenhum'/null caso contrário."
+            "OBRIGATÓRIO quando natureza='extinto_sem_merito' (nunca null nesse caso): "
+            "'terminativa'=extinção processual (ilegitimidade/abandono/prescrição acolhida em "
+            "exceção); 'consensual'=desistência/acordo homologado; 'satisfacao'=extinção por "
+            "PAGAMENTO/quitação/satisfação da obrigação (art. 924 II CPC). "
+            "null SÓ quando a natureza não é extinto_sem_merito."
         ),
     )
 
@@ -234,3 +250,12 @@ class MovFactSheetCardV4(BaseModel):
     decisao: DecisaoBlockV4 = Field(default_factory=DecisaoBlockV4)
     evento_garantia: EventoGarantiaV4 = Field(default_factory=EventoGarantiaV4)
     valores: ValoresBlockV4 = Field(default_factory=ValoresBlockV4)
+    data_inferida_ato: Optional[str] = Field(
+        default=None,
+        description=(
+            "YYYY-MM-DD do ato real INFERIDA do texto (ex: 'sentença proferida em "
+            "10/03/2024'), SOMENTE quando diferir da data de publicação da mov E houver "
+            "data explícita no texto. É inferência da LLM, não dado autoritativo. "
+            "null em todos os outros casos (NÃO repita a data da publicação)."
+        ),
+    )

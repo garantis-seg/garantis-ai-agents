@@ -233,3 +233,119 @@
         instancia: "2g"
       categoria: "acordao"
       relevancia_merito: "alta"
+
+# ── v4.3 (prompt-review 2026-06-11): extinções + exceção de pré-executividade ──
+# Censo 4.2 achou motivo_extincao 0/15 preenchido quando extinto_sem_merito (degradava
+# SENTIDO_EXTINCAO on-read) e a regra antiga de inexigibilidade podia inverter o sinal
+# em exceção de pré-executividade acolhida (o autor da EF é a Fazenda). Casos 11-15
+# travam o comportamento novo. sentido NÃO é assertado (v4 deriva on-read).
+
+- description: "[POLO-REG 11] EF extinta por pagamento art. 924 II = extinto_sem_merito + motivo satisfacao"
+  vars:
+    processo:
+      cnj: "0000011-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Uniao Federal - PGFN"
+      polo_passivo: "COMERCIO ABC LTDA"
+    mov:
+      mov_id: "polo-reg-11"
+      data: "2025-02-10"
+      tipo: "SENTENCA"
+      texto: "Sentenca. Comprovado o pagamento integral do debito exequendo, conforme comprovante de quitacao juntado aos autos. JULGO EXTINTA a presente execucao fiscal, com fundamento no art. 924, inciso II, do CPC. Sem custas. Transitada em julgado, arquivem-se."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        natureza: "extinto_sem_merito"
+        motivo_extincao: "satisfacao"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 12] EF extinta por desistencia da exequente homologada = extinto_sem_merito + motivo consensual"
+  vars:
+    processo:
+      cnj: "0000012-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Estado de Sao Paulo"
+      polo_passivo: "INDUSTRIA XYZ S.A."
+    mov:
+      mov_id: "polo-reg-12"
+      data: "2025-03-05"
+      tipo: "SENTENCA"
+      texto: "Sentenca. A exequente requereu a desistencia da acao em razao de adesao do contribuinte a programa de parcelamento com transacao. HOMOLOGO a desistencia e JULGO EXTINTO o processo, sem resolucao de merito, nos termos do art. 485, VIII, do CPC. Baixem-se eventuais penhoras."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        natureza: "extinto_sem_merito"
+        motivo_extincao: "consensual"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 13] EF extinta por ilegitimidade passiva = extinto_sem_merito + motivo terminativa"
+  vars:
+    processo:
+      cnj: "0000013-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Municipio de Campinas"
+      polo_passivo: "TRANSPORTADORA DEF LTDA"
+    mov:
+      mov_id: "polo-reg-13"
+      data: "2025-04-12"
+      tipo: "SENTENCA"
+      texto: "Sentenca. A executada comprovou que o imovel gerador do IPTU foi alienado antes dos fatos geradores, sendo parte ilegitima para figurar no polo passivo. JULGO EXTINTA a execucao fiscal, sem resolucao de merito, por ilegitimidade passiva, nos termos do art. 485, VI, do CPC."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        natureza: "extinto_sem_merito"
+        motivo_extincao: "terminativa"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 14] Excecao de pre-executividade ACOLHIDA extinguindo a EF = extinto_sem_merito (NUNCA procedente) + terminativa"
+  vars:
+    processo:
+      cnj: "0000014-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Uniao Federal - Fazenda Nacional"
+      polo_passivo: "METALURGICA GHI LTDA"
+    mov:
+      mov_id: "polo-reg-14"
+      data: "2025-05-20"
+      tipo: "SENTENCA"
+      texto: "Vistos. A executada opos excecao de pre-executividade alegando prescricao do credito tributario. Verifico que entre a constituicao definitiva do credito e o ajuizamento transcorreram mais de cinco anos, sem causa interruptiva. ACOLHO a excecao de pre-executividade, reconheco a prescricao e JULGO EXTINTA a execucao fiscal. Sem honorarios."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        natureza: "extinto_sem_merito"
+        motivo_extincao: "terminativa"
+      categoria: "sentenca"
+      relevancia_merito: "alta"
+
+- description: "[POLO-REG 15] Excecao de pre-executividade REJEITADA = interlocutoria (execucao prossegue), motivo_extincao null"
+  vars:
+    processo:
+      cnj: "0000015-12.2020.4.03.6100"
+      classe: "Execucao Fiscal"
+      classe_cnj_code: 1116
+      polo_ativo: "Estado de Minas Gerais"
+      polo_passivo: "ATACADO JKL S.A."
+    mov:
+      mov_id: "polo-reg-15"
+      data: "2025-06-02"
+      tipo: "DECISAO"
+      texto: "Decisao. A executada opos excecao de pre-executividade sustentando nulidade da CDA por ausencia de requisitos formais. A CDA preenche os requisitos do art. 202 do CTN e a materia demandaria dilacao probatoria, inadequada a via eleita. REJEITO a excecao de pre-executividade. Prossiga-se a execucao com a avaliacao dos bens penhorados."
+    documentos_anexados: []
+    expected:
+      decisao:
+        tem_decisao: true
+        natureza: "interlocutoria"
+      categoria: "decisao_interlocutoria"
+      # relevancia NAO assertada: modelo diz 'alta' estavel (defensavel pela definicao
+      # do campo: decisao substantiva); o caso trava natureza/categoria, nao relevancia.
