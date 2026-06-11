@@ -93,12 +93,15 @@ PROMPT_VERSION = "mov_factsheet.v3.1"
 L1_NEUTRAL_FLAG = "L1_NEUTRAL_ENABLED"
 
 
-def _build_card_v4(parsed: dict, mov: "MovInput") -> dict:
+def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None) -> dict:
     """Caminho v4 (fatos neutros): valida o card, injeta identidade pos-parse (mov_id/data
     NAO sao emitidos pela LLM — ficam fora do response_schema) e aplica os derivados
     sujeito-INDEPENDENTES no ponto comum G6 (categoria/status_garantia/relevante/peca_pivo).
     sentido/delta_risco NAO entram no card — sao parte_seguravel-dependentes, computados
     on-read na Fase 3.
+
+    card_cls: classe de validacao do ramo (default MovFactSheetCardV4; o ramo PETICAO
+    passa PeticaoExtractCardV4 — superset; validar com a base DROPARIA cdas/citados).
 
     Imports lazy: schemas_v4 + garantis_shared.derivacoes so sao tocados sob flag, pra o
     caminho v3.1 default nunca depender do shared pin novo (derivacoes ainda nao publicado
@@ -108,7 +111,7 @@ def _build_card_v4(parsed: dict, mov: "MovInput") -> dict:
         aplicar_derivados_sujeito_indep,
     )
 
-    card = MovFactSheetCardV4(**parsed)          # valida fatos neutros; pydantic descarta extras
+    card = (card_cls or MovFactSheetCardV4)(**parsed)  # valida; pydantic descarta extras
     card_data = card.model_dump()
     card_data["mov_id"] = mov.mov_id             # identidade injetada (nao LLM-emitida)
     if mov.data:
@@ -172,7 +175,12 @@ async def classify_mov_factsheet(
         # caminho v3.1 default do shared pin novo). Mesmo envelope de input (processo/
         # mov/docs/fallback/classe) — so o card emitido muda.
         from .prompts_v4 import build_mov_factsheet_prompt_v4
-        from .schemas_v4 import MovFactSheetCardV4, PROMPT_VERSION_V4
+        from .schemas_v4 import (
+            MovFactSheetCardV4,
+            PeticaoExtractCardV4,
+            PETICAO_PROMPT_VERSION,
+            PROMPT_VERSION_V4,
+        )
 
         prompt_version = PROMPT_VERSION_V4
         prompt = build_mov_factsheet_prompt_v4(
@@ -182,6 +190,12 @@ async def classify_mov_factsheet(
             classe=classe,
         )
         response_schema = MovFactSheetCardV4
+        if classe == "peticao":
+            # Ramo PETICAO (peticao_extract.v1, FASE 4): schema SUPERSET (card v4 +
+            # cdas/processos_citados) e versao POR RAMO — bump da peticao nao invalida
+            # cache do mov_factsheet e vice-versa. Opt-in do caller; prod nunca envia.
+            prompt_version = PETICAO_PROMPT_VERSION
+            response_schema = PeticaoExtractCardV4
     else:
         prompt = build_mov_factsheet_prompt(
             processo, mov,
@@ -209,8 +223,12 @@ async def classify_mov_factsheet(
         parsed = parse_llm_json(raw_response)
         if use_v4:
             # v4: fatos neutros + derivados sujeito-independentes (G6). Identidade injetada
-            # dentro do helper (mov_id/data fora do response_schema).
-            card_data = _build_card_v4(parsed, mov)
+            # dentro do helper (mov_id/data fora do response_schema). Ramo peticao valida
+            # com o superset (a base droparia cdas/processos_citados).
+            card_data = _build_card_v4(
+                parsed, mov,
+                card_cls=response_schema if classe == "peticao" else None,
+            )
         else:
             # Echo input identifiers em caso de LLM reset
             parsed.setdefault("mov_id", mov.mov_id)

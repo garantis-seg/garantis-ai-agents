@@ -259,3 +259,79 @@ class MovFactSheetCardV4(BaseModel):
             "null em todos os outros casos (NÃO repita a data da publicação)."
         ),
     )
+
+
+# ════ Ramo PETIÇÃO INICIAL (peticao_extract.v1) — FASE 4 conexos ════
+# Variação da L1 (decisão Elton/Alfredo 2026-06-11): mesmo card v4 + os campos do
+# CONTRATO do leitor-de-petição (prompts/fase4-alfredo-handoff-peticao-extraction.md).
+# Versionamento POR RAMO: bump daqui NÃO invalida cache do mov_factsheet (e vice-versa).
+# Caller opt-in via classe="peticao" — o materializer de prod NUNCA envia isso hoje;
+# zero mudança de comportamento até a integração ligar (sink FASE 4).
+
+PETICAO_PROMPT_VERSION = "peticao_extract.v1"
+
+
+class CdaPeticao(BaseModel):
+    """CDA/inscrição em dívida ativa que ESTE processo executa/discute (corpo/planilha
+    da petição inicial). Conector 'irmãos' da formação de conexos — taxpayer-specific,
+    forte e confiável."""
+
+    numero: str = Field(description="Número LITERAL da CDA/inscrição como aparece no texto.")
+    ente: Optional[Literal["estadual", "municipal", "federal_pgfn"]] = Field(
+        default=None, description="Origem da CDA. null se não identifica.",
+    )
+    tributo: Optional[str] = Field(
+        default=None, description="Sigla do tributo (ICMS, ISS, IPVA, IRPJ...). null se não identifica.",
+    )
+    valor_total: Optional[float] = Field(
+        default=None, description="Valor em BRL quando explícito. null caso contrário.",
+    )
+
+
+class ProcessoCitado(BaseModel):
+    """Processo citado na petição inicial. O campo crítico é `papel` — conector
+    'derivados' (citação-direcional) da formação de conexos."""
+
+    cnj: str = Field(description="CNJ citado LITERALMENTE (20 dígitos ou formatado 7-2.4.1.2.4).")
+    papel: Literal["originario", "derivado", "incidente", "jurisprudencia", "incerto"] = Field(
+        description=(
+            "'originario'=o contexto indica o processo de ORIGEM desta ação ('distribuição "
+            "por dependência', 'Processo de Origem', 'nos autos da Execução Fiscal nº', 'em "
+            "apenso a') — sinal de ouro; 'jurisprudencia'=CNJ em ementa/precedente citado "
+            "('Rel. Des.', 'Relator:', 'Data de Julgamento', Turma/Câmara); 'derivado'/"
+            "'incidente'=ação derivada/incidental mencionada; 'incerto'=não dá pra classificar "
+            "(a integração decide)."
+        ),
+    )
+    contexto: Optional[str] = Field(
+        default=None,
+        description="Snippet ~120 chars ao redor da citação (pra auditoria do papel).",
+    )
+
+
+class PeticaoExtractCardV4(MovFactSheetCardV4):
+    """response_schema do ramo PETIÇÃO: o card v4 + extração dirigida de conectores.
+
+    Herda todos os campos do MovFactSheetCardV4 (resumo_ato/tipo_doc/relevancia/decisao/
+    evento_garantia/valores/data_inferida_ato) — a petição NÃO tem decisão (tem_decisao
+    =false por instrução), mas PODE ter evento_garantia (oferta de garantia na inicial).
+    Persistência: o JSONB carrega os campos extras; a tabela tipada ignora (tolerante);
+    o sink FASE 4 consome cdas/processos_citados → processo_referencias/processo_conexoes.
+    """
+
+    cdas: list[CdaPeticao] = Field(
+        default_factory=list,
+        description="CDAs que ESTE processo executa/discute. [] se nenhuma no texto.",
+    )
+    processos_citados: list[ProcessoCitado] = Field(
+        default_factory=list,
+        description="Processos citados na petição, com papel. [] se nenhum.",
+    )
+    confianca_extracao: float = Field(
+        default=0.7, ge=0.0, le=1.0,
+        description=(
+            "Confiança na EXTRAÇÃO dos conectores (0-1): texto limpo e citações claras "
+            "= alta; OCR ruidoso/citações ambíguas = baixa. (Escopo: só cdas/processos_"
+            "citados — não os demais campos do card.)"
+        ),
+    )
