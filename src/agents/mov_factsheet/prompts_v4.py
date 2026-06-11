@@ -80,8 +80,20 @@ def _get(processo: Any, campo: str):
 
 
 def _familia_key(processo: Any) -> str:
-    """Família da mov a partir de materia + classe (viés a injetar: na dúvida → cível)."""
-    blob = f"{_get(processo, 'materia') or ''} {_get(processo, 'classe') or ''}".lower()
+    """Família da mov a partir de materia + classe (viés a injetar: na dúvida → cível).
+
+    `classe` pode vir como tree-path CNJ ("1116 - PROCESSO CÍVEL E DO TRABALHO ->
+    Processo de Execução -> Execução Fiscal") — o cabeçalho contém "TRABALHO" pra
+    QUALQUER classe e roteava Execução Fiscal pro vocab trabalhista (censo do
+    prompt-review 2026-06-10, proc 5159436-51.2025.8.09.0051/TJGO; 'trabalh' tem
+    precedência sobre 'fiscal'). Com "->" na classe, só o ÚLTIMO segmento (a classe
+    folha) entra no match. `materia` não precisa: vocabulário controlado de
+    apolices_monitoradas (Tributario/Trabalhista/Civel).
+    """
+    classe = str(_get(processo, "classe") or "")
+    if "->" in classe:
+        classe = classe.rsplit("->", 1)[-1]
+    blob = f"{_get(processo, 'materia') or ''} {classe}".lower()
     if "trabalh" in blob or "reclamac" in blob:
         return "trabalhista"
     if "fiscal" in blob or "tribut" in blob:
