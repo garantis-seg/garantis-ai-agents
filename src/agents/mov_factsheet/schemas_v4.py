@@ -32,7 +32,17 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
-PROMPT_VERSION_V4 = "mov_factsheet.v4"
+# v4.1 (2026-06-11, prompt-review Lote 1 — itens 1.1/1.2 do kickoff):
+#   1.1 persona/REGRA DE OURO reescritas: a tarefa real é resolver ator-do-texto →
+#       polo USANDO o CONTEXTO injetado (a composição dos polos não é descoberta).
+#   1.2 'ENUMs em ASCII' removida da persona (o response_schema/constrained decoding
+#       do Gemini já força os Literals — verificado: 0 enum inválido em 40 casos ×
+#       múltiplos runs sem a instrução); 'só resumo_ato leva acento' movida pra
+#       description do campo (regra de campo mora no campo).
+#   + 'Echo de mov_id' removido (instrução morta: o schema v4 não tem mov_id —
+#       identidade é injetada pós-parse).
+# Gate: gate_v4.py (3-run majority vs baseline master, casos _boundary ignorados).
+PROMPT_VERSION_V4 = "mov_factsheet.v4.1"
 
 # Taxonomia tipo_doc (34) — idêntica à v3.1 (`schemas.py` / `fundacao.TAXONOMIA_TIPO_DOC`).
 # Mantida aqui pra o módulo v4 ser auto-contido/reversível; insumo de `categoria` (DERIVED).
@@ -205,10 +215,10 @@ class MovFactSheetCardV4(BaseModel):
 
     resumo_ato: str = Field(
         description=(
-            "Resumo PT-BR do que aconteceu NESTA mov. Tamanho proporcional à relevância: "
+            "Resumo PT-BR (português ACENTUADO normal — é o único campo de texto livre "
+            "com acento) do que aconteceu NESTA mov. Tamanho proporcional à relevância: "
             "ato trivial = 1 frase; decisão/sentença/evento de garantia = até ~300 palavras "
-            "se houver substância. Técnico-jurídico, neutro. NÃO repita o resumo do processo "
-            "nem a mov anterior."
+            "se houver substância. Técnico-jurídico, neutro. NÃO repita o resumo do processo."
         ),
     )
     tipo_doc: TIPO_DOC = Field(description="Tipo da peça/documento — UM da taxonomia (34 valores).")
