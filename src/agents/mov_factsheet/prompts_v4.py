@@ -31,10 +31,15 @@ from __future__ import annotations
 from typing import Any
 
 from .fundacao import TAXONOMIA_TIPO_DOC
-from .prompts import (
-    _DOC_LIST_CAP,
-    _summarize_doc,
-)
+from .prompts import _summarize_doc
+
+# ── Caps v4.4 (decisão "SEM LIMITE primeiro — qualidade > custo", 2026-06-11) ──
+# Não há mais cap de 5 docs/mov nem 8k/doc: TODOS os docs entram, governados por um
+# ORÇAMENTO por unidade (guarda de janela do modelo, não economia). Censo 2026-06-10:
+# sem cap o input multiplica ~8,9× — custo MEDIDO e aceito pela decisão.
+_V4_MOV_TEXT_CAP = 200_000        # snippet da mov (publicação pode trazer inteiro teor)
+_V4_DOC_TEXT_CAP = 1_000_000      # teto por doc (janela; casa com o fetch do shared)
+_V4_DOCS_BUDGET = 2_000_000       # orçamento agregado de docs por unidade (~500k tokens)
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
 
 
@@ -212,7 +217,7 @@ RACIOCÍNIO sobre a NATUREZA do documento (orienta data e se há decisão):
 {_REGRAS_CRUS}
 
 === DOCUMENTO (id {mov.mov_id}) ==={meta_line}
-{txt[:8000]}
+{txt[:_V4_DOC_TEXT_CAP]}
 
 Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o texto sustenta;
 o resto null."""
@@ -237,17 +242,30 @@ def build_mov_factsheet_prompt_v4(
 
     fam = _familia_key(processo)
 
-    # Docs anexados (reusa o rendering de prompts.py — cap 8000/doc, _DOC_LIST_CAP docs).
+    # Docs anexados (v4.4 sem-limite): TODOS os docs, sob orçamento agregado por
+    # unidade. O doc que estoura o restante é truncado; excedentes viram marcador
+    # explícito (no silent caps).
     has_docs = len(documentos_anexados) > 0
     if has_docs:
-        docs_capped = documentos_anexados[:_DOC_LIST_CAP]
-        docs_block = "\n\n".join(
-            _summarize_doc(d, i, len(docs_capped)) for i, d in enumerate(docs_capped)
-        )
-        if len(documentos_anexados) > _DOC_LIST_CAP:
-            docs_block += f"\n\n[+ {len(documentos_anexados) - _DOC_LIST_CAP} docs omitidos do prompt]"
+        blocks: list[str] = []
+        remaining = _V4_DOCS_BUDGET
+        rendered = 0
+        total = len(documentos_anexados)
+        for i, d in enumerate(documentos_anexados):
+            if remaining <= 0:
+                break
+            cap = min(_V4_DOC_TEXT_CAP, remaining)
+            block = _summarize_doc(d, i, total, text_cap=cap)
+            remaining -= min(len((d.text_content or "").strip()), cap)
+            blocks.append(block)
+            rendered += 1
+        docs_block = "\n\n".join(blocks)
+        if rendered < total:
+            docs_block += (
+                f"\n\n[+ {total - rendered} docs omitidos — orçamento de janela do modelo]"
+            )
         docs_section = (
-            f"\n\n=== DOCUMENTOS ANEXADOS A ESTA MOV ({len(documentos_anexados)} doc(s)) ===\n{docs_block}"
+            f"\n\n=== DOCUMENTOS ANEXADOS A ESTA MOV ({total} doc(s)) ===\n{docs_block}"
         )
     else:
         docs_section = ""
@@ -279,8 +297,8 @@ def build_mov_factsheet_prompt_v4(
     )
 
     texto = (mov.texto or "").strip()
-    if len(texto) > 3000:
-        texto = texto[:3000] + "..."
+    if len(texto) > _V4_MOV_TEXT_CAP:
+        texto = texto[:_V4_MOV_TEXT_CAP] + "..."
 
     mov_meta = [f"id: {mov.mov_id}"]
     if mov.data:

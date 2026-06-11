@@ -44,13 +44,14 @@ _DOC_LIST_CAP = 5  # max docs anexados por mov
 _RESUMO_PROCESSO_CAP = 1000
 
 
-def _summarize_doc(doc: DocAnexado, idx: int, total: int) -> str:
-    """Bloco de 1 doc no prompt."""
+def _summarize_doc(doc: DocAnexado, idx: int, total: int, text_cap: int = _DOC_TEXT_CAP_CHARS) -> str:
+    """Bloco de 1 doc no prompt. text_cap: cap de exibição POR VERSÃO — default 8.000
+    preserva o v3.1 congelado; o v4.4+ passa o próprio orçamento (sem-limite)."""
     text = (doc.text_content or "").strip()
     truncated_note = ""
-    if len(text) > _DOC_TEXT_CAP_CHARS:
-        text = text[:_DOC_TEXT_CAP_CHARS]
-        truncated_note = f"\n  [TRUNCADO a {_DOC_TEXT_CAP_CHARS} chars do original]"
+    if len(text) > text_cap:
+        text = text[:text_cap]
+        truncated_note = f"\n  [TRUNCADO a {text_cap} chars do original]"
     parts = [f"--- DOC {idx + 1}/{total} ---"]
     meta = []
     if doc.tipo:
