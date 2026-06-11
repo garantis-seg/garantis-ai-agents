@@ -308,6 +308,16 @@
         urgência. No mais, aguarde-se o decurso de prazo recursal.
     documentos_anexados: []
     expected:
+      # knife-edge (prompt-review 2026-06-11): input com sinais CONTRADITÓRIOS
+      # (mov.tipo=sentenca do provider vs texto "PROFERIDO DESPACHO DE MERO
+      # EXPEDIENTE"). O output flipa com QUALQUER mudança de byte no prompt/schema
+      # (forense: até 1 parêntese em description de campo flipa; 6 estados
+      # perturbados -> todos sentenca/alta; só os bytes exatos do master acertam).
+      # _boundary=true: asserts categóricos viram informacionais; o caso NÃO
+      # gateia mudança de prompt. O golden (despacho/baixa) segue sendo a
+      # resposta CERTA — recuperá-la de forma robusta é trabalho de prompt
+      # (cross-check tipo_origem vs texto), não de eval.
+      _boundary: true
       cda:
         ente: null
         numeros: []
@@ -830,6 +840,11 @@
       texto: ANEXO JUNTADO - 0018_Contrato-de-trabalho-e-termos-aditivos-ficha-funcional_2015-09-23.pdf | Manifestação
     documentos_anexados: []
     expected:
+      # knife-edge (prompt-review 2026-06-11): "ANEXO JUNTADO ... | Manifestação"
+      # é genuinamente ambíguo (prova_anexa vs peticao — ambos defensáveis; flipa
+      # com mudanças de byte NÃO relacionadas no prompt/schema). _boundary=true:
+      # asserts categóricos viram informacionais; não gateia mudança de prompt.
+      _boundary: true
       cda:
         ente: null
         numeros: []

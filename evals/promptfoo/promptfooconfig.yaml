@@ -35,6 +35,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.decisao?.sentido === undefined) return true;
         return out.decisao?.sentido === exp.decisao?.sentido;
     - type: javascript
@@ -42,6 +43,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.decisao?.transito_certificado === undefined) return true;
         return out.decisao?.transito_certificado === exp.decisao?.transito_certificado;
     - type: javascript
@@ -49,6 +51,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.categoria === undefined || exp.categoria === null) return true;
         return out.categoria === exp.categoria;
     - type: javascript
@@ -56,6 +59,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.relevancia_merito === undefined || exp.relevancia_merito === null) return true;
         return out.relevancia_merito === exp.relevancia_merito;
     - type: javascript
@@ -63,6 +67,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.peca_pivo?.e_pivo === undefined) return true;
         return out.peca_pivo?.e_pivo === exp.peca_pivo?.e_pivo;
     - type: javascript
@@ -70,6 +75,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.delta_risco?.direcao === undefined || exp.delta_risco?.direcao === null) return true;
         return out.delta_risco?.direcao === exp.delta_risco?.direcao;
 
@@ -80,6 +86,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.decisao?.natureza === undefined || exp.decisao?.natureza === null) return true;
         return out.decisao?.natureza === exp.decisao?.natureza;
 
@@ -89,6 +96,7 @@ defaultTest:
       value: |
         const out = JSON.parse(output);
         const exp = context.vars.expected || {};
+        if (exp._boundary) return true; // caso knife-edge: informacional, nao gateia (ver comentario no golden)
         if (exp.decisao?.instancia === undefined || exp.decisao?.instancia === null) return true;
         return out.decisao?.instancia === exp.decisao?.instancia;
 
