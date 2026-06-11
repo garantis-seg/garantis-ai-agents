@@ -36,7 +36,7 @@ HERE = Path(__file__).resolve().parent
 CONFIG = "promptfooconfig.v4.yaml"
 
 
-def run_eval(out_path: Path) -> None:
+def run_eval(out_path: Path, log_path: Path) -> None:
     cmd = (
         f'npx promptfoo eval -c {CONFIG} --no-cache --max-concurrency 5 '
         f'--no-progress-bar --output "{out_path}"'
@@ -44,10 +44,22 @@ def run_eval(out_path: Path) -> None:
     # --no-cache é OBRIGATÓRIO: o prompt é construído DENTRO do provider python,
     # então a cache-key do promptfoo não muda quando o prompt muda — com cache
     # ligado o run devolve resultados velhos e o gate é falso.
-    res = subprocess.run(cmd, shell=True, cwd=HERE, capture_output=True, text=True)
-    if res.returncode not in (0, 100):  # promptfoo sai !=0 quando há fails — ok
-        sys.stderr.write(res.stdout[-2000:] + "\n" + res.stderr[-2000:] + "\n")
-        raise SystemExit(f"promptfoo eval falhou (exit {res.returncode})")
+    #
+    # stdout/stderr vão pra ARQUIVO (não pipe): no Windows, os providers python
+    # que o promptfoo spawna herdam o handle do pipe e capture_output deadlocka
+    # esperando EOF mesmo depois do promptfoo sair. stdin=DEVNULL pelo mesmo
+    # motivo. Sucesso = o arquivo de output existir (promptfoo sai !=0 quando
+    # há fails de assert — isso NÃO é erro pro gate).
+    with open(log_path, "w", encoding="utf-8") as log:
+        try:
+            subprocess.run(
+                cmd, shell=True, cwd=HERE, stdin=subprocess.DEVNULL,
+                stdout=log, stderr=subprocess.STDOUT, timeout=900,
+            )
+        except subprocess.TimeoutExpired:
+            raise SystemExit(f"promptfoo eval estourou 900s; log em {log_path}")
+    if not out_path.exists():
+        raise SystemExit(f"promptfoo não gerou {out_path}; log em {log_path}")
 
 
 def parse_results(path: Path) -> dict[str, dict]:
@@ -79,8 +91,9 @@ def main() -> int:
     with tempfile.TemporaryDirectory() as td:
         for i in range(args.runs):
             out = Path(td) / f"run{i}.json"
+            log = Path(td) / f"run{i}.log"
             print(f"[gate] run {i + 1}/{args.runs}...", flush=True)
-            run_eval(out)
+            run_eval(out, log)
             runs.append(parse_results(out))
 
     keys = sorted(runs[0].keys())
