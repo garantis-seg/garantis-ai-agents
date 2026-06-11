@@ -280,7 +280,13 @@ class MovFactSheetCardV4(BaseModel):
 # Caller opt-in via classe="peticao" — o materializer de prod NUNCA envia isso hoje;
 # zero mudança de comportamento até a integração ligar (sink FASE 4).
 
-PETICAO_PROMPT_VERSION = "peticao_extract.v1"
+# v1.1 (2026-06-11, 1a iteracao com dado real — review Casas Bahia/Alfredo): o v0
+# extraia QUALQUER numero juridico como processo (40/58 eram artigos de lei, incl.
+# vazados do proprio template: CPC 1.012/art.924/Lei 8.437 das descriptions; e 1 blend
+# alucinado de 2 CNJs). Fix: formato CNJ obrigatorio + "so o que esta NO DOCUMENTO" +
+# artigo de lei nao e CDA. Rede determininistica complementar no sink: digitos do cnj
+# devem existir no texto-fonte + len==20 + mod-97.
+PETICAO_PROMPT_VERSION = "peticao_extract.v1.1"
 
 
 class CdaPeticao(BaseModel):
