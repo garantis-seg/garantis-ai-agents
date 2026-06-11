@@ -33,7 +33,6 @@ from typing import Any
 from .fundacao import TAXONOMIA_TIPO_DOC
 from .prompts import (
     _DOC_LIST_CAP,
-    _processo_resumo_block,
     _summarize_doc,
 )
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
@@ -225,7 +224,12 @@ def build_mov_factsheet_prompt_v4(
     else:
         docs_section = ""
 
-    processo_section = _processo_resumo_block(fallback_context)
+    # RESUMO DO PROCESSO removido do caminho v4 (decisão D do prompt-review,
+    # 2026-06-11): a dependência (resumo_ia via Escavador lazy_gen) não é garantida
+    # em todo processo, e o bloco era contexto de FUNDO, não desta mov. Se a
+    # qualidade dos 1A degradar, re-adicionar é a melhoria futura (rollback =
+    # revert deste commit). O lazy_gen upstream NÃO foi tocado (resumo_ia tem
+    # consumidores fora da L1).
 
     # Instruções de uso do contexto — neutras (docs prevalecem; não copie).
     instrucoes = []
@@ -241,11 +245,6 @@ def build_mov_factsheet_prompt_v4(
             "- Sem doc anexo, você SÓ tem o snippet da publicação + metadata. NÃO INVENTE "
             "conteúdo. Snippet genérico (ex: 'Expedição de outros documentos', 'Juntada de "
             "petição') => relevancia_merito='ruido'/'baixa' + tem_decisao=false."
-        )
-    if processo_section:
-        instrucoes.append(
-            "- RESUMO DO PROCESSO é contexto de FUNDO. NÃO copie pro resumo_ato — esse campo "
-            "descreve SOMENTE esta mov."
         )
     contexto_extra = (
         "\n\n=== INSTRUÇÕES PARA USO DO CONTEXTO ===\n" + "\n".join(instrucoes) if instrucoes else ""
@@ -286,7 +285,7 @@ resolva QUAL POLO recorreu usando o CONTEXTO DO PROCESSO (recorrente_polo='ativo
   {mov_meta_s}
 
   texto da publicação (snippet):
-  {texto}{docs_section}{processo_section}{contexto_extra}
+  {texto}{docs_section}{contexto_extra}
 
 Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o texto sustenta;
 o resto null."""

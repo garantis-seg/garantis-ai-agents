@@ -42,7 +42,17 @@ from pydantic import BaseModel, Field
 #   + 'Echo de mov_id' removido (instrução morta: o schema v4 não tem mov_id —
 #       identidade é injetada pós-parse).
 # Gate: gate_v4.py (3-run majority vs baseline master, casos _boundary ignorados).
-PROMPT_VERSION_V4 = "mov_factsheet.v4.1"
+# v4.2 (2026-06-11, prompt-review parte 3 — decisões D + G aprovadas na sessão):
+#   D: bloco RESUMO DO PROCESSO removido do prompt (dependência resumo_ia/Escavador
+#      não garantida; era contexto de fundo). Se a qualidade dos 1A degradar,
+#      re-adicionar é a melhoria futura. lazy_gen upstream NÃO tocado.
+#   G: drops aprovados do schema — valor_excluido + percentual_mantido (0/10
+#      preenchidos quando aplicáveis E 0 leitores no código) e data_real_ato
+#      (73,8% redundante com `data`; 0 leitores reais — só passthrough/debug).
+#      Colunas da tabela tipada ficam (viram NULL em cards novos); shared lê via
+#      .get() tolerante — zero mudança fora deste módulo.
+# Gate: gate_v4.py 3-run majority vs baseline v4.1.
+PROMPT_VERSION_V4 = "mov_factsheet.v4.2"
 
 # Taxonomia tipo_doc (34) — idêntica à v3.1 (`schemas.py` / `fundacao.TAXONOMIA_TIPO_DOC`).
 # Mantida aqui pra o módulo v4 ser auto-contido/reversível; insumo de `categoria` (DERIVED).
@@ -193,14 +203,6 @@ class ValoresBlockV4(BaseModel):
         default=None,
         description="Valor da garantia/apólice em BRL quando explícito. null caso contrário.",
     )
-    valor_excluido: Optional[float] = Field(
-        default=None,
-        description="Em decisão PARCIAL: valor/quantia EXCLUÍDA da condenação/execução (BRL). null se n/a.",
-    )
-    percentual_mantido: Optional[float] = Field(
-        default=None,
-        description="Em decisão PARCIAL: % do crédito/pedido MANTIDO (0-100). null se n/a.",
-    )
     # valor_causa: S1-injetado no materializer de leads.processos (Q3) — NÃO emitido pela LLM.
 
 
@@ -232,7 +234,3 @@ class MovFactSheetCardV4(BaseModel):
     decisao: DecisaoBlockV4 = Field(default_factory=DecisaoBlockV4)
     evento_garantia: EventoGarantiaV4 = Field(default_factory=EventoGarantiaV4)
     valores: ValoresBlockV4 = Field(default_factory=ValoresBlockV4)
-    data_real_ato: Optional[str] = Field(
-        default=None,
-        description="YYYY-MM-DD do ato real SE diferir da data de publicação. null caso contrário.",
-    )
