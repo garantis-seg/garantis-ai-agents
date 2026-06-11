@@ -74,8 +74,20 @@ def test_render_1b_com_doc(processo, mov):
     assert "nem a mov anterior" not in prompt  # instrução não referencia bloco inexistente
 
 
-def test_render_orfao_1d(processo, mov):
-    doc = DocAnexado(doc_key="d1", tipo="apolice", text_content="APOLICE DE SEGURO GARANTIA n 123.")
+def test_render_documento_1d(processo, mov):
+    """Ramo DOCUMENTO (ex-órfão) v4.3: ganha vocab de família, regras crus e a
+    metadata do doc no render (censo 2026-06-11: metadata jusbrasil 100% preenchida)."""
+    doc = DocAnexado(
+        doc_key="d1", tipo="1", titulo="PETICAO INICIAL - PETICAO INICIAL",
+        data_documento="2022-10-03", provider="jusbrasil",
+        text_content="EXCELENTISSIMO SENHOR DOUTOR JUIZ. ACME vem opor embargos...",
+    )
     prompt = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=[doc], classe="1D")
-    assert "DOCUMENTO ÓRFÃO" in prompt
+    assert "DOCUMENTO AVULSO" in prompt
+    assert "DOCUMENTO ÓRFÃO" not in prompt
+    assert "CONTEXTO FISCAL/TRIBUTÁRIO" in prompt          # vocab da família agora entra
+    assert "REGRAS DOS CAMPOS CRUS" in prompt              # regras crus agora entram
+    assert "titulo: PETICAO INICIAL - PETICAO INICIAL" in prompt  # metadata renderizada
+    assert "fonte: jusbrasil" in prompt
     assert "MOV ANTERIOR" not in prompt
+    assert "RESUMO DO PROCESSO" not in prompt

@@ -47,8 +47,13 @@ VOCAB_FAMILIA = {
         "vs contribuinte.\n"
         "- Em Execução Fiscal o contribuinte é EXECUTADO (polo passivo); em Embargos/"
         "Anulatória/MS/Repetitório ele é AUTOR (polo ativo).\n"
-        "- 'inexigibilidade do crédito'/'nulidade da CDA'/'prescrição' acolhida => "
-        "natureza='procedente' (mérito), NÃO extinto_sem_merito.\n"
+        "- Em EMBARGOS/ANULATÓRIA/MS (contribuinte é AUTOR): 'inexigibilidade do crédito'/"
+        "'nulidade da CDA'/'prescrição' acolhida => natureza='procedente' (mérito), NÃO "
+        "extinto_sem_merito.\n"
+        "- EXCEÇÃO DE PRÉ-EXECUTIVIDADE (defesa DENTRO da Execução Fiscal): se ACOLHIDA "
+        "extinguindo a execução => natureza='extinto_sem_merito' + motivo_extincao "
+        "('terminativa' p/ prescrição/ilegitimidade) — NUNCA 'procedente' (o autor da EF é "
+        "a Fazenda). Acolhimento parcial ou rejeição => natureza='interlocutoria'.\n"
         "- suspensão da exigibilidade (art. 151 CTN: depósito/parcelamento/liminar do "
         "contribuinte) => instrumento_cautelar='suspensao_exigibilidade_ctn'.\n"
         "- suspensão de SEGURANÇA (Lei 8.437, requerida pela Fazenda à presidência do "
@@ -149,24 +154,43 @@ def _build_orfao_prompt_v4(
     mov: MovInput,
     documentos_anexados: list[DocAnexado],
 ) -> str:
-    """Prompt NEUTRO pro DOCUMENTO ÓRFÃO (classe 1D) — doc sem ato processual vinculado.
+    """Prompt NEUTRO pro ramo DOCUMENTO (classe 1D) — doc analisado isoladamente, sem
+    movimento vinculado ("avulso"; ex-"órfão").
 
     Saída = MovFactSheetCardV4 (mesmo schema). natureza de_fluxo/acessorio entra como
     RACIOCÍNIO (orienta data + se há decisão), não como campo. SEM fundação-do-Tomador.
+    v4.3 (#2 prompt-review): ganha VOCAB_FAMILIA + _REGRAS_CRUS (um doc pode ser uma
+    sentença — precisa das mesmas regras de extração do ramo movimento) + metadata do
+    doc (censo 2026-06-11: metadata jusbrasil é 100% preenchida e o título identifica
+    a peça — ex: 'PETICAO INICIAL').
     """
-    txt = ""
-    if documentos_anexados:
-        txt = (documentos_anexados[0].text_content or "").strip()
+    doc = documentos_anexados[0] if documentos_anexados else None
+    txt = (doc.text_content or "").strip() if doc else ""
     if not txt:
         txt = (mov.texto or "").strip()
+
+    meta_bits = []
+    if doc:
+        if doc.tipo:
+            meta_bits.append(f"tipo: {doc.tipo}")
+        if doc.titulo:
+            meta_bits.append(f"titulo: {doc.titulo}")
+        if doc.data_documento:
+            meta_bits.append(f"data_documento: {doc.data_documento}")
+        if doc.provider:
+            meta_bits.append(f"fonte: {doc.provider}")
+    meta_line = ("\n  " + " | ".join(meta_bits)) if meta_bits else ""
+
+    fam = _familia_key(processo)
+
     return f"""Você é um extrator de FATOS NEUTROS de documentos judiciais brasileiros.
 RELATE objetivamente o que o documento contém — NÃO julgue se algo é bom ou ruim para
 alguém. A composição dos polos já vem pronta no CONTEXTO DO PROCESSO abaixo; identifique
 em QUAL POLO ('ativo' ou 'passivo') está cada ator citado no texto. O julgamento é feito
 por outro sistema.
 
-Este é um DOCUMENTO ÓRFÃO — NÃO vinculado a um movimento processual. Classifique-o e
-produza o FactSheet (mesmo schema dos demais).
+Este é um DOCUMENTO AVULSO — analisado isoladamente, sem movimento processual vinculado.
+Classifique-o e produza o FactSheet (mesmo schema dos demais).
 
 RACIOCÍNIO sobre a NATUREZA do documento (orienta data e se há decisão):
 - PEÇA DESTE PROCESSO ('de_fluxo'): tem ato/momento processual próprio nestes autos
@@ -181,9 +205,13 @@ RACIOCÍNIO sobre a NATUREZA do documento (orienta data e se há decisão):
 
 {_contexto_processo_block(processo)}
 
+{VOCAB_FAMILIA[fam]}
+
 {TAXONOMIA_TIPO_DOC}
 
-=== DOCUMENTO ÓRFÃO (id {mov.mov_id}) ===
+{_REGRAS_CRUS}
+
+=== DOCUMENTO (id {mov.mov_id}) ==={meta_line}
 {txt[:8000]}
 
 Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o texto sustenta;
