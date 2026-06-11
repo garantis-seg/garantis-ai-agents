@@ -91,3 +91,30 @@ def test_render_documento_1d(processo, mov):
     assert "fonte: jusbrasil" in prompt
     assert "MOV ANTERIOR" not in prompt
     assert "RESUMO DO PROCESSO" not in prompt
+
+
+# ── v4.4 sem-limite (decisão "qualidade > custo", 2026-06-11) ──
+
+def test_v44_todos_os_docs_renderizam_sem_cap(processo, mov):
+    """Sem cap de 5 docs/mov e sem cap de 8k/doc: 7 docs de 30k entram inteiros."""
+    docs = [DocAnexado(doc_key=str(i), text_content=f"DOC{i} " + "y" * 30_000) for i in range(7)]
+    prompt = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=docs)
+    assert "DOC 7/7" in prompt
+    assert "omitidos" not in prompt
+    assert "TRUNCADO" not in prompt
+
+
+def test_v44_orcamento_por_unidade(processo, mov):
+    """Orçamento agregado (2M chars): doc que estoura é truncado com marcador; o
+    excedente vira marcador explícito de omissão (no silent caps)."""
+    big = [DocAnexado(doc_key=str(i), text_content="z" * 900_000) for i in range(4)]
+    prompt = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=big)
+    assert "DOC 3/4" in prompt and "DOC 4/4" not in prompt
+    assert "[TRUNCADO a 200000 chars do original]" in prompt
+    assert "[+ 1 docs omitidos — orçamento de janela do modelo]" in prompt
+
+
+def test_v44_mov_texto_sem_cap_de_3k(processo):
+    mov_longa = MovInput(mov_id="m-longa", texto="t" * 50_000)
+    prompt = build_mov_factsheet_prompt_v4(processo, mov_longa)
+    assert "t" * 49_000 in prompt

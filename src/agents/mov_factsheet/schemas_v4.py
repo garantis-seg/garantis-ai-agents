@@ -65,7 +65,19 @@ from pydantic import BaseModel, Field
 #   - Ramo DOCUMENTO (ex-órfão) fechado: ganha VOCAB_FAMILIA + REGRAS_CRUS + metadata
 #     do doc (tipo|titulo|data|provider — censo: metadata jusbrasil 100% preenchida) +
 #     wording 'DOCUMENTO AVULSO'.
-PROMPT_VERSION_V4 = "mov_factsheet.v4.3"
+# v4.4 (2026-06-11, prompt-review parte 5 — GO do "sem limite" / item J original):
+#   - Removidos os caps de exibição do ramo MOVIMENTO: 5 docs/mov e 8.000 chars/doc
+#     viram ORÇAMENTO por unidade (_V4_DOCS_BUDGET=2M chars, teto 1M/doc — guarda de
+#     janela, não economia). Excedente vira marcador explícito (no silent caps).
+#   - Snippet da mov: 3.000 -> 200.000 chars (publicação pode trazer inteiro teor).
+#   - Ramo DOCUMENTO (1D): 8.000 -> 1M chars.
+#   - Par com garantis-shared: fetch DOC_TEXT_CAP_CHARS 8k->1M + apply_docs_unit_budget
+#     na montagem do payload (efeito completo SÓ após publish do shared + bump dos pins
+#     em ai-agents/fe-api/worker; antes disso o texto chega capado a 8k do fetch).
+#   - v3.1 INTOCADO (cap próprio de 8k no render). day_factsheet (caps 20/8/6k SQL)
+#     fora do escopo — follow-up próprio (prompt agregado por dia, orçamento distinto).
+#   - Custo: censo 2026-06-10 mediu ~8,9x de input sem cap — decisão qualidade>custo.
+PROMPT_VERSION_V4 = "mov_factsheet.v4.4"
 
 # Taxonomia tipo_doc (34) — idêntica à v3.1 (`schemas.py` / `fundacao.TAXONOMIA_TIPO_DOC`).
 # Mantida aqui pra o módulo v4 ser auto-contido/reversível; insumo de `categoria` (DERIVED).
