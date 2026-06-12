@@ -1,5 +1,5 @@
-"""Helper Vision L1 — chamadas multimodais (PDF→Gemini Vision) compartilhadas
-entre mov_factsheet e day_factsheet.
+"""Helper Vision L1 — chamadas multimodais (PDF→Gemini Vision) do
+mov_factsheet (day_factsheet usava tambem, ate o teardown 2026-06-13).
 
 Acionado quando flag VISION_L1_ENABLED=true E o caller fornece pelo menos 1
 gcs_url no input. Roteamento inline vs Files API decidido per-call por

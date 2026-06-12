@@ -70,32 +70,9 @@ def _mov_factsheet_template() -> str:
     return build_mov_factsheet_prompt(processo, mov, docs, fb)
 
 
-def _day_factsheet_template() -> str:
-    from .day_factsheet.prompts import build_day_factsheet_prompt
-    from .day_factsheet.schemas import DayDocInput, DayMovInput, ProcessoContextMin
-
-    processo = ProcessoContextMin(
-        cnj="{{cnj}}",
-        classe="{{classe}}",
-        polo_ativo="{{polo_ativo}}",
-        polo_passivo="{{polo_passivo}}",
-    )
-    movs = [
-        DayMovInput(
-            mov_id="{{mov_id}}",
-            tipo="{{tipo}}",
-            texto="{{texto_da_movimentacao}}",
-        )
-    ]
-    docs = [
-        DayDocInput(
-            doc_key="{{doc_key}}",
-            titulo="{{titulo}}",
-            tipo="{{tipo}}",
-            text_content="{{texto_do_documento}}",
-        )
-    ]
-    return build_day_factsheet_prompt(processo, "{{date}}", movs, docs)
+# _day_factsheet_template REMOVIDO em 2026-06-13 (teardown do tier por-dia,
+# decisao Elton): agent day_factsheet aposentou; o registry nao pode manter
+# a entry (lazy import quebraria a rota GET /prompts em runtime).
 
 
 def _processo_synthesis_template() -> str:
@@ -208,7 +185,6 @@ def _merito_synthesis_template() -> str:
 # layer canonico (engine_llm_calls.layer) -> builder do template cru.
 _BUILDERS = {
     "layer1_mov_factsheet": _mov_factsheet_template,
-    "layer1_day_factsheet": _day_factsheet_template,
     "layer2_processo_synthesis": _processo_synthesis_template,
     "layer3_merito_synthesis": _merito_synthesis_template,
 }
