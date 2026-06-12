@@ -296,6 +296,10 @@ class MovFactSheetCardV4(BaseModel):
 # esticamento (nao converter RE/AREsp/ADI pra 20 digitos). Enforcement real continua
 # DETERMINISTICO no sink/formacao (papel = hint, nunca cria aresta sozinho).
 PETICAO_PROMPT_VERSION = "peticao_extract.v1.2"
+# Ramo 1X: doc de tipo NAO identificado (fallback L3 do identify) — mesmo
+# schema superset do 1P (tipo_doc classificado em vez de cravado). Versao por
+# ramo: bump do 1X nao invalida cache do 1P nem do mov, e vice-versa.
+DOC_INCERTO_PROMPT_VERSION = "doc_incerto_extract.v1"
 
 
 class CdaPeticao(BaseModel):
