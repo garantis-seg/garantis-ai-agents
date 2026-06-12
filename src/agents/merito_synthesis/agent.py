@@ -78,13 +78,16 @@ async def classify_merito_synthesis(
         parsed.setdefault("merito_id", request.merito_id)
         parsed.setdefault("merito_context", request.merito_context)
         # Default cards_index aggregation if LLM didn't fill
+        # (campo `jurisprudencia` removido do request na v2.2 — referencia-lo
+        # aqui levantava AttributeError engolido pelo except amplo abaixo,
+        # convertendo card LLM VALIDO em parse-error sempre que cards_index
+        # vinha vazio. CardsIndexCount.jurisprudencia default=0 cobre.)
         if not parsed.get("cards_index"):
             parsed["cards_index"] = {
                 "processo_synthesis": len(request.processo_syntheses or []),
                 "cda": len(request.cdas or []),
                 "aiim": len(request.aiims or []),
                 "tomador": 1 if request.tomador else 0,
-                "jurisprudencia": 1 if request.jurisprudencia else 0,
             }
         card = MeritoSynthesisCard(**parsed)
         card_data = card.model_dump()
