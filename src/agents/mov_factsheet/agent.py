@@ -178,7 +178,8 @@ async def classify_mov_factsheet(
         from .schemas_v4 import (
             MovFactSheetCardV4,
             PeticaoExtractCardV4,
-            PETICAO_PROMPT_VERSION,
+            DOC_INCERTO_PROMPT_VERSION,
+    PETICAO_PROMPT_VERSION,
             PROMPT_VERSION_V4,
         )
 
@@ -195,6 +196,12 @@ async def classify_mov_factsheet(
             # cdas/processos_citados) e versao POR RAMO — bump da peticao nao invalida
             # cache do mov_factsheet e vice-versa. Opt-in do caller; prod nunca envia.
             prompt_version = PETICAO_PROMPT_VERSION
+            response_schema = PeticaoExtractCardV4
+        elif classe == "doc_incerto":
+            # Ramo 1X (doc_incerto_extract.v1): fallback do identify — doc do 1o dia
+            # sem tipo confirmado. MESMO schema superset; a prompt CLASSIFICA o tipo
+            # em vez de crava-lo. Draft aprovado Elton 2026-06-12.
+            prompt_version = DOC_INCERTO_PROMPT_VERSION
             response_schema = PeticaoExtractCardV4
     else:
         prompt = build_mov_factsheet_prompt(
@@ -227,7 +234,7 @@ async def classify_mov_factsheet(
             # com o superset (a base droparia cdas/processos_citados).
             card_data = _build_card_v4(
                 parsed, mov,
-                card_cls=response_schema if classe == "peticao" else None,
+                card_cls=response_schema if classe in ("peticao", "doc_incerto") else None,
             )
         else:
             # Echo input identifiers em caso de LLM reset

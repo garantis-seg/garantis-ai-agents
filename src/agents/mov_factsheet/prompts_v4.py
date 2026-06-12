@@ -321,6 +321,110 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
 Extraia no schema PeticaoExtractCardV4. Preencha SÓ o que o texto sustenta; o resto null."""
 
 
+def _build_doc_incerto_prompt_v4(
+    processo: ProcessoContext,
+    mov: MovInput,
+    documentos_anexados: list[DocAnexado],
+) -> str:
+    """Prompt do ramo 1X (doc_incerto_extract.v1) — doc de tipo NÃO identificado.
+
+    Variante do 1P pro fallback do identify (camada L3 — doc substancial do 1º
+    dia da captura, sem confirmação de tipo): frame de INCERTEZA + classificação
+    ativa via TAXONOMIA completa (do ramo 1D) + a MESMA extração relacional do
+    1P com papel MAIS conservador (default jurisprudência/incerto em peça
+    decisória — decisões citam precedente o tempo todo). Censo 2026-06-12: a
+    regra crua do 1º dia tinha 0/15 precisão de identify; aqui a incerteza vai
+    pra prompt e a extração degrada com graça. Schema REUSA PeticaoExtractCardV4
+    (já tem tipo_doc). Draft aprovado Elton 2026-06-12
+    (~/.claude/plans/ramo-1x-doc-incerto-draft-2026-06-12.md).
+    """
+    doc = documentos_anexados[0] if documentos_anexados else None
+    txt = (doc.text_content or "").strip() if doc else ""
+    if not txt:
+        txt = (mov.texto or "").strip()
+
+    meta_bits = []
+    if doc:
+        if doc.tipo:
+            meta_bits.append(f"tipo: {doc.tipo}")
+        if doc.titulo:
+            meta_bits.append(f"titulo: {doc.titulo}")
+        if doc.data_documento:
+            meta_bits.append(f"data_documento: {doc.data_documento}")
+        if doc.provider:
+            meta_bits.append(f"fonte: {doc.provider}")
+    meta_line = ("\n  " + " | ".join(meta_bits)) if meta_bits else ""
+
+    fam = _familia_key(processo)
+
+    return f"""Você é um extrator de FATOS NEUTROS de documentos judiciais brasileiros.
+RELATE objetivamente — NÃO julgue se algo é bom ou ruim para alguém. A composição dos
+polos já vem pronta no CONTEXTO DO PROCESSO abaixo. O julgamento é feito por outro sistema.
+
+A integração NÃO conseguiu identificar o TIPO deste documento. Ele foi selecionado por
+ser um documento substancial do primeiro dia disponível da captura — PODE ser a petição
+inicial, mas pode ser decisão, sentença, despacho, certidão, manifestação ou um anexo.
+NÃO assuma que é a petição inicial. Sua missão tem DUAS partes:
+
+PARTE 1 — CLASSIFICAR e produzir o FactSheet:
+- tipo_doc: classifique pelo CONTEÚDO usando a TAXONOMIA COMPLETA abaixo (a mesma dos
+  demais ramos — não há lista resumida aqui). Atenção à distinção mais traiçoeira deste
+  ramo: 'peticao_inicial' (inaugura a ação) × 'peticao' (manifestação intercorrente) —
+  só marque inicial com os 4 sinais: endereçamento ao juízo + qualificação das partes +
+  causa de pedir + pedidos.
+- RACIOCÍNIO sobre a NATUREZA (orienta data e se há decisão):
+  · PEÇA DESTE PROCESSO ('de_fluxo'): tem ato/momento processual próprio nestes autos.
+  · ANEXO ('acessorio'): juntado como prova/instrução, sem ato próprio nestes autos. Se
+    pertence a OUTRO órgão/rito (PROCON, INSS, Receita) é 'acessorio' mesmo com forma de ato.
+- Petição (inicial ou não) e 'acessorio': tem_decisao=false e decisao toda null. Peça
+  decisória DESTE processo (sentença/decisão/acórdão): tem_decisao pode ser true + os
+  fatos neutros que o texto sustentar (mesmas regras de extração do ramo movimento).
+- resumo_ato: o que o documento É e o que contém, em até ~150 palavras.
+- evento_garantia: SÓ se o documento OFERECE/JUNTA garantia (seguro garantia/fiança/
+  depósito) — tipo + subtipo. Senão 'nenhum'.
+- valores: valor_debito_executado/valor_garantia quando explícitos.
+
+PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
+- cdas[]: TODOS os números de CDA/inscrição em dívida ativa que ESTE processo executa ou
+  discute (corpo E planilhas/listas), ESCRITOS no documento. Número LITERAL + ente/
+  tributo/valor quando explícitos. NÃO normalize. Artigo de lei NÃO é CDA.
+- processos_citados[]: SÓ números de PROCESSO JUDICIAL no formato CNJ
+  (NNNNNNN-DD.AAAA.J.TR.OOOO, ou 20 dígitos contínuos) ESCRITOS no documento. NÃO são
+  processos: artigos de lei, números de lei/LC, súmulas, registros fora do formato CNJ
+  (RE/AREsp/ADI + número curto). NUNCA extraia números mencionados NESTAS INSTRUÇÕES.
+  Campo crítico `papel` — ATENÇÃO REDOBRADA aqui: como o tipo do documento é incerto,
+  citações têm probabilidade MAIOR de ser jurisprudência/referência (decisões e
+  sentenças citam precedentes o tempo todo):
+  · 'originario' — SÓ com gatilho textual explícito: 'distribuição por dependência',
+    'Processo de Origem', 'processo originário', 'nos autos da Execução Fiscal nº',
+    'em apenso a'. Paradigma/prova emprestada/caso de outro autor NÃO é originário.
+  · 'jurisprudencia' — CNJ dentro de ementa/precedente ('Rel. Des.', 'Relator:',
+    'Data de Julgamento', Turma/Câmara). Em peça DECISÓRIA, o default de uma citação
+    sem gatilho claro é jurisprudência ou 'incerto' — nunca 'derivado'.
+  · 'derivado'/'incidente' — outra ação LIGADA A ESTE processo, da MESMA empresa/parte
+    privada (a parte pública pode variar). Exige contexto explícito de ligação.
+  · 'incerto' — na dúvida, SEMPRE prefira 'incerto' a chutar papel relacional.
+  Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
+  NÃO converta números incompletos pra 20 dígitos — se não está no formato CNJ
+  completo, ignore.
+- NÃO deduza direção do par — a integração resolve por data.
+- confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores. Documento de tipo incerto
+  ou OCR ruidoso => comece de 0.7 pra baixo.
+
+{_contexto_processo_block(processo)}
+
+{VOCAB_FAMILIA[fam]}
+
+{TAXONOMIA_TIPO_DOC}
+
+{_REGRAS_CRUS}
+
+=== DOCUMENTO DE TIPO NÃO IDENTIFICADO (id {mov.mov_id}) ==={meta_line}
+{txt[:_PETICAO_TEXT_CAP_CHARS]}
+
+Extraia no schema PeticaoExtractCardV4. Preencha SÓ o que o texto sustenta; o resto null."""
+
+
 def build_mov_factsheet_prompt_v4(
     processo: ProcessoContext,
     mov: MovInput,
@@ -338,6 +442,9 @@ def build_mov_factsheet_prompt_v4(
 
     if classe == "peticao":
         return _build_peticao_prompt_v4(processo, mov, documentos_anexados)
+
+    if classe == "doc_incerto":
+        return _build_doc_incerto_prompt_v4(processo, mov, documentos_anexados)
 
     if classe == "1D":
         return _build_orfao_prompt_v4(processo, mov, documentos_anexados)
