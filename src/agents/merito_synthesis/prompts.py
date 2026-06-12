@@ -19,7 +19,8 @@ from typing import Literal
 from .schemas import (
     AIIMCardMin,
     CDACardMin,
-    JurisprudenciaMin,
+    # v2.5 (2026-06-12): JurisprudenciaMin removido (dead code desde v2.2 —
+    # campo saiu do request; o summarizer morto saiu junto).
     MeritoSynthesisRequest,
     # PR7.2 (2026-05-31): ParadigmaMin removido (paradigmas Poletto curados drop).
     PreviousSnapshot,
@@ -71,7 +72,19 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #     assume papel jurisprudencial via matriz determ + provider externo.
 #   - Elimina double-counting: jurisprudencia pesava 2x (Matriz Daycoval
 #     implicito em L2 + regras G em L3).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.4"
+#
+# v2.5 (2026-06-12, SEM CAP de dados — decisao Elton, revisao L2/L3):
+#   - Truncagens de render removidas: justificativa prob_exito [:140],
+#     criterios [:2]+[:160], peca_pivo motivo [:120], lifecycle [:5],
+#     cda.notes [:120], aiim.contexto_snippet [:200],
+#     decisao_anterior [:200] (este truncava json.dumps no meio = JSON
+#     quebrado no prompt). classified_at [:10] FICA (data-only, Bug 4 —
+#     estabilidade de prompt_hash, nao e cap de dado).
+#   - Limpeza stale v2.2: intro nao promete mais "jurisprudencia da tese"
+#     (promessa falsa em toda call desde 2026-05-25); _summarize_jurisprudencia
+#     (dead code) + JurisprudenciaMin deletados; docstrings atualizadas.
+#   - Rollback: revert do PR (regen COLD na versao anterior).
+PROMPT_VERSION_BASE = "merito_synthesis.v2.5"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -106,11 +119,11 @@ def _summarize_processo_synthesis(ps: ProcessoSynthesisMin) -> str:
     if pe.get("classificacao"):
         prob_str = f"  Prob. Exito (Daycoval): {pe['classificacao']} (score={pe.get('score')})"
         if pe.get("justificativa"):
-            prob_str += f" — {(pe['justificativa'] or '')[:140]}"
+            prob_str += f" — {pe['justificativa'] or ''}"
         parts.append(prob_str)
         if pe.get("criterios_aplicados"):
-            for c in (pe["criterios_aplicados"] or [])[:2]:
-                parts.append(f"    crit: {c[:160]}")
+            for c in pe["criterios_aplicados"] or []:
+                parts.append(f"    crit: {c}")
     if ps.estado_processual:
         parts.append(f"  Estado: {ps.estado_processual}")
     dv = ps.decisao_vigente or {}
@@ -127,11 +140,11 @@ def _summarize_processo_synthesis(ps: ProcessoSynthesisMin) -> str:
         parts.append(f"  Trajetoria interna: {ps.trajetoria_dentro_processo}")
     pivo = ps.peca_pivo_candidata or {}
     if pivo.get("mov_id"):
-        parts.append(f"  Peca-pivo candidata: mov_id={pivo['mov_id']} ({(pivo.get('motivo') or '')[:120]})")
+        parts.append(f"  Peca-pivo candidata: mov_id={pivo['mov_id']} ({pivo.get('motivo') or ''})")
     lc = ps.lifecycle_garantia or []
     if lc:
         parts.append(f"  Lifecycle garantia ({len(lc)} eventos):")
-        for ev in lc[:5]:
+        for ev in lc:
             parts.append(
                 f"    {ev.get('data') or '?'} | {ev.get('evento')} "
                 f"({ev.get('tipo_garantia') or 'na'}) -> {ev.get('status_pos')}"
@@ -157,7 +170,7 @@ def _summarize_cda(cda: CDACardMin) -> str:
     if cda.aiim_number_associado:
         parts.append(f"AIIM:{cda.aiim_number_associado}")
     if cda.notes:
-        parts.append((cda.notes or "")[:120])
+        parts.append(cda.notes)
     return " | ".join(parts)
 
 
@@ -166,7 +179,7 @@ def _summarize_aiim(aiim: AIIMCardMin) -> str:
     if aiim.relacao:
         parts.append(f"relacao: {aiim.relacao}")
     if aiim.contexto_snippet:
-        parts.append((aiim.contexto_snippet or "")[:200])
+        parts.append(aiim.contexto_snippet)
     return " | ".join(parts)
 
 
@@ -196,17 +209,9 @@ def _summarize_tomador(tom: TomadorCardMin) -> str:
     return " | ".join(parts)
 
 
-def _summarize_jurisprudencia(jur: JurisprudenciaMin) -> str:
-    parts = []
-    if jur.tese_nome:
-        parts.append(f"Tese: {jur.tese_nome}")
-    if jur.tema_stj:
-        parts.append(f"STJ Tema {jur.tema_stj}")
-    if jur.tema_stf:
-        parts.append(f"STF {jur.tema_stf}")
-    if jur.resultado_majoritario:
-        parts.append(f"resultado majoritario: {jur.resultado_majoritario}")
-    return " | ".join(parts) if parts else "(sem mapeamento de jurisprudencia)"
+# v2.5 (2026-06-12): _summarize_jurisprudencia DELETADO — dead code desde a
+# v2.2 (campo jurisprudencia saiu do MeritoSynthesisRequest; juris vive no L2
+# via regras J/J.1/J.2). Nenhum call site em nenhum repo (grep 2026-06-12).
 
 
 def _summarize_previous(prev: PreviousSnapshot | None) -> str:
@@ -222,7 +227,10 @@ def _summarize_previous(prev: PreviousSnapshot | None) -> str:
         cls_at = str(prev.classified_at_anterior)[:10]
         parts.append(f"classified_at: {cls_at}")
     if prev.decisao_anterior:
-        parts.append(f"decisao_anterior: {json.dumps(prev.decisao_anterior, ensure_ascii=False)[:200]}")
+        # v2.5: sem [:200] — truncar json.dumps no meio gerava JSON quebrado
+        # no prompt (e era cap de dado). classified_at segue [:10] (data-only,
+        # Bug 4: estabilidade do prompt_hash entre cascades do mesmo dia).
+        parts.append(f"decisao_anterior: {json.dumps(prev.decisao_anterior, ensure_ascii=False)}")
     return "\n".join(parts)
 
 
@@ -268,7 +276,9 @@ def _build_intro() -> str:
         "\n"
         "Sua tarefa: classificar o RISCO DE ACIONAMENTO DA APOLICE pro MERITO inteiro. Voce recebe\n"
         "os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda/aiim\n"
-        "+ jurisprudencia da tese + snapshot anterior (referencia historica).\n"
+        "+ snapshot anterior (referencia historica). A jurisprudencia da tese NAO vem\n"
+        "neste payload — ela ja foi absorvida pelo risco_processo_intermediario de cada\n"
+        "processo na camada 2 (regras J/J.1/J.2).\n"
         "\n"
         "ESTA E A CAMADA 3 - OUTPUT PRIMARIO. Risco aqui e o que vai pra UI/cliente."
     )
@@ -388,11 +398,9 @@ def _build_tomador_block_section(req: MeritoSynthesisRequest) -> str:
     return f"=== TOMADOR (historico CNPJ basico) ===\n{tomador_block}"
 
 
-def _build_jurisprudencia_block(req: MeritoSynthesisRequest) -> str:
-    """DEPRECATED v2.2: jurisprudencia migrada pra L2 (proposta L2-only).
-    Funcao mantida pra backward-compat de imports. Retorna string vazia —
-    suprimida do prompt no `build_prompt_and_version`."""
-    return ""
+# v2.5 (2026-06-12): _build_jurisprudencia_block DELETADO (era stub vazio
+# DEPRECATED v2.2 "pra backward-compat de imports" — zero importers em
+# qualquer repo, grep 2026-06-12).
 
 
 def _build_snapshot_anterior_block(req: MeritoSynthesisRequest) -> str:
@@ -1584,7 +1592,7 @@ def build_merito_synthesis_prompt(
     bucket: str | None = None,
 ) -> str:
     """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda/aiim
-    + jurisprudencia + previous_snapshot pra computar risco do MERITO.
+    + previous_snapshot pra computar risco do MERITO (juris vive no L2 desde v2.2).
 
     Dispatch determ.:
     - >=80% fiscal -> vocab EF, Anulatoria, Tema 372/1226/DIFAL
