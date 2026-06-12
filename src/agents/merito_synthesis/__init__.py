@@ -1,8 +1,9 @@
 """Merito Synthesis Agent (engine v6_meritos camada 3 - OUTPUT PRIMARIO).
 
 Agrega processo_syntheses de TODOS processos do merito + tomador + cda/aiim
-+ jurisprudencia + snapshot anterior. Output: risco + justificativa + trajetoria
++ snapshot anterior. Output: risco + justificativa + trajetoria
 + peca_pivo + proximos_passos.
+(Jurisprudencia saiu do payload L3 na v2.2 — vive no L2, regras J/J.1/J.2.)
 
 Persiste em monitoramento.risk_snapshots (via orchestrator no frontend-api).
 """
@@ -13,7 +14,6 @@ from .schemas import (
     CDACardMin,
     DecisaoAtual,
     EvidenceArtifact,
-    JurisprudenciaMin,
     MeritoSynthesisCard,
     MeritoSynthesisRequest,
     MeritoSynthesisResponse,
@@ -29,7 +29,6 @@ __all__ = [
     "CDACardMin",
     "DecisaoAtual",
     "EvidenceArtifact",
-    "JurisprudenciaMin",
     "MeritoSynthesisCard",
     "MeritoSynthesisRequest",
     "MeritoSynthesisResponse",

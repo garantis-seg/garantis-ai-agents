@@ -382,15 +382,9 @@ class TomadorCardMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
-class JurisprudenciaMin(BaseModel):
-    """Jurisprudencia da tese canonica do merito."""
-
-    tese_nome: Optional[str] = None
-    tema_stj: Optional[str] = None
-    tema_stf: Optional[str] = None
-    resultado_majoritario: Optional[str] = None
-
-    model_config = {"extra": "ignore"}
+# v2.5 (2026-06-12): JurisprudenciaMin REMOVIDO — dead code desde a v2.2
+# (campo jurisprudencia saiu do MeritoSynthesisRequest; o unico consumidor
+# era _summarize_jurisprudencia, tambem dead, deletado junto).
 
 
 # PR7.2 (2026-05-31): ParadigmaMin REMOVIDO. Curadoria interna de paradigmas
