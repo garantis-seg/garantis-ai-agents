@@ -16,7 +16,7 @@ from .base import BaseLLMProvider, LLMResponse
 logger = logging.getLogger(__name__)
 
 # Rate limiter global per-process — protege contra 503 storms quando varios
-# agentes (mov_factsheet/day_factsheet/processo_synthesis/merito_synthesis/etc)
+# agentes (mov_factsheet/processo_synthesis/merito_synthesis/etc)
 # disparam Gemini em paralelo. Single chokepoint: todos os agentes que usam
 # GeminiProvider compartilham este limiter.
 #
