@@ -52,7 +52,19 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #   - L3 perdeu juris no payload (Opcao A: single source of truth em L2).
 #   - Elimina double-counting: jurisprudencia pesava 2x antes (Matriz Daycoval
 #     implicito em L2 + regras G/G.1/G.2 explicitas em L3).
-PROMPT_VERSION = "processo_synthesis.v2.2"
+#
+# v2.3 (2026-06-12, SEM CAP de dados — decisao Elton, revisao L2/L3):
+#   - _MAX_MOVS_INLINE=50 removido dos 2 builders (cortava a peticao 1P +
+#     movs antigas; censo: p99=2026 movs cabe no contexto 1M). Guard
+#     fail-loud L2_PROMPT_SIZE/OVERSIZE no lugar (nunca trunca).
+#   - Truncagens de render removidas (resumo_ato/motivos/resumo_dia/eventos).
+#   - Instrucoes mortas de "autos raw" removidas (ex-REGRA F; G ESTABILIDADE
+#     TEMPORAL renumerada pra F).
+#   - Instrucoes novas: leitura da PETICAO INICIAL (mov_id 'peticao-<pn>')
+#     + split por documento ('<id>:<doc>').
+#   - CAVEAT regra_polos atualizado pro sentido deterministico on-read (v4).
+#   - Rollback: revert do PR (regen COLD na versao anterior).
+PROMPT_VERSION = "processo_synthesis.v2.3"
 
 
 async def classify_processo_synthesis(

@@ -12,9 +12,26 @@ REV3 2026-05-25 (P1+P2 do prompt-engineering FINDINGS — v2.1):
 - <lembrete_final> no fim como recency anchor.
 - Tipo-specific blocks (FISCAL/TRABALHISTA/CIVEL) mantidos no meio — sao
   contextuais por bucket, nao competem com regras universais.
+
+REV4 2026-06-12 (v2.3 — SEM CAP de dados, decisao Elton "nao pode ter cap de
+dados em nenhum lugar"):
+- _MAX_MOVS_INLINE=50 REMOVIDO dos 2 builders. Cortava as movs mais ANTIGAS
+  — inclusive o card de PETICAO INICIAL (1P), que e a entrada mais antiga
+  (censo 2026-06-12: 2/2 procs com card 1P tinham >50 movs = peticao nunca
+  chegava ao LLM). Censo de tamanho: p99=max=2026 movs ~ 530k chars — cabe
+  no contexto 1M tokens. Guard fail-loud _log_prompt_size no lugar do cap
+  (loga sempre; WARN L2_PROMPT_OVERSIZE >3M chars; NUNCA trunca).
+- Truncagens de render removidas (resumo_ato[:200], motivos[:80],
+  resumo_dia[:200], descricao[:80], eventos[:5]).
+- Instrucoes mortas de "autos raw" removidas (campos 7/8/9 + ex-REGRA F):
+  o request nunca teve autos_raw_excerpt no caminho vivo — REV2 morreu
+  upstream (materializer shared nao envia; schema dropa via extra-ignore).
+- Instrucoes novas de leitura: PETICAO INICIAL (mov_id 'peticao-<pn>') +
+  split por documento (mov_id '<id>:<doc>', regra 1-doc-maximo shared#68).
 """
 
 import json
+import logging
 import os
 from typing import Any
 
@@ -25,11 +42,30 @@ from .schemas import ApoliceContextMin, DayFactSheetMin, MovFactSheetMin, Proces
 # JURISPRUDENCIA_BLOCK_ENABLED do bloco interno (dropado em PR7.2).
 # Provider externo jurisprudencias.ai eh single source jurisprudencial agora.
 
-_MAX_MOVS_INLINE = 50  # cap defensivo no input do prompt
-_AUTOS_TEXT_CAP_CHARS = 60000  # DD6: cap absoluto 60k chars
-_DOC_TEXT_CAP_CHARS = 6000     # DD4-alt: cap por doc dos autos
-_MAX_DOCS_INLINE = 10           # DD4-alt: cap docs no prompt
+logger = logging.getLogger(__name__)
+
+# v2.3: _MAX_MOVS_INLINE / _AUTOS_TEXT_CAP_CHARS / _DOC_TEXT_CAP_CHARS /
+# _MAX_DOCS_INLINE REMOVIDOS (os 3 ultimos eram dead code desde que o
+# autos_raw_excerpt morreu upstream). Sem cap de dados — ver REV4 no header.
 _MOV_ID_DISPLAY_CHARS = 8       # UUID prefix na exibicao (Bug 3 handoff)
+
+# ~Limite fisico do contexto (1M tokens ~ 4M chars) com folga pro output.
+# NAO e um cap: acima disso a call falha VISIVEL no cascade (sem truncar).
+_PROMPT_OVERSIZE_WARN_CHARS = 3_000_000
+
+
+def _log_prompt_size(kind: str, processo_numero: str, prompt: str, movs: int) -> None:
+    """Observability do sem-cap (v2.3): loga tamanho SEMPRE; WARN acima do
+    threshold fisico. NUNCA trunca — principio no-silent-caps."""
+    size = len(prompt)
+    logger.info("L2_PROMPT_SIZE kind=%s pn=%s movs=%d chars=%d",
+                kind, processo_numero, movs, size)
+    if size > _PROMPT_OVERSIZE_WARN_CHARS:
+        logger.warning(
+            "L2_PROMPT_OVERSIZE kind=%s pn=%s movs=%d chars=%d (>%d — risco de "
+            "estourar o contexto do modelo; a call falhara visivel, sem truncamento)",
+            kind, processo_numero, movs, size, _PROMPT_OVERSIZE_WARN_CHARS,
+        )
 
 
 def _short_mov_id(mov_id: str | None) -> str:
@@ -73,12 +109,9 @@ def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
     """
     factsheets = req.mov_factsheets or []
     factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or ""))
-    if len(factsheets_sorted) > _MAX_MOVS_INLINE:
-        factsheets_capped = factsheets_sorted[-_MAX_MOVS_INLINE:]
-    else:
-        factsheets_capped = factsheets_sorted
 
-    timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_capped) \
+    # v2.3: sem cap — render TODAS as movs (ver REV4 no header).
+    timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_sorted) \
         or "(sem movimentacoes)"
 
     matriz_block = _build_matriz_block(req.tipo_judicial)
@@ -91,7 +124,7 @@ def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
         header_parts.append(f"Tomador (polo passivo): {req.polo_passivo}")
     header_block = "\n  ".join(header_parts)
 
-    return f"""Voce e analista juridico brasileiro especializado em SEGURO GARANTIA JUDICIAL.
+    prompt = f"""Voce e analista juridico brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
 Sua UNICA tarefa: aplicar a Matriz Daycoval e classificar a PROBABILIDADE
 DO TOMADOR TER EXITO neste processo. Sao 4 buckets — escolha 1.
@@ -129,6 +162,8 @@ DO TOMADOR TER EXITO neste processo. Sao 4 buckets — escolha 1.
 Output: JSON estruturado conforme schema ProbabilidadeExito (enforced via
 response_schema do Gemini — nao precisa formato textual no prompt).
 """
+    _log_prompt_size("prob_exito", req.processo_numero, prompt, len(factsheets_sorted))
+    return prompt
 
 
 def _summarize_factsheet(fs: MovFactSheetMin) -> str:
@@ -147,7 +182,7 @@ def _summarize_factsheet(fs: MovFactSheetMin) -> str:
     if fs.relevancia_merito:
         parts.append(f"rel={fs.relevancia_merito}")
     if fs.resumo_ato:
-        parts.append((fs.resumo_ato or "")[:200])
+        parts.append(fs.resumo_ato)
 
     decisao = fs.decisao or {}
     if decisao.get("tem_decisao"):
@@ -169,11 +204,11 @@ def _summarize_factsheet(fs: MovFactSheetMin) -> str:
 
     dr = fs.delta_risco or {}
     if dr.get("mudou"):
-        parts.append(f"DELTA_RISCO:{dr.get('direcao')} ({(dr.get('motivo') or '')[:80]})")
+        parts.append(f"DELTA_RISCO:{dr.get('direcao')} ({dr.get('motivo') or ''})")
 
     pivo = fs.peca_pivo or {}
     if pivo.get("e_pivo"):
-        parts.append(f"PIVO ({(pivo.get('motivo') or '')[:80]})")
+        parts.append(f"PIVO ({pivo.get('motivo') or ''})")
 
     valores = fs.valores or {}
     val_parts = []
@@ -211,12 +246,12 @@ def _summarize_day_factsheet(d: DayFactSheetMin) -> str:
     if d.relevancia_para_merito:
         parts.append(f"relev={d.relevancia_para_merito}")
     if d.resumo_dia:
-        parts.append(f"resumo: {d.resumo_dia[:200]}")
+        parts.append(f"resumo: {d.resumo_dia}")
     eventos = d.eventos or []
     if eventos:
         eventos_str = "; ".join(
-            f"{e.get('tipo', '?')}: {(e.get('descricao') or '')[:80]}"
-            for e in eventos[:5]
+            f"{e.get('tipo', '?')}: {e.get('descricao') or ''}"
+            for e in eventos
         )
         parts.append(f"eventos: {eventos_str}")
     if d.decisao_do_dia and d.decisao_do_dia.get("tem_decisao"):
@@ -381,25 +416,22 @@ def _build_juris_externa_block(je) -> str:
 
 
 def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
-    """Build prompt que agrega mov_factsheets + day_factsheets + apolice context + autos_raw_excerpt.
+    """Build prompt que agrega mov_factsheets + day_factsheets + apolice context.
 
     Sort do timeline e DETERMINISTICO: (data ASC, mov_id ASC). mov_id e
     cluster_id UUID estavel pos-Fase 2 (Bug 3 handoff). Mesmo input
     produz mesmo prompt entre cascades — drift L2 eliminado.
+
+    v2.3: SEM CAP de movs (REV4 no header) — a peticao 1P (entrada mais
+    antiga) e movs historicas sempre entram. Guard fail-loud no retorno.
     """
     factsheets = req.mov_factsheets or []
     factsheets_sorted = sorted(
         factsheets,
         key=lambda f: (f.data or "", f.mov_id or ""),
     )
-    if len(factsheets_sorted) > _MAX_MOVS_INLINE:
-        factsheets_capped = factsheets_sorted[-_MAX_MOVS_INLINE:]
-        cap_note = f"\n  [{len(factsheets_sorted) - _MAX_MOVS_INLINE} movs anteriores omitidas para caber no prompt]\n"
-    else:
-        factsheets_capped = factsheets_sorted
-        cap_note = ""
 
-    timeline_block = cap_note + "\n  ".join(_summarize_factsheet(f) for f in factsheets_capped) \
+    timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_sorted) \
         or "(sem movimentacoes mov-by-mov)"
 
     # Day_factsheets: tier Degradado-Dia. Coexiste com mov_factsheets quando
@@ -470,7 +502,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         "  risco_processo_intermediario LEGACY tambem eh emitido (compat backward).\n"
     )
 
-    return f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
+    prompt = f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
 Sua tarefa: sintetizar o estado atual do PROCESSO a partir dos FACTSHEETS da Camada 1
 (mov_factsheet + day_factsheet) + contexto da(s) apolice(s).
@@ -510,10 +542,13 @@ procedente = autor venceu; improcedente = autor perdeu. Se nao identificar
 com confianca: sentido=null + confianca<=0.5. NUNCA chute "polo_ativo=Fazenda
 default".
 
-CAVEAT — Camada 1 pode ter classificado decisao.sentido errado. Releia os
-factsheets com lente de polo: se um factsheet trouxer sentido='desfavoravel'
-em Anulatoria onde Tomador eh autor e natureza='procedente', Camada 1 errou —
-corrija no estado_processual + decisao_vigente.sentido.
+CAVEAT — decisao.sentido dos factsheets vem de derivacao DETERMINISTICA
+on-read (truth-table por parte seguravel) e GATEIA (null) quando o lado nao
+e identificavel com confianca. sentido=null NAO significa decisao neutra —
+releia natureza + resumo com a lente de polo acima e derive o sentido voce
+mesmo em decisao_vigente. Se um sentido derivado contradisser sua leitura de
+polo (ex: 'desfavoravel' em Anulatoria procedente onde Tomador e autor),
+prevalece SUA leitura — corrija em estado_processual + decisao_vigente.sentido.
 </regra_polos>
 
 <regra_extincao_tomador_autor>
@@ -609,6 +644,20 @@ logica via <regra_polos>.
     data: confie no day (que viu o doc) sobre mov (que viu so o snippet).
   - Confianca menor (~0.5-0.7) — correlacao multi-mov*multi-doc tem ruido.
 
+  INSTRUCOES PARA a entrada de PETICAO INICIAL (quando presente):
+  - A entrada com mov_id 'peticao-<numero>' (categoria=peticao, inicio da
+    timeline) e a PETICAO INICIAL: tese + pedido do autor extraidos da peca
+    inaugural. NAO e ato decisorio nem movimentacao nova.
+  - Use-a pra: (a) ancorar a REGRA DE POLOS (quem moveu a acao e o que
+    pede); (b) contexto da causa no estado_processual; (c) evento de
+    garantia OFERTADA na inicial (quando presente).
+  - Ela NUNCA entra em decisao_vigente.
+
+  INSTRUCAO PARA entradas de SPLIT POR DOCUMENTO:
+  - Entradas com mov_id no formato '<id>:<doc>' sao DOCUMENTOS distintos da
+    MESMA movimentacao (split 1-doc-por-unidade). NAO conte como atos
+    processuais separados.
+
 === APOLICE(S) ATRELADA(S) ===
   {apolice_block}
 
@@ -685,15 +734,15 @@ logica via <regra_polos>.
    do factsheet com e_pivo=true mais recente. Se varios, escolha o mais "load-bearing"
    (sentenca > decisao interlocutoria > peticao). Motivo: 1 frase.
 
-7. valor_em_disputa (BRL): melhor estimativa dos factsheets E autos raw. Use o mais
+7. valor_em_disputa (BRL): melhor estimativa dos factsheets. Use o mais
    recente/maior entre valor_causa e valor_debito_executado. null se nenhum disponivel.
 
 8. valor_garantia (BRL): valor da apolice/garantia. Use prioritariamente o apolice card
-   (apolices[].valor_is). Se nao, valores.valor_garantia dos factsheets ou autos raw.
+   (apolices[].valor_is). Se nao, valores.valor_garantia dos factsheets.
 
 9. confianca (0.0-1.0): quanto voce confia na sintese. Use 0.85+ quando ha decisao clara
-   (factsheet com tem_decisao=true OU autos raw com dispositivo de sentenca/acordao),
-   0.6-0.8 quando o estado e ambiguo, < 0.5 quando muitos factsheets vazios E sem autos.
+   (factsheet com tem_decisao=true), 0.6-0.8 quando o estado e ambiguo, < 0.5 quando
+   muitos factsheets vazios.
 
 10. evidence_artifacts: lista de {{mov_id, snippet, weight}} citando os 3-5 factsheets
     mais decisivos pra sua sintese. weight = high | medium | low.
@@ -712,11 +761,8 @@ D. Apelacao tem efeito suspensivo automatico (CPC art. 1.012) -- improcedente em
    contrario (penhora deferida, intimacao para pagamento).
 E. Suspensao e ambigua: explicite POR QUE no estado_processual (acordo/RJ/prejudicialidade/
    efeito suspensivo de recurso). Cada motivo move o risco diferente.
-F. Quando ha autos raw disponivel, USE pra confirmar/refutar inferencias dos factsheets.
-   Se o autos mostra dispositivo de sentenca mas nenhum factsheet capturou, registre na
-   justificativa que o autos foi load-bearing.
 
-G. ESTABILIDADE TEMPORAL — decisao_vigente NAO deve oscilar entre cuts/snapshots
+F. ESTABILIDADE TEMPORAL — decisao_vigente NAO deve oscilar entre cuts/snapshots
    sucessivos do MESMO processo so porque chegaram movs procedurais novos.
    Backtest 2026-05-24 detectou padrao de instabilidade: cuts antigos
    classificaram corretamente (ancorados em sentenca/acordao), cut recente
@@ -733,12 +779,14 @@ Antes de emitir decisao_vigente.sentido: cheque <regra_polos> no topo (Tomador
 em qual polo? procedente=quem venceu?).
 Extincao SEM merito em Tomador-AUTOR: ver <regra_extincao_tomador_autor> —
 sentido='desfavoravel', NAO 'neutro'.
-decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA G).
+decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA F).
 </lembrete_final>
 
 Output: JSON estruturado conforme schema ProcessoSynthesisCard (enforced via
 response_schema do Gemini — nao precisa formato textual no prompt). Cada campo
 tem descricao especifica no Pydantic. Echo de processo_numero/classe/classe_cnj_code/
 role_no_merito/tipo_judicial deste input. estado_processual eh OBRIGATORIO
-(nao deixar vazio). movs_processed = {len(factsheets_capped)}.
+(nao deixar vazio). movs_processed = {len(factsheets_sorted)}.
 """
+    _log_prompt_size("synthesis", req.processo_numero, prompt, len(factsheets_sorted))
+    return prompt
