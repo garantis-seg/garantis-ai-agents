@@ -35,7 +35,7 @@ import logging
 import os
 from typing import Any
 
-from .schemas import ApoliceContextMin, DayFactSheetMin, MovFactSheetMin, ProcessoSynthesisRequest
+from .schemas import ApoliceContextMin, MovFactSheetMin, ProcessoSynthesisRequest
 
 
 # PR7.3 (2026-05-31): _flag_enabled wrapper removido — unico caller era
@@ -240,27 +240,10 @@ def _summarize_apolice(ap: ApoliceContextMin) -> str:
     return " | ".join(parts)
 
 
-def _summarize_day_factsheet(d: DayFactSheetMin) -> str:
-    """Bloco curto de 1 day_factsheet pro prompt."""
-    parts = [f"[DIA {d.date or '?'}]"]
-    if d.relevancia_para_merito:
-        parts.append(f"relev={d.relevancia_para_merito}")
-    if d.resumo_dia:
-        parts.append(f"resumo: {d.resumo_dia}")
-    eventos = d.eventos or []
-    if eventos:
-        eventos_str = "; ".join(
-            f"{e.get('tipo', '?')}: {e.get('descricao') or ''}"
-            for e in eventos
-        )
-        parts.append(f"eventos: {eventos_str}")
-    if d.decisao_do_dia and d.decisao_do_dia.get("tem_decisao"):
-        sentido = d.decisao_do_dia.get("sentido", "?")
-        natureza = d.decisao_do_dia.get("natureza", "?")
-        parts.append(f"DECISAO: {sentido}/{natureza}")
-    if d.evento_garantia_do_dia and d.evento_garantia_do_dia.get("tipo") not in (None, "nenhum"):
-        parts.append(f"garantia: {d.evento_garantia_do_dia.get('tipo')}")
-    return " | ".join(parts)
+# _summarize_day_factsheet REMOVIDO em 2026-06-13 (onda 2 do teardown do
+# tier por-dia): day_factsheets sairam do payload/prompt do L2. Sem bump de
+# PROMPT_VERSION de proposito — pra todo proc o bloco ja renderizava o
+# placeholder vazio (cards day 100% supersedidos antes deste deploy).
 
 
 _TIPO_RULES_FISCAL = """=== REGRAS TIPO-SPECIFIC (FISCAL) ===
@@ -416,7 +399,7 @@ def _build_juris_externa_block(je) -> str:
 
 
 def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
-    """Build prompt que agrega mov_factsheets + day_factsheets + apolice context.
+    """Build prompt que agrega mov_factsheets + apolice context.
 
     Sort do timeline e DETERMINISTICO: (data ASC, mov_id ASC). mov_id e
     cluster_id UUID estavel pos-Fase 2 (Bug 3 handoff). Mesmo input
@@ -433,13 +416,6 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
 
     timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_sorted) \
         or "(sem movimentacoes mov-by-mov)"
-
-    # Day_factsheets: tier Degradado-Dia. Coexiste com mov_factsheets quando
-    # parte das movs tem FK e parte nao (intra-proc mixed). Sort tie-break
-    # por date string (sem mov_id em day).
-    day_factsheets_sorted = sorted(req.day_factsheets or [], key=lambda d: (d.date or ""))
-    days_block = "\n  ".join(_summarize_day_factsheet(d) for d in day_factsheets_sorted) \
-        or "(sem day_factsheets — proc nao esta em tier Degradado-Dia OU nao ha docs sem FK)"
 
     apolice_block = "\n  ".join(_summarize_apolice(ap) for ap in (req.apolices or [])) \
         or "(sem apolice atrelada)"
@@ -505,7 +481,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     prompt = f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
 
 Sua tarefa: sintetizar o estado atual do PROCESSO a partir dos FACTSHEETS da Camada 1
-(mov_factsheet + day_factsheet) + contexto da(s) apolice(s).
+(mov_factsheet) + contexto da(s) apolice(s).
 Output sera consumido pela camada 3 (merito_synthesis) pra agregar risco do MERITO.
 
 ARQUITETURA FULL-RAG: voce SO recebe cards estruturados ja-sintetizados pela Camada 1
@@ -628,21 +604,6 @@ logica via <regra_polos>.
 
 === TIMELINE DE FACTSHEETS (mov_factsheets, ordenados por data ASC) ===
   {timeline_block}
-
-=== DAY FACTSHEETS (tier Degradado-Dia, ordenados por data ASC) ===
-  {days_block}
-
-  INSTRUCOES PARA day_factsheets:
-  - Existem quando ha docs nos autos com texto MAS sem vinculo nativo
-    doc<->mov (caso tipico: Judit, Jusbrasil sem id de anexo). 1 card por dia
-    agregando movs+docs do mesmo dia.
-  - Coexistem com mov_factsheets no MESMO proc (intra-proc mixed tier).
-    NAO sao duplicata: cobrem dias que mov_factsheet nao teve acesso a doc.
-  - Use o RESUMO_DIA e EVENTOS pra extrair informacao FACTUAL (decisao,
-    valores, peca-pivo) que mov_factsheet nao pegou.
-  - Quando day_factsheet tem DECISAO mas mov_factsheet nao tem na mesma
-    data: confie no day (que viu o doc) sobre mov (que viu so o snippet).
-  - Confianca menor (~0.5-0.7) — correlacao multi-mov*multi-doc tem ruido.
 
   INSTRUCOES PARA a entrada de PETICAO INICIAL (quando presente):
   - A entrada com mov_id 'peticao-<numero>' (categoria=peticao, inicio da
