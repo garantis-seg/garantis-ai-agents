@@ -82,7 +82,6 @@ def _processo_synthesis_template() -> str:
     )
     from .processo_synthesis.schemas import (
         ApoliceContextMin,
-        DayFactSheetMin,
         MovFactSheetMin,
         ProcessoSynthesisRequest,
     )
@@ -103,13 +102,6 @@ def _processo_synthesis_template() -> str:
                 resumo_ato="{{resumo_ato}}",
                 categoria="{{categoria}}",
                 relevancia_merito="{{relevancia_merito}}",
-            )
-        ],
-        day_factsheets=[
-            DayFactSheetMin(
-                date="{{date}}",
-                resumo_dia="{{resumo_dia}}",
-                relevancia_para_merito="{{relevancia_para_merito}}",
             )
         ],
         apolices=[
