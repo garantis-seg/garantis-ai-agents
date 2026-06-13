@@ -49,7 +49,9 @@ steps:
       # dropados (zero callers Python pos-PR7.2 — blocos internos removidos).
       # L1_NEUTRAL_ENABLED (2026-06-10): FLIP PERMANENTE do v4 — agent mov_factsheet
       # emite fatos neutros (prompt/schema v4). Par de fe-api + risk-engine-worker.
-      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,JURISPRUDENCE_PATH_ENABLED=new,L3_AB_TEST_ENABLED=true,L1_NEUTRAL_ENABLED=true'
+      # VISION_L1_ENABLED (2026-06-13): fallback vision-L1 — agent manda PDF cru pro
+      # Gemini só pros doc-imagem (route-by-has_text). Sync com fe-api + worker.
+      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,JURISPRUDENCE_PATH_ENABLED=new,L3_AB_TEST_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true'
       - '--set-secrets'
       - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
 
