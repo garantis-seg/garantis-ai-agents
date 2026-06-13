@@ -292,9 +292,16 @@ async def call_l1_with_vision_fallback(
     if gcs_urls and flag_enabled(vision_flag_name):
         if docs_text:
             # GATE por documento: baixa e filtra só os que o gate aprova.
-            from .ocr_gate import precisa_vision
+            from .ocr_gate import precisa_vision, texto_lixo
             for text_content, gcs_url in docs_text:
                 if not gcs_url:
+                    continue
+                # route-by-has_text (núcleo OCR per-doc 2026-06-13): doc com texto
+                # USÁVEL fica no texto do prompt SEM baixar o PDF — o ingest já extraiu
+                # o text-layer (born-digital). Só doc-imagem/texto-lixo (vazio ou
+                # garbage) baixa + passa pelo gate. Assim o custo do Vision ON é ∝ nº de
+                # docs-imagem (~5%), não ao total de docs (antes baixava TODOS pra gate).
+                if not texto_lixo(text_content):
                     continue
                 try:
                     raw = await fetch_pdfs_from_gcs([gcs_url])
