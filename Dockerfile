@@ -31,4 +31,9 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3     CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the application
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+# --timeout-keep-alive 75: o default do uvicorn e 5s — o risk-engine-worker reusa
+# conexoes keepalive do pool por mais tempo (httpx) e batia em conexao que o
+# servidor ja fechou em 5s -> ReadError em massa no fan-out L1 do re-cascade
+# (incidente 2026-06-14: ReadError = transporte, ai-agents nunca caiu). 75s >>
+# qualquer janela de reuse do client -> reuse sempre seguro.
+CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8080", "--timeout-keep-alive", "75"]
