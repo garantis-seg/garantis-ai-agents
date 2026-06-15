@@ -30,7 +30,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # v4.1 (2026-06-11, prompt-review Lote 1 — itens 1.1/1.2 do kickoff):
 #   1.1 persona/REGRA DE OURO reescritas: a tarefa real é resolver ator-do-texto →
@@ -271,6 +271,17 @@ class MovFactSheetCardV4(BaseModel):
             "null em todos os outros casos (NÃO repita a data da publicação)."
         ),
     )
+
+    @field_validator("decisao", "evento_garantia", "valores", mode="before")
+    @classmethod
+    def _null_block_to_default(cls, v):
+        # O Gemini às vezes emite estes blocos aninhados como null EXPLÍCITO (chave
+        # presente, valor None) em vez de omiti-los. `default_factory` só vale quando a
+        # chave está AUSENTE — null vira "Input should be a valid dictionary or instance
+        # of <Block>" e o parse falha -> 500 -> retry storm do L1 (erro DOMINANTE do
+        # cascade: ~56% dos 500 do ai-agents em 2026-06-15). Semanticamente null ==
+        # "sem decisão / sem evento de garantia / sem valores" == o bloco default vazio.
+        return {} if v is None else v
 
 
 # ════ Ramo PETIÇÃO INICIAL (peticao_extract.v1) — FASE 4 conexos ════
