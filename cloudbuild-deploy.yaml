@@ -51,7 +51,11 @@ steps:
       # emite fatos neutros (prompt/schema v4). Par de fe-api + risk-engine-worker.
       # VISION_L1_ENABLED (2026-06-13): fallback vision-L1 — agent manda PDF cru pro
       # Gemini só pros doc-imagem (route-by-has_text). Sync com fe-api + worker.
-      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,JURISPRUDENCE_PATH_ENABLED=new,L3_AB_TEST_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true'
+      # GEMINI_RATE_LIMIT_TIMEOUT_S=180 (2026-06-16): era default 60 — em mérito GRANDE
+      # (ex. Petrobras 25 procs) o fan-out de L1 satura o rate-limiter e o 1 call de L3
+      # no fim não pega slot em 60s → acquire TimeoutError → 500 → engine desiste após
+      # retries → merito fica indeterminado. 180s (< Cloud Run --timeout 300) dá folga.
+      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,JURISPRUDENCE_PATH_ENABLED=new,L3_AB_TEST_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180'
       - '--set-secrets'
       - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
 
