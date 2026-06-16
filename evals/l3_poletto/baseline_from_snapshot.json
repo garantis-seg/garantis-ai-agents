@@ -1,0 +1,17 @@
+{
+  "n_total": 55,
+  "n_resolved": 46,
+  "coverage": 0.8363636363636363,
+  "exact": 0.43478260869565216,
+  "within1": 0.8260869565217391,
+  "mean_signed": 0.43478260869565216,
+  "over": 18,
+  "under": 8,
+  "exact_n": 20,
+  "false_alto_rate": 0.391304347826087,
+  "false_baixo_rate": 0.17391304347826086,
+  "recall_alto_plus": 0.38461538461538464,
+  "n_poletto_alto_plus": 13,
+  "promoted_rate": 0.7391304347826086,
+  "final_eq_factual_rate": 0.9117647058823529
+}

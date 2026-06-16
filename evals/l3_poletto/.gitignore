@@ -1,0 +1,3 @@
+fixtures/
+*.pyc
+__pycache__/
