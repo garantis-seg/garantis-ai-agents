@@ -141,7 +141,13 @@ class ProbabilidadeExitoMerito(BaseModel):
     )
     contribuicao_no_risco: Optional[str] = Field(
         default=None,
-        description="1 frase PT-BR explicando como a prob_exito agregada influenciou o risco final",
+        description=(
+            "1 frase PT-BR (texto pro ADVOGADO) explicando, em termos JURIDICOS, "
+            "como a perspectiva de exito influenciou o risco final. NUNCA cite "
+            "score/numero decimal, a palavra 'score', nomes internos (Daycoval/"
+            "Poletto/Architecture D/matriz determ/sem nuance), rotulos snake_case "
+            "(poucas_chances) nem codigos de template (T-B1). Ver <filtro_redacao_advogado>."
+        ),
     )
 
 
@@ -212,14 +218,17 @@ class MeritoSynthesisCard(BaseModel):
     justificativa: Optional[str] = Field(
         default="",
         description=(
-            "2-4 paragrafos PT-BR citando evidencias dos cards consumidos. "
+            "2-4 paragrafos PT-BR (texto pro ADVOGADO) citando evidencias. "
             "Paragrafo 1: estado factual. Paragrafo 2: aspectos suportivos. "
-            "Paragrafo 3: justificativa do nivel vs nivel adjacente. Cite IDs/CNJs."
+            "Paragrafo 3: justificativa do nivel vs nivel adjacente. Cite CNJs. "
+            "NUNCA inclua jargao interno (score/decimal, snake_case, T-B1, "
+            "Daycoval/Poletto/Architecture D, 'matriz determ/sem nuance', 'piso "
+            "minimo', 'merito'+numero, mov_id). Ver <filtro_redacao_advogado>."
         ),
     )
     narrativa_executiva: Optional[str] = Field(
         default=None,
-        description="1 frase resumindo o estado do merito pro time comercial.",
+        description="1 frase (pro ADVOGADO/time comercial) resumindo o estado do caso, em portugues juridico acessivel. SEM jargao interno (score, snake_case, T-XX, nomes de produto, 'piso minimo'). Ver <filtro_redacao_advogado>.",
     )
 
     # Estado
