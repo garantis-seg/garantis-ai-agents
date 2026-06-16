@@ -84,7 +84,23 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #     (promessa falsa em toda call desde 2026-05-25); _summarize_jurisprudencia
 #     (dead code) + JurisprudenciaMin deletados; docstrings atualizadas.
 #   - Rollback: revert do PR (regen COLD na versao anterior).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.5"
+#
+# v2.6 (2026-06-16, FILTRO DE REDACAO — bastidores fora da tela do advogado):
+#   - Estudo de 100 outputs L3 reais (multi-agente) achou 13 categorias de
+#     vazamento de jargao interno na prosa visivel ao advogado; 4 criticas
+#     (termo "merito"=cluster + merito_id; Poletto/templates T-X; Daycoval/
+#     Architecture D/matriz determ; scores 0.xxxx).
+#   - Novo bloco _build_filtro_redacao() (recency anchor, antes do lembrete):
+#     separa raciocinio interno (pode usar jargao) dos campos de PROSA (limpos).
+#     Constraint negativa especifica + substituto positivo (best practices
+#     Gemini). NAO simplifica — torna acessivel pro advogado SEM omitir tecnica
+#     juridica.
+#   - Ajustes pontuais que MANDAVAM vazar: _build_templates_poletto (parou de
+#     pedir "cite Poletto T-X na justificativa") + derived_only bucket (trocou
+#     o texto-modelo "matriz determ Architecture D, sem nuance LLM").
+#   - lembrete_final ganhou item 4 (prosa limpa).
+#   - Rollback: revert do PR (regen COLD na v2.5).
+PROMPT_VERSION_BASE = "merito_synthesis.v2.6"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -587,10 +603,13 @@ ESCAPE — quando IGNORAR o template:
   - Tomador-autor em Tutela Cautelar com extincao sem merito ISOLADA (sem
     EF subsequente): trate como T-B3 (aguarda aceitacao).
 
-OUTPUT: na justificativa, cite o template (ex: "Classificacao Poletto T-B1:
-apolice apresentada em Anulatoria sem sentenca de 1g"). Se nenhum template
-casar, escreva "[sem match com template Poletto]" e prossiga com
-raciocinio livre."""
+USO INTERNO: o template (T-B1 etc.) guia a SUA classificacao, mas NAO deve
+aparecer na prosa que vai pro advogado — "Poletto", "Classificacao Poletto",
+"T-B1" sao jargao interno (vide FILTRO DE REDACAO no fim). Em vez de "Poletto
+T-B1", escreva o RACIOCINIO JURIDICO equivalente na justificativa (ex: "apolice
+apresentada em Anulatoria ainda sem sentenca de 1o grau, portanto risco baixo").
+Se nenhum template casar, prossiga com raciocinio livre (sem anotar isso na
+prosa)."""
 
 
 def _build_bloqueio_prob_exito() -> str:
@@ -815,12 +834,142 @@ def _build_field_instructions() -> str:
     ref = processo_numero, mov_id, cda_number, cnpj_basico, etc."""
 
 
+def _build_filtro_redacao() -> str:
+    """FILTRO DE REDACAO dos campos de PROSA (v2.6) — separa raciocinio interno
+    do texto que vai pra TELA DO ADVOGADO.
+
+    Motivacao (estudo 2026-06-16, 100 outputs reais): a prosa do L3 vaza
+    sistematicamente a maquinaria interna que a produziu — o pior caso e a
+    palavra "merito" no sentido de cluster de processos (colide com merito da
+    causa), alem de nomes do motor de risco (Poletto, templates T-X, Daycoval,
+    Architecture D, matriz determ, scores 0.xxxx), vocabulario de pipeline
+    (snapshot, pv, cards, mov_id/hash) e rotulos crus de seguro/conta. O leitor
+    e advogado de seguradora; isso quebra a leitura de um parecer e expoe que
+    tudo e saida mecanica de um classificador.
+
+    Desacopla raciocinio de formatacao (best practice Gemini): o jargao interno
+    PODE ser usado pra raciocinar/classificar e nos campos ESTRUTURAIS de audit
+    (cards_index, score, breakdown, risk_decomposition, merito_id echo). So a
+    PROSA visivel ao advogado deve ser limpa. Recency anchor (ultimo bloco) +
+    constraint negativa especifica + substituto positivo (best practices Gemini
+    ai.google.dev/prompting-strategies + Gemini 3 prompting guide).
+
+    NAO e "simplificar": e tornar AMIGAVEL e ACESSIVEL pra advogado, sem omitir
+    tecnica JURIDICA relevante e sem infantilizar."""
+    return """<filtro_redacao_advogado>
+=== FILTRO DE REDACAO — LEITOR E ADVOGADO (aplica aos CAMPOS DE PROSA) ===
+
+Quem le os campos de prosa (justificativa, narrativa_executiva,
+probabilidade_exito_merito.contribuicao_no_risco, decisao_atual.justificativa_breve,
+peca_pivo_merito.motivo, evidence_artifacts.snippet, proximos_passos_provaveis)
+e um ADVOGADO da equipe juridica de uma seguradora. Escreva PARA ele: portugues
+juridico AMIGAVEL e ACESSIVEL, sem omitir a tecnica juridica relevante e sem
+infantilizar. NAO e simplificar — e nao despejar jargao de bastidor.
+
+Ha DUAS listas abaixo. Leia as DUAS antes de redigir. Sao opostas e nao se
+misturam: a LISTA A e o que VOCE PODE/DEVE escrever; a LISTA B e o que VOCE
+NUNCA escreve. Em caso de conflito, a LISTA B (proibicao) vence.
+
+────────────────────────────────────────────────────────────────────────
+LISTA A — PODE / DEVE escrever (isto NAO e vazamento):
+- Tecnica juridica: fase processual, classe, instancia, efeito suspensivo,
+  transito em julgado, tese firmada em tribunal, fase recursal, fundamento da
+  decisao, CNJ dos processos.
+- O nivel de risco em portugues: "risco Alto / Medio / Baixo".
+- A chance de exito em termos QUALITATIVOS: "chance de exito baixa", "desfecho
+  favoravel ao tomador e improvavel", "alta perspectiva de exito".
+- "merito" SO no sentido JURIDICO: "merito da causa", "julgamento de merito",
+  "decisao de merito", "extinto sem merito".
+- Referencia GENERICA a "matriz de risco interna" / "matriz de risco da
+  seguradora" / "avaliacao interna de risco" (conceito de negocio, conhecido
+  dos advogados internos).
+- O NOME da empresa ou a POSICAO PROCESSUAL ("a executada", "a embargante", "a
+  re"). Pode explicar 1x que e a parte garantida pela apolice.
+
+────────────────────────────────────────────────────────────────────────
+LISTA B — NUNCA escreva (jargao INTERNO de bastidor — REESCREVA em portugues):
+- "merito" como AGRUPAMENTO/cluster de processos, "merito_id", ou ID numerico
+  interno do agrupamento.  -> escreva "o conjunto de processos com esta apolice".
+- NOMES DE PRODUTO/IMPLEMENTACAO do motor de risco: "Poletto", "Classificacao
+  Poletto", "Daycoval", "Matriz Daycoval", "Architecture D".  (O nome e proibido
+  MESMO colado em "interna"/"da seguradora"/"metodologia"/"versao".)
+- QUALIFICADOR DE COMO O RISCO FOI CALCULADO colado na matriz/avaliacao:
+  "matriz determ(inistica)", "deterministic(o/a)", "sem nuance de LLM", "sem
+  nuance de modelo", "sem nuance" (de qualquer coisa), "com/sem IA", "modelo",
+  "motor", "engine", "matriz=", "regra automatica". A "matriz/avaliacao interna"
+  GENERICA e OK (Lista A); QUALQUER qualificador de implementacao colado nela
+  vaza — "matriz de avaliacao interna, SEM NUANCE DE MODELO" e PROIBIDO (corte o
+  "sem nuance de modelo").
+- NUMERO de score/probabilidade do modelo: qualquer decimal (0.0001, 0.20, 0.4),
+  qualquer "%", e a PALAVRA "score". O parecer e qualitativo — diga em palavras,
+  nunca o numero. (Proibido inclusive "score agregado de 0.20".)
+- ROTULO DE CLASSE do modelo, com ou sem aspas, com ou sem underscore:
+  "poucas_chances", "poucas chances", "remota", "pro_fazenda_firmado",
+  "agregada".  -> traduza pela tabela abaixo.
+- CODIGOS/NOMES de regra, template ou cenario interno: "T-B1"/"T-A1"/"T-M1"/
+  qualquer "T-XX", "(Template X)", "(Regra Y)", "Regra G/H", "protocolo de risco
+  base", "piso/floor minimo de risco", "regra de diferimento operacional",
+  "gatilho", "rota de escape", e strings em CAIXA ALTA sem acento copiadas do
+  sistema.  -> descreva o cenario em portugues juridico corrente. Para "piso
+  minimo de risco Medio" escreva "o conjunto de fatores sustenta, no minimo,
+  risco Medio" (sem nomear mecanismo). Em vez de "conforme o protocolo de risco
+  base" escreva "pela analise dos elementos do caso" ou simplesmente afirme o
+  risco sem citar protocolo nenhum.
+- VOCABULARIO DE PIPELINE/DADOS: "card(s)", "snapshot" (inclusive "snapshot
+  anterior"), "pv", "camada/L2/L3", "processo_synthesis", "engine", "mov_id",
+  hashes (#7e7abaee), versao (vX.Y, "-fiscal").  -> refira o documento/evento
+  pela DATA e pelo que ele e ("a certidao de transito em julgado de 12/03/2024");
+  em vez de "consolidada no snapshot anterior" escreva "ja constava na
+  classificacao anterior" ou "ja era do conhecimento na analise anterior".
+- METRICAS internas de carteira: "N apolices ativas", "taxa de recusa X%". -> omita.
+
+────────────────────────────────────────────────────────────────────────
+TABELA DE TRADUCAO OBRIGATORIA (escreva o lado direito, NUNCA o esquerdo):
+  'provavel'/'pacifica'  ->  "alta perspectiva de exito pro tomador"
+  'possivel'             ->  "perspectiva moderada de exito"
+  'poucas_chances'       ->  "baixa perspectiva de as teses prosperarem"
+  'remota'               ->  "desfecho favoravel ao tomador e improvavel"
+
+────────────────────────────────────────────────────────────────────────
+AUTO-CHECAGEM ANTES DE EMITIR — varra cada campo de prosa; se achar QUALQUER um,
+REESCREVA antes de emitir:
+  (a) numero decimal entre 0 e 1, "%", ou a palavra "score"  -> remova, diga em palavras;
+  (b) underscore no meio de palavra (token snake_case)  -> traduza;
+  (c) aspas simples ao redor de uma palavra-classe ('remota')  -> traduza;
+  (d) os literais: Daycoval, Poletto, Architecture D, "matriz determ", "sem nuance",
+      T-A1/T-B1/T-XX, "piso minimo", "protocolo de risco base", "Regra G/H",
+      camada, engine, snapshot, mov_id, "merito" + numero;
+  (e) trecho em CAIXA ALTA no meio de frase / sem acentuacao (string copiada).
+
+PADRAO-OURO de redacao: "O conjunto de processos com esta apolice envolve uma
+Execucao Fiscal (CNJ ...) suspensa aguardando Embargos; a empresa obteve decisao
+desfavoravel em 1a instancia, pendente de apelacao. A apolice foi aceita. O risco
+e Medio." — acessivel a advogado E nao-advogado, sem nenhum termo da Lista B.
+
+EXEMPLOS (campo contribuicao_no_risco):
+  ERRADO: "Esta versao reflete a matriz deterministica, sem nuance de LLM.
+           Factual=Baixo juris=Medio -> matriz=Medio. score agregado 0.20,
+           piso minimo de risco Medio (Template T-B1)."
+  CERTO:  "A baixa perspectiva de exito das teses, somada a fase recursal sem
+           decisao definitiva, sustenta um risco no minimo Medio de acionamento."
+
+COM BASE EM TUDO ACIMA: antes de finalizar o JSON, releia CADA campo de prosa e
+confirme que NENHUM termo da LISTA B aparece (nenhum decimal, nenhuma palavra
+"score", nenhum codigo T-XX, nenhuma frase "matriz determ.../sem nuance/matriz=").
+Se aparecer, REESCREVA pela LISTA A + tabela antes de emitir. Esta e a regra final
+e mais importante do prompt.
+</filtro_redacao_advogado>"""
+
+
 def _build_lembrete_final(req: MeritoSynthesisRequest) -> str:
     """Recency anchor no fim do prompt — combate Lost-in-the-Middle.
 
     v2.1: substitui _build_output_schema legacy (FORMATO DE SAIDA duplicava
     o que response_schema=MeritoSynthesisCard ja enforça nativamente).
     Reforça as 3 regras criticas que devem governar a decisao final.
+
+    v2.6: adiciona item 4 (filtro de redacao) ao checklist final — recency
+    anchor pro <filtro_redacao_advogado> plugado logo acima.
     """
     return f"""<lembrete_final>
 Antes de emitir risco final, confirme:
@@ -829,6 +978,12 @@ Antes de emitir risco final, confirme:
    (releia CONSISTENCY CHECK no topo).
 3. Default = Baixo. Subida requer sinal explicito citando CNJ + evento
    concreto + bullet da escala (REGRA JUSTIFIQUE A SUBIDA).
+4. Prosa LIMPA pro advogado? Os campos de texto (justificativa,
+   narrativa_executiva, contribuicao_no_risco, etc.) NAO podem citar jargao
+   interno — "merito"(cluster)/merito_id, Poletto/templates T-X, Daycoval/
+   Architecture D/matriz determ, scores 0.xxxx, Regra G/H, cards/snapshot/
+   mov_id, "N apolices ativas". Reescreva em portugues juridico acessivel,
+   sem omitir a tecnica juridica (releia FILTRO DE REDACAO logo acima).
 
 Output: JSON estruturado conforme schema MeritoSynthesisCard (enforced via
 response_schema do Gemini). merito_id={req.merito_id}, merito_context=
@@ -1523,13 +1678,14 @@ def _build_ab_test_bucket_block(
             "  que voce discorde da matriz determ. Sua tarefa NAO eh classificar,\n"
             "  eh JUSTIFICAR a classificacao ja feita.\n"
             "\n"
-            "  Em `probabilidade_exito_merito.contribuicao_no_risco` cite:\n"
-            "    1. Qual foi o `risco_factual` agregado (do payload)\n"
-            "    2. Qual foi o `risco_jurisprudencial` agregado (do payload)\n"
-            f"    3. Por que a matriz determ Architecture D chegou em **{hint}**\n"
-            f"       (tabela: factual_agg x jurisprudencial_agg -> {hint})\n"
-            "  Padrao: 'Esta versao reflete a matriz determ Architecture D, sem\n"
-            "  nuance LLM. Factual=X juris=Y -> matriz={hint}.'\n"
+            "  Em `probabilidade_exito_merito.contribuicao_no_risco`, JUSTIFIQUE\n"
+            f"  o risco {hint} em PORTUGUES JURIDICO acessivel pro advogado,\n"
+            "  combinando o estado factual do caso (decisao vigente, fase) com a\n"
+            "  tendencia jurisprudencial da tese. NAO cite 'Architecture D',\n"
+            "  'matriz determ', 'sem nuance LLM', 'factual_agg/juris_agg' nem\n"
+            "  scores crus — esse e jargao interno (vide FILTRO DE REDACAO no fim).\n"
+            "  Ex: 'O estado atual do caso e a jurisprudencia desfavoravel a tese\n"
+            f"  sustentam um risco {hint} de acionamento da apolice.'\n"
             "</ab_test_bucket>\n"
         )
     # Bucket desconhecido -> trate como mixed (defensive)
@@ -1579,6 +1735,12 @@ def build_prompt_and_version(
         _build_rules(tipo),
         ab_test_block,  # PR6 — injetado quando bucket != None
         _build_lembrete_final(req),
+        # v2.6: filtro de redacao e a ULTIMA coisa do prompt (recency absoluto).
+        # Best practice oficial Gemini 3 (docs.cloud.google.com/.../gemini-3-prompting-guide):
+        # "the model may drop negative constraints if they appear too early" +
+        # "place your most critical restrictions as the final line". Constraint
+        # negativa (blacklist de jargao) DEPOIS do lembrete e da geracao.
+        _build_filtro_redacao(),
     ]
     version = _prompt_version_for(tipo)
     if bucket:
