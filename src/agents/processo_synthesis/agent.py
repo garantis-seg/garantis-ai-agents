@@ -127,6 +127,9 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
         prompt=prompt, model=model, temperature=0.0,
         response_schema=ProcessoSynthesisCard,
         thinking_budget=0,
+        # max_tokens 16384(default)->65536 (2026-06-17): processos com MUITOS movs
+        # (ex 680067, 393) geravam card grande demais -> JSON truncado -> 0 L2 cards.
+        max_tokens=65536,
     )
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
 
