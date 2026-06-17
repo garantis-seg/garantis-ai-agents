@@ -70,6 +70,12 @@ async def classify_merito_synthesis(
         temperature=0.0,
         response_schema=MeritoSynthesisCard,
         thinking_budget=0,
+        # max_tokens 16384(default)->65536 (teto Gemini 2.5), 2026-06-17: meritos
+        # GIGANTES (ex Petrobras 680195, 25 processos) geravam >16k tokens de output
+        # -> JSON truncado -> JSONDecodeError -> retryable_500 5x -> indeterminado.
+        # 65536 cabe folgado (so paga o output REAL gerado, nao o limite). Raiz, sem
+        # fallback. (edital_summarizer tem retry-aware p/ casos >65536 — YAGNI aqui.)
+        max_tokens=65536,
     )
 
     raw_response = response.text
