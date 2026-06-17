@@ -189,6 +189,7 @@ async def call_vision_l1(
     response_schema=None,
     temperature: float = 0.0,
     thinking_budget: int = 0,
+    max_tokens: int | None = None,
 ) -> Any:
     """Chama Gemini Vision com PDFs + prompt text. Retorna LLMResponse.
 
@@ -209,6 +210,8 @@ async def call_vision_l1(
     if response_schema is not None:
         config_kwargs["response_mime_type"] = "application/json"
         config_kwargs["response_schema"] = response_schema
+    if max_tokens:
+        config_kwargs["max_output_tokens"] = max_tokens
     if thinking_budget == 0:
         try:
             config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
@@ -268,6 +271,7 @@ async def call_l1_with_vision_fallback(
     log_label: str = "",
     thinking_budget: int = 0,
     docs_text: Optional[list[tuple[Optional[str], Optional[str]]]] = None,
+    max_tokens: int | None = None,
 ) -> Any:
     """High-level helper pros agents L1 (mov/day).
 
@@ -323,6 +327,7 @@ async def call_l1_with_vision_fallback(
             response_schema=response_schema,
             temperature=0.0,
             thinking_budget=thinking_budget,
+            max_tokens=max_tokens,
         )
 
     if gcs_urls and flag_enabled(vision_flag_name):
@@ -336,4 +341,5 @@ async def call_l1_with_vision_fallback(
         temperature=0.0,
         response_schema=response_schema,
         thinking_budget=thinking_budget,
+        max_tokens=max_tokens,
     )
