@@ -223,6 +223,12 @@ async def classify_mov_factsheet(
         response_schema=response_schema,
         log_label=f"mov_id={mov.mov_id}",
         thinking_budget=0,
+        # max_tokens default(~16384)->65536 (2026-06-17): mov de TEXTO GRANDE gerava
+        # card > teto default -> JSON truncado no char ~46K ("Unterminated string"/
+        # "Expecting ',' delimiter") -> parse_500 -> mov falha -> l1_degraded. Mesma
+        # raiz dos gigantes corrigida no L2/L3 (PR #37); faltava o L1. Era a causa
+        # dominante dos 9 monit indeterminado + parse_500 no contexto global.
+        max_tokens=65536,
     )
 
     raw_response = response.text
