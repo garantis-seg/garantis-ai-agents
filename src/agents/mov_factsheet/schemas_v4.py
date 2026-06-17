@@ -28,7 +28,7 @@ DEFER (re-liga no Lote 3 / FASE 4, leitor-de-petição): `cda`, conexos.
 """
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal, Optional, get_args
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -90,6 +90,7 @@ TIPO_DOC = Literal[
     "recusa_aceitacao_garantia", "cda", "guia_recolhimento", "comprovante_pagamento",
     "planilha_calculo", "parecer", "laudo_pericial", "prova_anexa", "ilegivel", "outros",
 ]
+_TIPO_DOC_VALORES = frozenset(get_args(TIPO_DOC))
 
 
 class DecisaoBlockV4(BaseModel):
@@ -282,6 +283,18 @@ class MovFactSheetCardV4(BaseModel):
         # cascade: ~56% dos 500 do ai-agents em 2026-06-15). Semanticamente null ==
         # "sem decisão / sem evento de garantia / sem valores" == o bloco default vazio.
         return {} if v is None else v
+
+    @field_validator("tipo_doc", mode="before")
+    @classmethod
+    def _coerce_tipo_doc_desconhecido(cls, v):
+        # Mesma família do _null_block_to_default: a LLM emite tipo_doc FORA da taxonomia
+        # (ex 'relatorio_fiscal' em exec-fiscal — sem constrained-decoding no ramo não-
+        # petição) -> literal_error -> 500 -> retry storm; em mérito de 1 mov isso é 100%
+        # de L1 fail -> l1_degraded -> indeterminado (raiz dos 9 méritos travados
+        # 2026-06-17). 'outros' é o catch-all do próprio enum ("não se encaixa em nenhum").
+        if isinstance(v, str) and v not in _TIPO_DOC_VALORES:
+            return "outros"
+        return v
 
 
 # ════ Ramo PETIÇÃO INICIAL (peticao_extract.v1) — FASE 4 conexos ════
