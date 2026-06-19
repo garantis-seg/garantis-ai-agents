@@ -51,10 +51,8 @@ def split_large_peca_variants(docs: list[DocAnexado]) -> list[list[DocAnexado]] 
     if big_idx is None:
         return None
     big = docs[big_idx]
-    pieces = _split_text(big.text_content or "")
+    pieces = _split_text(big.text_content or "")  # len>CHUNK_SIZE ⇒ sempre ≥2 pedaços
     n = len(pieces)
-    if n <= 1:
-        return None
     variants: list[list[DocAnexado]] = []
     for j, piece in enumerate(pieces):
         marked = f"[PARTE {j + 1}/{n} de documento dividido — leia como continuação]\n{piece}"
