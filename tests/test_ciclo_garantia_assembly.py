@@ -58,3 +58,18 @@ def test_aceita_objeto_pydantic():
         {"data": "2024-05-01", "evento": "acionamento", "status_pos": "nenhum"}])]
     out = _assemble_ciclo_garantia(ps)
     assert len(out) == 1 and out[0]["processo_numero"] == "X"
+
+
+def test_decoupling_llm_schema_vs_response():
+    # O LLM usa MeritoSynthesisCard (base, SEM ciclo → não loopa); a resposta usa
+    # MeritoSynthesisCardOut (COM ciclo). O response_model NÃO pode estripar o ciclo
+    # montado em código (era o bug do 680046: _assemble dava 26 mas a resposta vinha 0).
+    from src.agents.merito_synthesis.schemas import (
+        MeritoSynthesisCard, MeritoSynthesisCardOut, MeritoSynthesisResponse)
+    assert "ciclo_garantia" not in MeritoSynthesisCard.model_json_schema()["properties"]
+    assert "ciclo_garantia" in MeritoSynthesisCardOut.model_json_schema()["properties"]
+    card = {"merito_id": 1, "merito_context": "global", "risco": "Alto",
+            "ciclo_garantia": [{"data": "2024-01-01", "processo_numero": "A",
+                                "evento": "aceitacao", "status_pos": "aceito"}]}
+    resp = MeritoSynthesisResponse(card=card)
+    assert len(resp.model_dump()["card"]["ciclo_garantia"]) == 1  # NÃO estripado

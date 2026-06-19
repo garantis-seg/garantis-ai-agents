@@ -459,8 +459,24 @@ class MeritoSynthesisRequest(BaseModel):
     model_config = {"extra": "ignore"}
 
 
+class MeritoSynthesisCardOut(MeritoSynthesisCard):
+    """MeritoSynthesisCard + ciclo_garantia. É o tipo do PARSE e da RESPOSTA HTTP.
+
+    Decoupling (2026-06-19): o LLM usa MeritoSynthesisCard (base, SEM ciclo_garantia)
+    como response_schema → não pode loopar re-listando os eventos (680046: ~880 eventos
+    / 145KB malformado → indeterminado). O ciclo_garantia é montado em CÓDIGO
+    (agent._assemble_ciclo_garantia) e vive SÓ aqui — senão o response_model (que tipa
+    card por esta classe) o estriparia da resposta.
+    """
+
+    ciclo_garantia: list[CicloGarantiaEvent] = Field(
+        default_factory=list,
+        description="Timeline cross-processo da garantia — montada em código, NÃO pelo LLM.",
+    )
+
+
 class MeritoSynthesisResponse(BaseModel):
-    card: MeritoSynthesisCard
+    card: MeritoSynthesisCardOut
     raw_response: Optional[str] = None
     llm_raw_prompt: Optional[str] = None
     prompt_version: Optional[str] = None
