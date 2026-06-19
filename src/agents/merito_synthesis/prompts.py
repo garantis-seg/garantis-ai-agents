@@ -815,8 +815,8 @@ def _build_field_instructions() -> str:
 4. decisao_atual: a decisao mais recente que governa o MERITO HOJE (do processo principal
    OU do conexo se principal nao tem decisao). Inclua processo_de_origem.
 
-5. ciclo_garantia: timeline cross-processo unificada (todos os eventos de garantia de
-   todos os processos do merito), ordenada por data ASC.
+5. ciclo_garantia: NAO emita este campo — saiu do schema de output (2026-06-19). E
+   montado DETERMINISTICAMENTE em codigo a partir dos lifecycle_garantia dos processos.
 
 6. valor_em_disputa_melhor_evidencia: maior valor entre os processos (BRL).
    valor_garantia_melhor_evidencia: SOMA dos valor_garantia das apolices aceitas (BRL).
