@@ -106,8 +106,12 @@ def test_v44_todos_os_docs_renderizam_sem_cap(processo, mov):
 
 def test_v44_orcamento_por_unidade(processo, mov):
     """Orçamento agregado (2M chars): doc que estoura é truncado com marcador; o
-    excedente vira marcador explícito de omissão (no silent caps)."""
-    big = [DocAnexado(doc_key=str(i), text_content="z" * 900_000) for i in range(4)]
+    excedente vira marcador explícito de omissão (no silent caps).
+
+    titulo='SENTENCA' => perfil 'peça' (lê completo) — senão o perfil de leitura
+    (2026-06-19) marcaria doc grande SEM título legal como evidência (head+tail)
+    e cada doc consumiria ~80k em vez de 900k, fazendo todos caberem."""
+    big = [DocAnexado(doc_key=str(i), titulo="SENTENCA", text_content="z" * 900_000) for i in range(4)]
     prompt = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=big)
     assert "DOC 3/4" in prompt and "DOC 4/4" not in prompt
     assert "[TRUNCADO a 200000 chars do original]" in prompt

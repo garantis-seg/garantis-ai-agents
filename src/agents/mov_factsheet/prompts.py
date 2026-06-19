@@ -44,10 +44,15 @@ _DOC_LIST_CAP = 5  # max docs anexados por mov
 _RESUMO_PROCESSO_CAP = 1000
 
 
-def _summarize_doc(doc: DocAnexado, idx: int, total: int, text_cap: int = _DOC_TEXT_CAP_CHARS) -> str:
+def _summarize_doc(
+    doc: DocAnexado, idx: int, total: int, text_cap: int = _DOC_TEXT_CAP_CHARS,
+    text_override: str | None = None,
+) -> str:
     """Bloco de 1 doc no prompt. text_cap: cap de exibição POR VERSÃO — default 8.000
-    preserva o v3.1 congelado; o v4.4+ passa o próprio orçamento (sem-limite)."""
-    text = (doc.text_content or "").strip()
+    preserva o v3.1 congelado; o v4.4+ passa o próprio orçamento (sem-limite).
+    text_override: texto já transformado pelo caller (head+tail de evidência no v4)
+    — usado no lugar de doc.text_content quando fornecido (v3.1 nunca passa)."""
+    text = (text_override if text_override is not None else (doc.text_content or "")).strip()
     truncated_note = ""
     if len(text) > text_cap:
         text = text[:text_cap]

@@ -28,6 +28,7 @@ pilotos sequenciais futuros. Render de prod inalterado (1A/1D byte-idêntico).
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .fundacao import TAXONOMIA_TIPO_DOC
@@ -41,6 +42,59 @@ _V4_MOV_TEXT_CAP = 200_000        # snippet da mov (publicação pode trazer int
 _V4_DOC_TEXT_CAP = 1_000_000      # teto por doc (janela; casa com o fetch do shared)
 _V4_DOCS_BUDGET = 2_000_000       # orçamento agregado de docs por unidade (~500k tokens)
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
+
+# ── Perfil de leitura por Tipo de doc (2026-06-19) ─────────────────────────
+# Resolve o timeout do L1 em docs grandes (demonstrativo de 567pg = 1,9M chars →
+# Gemini 18-55s → estoura TIMEOUT_LAYER1_S=60s). NÃO é dup (memory
+# digesto-ocr-text-dup = falso alarme). 2 perfis:
+#   peça (substantivo: petição/sentença/acórdão/decisão...) → ler COMPLETO
+#         (chunk em camada separada se >200k — follow-up; aqui mantém a janela).
+#   evidência (tabular: demonstrativo/planilha/NFe/comprovante...) → HEAD+TAIL:
+#         natureza+valor no cabeçalho, totais no fim, miolo = bulk por-NFe.
+# Pré-classificador BARATO (sem LLM) por título/tipo/nº-páginas. Conservador:
+# default 'peça'; keyword legal VENCE (uma petição grande NÃO é evidência).
+_DOC_EVIDENCIA_HEAD = 50_000
+_DOC_EVIDENCIA_TAIL = 30_000
+_EVIDENCIA_EST_PAGES = 100        # doc SEM título legal e > isto = tabular/bundle
+
+_RE_DOC_PECA = re.compile(
+    r"PETI[CÇ][AÃ]O|INICIAL|SENTEN[CÇ]A|AC[OÓ]RD[AÃ]O|DECIS[AÃ]O|DESPACHO|"
+    r"EMBARGOS|CONTESTA[CÇ][AÃ]O|RECURSO|AGRAVO|APELA[CÇ][AÃ]O|MANIFESTA[CÇ][AÃ]O|"
+    r"PARECER|VOTO|IMPUGNA[CÇ][AÃ]O|R[EÉ]PLICA|CONTRARRAZ[OÕ]ES",
+    re.IGNORECASE,
+)
+_RE_DOC_EVIDENCIA = re.compile(
+    r"DEMONSTRATIVO|PLANILHA|C[AÁ]LCULO|NOTA[S]?\s+FISCA|NF[\s\-]?E\b|COMPROVANTE|"
+    r"GUIA|EXTRATO|RELA[CÇ][AÃ]O\s+DE|FICHA\s+DE\s+PONTO|SEFIP|FATURA|DARF|"
+    r"\bDAS\b|MEM[OÓ]RIA\s+DE\s+C[AÁ]LCULO|DEINF",
+    re.IGNORECASE,
+)
+
+
+def _doc_reading_profile(d: DocAnexado) -> str:
+    """'peca' (ler completo) | 'evidencia' (head+tail). Conservador: default peça."""
+    titulo = f"{d.titulo or ''} {d.tipo or ''}"
+    if _RE_DOC_PECA.search(titulo):
+        return "peca"  # peça explícita vence — petição grande NÃO é evidência
+    est_pages = d.paginas or (len(d.text_content or "") // 3000)
+    if _RE_DOC_EVIDENCIA.search(titulo) or est_pages > _EVIDENCIA_EST_PAGES:
+        return "evidencia"
+    return "peca"
+
+
+def _evidencia_head_tail(text: str) -> str:
+    """Head+tail de evidência tabular: cabeçalho (natureza+valor) + fim (totais);
+    miolo por-NFe omitido com marcador explícito (no silent cap)."""
+    if len(text) <= _DOC_EVIDENCIA_HEAD + _DOC_EVIDENCIA_TAIL:
+        return text
+    omit = len(text) - _DOC_EVIDENCIA_HEAD - _DOC_EVIDENCIA_TAIL
+    return (
+        text[:_DOC_EVIDENCIA_HEAD]
+        + f"\n\n[... documento de EVIDÊNCIA tabular: ~{omit:,} chars do miolo "
+        "omitidos (início e fim preservados — natureza/valor no cabeçalho, "
+        "totais no fim) ...]\n\n"
+        + text[-_DOC_EVIDENCIA_TAIL:]
+    )
 
 
 # Vocab por família — NEUTRO (relata as partes típicas; NÃO diz quem é "o cliente").
@@ -463,9 +517,15 @@ def build_mov_factsheet_prompt_v4(
         for i, d in enumerate(documentos_anexados):
             if remaining <= 0:
                 break
+            # Perfil de leitura: evidência tabular → head+tail; peça → completo.
+            raw = (d.text_content or "").strip()
+            eff_text = (
+                _evidencia_head_tail(raw)
+                if _doc_reading_profile(d) == "evidencia" else raw
+            )
             cap = min(_V4_DOC_TEXT_CAP, remaining)
-            block = _summarize_doc(d, i, total, text_cap=cap)
-            remaining -= min(len((d.text_content or "").strip()), cap)
+            block = _summarize_doc(d, i, total, text_cap=cap, text_override=eff_text)
+            remaining -= min(len(eff_text), cap)
             blocks.append(block)
             rendered += 1
         docs_block = "\n\n".join(blocks)
