@@ -28,6 +28,39 @@ DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-2.5-flash")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 
+def _assemble_ciclo_garantia(processo_syntheses) -> list[dict]:
+    """Monta o ciclo_garantia (timeline cross-processo da garantia) DETERMINISTICAMENTE
+    dos lifecycle_garantia dos processos — em vez de pedir pro LLM re-listar, o que
+    fazia o L3 loopar numa lista runaway (680046: ~880 eventos / 145KB malformado →
+    indeterminado). Ordena por data + dedupa. Shape = CicloGarantiaEvent (schemas.py)."""
+    def _g(ps, k):
+        return ps.get(k) if isinstance(ps, dict) else getattr(ps, k, None)
+
+    events: list[dict] = []
+    for ps in processo_syntheses or []:
+        pn = _g(ps, "processo_numero")
+        for ev in (_g(ps, "lifecycle_garantia") or []):
+            if not isinstance(ev, dict):
+                continue
+            events.append({
+                "data": ev.get("data"),
+                "processo_numero": pn,
+                "evento": ev.get("evento"),
+                "tipo_garantia": ev.get("tipo_garantia"),
+                "status_pos": ev.get("status_pos"),
+                "motivo_recusa": ev.get("motivo_recusa"),
+            })
+    events.sort(key=lambda e: e.get("data") or "9999-99-99")
+    seen: set = set()
+    out: list[dict] = []
+    for e in events:
+        key = (e["data"], e["processo_numero"], e["evento"], e["status_pos"])
+        if key not in seen:
+            seen.add(key)
+            out.append(e)
+    return out
+
+
 async def classify_merito_synthesis(
     request: MeritoSynthesisRequest | dict,
     model: Optional[str] = None,
@@ -98,6 +131,9 @@ async def classify_merito_synthesis(
             }
         card = MeritoSynthesisCard(**parsed)
         card_data = card.model_dump()
+        # ciclo_garantia montado em CÓDIGO (não pelo LLM — ver schemas.py): o LLM
+        # loopava re-listando os eventos. Determinístico dos lifecycle_garantia do input.
+        card_data["ciclo_garantia"] = _assemble_ciclo_garantia(request.processo_syntheses)
     except (json.JSONDecodeError, Exception) as e:
         # Diag (2026-06-19): L3 de mérito gigante gera JSON malformado/truncado.
         # raw_len + head/tail revelam o tamanho real + se trunca no max_tokens (corte

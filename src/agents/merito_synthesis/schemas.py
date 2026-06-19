@@ -233,10 +233,14 @@ class MeritoSynthesisCard(BaseModel):
 
     # Estado
     decisao_atual: DecisaoAtual = Field(default_factory=DecisaoAtual)
-    ciclo_garantia: list[CicloGarantiaEvent] = Field(
-        default_factory=list,
-        description="Timeline cross-processo dos eventos da garantia",
-    )
+    # ciclo_garantia REMOVIDO do output do LLM (2026-06-19): pedir pro LLM re-listar
+    # eventos que JÁ damos a ele (no lifecycle_garantia dos processo_syntheses) fazia
+    # o L3 LOOPAR numa lista runaway — 680046 gerava ~880 eventos / 145KB de JSON
+    # malformado → parse fail → indeterminado (não-determinístico). Agora é montado
+    # DETERMINISTICAMENTE em código (agent._assemble_ciclo_garantia) dos próprios
+    # lifecycle_garantia do input → exato, bounded, sem degeneração. CicloGarantiaEvent
+    # (acima) segue como contrato do shape persistido. Consumidor: snapshots.py usa
+    # card.get("ciclo_garantia") (dict), não atributo tipado.
 
     # Valores agregados
     valor_em_disputa_melhor_evidencia: Optional[float] = Field(
