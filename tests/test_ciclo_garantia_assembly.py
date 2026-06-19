@@ -73,3 +73,15 @@ def test_decoupling_llm_schema_vs_response():
                                 "evento": "aceitacao", "status_pos": "aceito"}]}
     resp = MeritoSynthesisResponse(card=card)
     assert len(resp.model_dump()["card"]["ciclo_garantia"]) == 1  # NÃO estripado
+
+
+def test_ciclo_aceita_valores_reais_amplos():
+    # ciclo_garantia é list[dict] (não list[CicloGarantiaEvent]) — os valores vêm do
+    # lifecycle real (evento 'acionamento'/'nenhum', 'reforco' sem cedilha), que os
+    # Literals estritos rejeitariam → 500. Permissivo NÃO pode levantar.
+    from src.agents.merito_synthesis.schemas import MeritoSynthesisCardOut, MeritoSynthesisResponse
+    card = {"merito_id": 1, "merito_context": "global", "risco": "Alto", "ciclo_garantia": [
+        {"data": "2024-01-01", "processo_numero": "A", "evento": "acionamento", "status_pos": "nenhum"},
+        {"data": "2024-02-01", "processo_numero": "B", "evento": "reforco", "status_pos": "aceito"}]}
+    resp = MeritoSynthesisResponse(card=MeritoSynthesisCardOut(**card))
+    assert len(resp.model_dump()["card"]["ciclo_garantia"]) == 2

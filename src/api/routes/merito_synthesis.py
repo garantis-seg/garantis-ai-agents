@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from ...agents.merito_synthesis.agent import classify_merito_synthesis
 from ...agents.merito_synthesis.schemas import (
-    MeritoSynthesisCard,
+    MeritoSynthesisCardOut,
     MeritoSynthesisRequest,
     MeritoSynthesisResponse,
 )
@@ -38,7 +38,7 @@ async def classify_merito_synthesis_endpoint(request: MeritoSynthesisRequest):
             )
 
         return MeritoSynthesisResponse(
-            card=MeritoSynthesisCard(**card_data),
+            card=MeritoSynthesisCardOut(**card_data),  # COM ciclo_garantia (montado em código)
             raw_response=result.get("raw_response"),
             llm_raw_prompt=result.get("llm_raw_prompt"),
             prompt_version=result.get("prompt_version"),
