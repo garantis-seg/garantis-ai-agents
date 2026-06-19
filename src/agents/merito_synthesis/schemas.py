@@ -469,7 +469,11 @@ class MeritoSynthesisCardOut(MeritoSynthesisCard):
     card por esta classe) o estriparia da resposta.
     """
 
-    ciclo_garantia: list[CicloGarantiaEvent] = Field(
+    # list[dict], NÃO list[CicloGarantiaEvent]: o shape é controlado pelo _assemble, mas
+    # os VALORES vêm do lifecycle real (evento pode ser 'acionamento'/'nenhum', 'reforco'
+    # sem cedilha, etc.) — os Literals estritos de CicloGarantiaEvent rejeitariam dado
+    # válido → ResponseValidationError 500. CicloGarantiaEvent segue como doc do shape.
+    ciclo_garantia: list[dict[str, Any]] = Field(
         default_factory=list,
         description="Timeline cross-processo da garantia — montada em código, NÃO pelo LLM.",
     )
