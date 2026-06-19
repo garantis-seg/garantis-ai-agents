@@ -26,12 +26,6 @@ def test_peca_por_titulo_legal_vence_mesmo_grande():
     assert _doc_reading_profile(_doc(titulo="SENTENCA", text=big)) == "peca"
 
 
-def test_evidencia_por_titulo_tabular():
-    assert _doc_reading_profile(_doc(titulo="DEMONSTRATIVO DE DEBITO", text="abc")) == "evidencia"
-    assert _doc_reading_profile(_doc(titulo="PLANILHA DE CALCULO", text="abc")) == "evidencia"
-    assert _doc_reading_profile(_doc(titulo="01 SEFIP MAIO", text="abc")) == "evidencia"
-
-
 def test_evidencia_por_tamanho_sem_titulo_legal():
     # "ANEXO INFORMACAO FISCAL" (caso real merito 20): sem keyword legal nem
     # tabular, mas > 200k CHARS -> evidência (chars, não páginas: é o input do LLM).

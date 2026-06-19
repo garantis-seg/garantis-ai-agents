@@ -49,10 +49,11 @@ from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
 # digesto-ocr-text-dup = falso alarme). 2 perfis:
 #   peça (substantivo: petição/sentença/acórdão/decisão...) → ler COMPLETO
 #         (chunk em camada separada se >200k — follow-up; aqui mantém a janela).
-#   evidência (tabular: demonstrativo/planilha/NFe/comprovante...) → HEAD+TAIL:
-#         natureza+valor no cabeçalho, totais no fim, miolo = bulk por-NFe.
-# Pré-classificador BARATO (sem LLM) por título/tipo/nº-páginas. Conservador:
-# default 'peça'; keyword legal VENCE (uma petição grande NÃO é evidência).
+#   evidência (doc GRANDE >200k sem título legal — tipicamente tabular:
+#         demonstrativo/planilha/NFe) → HEAD+TAIL (natureza+valor no cabeçalho,
+#         totais no fim, miolo = bulk omitido).
+# Regra BARATA (sem LLM): keyword legal no título → peça (vence, petição grande
+# NÃO é evidência); senão doc >200k chars → evidência; senão peça (default).
 _DOC_EVIDENCIA_HEAD = 50_000
 _DOC_EVIDENCIA_TAIL = 30_000
 _EVIDENCIA_MIN_CHARS = 200_000    # doc SEM título legal e > isto = tabular/bundle.
@@ -65,22 +66,13 @@ _RE_DOC_PECA = re.compile(
     r"PARECER|VOTO|IMPUGNA[CÇ][AÃ]O|R[EÉ]PLICA|CONTRARRAZ[OÕ]ES",
     re.IGNORECASE,
 )
-_RE_DOC_EVIDENCIA = re.compile(
-    r"DEMONSTRATIVO|PLANILHA|C[AÁ]LCULO|NOTA[S]?\s+FISCA|NF[\s\-]?E\b|COMPROVANTE|"
-    r"GUIA|EXTRATO|RELA[CÇ][AÃ]O\s+DE|FICHA\s+DE\s+PONTO|SEFIP|FATURA|DARF|"
-    r"\bDAS\b|MEM[OÓ]RIA\s+DE\s+C[AÁ]LCULO|DEINF",
-    re.IGNORECASE,
-)
 
 
 def _doc_reading_profile(d: DocAnexado) -> str:
     """'peca' (ler completo) | 'evidencia' (head+tail). Conservador: default peça."""
-    titulo = f"{d.titulo or ''} {d.tipo or ''}"
-    if _RE_DOC_PECA.search(titulo):
+    if _RE_DOC_PECA.search(f"{d.titulo or ''} {d.tipo or ''}"):
         return "peca"  # peça explícita vence — petição grande NÃO é evidência
-    if _RE_DOC_EVIDENCIA.search(titulo) or len(d.text_content or "") > _EVIDENCIA_MIN_CHARS:
-        return "evidencia"
-    return "peca"
+    return "evidencia" if len(d.text_content or "") > _EVIDENCIA_MIN_CHARS else "peca"
 
 
 def _evidencia_head_tail(text: str) -> str:
