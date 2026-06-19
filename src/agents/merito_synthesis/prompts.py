@@ -122,6 +122,16 @@ def _prompt_version_for(tipo: str) -> str:
 # ─── Card summarizers (input cards → string fragments) ─────────────────────
 
 
+# Bound do lifecycle_garantia no prompt do L3 (2026-06-19): processo gigante (ex 1940
+# movs) gera ~280 eventos de lifecycle. Renderizá-los inteiros despejava ~22KB no prompt
+# → o L3 ecoava+amplificava em ciclo_garantia (145KB / 5312 linhas) → JSON malformado →
+# parse fail → indeterminado. head+tail preserva origem (apresentação/aceitação) + estado
+# atual; o miolo repetido é omitido.
+_LIFECYCLE_HEAD = 20
+_LIFECYCLE_TAIL = 20
+_LIFECYCLE_MAX = _LIFECYCLE_HEAD + _LIFECYCLE_TAIL  # acima disso → head+tail
+
+
 def _summarize_processo_synthesis(ps: ProcessoSynthesisMin) -> str:
     """Bloco de 1 processo_synthesis pro prompt."""
     parts = [f"=== PROCESSO {ps.processo_numero}"]
@@ -159,8 +169,19 @@ def _summarize_processo_synthesis(ps: ProcessoSynthesisMin) -> str:
         parts.append(f"  Peca-pivo candidata: mov_id={pivo['mov_id']} ({pivo.get('motivo') or ''})")
     lc = ps.lifecycle_garantia or []
     if lc:
+        shown = (
+            lc if len(lc) <= _LIFECYCLE_MAX
+            else lc[:_LIFECYCLE_HEAD] + [None] + lc[-_LIFECYCLE_TAIL:]
+        )
         parts.append(f"  Lifecycle garantia ({len(lc)} eventos):")
-        for ev in lc:
+        for ev in shown:
+            if ev is None:
+                omit = len(lc) - _LIFECYCLE_HEAD - _LIFECYCLE_TAIL
+                parts.append(
+                    f"    [... {omit} eventos intermediários omitidos "
+                    "(origem e estado atual preservados) ...]"
+                )
+                continue
             parts.append(
                 f"    {ev.get('data') or '?'} | {ev.get('evento')} "
                 f"({ev.get('tipo_garantia') or 'na'}) -> {ev.get('status_pos')}"
