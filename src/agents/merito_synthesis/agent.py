@@ -99,7 +99,14 @@ async def classify_merito_synthesis(
         card = MeritoSynthesisCard(**parsed)
         card_data = card.model_dump()
     except (json.JSONDecodeError, Exception) as e:
-        logger.error(f"merito_synthesis parse failed merito_id={request.merito_id}: {repr(e)}")
+        # Diag (2026-06-19): L3 de mérito gigante gera JSON malformado/truncado.
+        # raw_len + head/tail revelam o tamanho real + se trunca no max_tokens (corte
+        # mid-JSON no tail) + qual campo infla. Remover quando o bloat do L3 for fechado.
+        logger.error(
+            f"merito_synthesis parse failed merito_id={request.merito_id}: {repr(e)} "
+            f"| raw_len={len(raw_response)} head={raw_response[:220]!r} "
+            f"tail={raw_response[-220:]!r}"
+        )
         card_data = {
             "error": repr(e), "raw": raw_response,
             "merito_id": request.merito_id, "merito_context": request.merito_context,
