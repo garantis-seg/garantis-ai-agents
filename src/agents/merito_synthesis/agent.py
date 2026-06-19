@@ -134,6 +134,11 @@ async def classify_merito_synthesis(
         # ciclo_garantia montado em CÓDIGO (não pelo LLM — ver schemas.py): o LLM
         # loopava re-listando os eventos. Determinístico dos lifecycle_garantia do input.
         card_data["ciclo_garantia"] = _assemble_ciclo_garantia(request.processo_syntheses)
+        logger.info(
+            "ciclo_garantia assembled merito_id=%s n_eventos=%d lifecycle_lens=%s",
+            request.merito_id, len(card_data["ciclo_garantia"]),
+            [len(getattr(p, "lifecycle_garantia", None) or []) for p in (request.processo_syntheses or [])],
+        )
     except (json.JSONDecodeError, Exception) as e:
         # Diag (2026-06-19): L3 de mérito gigante gera JSON malformado/truncado.
         # raw_len + head/tail revelam o tamanho real + se trunca no max_tokens (corte
