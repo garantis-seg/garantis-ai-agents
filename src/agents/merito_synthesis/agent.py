@@ -18,7 +18,7 @@ from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
 from .prompts import build_prompt_and_version
-from .schemas import MeritoSynthesisCard, MeritoSynthesisRequest
+from .schemas import MeritoSynthesisCard, MeritoSynthesisCardOut, MeritoSynthesisRequest
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +129,9 @@ async def classify_merito_synthesis(
                 "aiim": len(request.aiims or []),
                 "tomador": 1 if request.tomador else 0,
             }
-        card = MeritoSynthesisCard(**parsed)
-        card_data = card.model_dump()
+        card = MeritoSynthesisCardOut(**parsed)  # subclasse COM ciclo_garantia (response_model
+        card_data = card.model_dump()            # tipa card por ela; response_schema do LLM
+        #                                          fica MeritoSynthesisCard base, SEM ciclo)
         # ciclo_garantia montado em CÓDIGO (não pelo LLM — ver schemas.py): o LLM
         # loopava re-listando os eventos. Determinístico dos lifecycle_garantia do input.
         card_data["ciclo_garantia"] = _assemble_ciclo_garantia(request.processo_syntheses)
