@@ -33,11 +33,16 @@ def test_evidencia_por_titulo_tabular():
 
 
 def test_evidencia_por_tamanho_sem_titulo_legal():
-    # "ANEXO INFORMACAO FISCAL" de 567pg (caso real merito 20): sem keyword legal
-    # nem tabular, mas > 100 pag estimadas -> evidência.
-    big = "y" * 1_900_000  # ~633 paginas estimadas (/3000)
-    assert _doc_reading_profile(_doc(titulo="ANEXO INFORMACAO FISCAL", text=big)) == "evidencia"
-    assert _doc_reading_profile(_doc(titulo="DOCUMENTO", text="z" * 1000, paginas=200)) == "evidencia"
+    # "ANEXO INFORMACAO FISCAL" (caso real merito 20): sem keyword legal nem
+    # tabular, mas > 200k CHARS -> evidência (chars, não páginas: é o input do LLM).
+    assert _doc_reading_profile(_doc(titulo="ANEXO INFORMACAO FISCAL", text="y" * 1_900_000)) == "evidencia"
+    assert _doc_reading_profile(_doc(titulo="DOCUMENTO", text="z" * 250_000)) == "evidencia"
+
+
+def test_peca_quando_texto_curto_mesmo_com_muitas_paginas():
+    # 500 páginas mas só 1000 chars extraídos = input trivial -> peça (lê completo).
+    # Páginas não importam; o que conta é o nº de chars (input do Gemini).
+    assert _doc_reading_profile(_doc(titulo="DOCUMENTO", text="z" * 1000, paginas=500)) == "peca"
 
 
 def test_peca_default_pequeno():

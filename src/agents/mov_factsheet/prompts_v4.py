@@ -55,7 +55,9 @@ from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
 # default 'peça'; keyword legal VENCE (uma petição grande NÃO é evidência).
 _DOC_EVIDENCIA_HEAD = 50_000
 _DOC_EVIDENCIA_TAIL = 30_000
-_EVIDENCIA_EST_PAGES = 100        # doc SEM título legal e > isto = tabular/bundle
+_EVIDENCIA_MIN_CHARS = 200_000    # doc SEM título legal e > isto = tabular/bundle.
+                                  # CHARS (não páginas): é o input do LLM que conta.
+                                  # Alinha com o tamanho seguro/chunk de 200k.
 
 _RE_DOC_PECA = re.compile(
     r"PETI[CÇ][AÃ]O|INICIAL|SENTEN[CÇ]A|AC[OÓ]RD[AÃ]O|DECIS[AÃ]O|DESPACHO|"
@@ -76,8 +78,7 @@ def _doc_reading_profile(d: DocAnexado) -> str:
     titulo = f"{d.titulo or ''} {d.tipo or ''}"
     if _RE_DOC_PECA.search(titulo):
         return "peca"  # peça explícita vence — petição grande NÃO é evidência
-    est_pages = d.paginas or (len(d.text_content or "") // 3000)
-    if _RE_DOC_EVIDENCIA.search(titulo) or est_pages > _EVIDENCIA_EST_PAGES:
+    if _RE_DOC_EVIDENCIA.search(titulo) or len(d.text_content or "") > _EVIDENCIA_MIN_CHARS:
         return "evidencia"
     return "peca"
 
