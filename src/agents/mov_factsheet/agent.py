@@ -4,6 +4,7 @@ Single LLM call por movimentacao, extrai 13 campos estruturados.
 Substitui mov_summarizer durante coexistencia (kind='mov_factsheet' vs kind='movimentacao').
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -14,6 +15,7 @@ from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT, call_l1_with_vision_fallback
 from .._utils.feature_flags import flag_enabled
+from .chunking import reduce_peca_cards, split_large_peca_variants, sum_usage
 from .prompts import build_mov_factsheet_prompt
 from .fundacao import derivar_categoria, derivar_status_garantia
 from .schemas import (
@@ -128,6 +130,7 @@ async def classify_mov_factsheet(
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
     classe: Optional[str] = None,
+    _no_chunk: bool = False,
 ) -> dict:
     """Extract a 13-field FactSheet from a single mov.
 
@@ -169,6 +172,17 @@ async def classify_mov_factsheet(
     prompt_version = PROMPT_VERSION
 
     llm_provider = create_provider(provider)
+
+    # CHUNK GATE (v4): peça grande (>CHUNK_SIZE) estoura o L1 (Gemini >60s →
+    # TIMEOUT_LAYER1_S). Split em chunks, classifica cada um em PARALELO e reduz por
+    # campo (lê COMPLETO sem timeout). Evidência já vai head+tail no prompt builder; só
+    # peça precisa. Recursa com _no_chunk=True (cada chunk <CHUNK_SIZE → 1 call normal).
+    if use_v4 and not _no_chunk:
+        variants = split_large_peca_variants(docs_typed)
+        if variants:
+            return await _classify_chunked(
+                processo, mov, variants, fb_typed, model, provider, classe,
+            )
 
     if use_v4:
         # Caminho neutro (Fase 2): prompt + response_schema v4, imports lazy (isolam o
@@ -283,4 +297,47 @@ async def classify_mov_factsheet(
         "llm_raw_prompt": prompt,
         "prompt_version": prompt_version,
         "usage": usage,
+    }
+
+
+async def _classify_chunked(
+    processo, mov, variants, fb_typed, model, provider, classe,
+) -> dict:
+    """Map-reduce de peça grande: N variantes (chunks) → classify em PARALELO (cada uma
+    com _no_chunk=True → 1 call normal) → reduz os cards + RE-DERIVA (categoria/status/...
+    consistentes com a base reduzida). Custo somado. Lógica pura em chunking.py."""
+    from garantis_shared.engine_v6.layer1_mov_factsheet.derivacoes import (
+        aplicar_derivados_sujeito_indep,
+    )
+
+    results = await asyncio.gather(
+        *[
+            classify_mov_factsheet(
+                processo, mov, v, fb_typed, model, provider, classe, _no_chunk=True
+            )
+            for v in variants
+        ],
+        return_exceptions=True,
+    )
+    ok = [r for r in results if isinstance(r, dict)]
+    cards = [
+        r["card"] for r in ok
+        if isinstance(r.get("card"), dict) and "error" not in r["card"]
+    ]
+    if not cards:
+        # todos os chunks falharam → devolve o 1o resultado (com seu erro), não mascara
+        logger.error(f"L1_CHUNK_ALL_FAIL mov_id={mov.mov_id} variants={len(variants)}")
+        return ok[0] if ok else {
+            "card": {"error": "all chunks failed", "mov_id": mov.mov_id},
+            "raw_response": "", "llm_raw_prompt": "", "prompt_version": None, "usage": {},
+        }
+
+    reduced = reduce_peca_cards(cards)
+    aplicar_derivados_sujeito_indep(reduced)  # re-derive na base reduzida
+    return {
+        "card": reduced,
+        "raw_response": f"[chunked:{len(cards)}/{len(variants)} partes]",
+        "llm_raw_prompt": f"[chunked:{len(variants)} partes de peca grande]",
+        "prompt_version": ok[0].get("prompt_version"),
+        "usage": sum_usage([r.get("usage") or {} for r in ok]),
     }
