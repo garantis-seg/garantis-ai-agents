@@ -100,7 +100,20 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #     o texto-modelo "matriz determ Architecture D, sem nuance LLM").
 #   - lembrete_final ganhou item 4 (prosa limpa).
 #   - Rollback: revert do PR (regen COLD na v2.5).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.6"
+#
+# v2.7 (2026-06-20, SEPARACAO DAS 2 MATRIZES DAYCOVAL — calibragem L2/L3):
+#   - A MATRIZ DE RISCO (estagio processual) volta a ser o UNICO decisor do nivel;
+#     a probabilidade_exito (chance de vencer a causa) vira CONTEXTO de apoio.
+#     Removido o "floor" prob_exito->risco (protocolo + bloqueio + Regra F + gatilho
+#     prob no consistency-check) que misturava as duas matrizes Daycoval e causava
+#     over-rating sistematico. Injetado bloco <matriz_risco> (criterios BMG Dez/2024)
+#     como regra de decisao; prob_exito por processo fica como contexto rotulado.
+#   - A/B vs Poletto (eval l3_poletto, LLM decide sem override): exact 37->46%,
+#     within1 80->88%, miss-perigoso (Poletto>=Alto->Baixo) 7->3, Altissimo 0->14.
+#   - Pareado com flip do override no worker: JURISPRUDENCE_PATH_ENABLED
+#     prob_base->shadow (o veredito do LLM passa a valer; matriz fica dormente).
+#   - Rollback: revert do PR (regen COLD na v2.6) + flag de volta pra prob_base.
+PROMPT_VERSION_BASE = "merito_synthesis.v2.7"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -358,7 +371,6 @@ def _build_consistency_check() -> str:
    - "alta chance de reversao desfavoravel ao Tomador"
    - "alta probabilidade de reversao" (mesmo sem dizer "Alto")
    - "elevando o risco de acionamento da apolice"
-   - "probabilidade remota de exito" / "probabilidade de exito e 'remota'"
    - "jurisprudencia desfavoravel a tese / contraria ao Tomador"
    - "tendencia de perda em instancias superiores"
    - "tese majoritariamente pro_fazenda" / "majoritario pro-Fazenda"
@@ -465,50 +477,56 @@ def _build_protocolo_postura_default() -> str:
     Nova regra: floor minimo POR probabilidade_exito_merito.classificacao_agregada.
     "Ausencia de decisao" NAO eh mais sinal de Baixo — eh sinal NEUTRO; floor
     minimo do prob_exito agregado domina."""
-    return """=== PROTOCOLO DE RISCO BASE (CRITICA PR7.1 — Architecture D floor) ===
+    return """=== COMO DECIDIR O RISCO — A MATRIZ DE RISCO MANDA ===
 
-POSTURA: o risco do MERITO reflete a PROBABILIDADE DE ACIONAMENTO da apolice
-no horizonte 12-24 meses. Combine TRES sinais hierarquicos: (1) FLOOR MINIMO
-derivado de probabilidade_exito_merito.classificacao_agregada; (2) FASE
-PROCESSUAL via templates T-B*/T-M*/T-A*/T-AA*; (3) DECISAO MERITO explicita.
+O `risco` do MERITO e o risco de ACIONAMENTO DA APOLICE — decidido pela MATRIZ
+DE RISCO abaixo (criterio de negocio Daycoval/BMG). Ela classifica pelo ESTAGIO
+PROCESSUAL + direcao da decisao de MERITO + estado da garantia. NAO e a chance de
+o Tomador perder a causa.
 
-=== FLOOR MINIMO POR PROBABILIDADE_EXITO_AGREGADA ===
+A `probabilidade_exito` de cada processo (provavel/possivel/poucas_chances/remota)
+e CONTEXTO DE APOIO — diz quao provavel o Tomador VENCER a causa. Ajuda a entender
+o cenario, mas NAO define o nivel sozinha. Exito 'remota' com a apolice apenas
+apresentada e SEM decisao de merito desfavoravel exigivel = risco BAIXO. NUNCA
+suba o risco so porque a probabilidade de exito e 'poucas_chances' ou 'remota' —
+exija o ESTAGIO correspondente na Matriz de Risco.
 
-A probabilidade_exito_merito.classificacao_agregada eh INPUT VALIDO pro risco
-(diferente da regra anterior v2.4 que mandava ignorar). Aplique como FLOOR:
+<matriz_risco>
+Escolha o nivel pelo estagio MAIS SEVERO presente em QUALQUER processo do merito.
+Excecao: um conexo FAVORAVEL que SUSPENDE a execucao/cumprimento do principal
+derruba o risco (nao ha gatilho enquanto suspenso).
 
-  - 'provavel' / 'pacifica':  Baixo  (floor)
-  - 'possivel':               Medio  (floor — NUNCA emit Baixo)
-  - 'poucas_chances':         Medio  (floor — NUNCA emit Baixo)
-  - 'remota':                 Alto   (floor — NUNCA emit Baixo)
+BAIXO — garantia ainda nao em risco de acionamento de curto prazo:
+  - apolice aceita para opor Embargos/Anulatoria/MS/Cautelar/Impugnacao (ou no
+    cumprimento/execucao para opor defesa), SEM decisao de merito ainda
+  - aguarda-se a decisao sobre aceitacao da apolice
+  - Embargos a execucao / impugnacao julgados PROCEDENTES em favor do Tomador
+  - execucao/cumprimento SUSPENSO aguardando transito de Anulatoria/MS conexa
+    favoravel ao Tomador (ou processo principal extinto sem merito)
+  - julgamento FAVORAVEL ao Tomador em 2a ou ultima instancia
 
-=== EXCECOES BAIXADORAS (podem baixar 1 tier abaixo do floor) ===
+MEDIO — degradacao concreta, reversao razoavel:
+  - julgamento DESFAVORAVEL ao Tomador em 1a instancia (total ou parcial) COM
+    interposicao de recurso / prazo de recurso (efeito suspensivo)
+  - execucao suspensa por ACORDO de parcelamento (com manutencao da garantia)
 
-Aceite Baixo apesar de prob_exito=poucas_chances/remota SOMENTE quando:
-  - T-B2 confirmado (decisao FAVORAVEL ao Tomador em sentenca/acordao/transito)
-  - T-B4 confirmado (caso resolvido: pagamento, parcelamento, RJ)
-  - T-B3 confirmado (estado pre-aceitacao da apolice — apolice ainda nao em risco)
+ALTO — gatilho proximo, sem rota de escape clara:
+  - decisao de MERITO desfavoravel ao Tomador (Embargos/Anulatoria/Impugnacao que
+    discute o debito) SEM recurso pendente e ainda nao transitada
+  - descumprimento, pelo Tomador, do acordo de parcelamento garantido pela apolice
 
-Sem confirmacao explicita de UM dos 3 templates acima, FLOOR domina.
+ALTISSIMO — gatilho de acionamento disparado/iminente:
+  - decisao de MERITO desfavoravel ao Tomador TRANSITADA em julgado
+  - intimacao do Tomador para pagamento do debito/condenacao apos o transito
+  - decisao determinando pagamento pela Seguradora
+</matriz_risco>
 
-=== EXCECOES SUBIDORAS (sobem 1+ tier acima do floor) ===
+So decisoes de MERITO (sobre o debito/obrigacao) movem o nivel. Decisoes
+PROCESSUAIS (interlocutoria, agravo, embargos de declaracao, admissibilidade de
+recurso, extincao SEM merito) NAO sobem risco — ver regras abaixo.
 
-  - Penhora online com valor_bloqueado > 0 documentado nos cards
-  - Intimacao formal da seguradora pra pagar
-  - Cumprimento de sentenca contra Tomador com prazo em curso
-  - Transito em julgado DESFAVORAVEL ao Tomador
-  - Decisao 2g DESFAVORAVEL ao Tomador sem recurso pendente
-
-=== ZONA-CINZA / INDETERMINADO ===
-
-"Medio" NUNCA como zona-cinza meramente cauteloso. Medio so vem de floor
-explicito ou template T-M*.
-
-'Indeterminado' permitido APENAS quando TODAS as condicoes abaixo:
-  - probabilidade_exito_merito.classificacao_agregada ausente OU null
-  - factual_agg e juris_agg ambos null/Indeterminado
-  - Nenhum template T-* casa
-  - Cards sem decisao de merito identificada"""
+'Indeterminado' so quando NENHUM processo tem estagio identificavel na matriz
+(sem decisao de merito E sem estado de garantia legivel nos cards)."""
 
 
 def _build_templates_poletto() -> str:
@@ -665,22 +683,13 @@ def _build_bloqueio_prob_exito() -> str:
     # (alinhado com PROTOCOLO DE RISCO BASE PR7.1). Architecture D matriz
     # determ promote (mode=new) usa derived_aggregate como fonte oficial
     # quando disponivel. Block name preservado pra compat env var.
-    return """=== USO DE PROBABILIDADE_EXITO (PR7.1 — Architecture D compatible) ===
+    return """=== PROBABILIDADE_EXITO = CONTEXTO, NAO DECIDE O NIVEL ===
 
-A L2 entrega probabilidade_exito_merito.classificacao_agregada (Matriz Daycoval
-agregada via aggregator override). Esse campo eh INPUT VALIDO no risco final
-(reversao da regra v2.4 que mandava ignorar). Use como FLOOR conforme
-PROTOCOLO DE RISCO BASE.
-
-Combine com factual_agg + juris_agg (Architecture D) que tambem podem estar
-no payload. Quando flag JURISPRUDENCE_PATH_ENABLED=new estiver ativa, a matriz
-determ Architecture D substitui card.risco AUTOMATICAMENTE (downstream do LLM)
-SO quando derived_aggregate != Indeterminado. Quando Indeterminado, sua resposta
-LLM eh fallback — use o FLOOR de probabilidade_exito agregada como guia.
-
-Sinais Daycoval (probabilidade_exito) e Architecture D matriz determ sao
-COMPATIVEIS, nao concorrentes. Ambos refletem distribuicao empirica de
-acionamento por classe + estado processual. Use em conjunto."""
+A probabilidade_exito de cada processo (Matriz Daycoval de chance de VENCER a
+causa) e CONTEXTO DE APOIO pra entender o cenario. Ela NAO e o decisor do risco
+— quem decide o nivel e a MATRIZ DE RISCO (estagio processual), acima. NUNCA
+converta 'poucas_chances'/'remota' direto em Medio/Alto: exija o estagio
+correspondente (decisao de merito desfavoravel exigivel, transito, intimacao)."""
 
 
 # PR7.6 FIX (2026-05-31): _REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO DELETADA.
@@ -797,10 +806,11 @@ def _build_field_instructions() -> str:
     suficientes pra cobrir fiscal/trab/civel."""
     return """=== INSTRUCOES POR CAMPO ===
 
-1. risco (UM dos 4 niveis): aplique o PROTOCOLO DE RISCO BASE acima.
-   Default = Baixo. So sobe com sinal explicito (decisao desfavoravel
-   transitada, intimacao seguradora, penhora, cumprimento de sentenca
-   determinado, tese contraria firmada, etc — vide escala completa).
+1. risco (UM dos 4 niveis): aplique a MATRIZ DE RISCO (estagio) acima.
+   So sobe com sinal de ESTAGIO explicito (decisao de merito desfavoravel
+   exigivel, transito desfavoravel, intimacao seguradora, penhora efetivada,
+   cumprimento determinado — vide escala completa). NAO suba por probabilidade
+   de exito baixa.
 
 2. justificativa: 2-4 paragrafos PT-BR.
    - Paragrafo 1: estado factual (qual processo carrega a decisao mais decisiva, sentido)
@@ -827,7 +837,7 @@ def _build_field_instructions() -> str:
 
 8. proximos_passos_provaveis: lista de 2-4 acoes esperadas pro merito como um todo.
 
-9. probabilidade_exito_merito (Matriz Daycoval agregada — INPUT FORTE PRO RISCO):
+9. probabilidade_exito_merito (Matriz Daycoval agregada — CONTEXTO DE APOIO, NAO decide o nivel):
    Cada processo_synthesis ja traz `probabilidade_exito` com score (1.0/0.7/0.4/0.0001)
    da Matriz Daycoval. Voce agrega no nivel do MERITO:
 
@@ -1345,14 +1355,15 @@ D. Peca-pivo do merito pode ser de CONEXO (nao do principal). Ex: anulatória co
    julgou improcedente -> isso e pivo mesmo se principal e Embargos sem sentenca."""
 
 
-_REGRA_F_COMUM = """F. PROBABILIDADE DE EXITO (Daycoval) E INPUT FORTE PRO RISCO, NAO SUBSTITUI:
-   - prob_exito agregada ALTA (>= 0.85, "provavel") -> EMPURRA risco pra BAIXO
-     (mas nao supera trans em julgado desfavoravel — esse e Altissimo independente)
-   - prob_exito BAIXA (< 0.20, "remota") -> EMPURRA risco pra ALTO
-     (mesmo sem decisao desfavoravel ainda, pq a perda eventual e provavel)
-   - prob_exito MEDIA (0.20-0.85) -> deixa o risco governado pelo estado atual
-     (decisao_vigente, lifecycle_garantia, etc.)
-   - A `contribuicao_no_risco` deve EXPLICAR essa influencia em 1 frase."""
+_REGRA_F_COMUM = """F. PROBABILIDADE DE EXITO = CONTEXTO DE APOIO, NAO DECIDE O NIVEL:
+   A probabilidade_exito (provavel/possivel/poucas_chances/remota) de cada processo
+   diz quao provavel o Tomador VENCER a causa. Use como pano de fundo do cenario,
+   NUNCA como gatilho de risco: NAO suba o nivel so porque o exito e 'poucas_chances'
+   ou 'remota'. O nivel vem da MATRIZ DE RISCO (estagio processual). Cada processo
+   chega com a sua probabilidade_exito rotulada por papel (principal/conexo) — pondere
+   TODOS no entendimento do cenario, sem pegar so o pior nem fazer media de valor.
+   A `contribuicao_no_risco` deve explicar o ESTAGIO que define o nivel e citar a
+   probabilidade_exito apenas como contexto."""
 
 
 _REGRA_H1_COMUM = """H.1 EXTINCAO SEM MERITO NAO CONSOLIDA DIVIDA:

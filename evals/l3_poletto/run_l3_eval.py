@@ -76,9 +76,13 @@ def _pairs_from_snapshot(fixtures: list[dict]) -> list[Pair]:
 
 
 # ── modo live (re-roda L3 local) ───────────────────────────────────────────
-async def _classify_one(payload: dict, runs: int) -> dict:
+async def _classify_one(payload: dict, runs: int, no_override: bool = False) -> dict:
     """Roda o L3 local `runs` vezes; aplica risk_decomposition mode=new fiel
-    a producao; majority do risco FINAL. Retorna campos pro Pair."""
+    a producao; majority do risco FINAL. Retorna campos pro Pair.
+
+    no_override=True: final = veredito do LLM puro (sem override da matriz/prob_base).
+    Testa o desenho "LLM decide com as regras injetadas" (a Matriz de Risco no prompt).
+    """
     from src.agents.merito_synthesis import classify_merito_synthesis  # local agent
     from garantis_shared.engine_v6.matrices import build_risk_decomposition
 
@@ -92,7 +96,8 @@ async def _classify_one(payload: dict, runs: int) -> dict:
         llm = card.get("risco")
         llms.append(llm)
         # mode=new: matriz substitui o LLM quando derived != Indeterminado.
-        final = derived if derived in _LEVELS else llm
+        # no_override: o LLM decide sozinho (desenho LLM-decide com Matriz de Risco no prompt).
+        final = llm if no_override else (derived if derived in _LEVELS else llm)
         finals.append(final)
     final_majority = Counter([f for f in finals if f]).most_common(1)
     llm_majority = Counter([l for l in llms if l]).most_common(1)
@@ -107,7 +112,7 @@ async def _classify_one(payload: dict, runs: int) -> dict:
     }
 
 
-async def _pairs_live(fixtures: list[dict], runs: int) -> list[Pair]:
+async def _pairs_live(fixtures: list[dict], runs: int, no_override: bool = False) -> list[Pair]:
     if not os.environ.get("GEMINI_API_KEY"):
         raise SystemExit(
             "GEMINI_API_KEY nao setada. Use a _EVAL:\n"
@@ -116,7 +121,7 @@ async def _pairs_live(fixtures: list[dict], runs: int) -> list[Pair]:
         )
     pairs = []
     for i, fx in enumerate(fixtures, 1):
-        out = await _classify_one(fx["payload"], runs)
+        out = await _classify_one(fx["payload"], runs, no_override=no_override)
         print(
             f"  [{i}/{len(fixtures)}] m={fx['merito_id']} "
             f"final={out['final']} (llm={out['llm']} derived={out['derived']} "
@@ -153,6 +158,8 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help="amostra N fixtures")
     ap.add_argument("--save", type=str, default="", help="salva o report (baseline) em FILE")
     ap.add_argument("--compare-to", type=str, default="", help="compara com baseline salvo (DELTA)")
+    ap.add_argument("--no-override", action="store_true",
+                    help="final = veredito do LLM puro (sem override matriz/prob_base); so --live")
     args = ap.parse_args()
 
     fixtures = _load_fixtures(args.limit)
@@ -163,7 +170,7 @@ def main() -> int:
     mode = "live (re-roda L3)" if args.live else "from-snapshot (producao gravada)"
     print(f"Modo: {mode} | fixtures: {len(fixtures)}", file=sys.stderr)
     if args.live:
-        pairs = asyncio.run(_pairs_live(fixtures, args.runs))
+        pairs = asyncio.run(_pairs_live(fixtures, args.runs, no_override=args.no_override))
     else:
         pairs = _pairs_from_snapshot(fixtures)
 
