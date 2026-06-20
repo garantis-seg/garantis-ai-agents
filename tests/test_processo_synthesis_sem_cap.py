@@ -90,3 +90,45 @@ def test_prob_exito_sem_cap():
     ]
     p = build_probabilidade_exito_prompt(_req(fs))
     assert all(f"ato numero {i}" in p for i in range(60))
+
+
+# ── Filtro de relevância p/ processo GIGANTE (2026-06-20, insight Elton) ──
+# >200 movs: dropa procedural ruido/baixa (o L1 JÁ julgou), mantém TODO sinal +
+# cauda recente. Evita o TIMEOUT_LAYER2 sem cortar decisão/garantia/petição.
+
+def test_processo_gigante_filtra_procedural_mantem_sinal():
+    fs = [
+        # petição inicial (mais antiga) — sempre mantida
+        MovFactSheetMin(mov_id="peticao-80383191420228050001", data="2020-01-01",
+                        relevancia_merito="alta", resumo_ato="PETICAO INICIAL da execucao"),
+        # decisão relevante ENTERRADA no meio — mantida onde quer que esteja
+        MovFactSheetMin(mov_id="dec-meio", data="2021-06-01", relevancia_merito="alta",
+                        resumo_ato="SENTENCA improcedente",
+                        decisao={"tem_decisao": True, "natureza": "improcedente"}),
+        # evento de garantia — mantido mesmo se relevância media
+        MovFactSheetMin(mov_id="gar-1", data="2021-07-01", relevancia_merito="media",
+                        resumo_ato="oferta de seguro garantia",
+                        evento_garantia={"tipo": "apresentacao"}),
+    ]
+    # 250 movs procedurais ruido (datas crescentes c/ i) — dropadas, menos a cauda recente
+    for i in range(250):
+        fs.append(MovFactSheetMin(
+            mov_id=f"proc-{i:04d}", data=f"2022-{(i // 28) + 1:02d}-{(i % 28) + 1:02d}",
+            relevancia_merito="ruido", categoria="despacho",
+            resumo_ato=f"intimacao procedural {i}"))
+    p = build_processo_synthesis_prompt(_req(fs))
+    assert "omitidas" in p                          # marcador (no silent cap)
+    assert "#peticao-80383191420228050001" in p     # petição mantida (sem o bug REV4)
+    assert "SENTENCA improcedente" in p             # decisão no meio mantida
+    assert "oferta de seguro garantia" in p         # garantia mantida
+    assert "intimacao procedural 0" not in p        # procedural antiga (ruido) dropada
+    assert "intimacao procedural 249" in p          # cauda recente mantida
+
+
+def test_processo_no_limite_nao_filtra():
+    """<= threshold: render TUDO (REV4 intacto), sem marcador."""
+    fs = [_fs(f"uuid-{i:04d}", f"2024-01-{(i % 28) + 1:02d}", resumo=f"ato {i}")
+          for i in range(200)]
+    p = build_processo_synthesis_prompt(_req(fs))
+    assert "omitidas" not in p
+    assert all(f"ato {i}" in p for i in range(200))

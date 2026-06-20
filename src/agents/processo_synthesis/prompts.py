@@ -99,6 +99,56 @@ from garantis_shared.engine_v6.matrices.daycoval import (
 )
 
 
+# ── Filtro de relevância p/ processo GIGANTE (2026-06-20) ──────────────────────
+# L2 renderiza TODOS os cards (REV4 "sem cap"). Processo gigante (449+ cards num prompt
+# só) estoura o TIMEOUT_LAYER2 de 180s — méritos 680075/680008/680046. Insight do Elton:
+# o L1 JÁ classificou cada mov (relevancia_merito); o L2 não precisa RE-LER os milhares de
+# movs procedurais que o L1 marcou ruido/baixa (penhora/intimação/conclusão) — não mudam
+# decisao_vigente/estado/garantia. Mantém TODO sinal onde quer que esteja (NÃO é head+tail
+# cego) + a cauda recente (estado corrente) + a petição inicial (não repete o bug REV4 de
+# cortar a petição antiga). Só liga ACIMA do threshold → processo normal fica byte-idêntico.
+# ponytail: threshold conserva o caminho quente (99% dos procs) intocado; sobe se algum
+# proc de ~150-200 movs ainda estourar.
+_L2_CARD_FILTER_THRESHOLD = 200   # <= isto: render tudo (sem mudança vs REV4)
+_L2_TAIL_KEEP = 30                # últimas N movs sempre entram (estado corrente)
+_L2_KEEP_REL = {"alta", "media"}
+
+
+def _card_carrega_sinal(f, is_tail: bool) -> bool:
+    """True se o L2 PRECISA deste card: cauda recente, ou sinal que o L1 já marcou
+    (relevância alta/media, decisão, evento de garantia, peça-pivô, petição inicial)."""
+    return bool(
+        is_tail
+        or (f.relevancia_merito in _L2_KEEP_REL)
+        or (f.decisao or {}).get("tem_decisao")
+        or ((f.evento_garantia or {}).get("tipo") not in (None, "nenhum"))
+        or (f.peca_pivo or {}).get("e_pivo")
+        or str(f.mov_id or "").startswith("peticao-")
+    )
+
+
+def _render_timeline(factsheets_sorted: list, empty: str) -> str:
+    """Timeline pro prompt L2. Processo normal (<= threshold): render TUDO (REV4 intacto).
+    Processo gigante: filtra pelo sinal que o L1 já computou + marcador dos omitidos (no
+    silent cap). Bound determinístico que evita o TIMEOUT_LAYER2 sem cortar sinal."""
+    n = len(factsheets_sorted)
+    if n <= _L2_CARD_FILTER_THRESHOLD:
+        return "\n  ".join(_summarize_factsheet(f) for f in factsheets_sorted) or empty
+    tail_start = n - _L2_TAIL_KEEP
+    kept = [f for i, f in enumerate(factsheets_sorted)
+            if _card_carrega_sinal(f, i >= tail_start)]
+    block = "\n  ".join(_summarize_factsheet(f) for f in kept) or empty
+    n_omit = n - len(kept)
+    if n_omit:
+        block += (
+            f"\n  [+{n_omit} movs procedurais omitidas (de {n} no total) — o L1 marcou "
+            "ruido/baixa (penhora/intimacao/conclusao/expediente); nao alteram "
+            "decisao_vigente/estado/garantia. Preservado: decisoes, eventos de garantia, "
+            "peticao inicial e as 30 movs mais recentes.]"
+        )
+    return block
+
+
 def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
     """Prompt FOCADO so na Probabilidade de Exito Daycoval — call B do C2.
 
@@ -110,9 +160,8 @@ def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
     factsheets = req.mov_factsheets or []
     factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or ""))
 
-    # v2.3: sem cap — render TODAS as movs (ver REV4 no header).
-    timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_sorted) \
-        or "(sem movimentacoes)"
+    # Render tudo p/ processo normal (REV4); filtra ruido/baixa só p/ processo gigante.
+    timeline_block = _render_timeline(factsheets_sorted, "(sem movimentacoes)")
 
     matriz_block = _build_matriz_block(req.tipo_judicial)
 
@@ -414,8 +463,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         key=lambda f: (f.data or "", f.mov_id or ""),
     )
 
-    timeline_block = "\n  ".join(_summarize_factsheet(f) for f in factsheets_sorted) \
-        or "(sem movimentacoes mov-by-mov)"
+    timeline_block = _render_timeline(factsheets_sorted, "(sem movimentacoes mov-by-mov)")
 
     apolice_block = "\n  ".join(_summarize_apolice(ap) for ap in (req.apolices or [])) \
         or "(sem apolice atrelada)"
