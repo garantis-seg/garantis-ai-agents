@@ -122,3 +122,37 @@ def test_v44_mov_texto_sem_cap_de_3k(processo):
     mov_longa = MovInput(mov_id="m-longa", texto="t" * 50_000)
     prompt = build_mov_factsheet_prompt_v4(processo, mov_longa)
     assert "t" * 49_000 in prompt
+
+
+# ── Gap de execução fechado (2026-06-20): head+tail de evidência nos ramos 1D/1X ──
+# O perfil de leitura (#41) vivia SÓ no ramo 1A; 1D (órfão) e 1X (doc_incerto) liam
+# 100% → bundle de NF-e/AIIM de 230-250k estourava o TIMEOUT_LAYER1 (mérito 20).
+
+def test_1d_evidencia_grande_le_head_tail(processo, mov):
+    """1D: doc tabular grande SEM título legal (NF-e/AIIM) → head+tail, não 100%."""
+    txt = "CABECALHO-NATUREZA-VALOR " + ("9" * 250_000) + " RODAPE-TOTAIS"
+    doc = DocAnexado(doc_key="aiim", tipo="3",
+                     titulo="1747 PDFSAM 04 - AIIM 19311 720016 - PIS", text_content=txt)
+    prompt = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=[doc], classe="1D")
+    assert "documento de EVIDÊNCIA tabular" in prompt   # head+tail aplicado
+    assert "omitidos" in prompt
+    assert "9" * 250_000 not in prompt                  # miolo NÃO renderizado inteiro
+    assert "CABECALHO-NATUREZA-VALOR" in prompt and "RODAPE-TOTAIS" in prompt  # pontas preservadas
+
+
+def test_1d_peca_grande_le_completo(processo, mov):
+    """Contraprova: PEÇA grande no 1D (título legal) NÃO vira head+tail — lê completo
+    (o chunk de peça é do agent, não do builder)."""
+    doc = DocAnexado(doc_key="s1", tipo="12", titulo="SENTENCA",
+                     text_content="SENTENCA: " + ("a" * 250_000))
+    prompt = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=[doc], classe="1D")
+    assert "documento de EVIDÊNCIA tabular" not in prompt
+
+
+def test_doc_incerto_evidencia_grande_le_head_tail(processo, mov):
+    """1X (doc_incerto): mesmo gap — evidência grande → head+tail."""
+    doc = DocAnexado(doc_key="x", tipo="9", titulo="DOCUMENTO COMPROBATORIO",
+                     text_content="HEAD " + ("8" * 250_000) + " TAIL")
+    prompt = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=[doc], classe="doc_incerto")
+    assert "documento de EVIDÊNCIA tabular" in prompt
+    assert "8" * 250_000 not in prompt

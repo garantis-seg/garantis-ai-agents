@@ -90,6 +90,22 @@ def _evidencia_head_tail(text: str) -> str:
     )
 
 
+def _render_doc_body(doc: DocAnexado | None, txt: str, cap: int) -> str:
+    """Corpo do doc com o MESMO perfil de leitura do ramo 1A (builder principal):
+    evidência tabular grande → head+tail (o sinal está nas pontas); peça → completo
+    até o cap de janela. Sem doc anexado (fallback pro snippet da mov) → cap simples.
+
+    Fecha um GAP DE EXECUÇÃO: o head+tail de evidência (#41) vivia SÓ no ramo 1A; os
+    ramos 1D (órfão) e 1X (doc_incerto) liam 100% (`txt[:cap]`) → doc tabular grande
+    (ex.: bundle de NF-e de 230-248k que substancia um AIIM) estourava o
+    TIMEOUT_LAYER1_S. O chunk de PEÇA grande (agent.split_large_peca_variants) já roda
+    pré-dispatch em todos os ramos; só faltava o head+tail de EVIDÊNCIA aqui.
+    """
+    if doc is not None and _doc_reading_profile(doc) == "evidencia":
+        return _evidencia_head_tail(txt)
+    return txt[:cap]
+
+
 # Vocab por família — NEUTRO (relata as partes típicas; NÃO diz quem é "o cliente").
 # Injeção seletiva: só o bloco da família da mov entra no prompt.
 VOCAB_FAMILIA = {
@@ -264,7 +280,7 @@ RACIOCÍNIO sobre a NATUREZA do documento (orienta data e se há decisão):
 {_REGRAS_CRUS}
 
 === DOCUMENTO (id {mov.mov_id}) ==={meta_line}
-{txt[:_V4_DOC_TEXT_CAP]}
+{_render_doc_body(doc, txt, _V4_DOC_TEXT_CAP)}
 
 Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o texto sustenta;
 o resto null."""
@@ -467,7 +483,7 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
 {_REGRAS_CRUS}
 
 === DOCUMENTO DE TIPO NÃO IDENTIFICADO (id {mov.mov_id}) ==={meta_line}
-{txt[:_PETICAO_TEXT_CAP_CHARS]}
+{_render_doc_body(doc, txt, _PETICAO_TEXT_CAP_CHARS)}
 
 Extraia no schema PeticaoExtractCardV4. Preencha SÓ o que o texto sustenta; o resto null."""
 
