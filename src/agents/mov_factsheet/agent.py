@@ -122,6 +122,35 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None) -> dict:
     return card_data
 
 
+def _stub_ruido_card(
+    mov: "MovInput", use_v4: bool, response_schema, classe: Optional[str]
+) -> dict:
+    """Card de baixa relevância pra quando o modelo devolve resposta VAZIA — doc
+    ilegível (texto-lixo/OCR corrompido) ou safety-block. O mov foi LIDO (nada
+    extraível), NÃO é um gap: evita o ciclo erro→500→5 retries→mov-falha→l1_degraded.
+    Honesto: relevancia='ruido', tipo_doc='outros', sem decisão. Reusa o derivador G6.
+    """
+    stub = {
+        "tipo_doc": "outros",
+        "relevancia_merito": "ruido",
+        "resumo_ato": (
+            "Documento sem texto extraível (resposta vazia do modelo — "
+            "provável OCR/texto corrompido)."
+        ),
+    }
+    if use_v4:
+        return _build_card_v4(
+            stub, mov,
+            card_cls=response_schema if classe in ("peticao", "doc_incerto") else None,
+        )
+    stub["mov_id"] = mov.mov_id
+    if mov.data:
+        stub["data"] = mov.data
+    stub["categoria"] = derivar_categoria("outros")
+    stub["status_garantia_pos_mov"] = derivar_status_garantia(None)
+    return MovFactSheetCard(**stub).model_dump()
+
+
 async def classify_mov_factsheet(
     processo: ProcessoContext | dict,
     mov: MovInput | dict,
@@ -247,17 +276,27 @@ async def classify_mov_factsheet(
 
     raw_response = response.text
     try:
-        parsed = parse_llm_json(raw_response)
-        if use_v4:
+        if not (raw_response or "").strip():
+            # Resposta VAZIA do modelo — doc ilegível (texto-lixo/OCR) ou safety-block.
+            # Card ruido em vez de erro: o mov foi LIDO (nada extraível), NÃO é gap —
+            # evita o ciclo erro→500→5 retries→mov-falha→l1_degraded.
+            # ponytail: empty determinístico (texto-lixo) re-tenta ao mesmo vazio.
+            logger.warning(
+                f"L1_EMPTY_RESPONSE mov_id={mov.mov_id} → card ruido (doc ilegível/sem texto)"
+            )
+            card_data = _stub_ruido_card(mov, use_v4, response_schema, classe)
+        elif use_v4:
             # v4: fatos neutros + derivados sujeito-independentes (G6). Identidade injetada
             # dentro do helper (mov_id/data fora do response_schema). Ramo peticao valida
             # com o superset (a base droparia cdas/processos_citados).
+            parsed = parse_llm_json(raw_response)
             card_data = _build_card_v4(
                 parsed, mov,
                 card_cls=response_schema if classe in ("peticao", "doc_incerto") else None,
             )
         else:
             # Echo input identifiers em caso de LLM reset
+            parsed = parse_llm_json(raw_response)
             parsed.setdefault("mov_id", mov.mov_id)
             if mov.data and not parsed.get("data"):
                 parsed["data"] = mov.data
