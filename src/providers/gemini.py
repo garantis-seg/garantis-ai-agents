@@ -5,8 +5,10 @@ Provides access to Google's Gemini models with support for
 structured output via response_schema.
 """
 
+import asyncio
 import os
 import logging
+import time
 from typing import Any, Dict, List, Optional, Type
 
 from garantis_shared.rate_limit import TokenBucketRateLimiter
@@ -36,6 +38,67 @@ _gemini_rate_limiter = TokenBucketRateLimiter(
     rate=_GEMINI_RATE,
     bucket_size=_GEMINI_BURST,
     name="gemini",
+)
+
+# ── TPM limiter (2026-06-21) ──────────────────────────────────────────────────
+# O RPS acima só conta REQUESTS; bulk-cascade de prompts grandes passa no RPS mas
+# estoura o tokens/min do Gemini → trunca (l1_degraded; causa-raiz provada, memory
+# l1-truncation-load-induced). Este conta TOKENS. Default 3M tok/min/process: um
+# cascade limpo MEDIU pico ~1.42M TPM (não throttla 1-2 cascades); concorrência alta
+# (loop ~6× = >8M) throttla pra ficar sob o teto do Gemini. Tune via env.
+_GEMINI_TPM = float(os.getenv("GEMINI_RATE_LIMIT_TPM", "3000000"))
+
+
+class _TokenRateLimiter:
+    """Token bucket onde 1 token = 1 token de API (não 1 request) — cost-aware.
+    ponytail: espelha garantis_shared.TokenBucketRateLimiter mas com acquire(cost)
+    + reconcile pós-call; consolidar lá se ganhar um 2o caller."""
+
+    def __init__(self, rate: float, bucket_size: float, name: str):
+        self.rate = rate
+        self.bucket_size = float(bucket_size)
+        self.name = name
+        self._tokens = float(bucket_size)
+        self._last = time.monotonic()
+        self._lock = asyncio.Lock()
+
+    def _refill(self) -> None:
+        now = time.monotonic()
+        self._tokens = min(self.bucket_size, self._tokens + (now - self._last) * self.rate)
+        self._last = now
+
+    async def acquire(self, cost: float, timeout: float) -> None:
+        cost = min(float(cost), self.bucket_size)  # anti-deadlock: nunca pede > bucket
+        start = time.monotonic()
+        while True:
+            async with self._lock:
+                self._refill()
+                if self._tokens >= cost:
+                    self._tokens -= cost
+                    return
+                wait_needed = (cost - self._tokens) / self.rate
+            elapsed = time.monotonic() - start
+            if elapsed >= timeout:
+                logger.warning(
+                    "RateLimiter '%s' TPM timeout %.1fs (cost=%.0f)",
+                    self.name, elapsed, cost,
+                )
+                raise asyncio.TimeoutError(f"{self.name} TPM timeout {elapsed:.1f}s")
+            await asyncio.sleep(min(wait_needed, timeout - elapsed, 0.25))
+
+    def reconcile(self, estimated: float, actual: float) -> None:
+        # pós-call: debita o que o estimado não cobriu (output real >> reserva).
+        # Sem lock/espera — best-effort; pode deixar _tokens negativo → throttla a
+        # próxima. ponytail: micro-race no float tolerável p/ rate limit.
+        extra = actual - estimated
+        if extra > 0:
+            self._tokens = max(self._tokens - extra, -self.bucket_size)
+
+
+_gemini_tpm_limiter = _TokenRateLimiter(
+    rate=_GEMINI_TPM / 60.0,
+    bucket_size=_GEMINI_TPM,  # ~1 min de burst
+    name="gemini-tpm",
 )
 
 # Model pricing (USD per 1M tokens) - Updated Dec 2024
@@ -308,6 +371,10 @@ class GeminiProvider(BaseLLMProvider):
         # asyncio.TimeoutError propagada e tratada como retryable pelo caller
         # (frontend-api ai_agents.call ja trata httpx.HTTPError + TimeoutError).
         await _gemini_rate_limiter.acquire(timeout=_GEMINI_ACQUIRE_TIMEOUT_S)
+        # TPM: input (≈4 chars/token, conhecido) + reserva output. reconcile() abaixo
+        # corrige com o uso REAL pós-call (output gigante debita o excedente).
+        _est_tokens = (len(prompt) if isinstance(prompt, str) else 4096) // 4 + 2048
+        await _gemini_tpm_limiter.acquire(_est_tokens, timeout=_GEMINI_ACQUIRE_TIMEOUT_S)
 
         # Make async API call
         response = await self._client.aio.models.generate_content(
@@ -322,6 +389,10 @@ class GeminiProvider(BaseLLMProvider):
         if hasattr(response, "usage_metadata") and response.usage_metadata:
             input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
             output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+
+        # Reconcilia o TPM com o uso real (estimativa cobriu input+reserva; output
+        # real pode estourar a reserva — debita a diferença, throttla a próxima).
+        _gemini_tpm_limiter.reconcile(_est_tokens, (input_tokens or 0) + (output_tokens or 0))
 
         text, finish_reason = _gemini_text_and_finish(response, model)
         return LLMResponse(
