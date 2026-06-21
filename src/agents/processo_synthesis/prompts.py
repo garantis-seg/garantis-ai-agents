@@ -408,6 +408,19 @@ def _build_tipo_specific_block(tipo: str | None) -> str:
 # jurisprudencias.ai. Substituido por _build_juris_externa_block (abaixo).
 
 
+def _clip_head_tail(text: str, *, head: int, tail: int) -> str:
+    """Clip preservando inicio (materia/tese) + fim (dispositivo) da ementa.
+
+    O dispositivo (provido/improvido/nega-se) — o sinal de QUEM GANHOU — costuma
+    vir no FIM da ementa. Truncar so o head (bug pre-2026-06-21: cap 300 chars no
+    head) jogava o resultado fora. Se cabe inteiro (<= head+tail) retorna intacto.
+    """
+    text = text or ""
+    if len(text) <= head + tail:
+        return text
+    return f"{text[:head]} […] {text[-tail:]}"
+
+
 def _build_juris_externa_block(je) -> str:
     """Renderiza jurisprudencia externa (provider jurisprudencias.ai) (PR3).
 
@@ -439,8 +452,11 @@ def _build_juris_externa_block(je) -> str:
             pn = d.get("process_number") or "?"
             pub = d.get("publication_date") or "?"
             excerpt = (d.get("excerpt") or "").strip().replace("\n", " ")
-            if len(excerpt) > 300:
-                excerpt = excerpt[:300] + "…"
+            # O DISPOSITIVO (provido/improvido — quem ganhou) vem no FIM da ementa;
+            # cap-no-head jogava o resultado fora. head+tail preserva materia +
+            # dispositivo. Provider devolve ~600-900 chars => na pratica entra
+            # inteira; head+tail so morde outlier longo.
+            excerpt = _clip_head_tail(excerpt, head=700, tail=400)
             lines.append(f"    [{i}] {pn} ({pub}): {excerpt}")
     else:
         lines.append("  (sem ementas retornadas pelo provider)")
@@ -484,6 +500,12 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     # PR7.2 (2026-05-31): tese_juris_section (bloco JURISPRUDENCIA DA TESE
     # interno) REMOVIDO. Provider externo jurisprudencias.ai (jurisprudencia_externa)
     # eh unica fonte. Curadoria interna ref.tese_jurisprudencia DROPPED.
+    # §3.2 (2026-06-21): o bloco <regra_jurisprudencia> (glossario 6-valores
+    # pro_contribuinte_firmado/.../nao_classificada + regras J/J.1/J.2/J.3) tambem
+    # foi removido das <regras_criticas> — operava no MESMO campo morto
+    # tese_jurisprudencia e empurrava o LEGACY risco_processo_intermediario. A juris
+    # VIVA entra so via risk_decomposition_section (risco_jurisprudencial, 4 valores
+    # do provider). Sistema unico, sem double-count nem glossario fantasma.
     tese_juris_section = ""
 
     # PR6 Architecture D: bloco "Decomposicao Orthogonal" SEMPRE renderizado
@@ -512,15 +534,20 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         "                          IGNORE jurisprudencia. Mesma logica que voce usaria\n"
         "                          em risco_processo_intermediario, mas SEM peso de tese.\n"
         f"  - risco_jurisprudencial: derive APENAS de {juris_sources_clause}.\n"
-        "                          IGNORE estado processual. Quando NAO ha sinal forte\n"
-        "                          (resultado oscilante/indeterminado, sem mapeamento de\n"
-        "                          tese, n_hits<3 no provider), emit 'Indeterminado' —\n"
+        "                          IGNORE estado processual. LEIA AS EMENTAS — cada uma\n"
+        "                          traz o dispositivo (provido/improvido/nega-se) que diz\n"
+        "                          QUEM GANHOU. VOCE determina a tendencia da tese a partir\n"
+        "                          das EMENTAS. O campo 'resultado=' eh uma heuristica\n"
+        "                          regex AUXILIAR (dica, NAO veredito) — se as ementas\n"
+        "                          contradizem o 'resultado=', confie nas EMENTAS.\n"
+        "                          Quando NAO ha sinal forte (ementas divergentes, sem\n"
+        "                          mapeamento de tese, n_hits<3), emit 'Indeterminado' —\n"
         "                          NUNCA chute Baixo por default.\n"
-        "                          Mapeamento sugerido (provider externo):\n"
-        "                            resultado='pro_contribuinte' -> Baixo\n"
-        "                            resultado='pro_fazenda'      -> Alto\n"
-        "                            resultado='dividida'         -> Medio\n"
-        "                            resultado='indeterminado'    -> Indeterminado\n"
+        "                          Definida a tendencia, mapeie pro bucket de risco:\n"
+        "                            pro_contribuinte (tomador/executado vence) -> Baixo\n"
+        "                            pro_fazenda (fisco vence)                  -> Alto\n"
+        "                            dividida / oscilante                       -> Medio\n"
+        "                            sem sinal                                  -> Indeterminado\n"
         "  AMBOS sao orthogonal — NAO combine sinais cruzados. Camada 3 agrega via\n"
         "  matriz determ + A/B test entre prompts (PR6).\n"
         "  risco_processo_intermediario LEGACY tambem eh emitido (compat backward).\n"
@@ -587,63 +614,6 @@ natureza = 'extinto_sem_merito'.
 So eh 'neutro' quando a extincao foi POR FAVOR ao Tomador (homologacao de
 acordo, desistencia da Fazenda) — raras em Tomador-autor.
 </regra_extincao_tomador_autor>
-
-<regra_jurisprudencia>
-A jurisprudencia da tese canonica (campo tese_jurisprudencia abaixo, quando
-presente) eh INPUT DIRETO no risco_processo_intermediario. Substituiu o
-double-counting antigo (Matriz Daycoval implicito + regras G/G.1/G.2 em L3).
-
-GLOSSARIO `resultado_majoritario` (6 valores):
-- pro_contribuinte_firmado: tese STF/STJ vinculante FAVORAVEL ao Tomador
-  (vento de cauda forte — empurra Baixo)
-- pro_fazenda_firmado: tese STF/STJ vinculante DESFAVORAVEL ao Tomador
-  (vento contra forte — empurra Alto)
-- oscilante: decisoes divididas entre turmas/instancias — sem majoritario
-  claro (NAO move risco; governado pelo estado da causa)
-- pendente_julgamento_superior: tema afetado, aguarda STF/STJ (estado atual
-  domina, MAS cite julgamento pendente como risco prospectivo)
-- tese_nova: sem historico significativo (governado pelo estado, baixa confianca)
-- nao_classificada: catch-all generico, sem mapeamento juridico especifico
-  (governado pelo estado; FLAG na narrativa que falta tese canonica)
-
-NOTA: campo pode vir COMMA-SEPARATED (string_agg de rows multiplas). Considere
-o sinal mais forte na precedencia: firmado > oscilante > pendente > tese_nova
-> nao_classificada.
-
-REGRA J — TESE pro_fazenda_firmado PREVALECE SOBRE 1g FAVORAVEL:
-Quando o conjunto:
-  (i)   tese_jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
-        (tese STF/STJ transitada — repetitivo/repercussao geral), AND
-  (ii)  decisao_vigente 1g FAVORAVEL ao Tomador SEM transito (apelacao/agravo/
-        RE/REsp pendente),
-ENTAO risco_processo_intermediario = "Alto" (NAO Medio).
-
-Por que: tese firmada vincula instancias inferiores pela ratio decidendi.
-Sentenca 1g favoravel sera revertida em juizo de admissibilidade ou no
-merito do recurso. Efeito suspensivo de apelacao NAO neutraliza esse risco
-— apenas adia. Sem contrapeso explicito (modulacao temporal protegendo o
-caso, distinguishing claro, garantia em renovacao com seguradora forte) =
-Alto.
-
-REGRA J.1 — SINAL INVERSO (tese pro_contribuinte_firmado):
-'pro_contribuinte_firmado' eh vento de cauda forte (ex: PIS-COFINS Tema 69
-STF). EMPURRA risco_processo_intermediario pra BAIXO mesmo se houver decisao
-1g desfavoravel — reversao em instancia superior eh provavel pela mesma
-ratio decidendi. Sem contrapeso explicito = Baixo.
-
-REGRA J.2 — PENDENTE JULGAMENTO SUPERIOR:
-'pendente_julgamento_superior' NAO move risco diretamente — governado pelo
-estado atual da causa. Porem REDUZIR confianca em 10-20% e CITAR
-EXPLICITAMENTE o julgamento pendente no estado_processual como risco
-prospectivo.
-
-REGRA J.3 — Tomador-AUTOR vs Tomador-REU (sentido invertido):
-As regras J/J.1 acima assumem que sentido='favoravel' = Tomador GANHOU. Pra
-classes onde Tomador eh AUTOR (Anulatoria/MS/Embargos): procedente=favoravel
-ao Tomador, juris pro_contribuinte_firmado eh aliada. Pra classes onde
-Tomador eh REU (EF, Cumprimento): improcedente=favoravel ao Tomador, mesma
-logica via <regra_polos>.
-</regra_jurisprudencia>
 
 </regras_criticas>
 
