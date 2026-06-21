@@ -52,6 +52,54 @@ GEMINI_PRICING = {
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
 
 
+# Terminações NORMAIS do Gemini. STOP = ok; MAX_TOKENS = corte legítimo de tamanho
+# (caller trata/chunka). QUALQUER outra (SAFETY / RECITATION / PROHIBITED_CONTENT /
+# OTHER / MALFORMED_FUNCTION_CALL...) deixa `response.text` PARCIAL → o parse
+# downstream falha com 'Unterminated string'. O provider Gemini IGNORAVA o
+# finish_reason (≠ providers OpenAI/OpenRouter, que já o expõem) — então a causa
+# real ficava invisível e o L1 só via 'JSONDecodeError char N'.
+_GEMINI_NORMAL_FINISH = {"STOP", "FINISH_REASON_STOP", "MAX_TOKENS"}
+
+
+def _gemini_finish_reason(response: Any) -> Optional[str]:
+    """finish_reason do 1º candidate como str (enum.name) ou None — defensivo."""
+    try:
+        cand = (getattr(response, "candidates", None) or [None])[0]
+        fr = getattr(cand, "finish_reason", None)
+        return getattr(fr, "name", None) or (str(fr) if fr is not None else None)
+    except Exception:
+        return None
+
+
+def _gemini_text_and_finish(response: Any, model: str) -> tuple[str, Optional[str]]:
+    """Extrai (text, finish_reason) e LOGA terminação anormal (prefix grepável
+    GEMINI_ABNORMAL_FINISH, p/ alert policy). text='' se response.text levantar
+    (resposta bloqueada / sem candidate). NÃO muda comportamento — só dá visibilidade
+    da causa quando o card vem truncado."""
+    finish_reason = _gemini_finish_reason(response)
+    try:
+        text = response.text
+    except Exception as e:
+        text = ""
+        logger.warning(
+            "GEMINI_RESPONSE_TEXT_RAISED model=%s finish_reason=%s err=%r",
+            model, finish_reason, e,
+        )
+    if finish_reason and finish_reason not in _GEMINI_NORMAL_FINISH:
+        try:
+            cand = (getattr(response, "candidates", None) or [None])[0]
+            safety = getattr(cand, "safety_ratings", None) if cand else None
+        except Exception:
+            safety = None
+        logger.warning(
+            "GEMINI_ABNORMAL_FINISH model=%s finish_reason=%s text_len=%d "
+            "prompt_feedback=%r safety=%r — response.text vem PARCIAL (parse vai falhar)",
+            model, finish_reason, len(text or ""),
+            getattr(response, "prompt_feedback", None), safety,
+        )
+    return text, finish_reason
+
+
 class GeminiProvider(BaseLLMProvider):
     """
     Google Gemini LLM provider.
@@ -204,8 +252,9 @@ class GeminiProvider(BaseLLMProvider):
             input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
             output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
 
+        text, finish_reason = _gemini_text_and_finish(response, model)
         return LLMResponse(
-            text=response.text,
+            text=text,
             model=model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -213,6 +262,7 @@ class GeminiProvider(BaseLLMProvider):
             raw_response=response,
             metadata={
                 "provider": "gemini",
+                "finish_reason": finish_reason,
                 "cost_usd": self.calculate_cost(model, input_tokens, output_tokens),
             },
         )
@@ -273,8 +323,9 @@ class GeminiProvider(BaseLLMProvider):
             input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
             output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
 
+        text, finish_reason = _gemini_text_and_finish(response, model)
         return LLMResponse(
-            text=response.text,
+            text=text,
             model=model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
@@ -282,6 +333,7 @@ class GeminiProvider(BaseLLMProvider):
             raw_response=response,
             metadata={
                 "provider": "gemini",
+                "finish_reason": finish_reason,
                 "cost_usd": self.calculate_cost(model, input_tokens, output_tokens),
             },
         )
