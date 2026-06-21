@@ -408,6 +408,19 @@ def _build_tipo_specific_block(tipo: str | None) -> str:
 # jurisprudencias.ai. Substituido por _build_juris_externa_block (abaixo).
 
 
+def _clip_head_tail(text: str, *, head: int, tail: int) -> str:
+    """Clip preservando inicio (materia/tese) + fim (dispositivo) da ementa.
+
+    O dispositivo (provido/improvido/nega-se) — o sinal de QUEM GANHOU — costuma
+    vir no FIM da ementa. Truncar so o head (bug pre-2026-06-21: cap 300 chars no
+    head) jogava o resultado fora. Se cabe inteiro (<= head+tail) retorna intacto.
+    """
+    text = text or ""
+    if len(text) <= head + tail:
+        return text
+    return f"{text[:head]} […] {text[-tail:]}"
+
+
 def _build_juris_externa_block(je) -> str:
     """Renderiza jurisprudencia externa (provider jurisprudencias.ai) (PR3).
 
@@ -439,8 +452,11 @@ def _build_juris_externa_block(je) -> str:
             pn = d.get("process_number") or "?"
             pub = d.get("publication_date") or "?"
             excerpt = (d.get("excerpt") or "").strip().replace("\n", " ")
-            if len(excerpt) > 300:
-                excerpt = excerpt[:300] + "…"
+            # O DISPOSITIVO (provido/improvido — quem ganhou) vem no FIM da ementa;
+            # cap-no-head jogava o resultado fora. head+tail preserva materia +
+            # dispositivo. Provider devolve ~600-900 chars => na pratica entra
+            # inteira; head+tail so morde outlier longo.
+            excerpt = _clip_head_tail(excerpt, head=700, tail=400)
             lines.append(f"    [{i}] {pn} ({pub}): {excerpt}")
     else:
         lines.append("  (sem ementas retornadas pelo provider)")
@@ -512,15 +528,20 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         "                          IGNORE jurisprudencia. Mesma logica que voce usaria\n"
         "                          em risco_processo_intermediario, mas SEM peso de tese.\n"
         f"  - risco_jurisprudencial: derive APENAS de {juris_sources_clause}.\n"
-        "                          IGNORE estado processual. Quando NAO ha sinal forte\n"
-        "                          (resultado oscilante/indeterminado, sem mapeamento de\n"
-        "                          tese, n_hits<3 no provider), emit 'Indeterminado' —\n"
+        "                          IGNORE estado processual. LEIA AS EMENTAS — cada uma\n"
+        "                          traz o dispositivo (provido/improvido/nega-se) que diz\n"
+        "                          QUEM GANHOU. VOCE determina a tendencia da tese a partir\n"
+        "                          das EMENTAS. O campo 'resultado=' eh uma heuristica\n"
+        "                          regex AUXILIAR (dica, NAO veredito) — se as ementas\n"
+        "                          contradizem o 'resultado=', confie nas EMENTAS.\n"
+        "                          Quando NAO ha sinal forte (ementas divergentes, sem\n"
+        "                          mapeamento de tese, n_hits<3), emit 'Indeterminado' —\n"
         "                          NUNCA chute Baixo por default.\n"
-        "                          Mapeamento sugerido (provider externo):\n"
-        "                            resultado='pro_contribuinte' -> Baixo\n"
-        "                            resultado='pro_fazenda'      -> Alto\n"
-        "                            resultado='dividida'         -> Medio\n"
-        "                            resultado='indeterminado'    -> Indeterminado\n"
+        "                          Definida a tendencia, mapeie pro bucket de risco:\n"
+        "                            pro_contribuinte (tomador/executado vence) -> Baixo\n"
+        "                            pro_fazenda (fisco vence)                  -> Alto\n"
+        "                            dividida / oscilante                       -> Medio\n"
+        "                            sem sinal                                  -> Indeterminado\n"
         "  AMBOS sao orthogonal — NAO combine sinais cruzados. Camada 3 agrega via\n"
         "  matriz determ + A/B test entre prompts (PR6).\n"
         "  risco_processo_intermediario LEGACY tambem eh emitido (compat backward).\n"
