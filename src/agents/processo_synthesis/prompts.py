@@ -500,6 +500,12 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     # PR7.2 (2026-05-31): tese_juris_section (bloco JURISPRUDENCIA DA TESE
     # interno) REMOVIDO. Provider externo jurisprudencias.ai (jurisprudencia_externa)
     # eh unica fonte. Curadoria interna ref.tese_jurisprudencia DROPPED.
+    # §3.2 (2026-06-21): o bloco <regra_jurisprudencia> (glossario 6-valores
+    # pro_contribuinte_firmado/.../nao_classificada + regras J/J.1/J.2/J.3) tambem
+    # foi removido das <regras_criticas> — operava no MESMO campo morto
+    # tese_jurisprudencia e empurrava o LEGACY risco_processo_intermediario. A juris
+    # VIVA entra so via risk_decomposition_section (risco_jurisprudencial, 4 valores
+    # do provider). Sistema unico, sem double-count nem glossario fantasma.
     tese_juris_section = ""
 
     # PR6 Architecture D: bloco "Decomposicao Orthogonal" SEMPRE renderizado
@@ -608,63 +614,6 @@ natureza = 'extinto_sem_merito'.
 So eh 'neutro' quando a extincao foi POR FAVOR ao Tomador (homologacao de
 acordo, desistencia da Fazenda) — raras em Tomador-autor.
 </regra_extincao_tomador_autor>
-
-<regra_jurisprudencia>
-A jurisprudencia da tese canonica (campo tese_jurisprudencia abaixo, quando
-presente) eh INPUT DIRETO no risco_processo_intermediario. Substituiu o
-double-counting antigo (Matriz Daycoval implicito + regras G/G.1/G.2 em L3).
-
-GLOSSARIO `resultado_majoritario` (6 valores):
-- pro_contribuinte_firmado: tese STF/STJ vinculante FAVORAVEL ao Tomador
-  (vento de cauda forte — empurra Baixo)
-- pro_fazenda_firmado: tese STF/STJ vinculante DESFAVORAVEL ao Tomador
-  (vento contra forte — empurra Alto)
-- oscilante: decisoes divididas entre turmas/instancias — sem majoritario
-  claro (NAO move risco; governado pelo estado da causa)
-- pendente_julgamento_superior: tema afetado, aguarda STF/STJ (estado atual
-  domina, MAS cite julgamento pendente como risco prospectivo)
-- tese_nova: sem historico significativo (governado pelo estado, baixa confianca)
-- nao_classificada: catch-all generico, sem mapeamento juridico especifico
-  (governado pelo estado; FLAG na narrativa que falta tese canonica)
-
-NOTA: campo pode vir COMMA-SEPARATED (string_agg de rows multiplas). Considere
-o sinal mais forte na precedencia: firmado > oscilante > pendente > tese_nova
-> nao_classificada.
-
-REGRA J — TESE pro_fazenda_firmado PREVALECE SOBRE 1g FAVORAVEL:
-Quando o conjunto:
-  (i)   tese_jurisprudencia.resultado_majoritario contem 'pro_fazenda_firmado'
-        (tese STF/STJ transitada — repetitivo/repercussao geral), AND
-  (ii)  decisao_vigente 1g FAVORAVEL ao Tomador SEM transito (apelacao/agravo/
-        RE/REsp pendente),
-ENTAO risco_processo_intermediario = "Alto" (NAO Medio).
-
-Por que: tese firmada vincula instancias inferiores pela ratio decidendi.
-Sentenca 1g favoravel sera revertida em juizo de admissibilidade ou no
-merito do recurso. Efeito suspensivo de apelacao NAO neutraliza esse risco
-— apenas adia. Sem contrapeso explicito (modulacao temporal protegendo o
-caso, distinguishing claro, garantia em renovacao com seguradora forte) =
-Alto.
-
-REGRA J.1 — SINAL INVERSO (tese pro_contribuinte_firmado):
-'pro_contribuinte_firmado' eh vento de cauda forte (ex: PIS-COFINS Tema 69
-STF). EMPURRA risco_processo_intermediario pra BAIXO mesmo se houver decisao
-1g desfavoravel — reversao em instancia superior eh provavel pela mesma
-ratio decidendi. Sem contrapeso explicito = Baixo.
-
-REGRA J.2 — PENDENTE JULGAMENTO SUPERIOR:
-'pendente_julgamento_superior' NAO move risco diretamente — governado pelo
-estado atual da causa. Porem REDUZIR confianca em 10-20% e CITAR
-EXPLICITAMENTE o julgamento pendente no estado_processual como risco
-prospectivo.
-
-REGRA J.3 — Tomador-AUTOR vs Tomador-REU (sentido invertido):
-As regras J/J.1 acima assumem que sentido='favoravel' = Tomador GANHOU. Pra
-classes onde Tomador eh AUTOR (Anulatoria/MS/Embargos): procedente=favoravel
-ao Tomador, juris pro_contribuinte_firmado eh aliada. Pra classes onde
-Tomador eh REU (EF, Cumprimento): improcedente=favoravel ao Tomador, mesma
-logica via <regra_polos>.
-</regra_jurisprudencia>
 
 </regras_criticas>
 
