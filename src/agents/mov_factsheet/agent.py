@@ -5,6 +5,7 @@ Substitui mov_summarizer durante coexistencia (kind='mov_factsheet' vs kind='mov
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -314,7 +315,17 @@ async def classify_mov_factsheet(
             card = MovFactSheetCard(**parsed)
             card_data = card.model_dump()
     except (json.JSONDecodeError, Exception) as e:
-        logger.error(f"mov_factsheet parse failed mov_id={mov.mov_id}: {repr(e)}")
+        # L1_PARSE_FAIL diag (2026-06-21): finish_reason distingue MAX_TOKENS / STOP-
+        # truncado-sob-carga / SAFETY; out_tokens confirma o teto; prompt_md5 compara
+        # com o repro isolado (mesmo md5 → causa é CARGA, não o prompt). Grepável.
+        _meta = response.metadata or {}
+        _phash = hashlib.md5((prompt or "").encode("utf-8", "replace")).hexdigest()[:12]
+        logger.error(
+            "L1_PARSE_FAIL mov_id=%s err=%r finish_reason=%s out_tokens=%s "
+            "prompt_len=%d prompt_md5=%s resp_len=%d resp_tail=%r",
+            mov.mov_id, e, _meta.get("finish_reason"), response.output_tokens,
+            len(prompt or ""), _phash, len(raw_response or ""), (raw_response or "")[-120:],
+        )
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
 
     usage = {
