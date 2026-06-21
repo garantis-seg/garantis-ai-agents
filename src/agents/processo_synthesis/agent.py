@@ -88,13 +88,38 @@ async def classify_processo_synthesis(
     llm_provider = create_provider(provider)
 
     synthesis_task = _call_synthesis(llm_provider, request, model, provider)
-    prob_exito_task = _call_probabilidade_exito(llm_provider, request, model, provider)
-    synthesis_result, prob_exito_result = await asyncio.gather(
-        synthesis_task, prob_exito_task,
-    )
+
+    # §3.1 exito-gate (flag EXITO_GATED_ON_JURIS, default OFF). A probabilidade de
+    # exito (Matriz Daycoval, call B) so agrega valor quando ha jurisprudencia REAL;
+    # sem sinal de juris ela vira ~redundante com o risco_factual. Com a flag ON e
+    # SEM sinal de juris, pulamos a call B -> card sai com probabilidade_exito vazio
+    # (L3 trata classificacao=null como sem-sinal -> decide pela Matriz de Risco/
+    # estagio). Default OFF = byte-identical ate flip + A/B: o engine ja bate Poletto
+    # com exito-como-contexto (validado 2026-06-21), entao a mudanca espera medicao.
+    # Ver memory l2-redesign-locked-2026-06-20 §3.1.
+    n_calls = 2
+    if _exito_gate_enabled() and not _juris_has_signal(request):
+        synthesis_result = await synthesis_task
+        prob_exito_result = {
+            "raw_response": "{}",  # parseia pra ProbabilidadeExito() vazio -> sem-sinal
+            "prompt": "(exito gated: sem sinal de jurisprudencia — call B pulada)",
+            "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+        }
+        n_calls = 1
+        logger.info(
+            "EXITO_GATED pn=%s (sem sinal juris) — call B pulada",
+            request.processo_numero,
+        )
+    else:
+        prob_exito_task = _call_probabilidade_exito(llm_provider, request, model, provider)
+        synthesis_result, prob_exito_result = await asyncio.gather(
+            synthesis_task, prob_exito_task,
+        )
 
     card_data = _merge_results(request, synthesis_result, prob_exito_result)
-    usage = _merge_usage(synthesis_result["usage"], prob_exito_result["usage"], model, provider)
+    usage = _merge_usage(
+        synthesis_result["usage"], prob_exito_result["usage"], model, provider, calls=n_calls,
+    )
 
     return {
         "card": card_data,
@@ -109,6 +134,23 @@ async def classify_processo_synthesis(
         "prompt_version": PROMPT_VERSION,
         "usage": usage,
     }
+
+
+def _exito_gate_enabled() -> bool:
+    """§3.1: flag EXITO_GATED_ON_JURIS (default OFF). ON => pula a call B de
+    probabilidade_exito quando NAO ha sinal de jurisprudencia (deixa a Matriz de
+    Risco/estagio decidir). Default OFF preserva comportamento byte-identical."""
+    return os.environ.get("EXITO_GATED_ON_JURIS", "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _juris_has_signal(request: ProcessoSynthesisRequest) -> bool:
+    """True se jurisprudencia_externa traz resultado DIRECIONAL (nao None/vazio/
+    'indeterminado'). E o gate de exito do §3.1 — sem sinal direcional, a
+    probabilidade_exito nao tem juris real pra agregar."""
+    je = request.jurisprudencia_externa
+    if je is None:
+        return False
+    return (je.resultado_majoritario or "").strip().lower() not in ("", "indeterminado")
 
 
 async def _call_synthesis(llm_provider, request, model, provider) -> dict:
@@ -225,9 +267,10 @@ def _usage_from(response: LLMResponse) -> dict:
 
 
 def _merge_usage(
-    usage_a: dict, usage_b: dict, model: str, provider: str,
+    usage_a: dict, usage_b: dict, model: str, provider: str, calls: int = 2,
 ) -> dict:
-    """Soma os 2 calls + adiciona model/provider."""
+    """Soma os 2 calls + adiciona model/provider. `calls` reflete quantas LLM calls
+    rodaram de fato (1 quando o exito-gate §3.1 pula a call B)."""
     return {
         "input_tokens": usage_a["input_tokens"] + usage_b["input_tokens"],
         "output_tokens": usage_a["output_tokens"] + usage_b["output_tokens"],
@@ -238,7 +281,7 @@ def _merge_usage(
         "cost_usd": usage_a["cost_usd"] + usage_b["cost_usd"],
         "model": model,
         "provider": provider,
-        "calls": 2,
+        "calls": calls,
         # L2 sempre text — não tem Vision path (consume cards L1, não docs raw).
         "model_variant": MODEL_VARIANT_TEXT,
     }
