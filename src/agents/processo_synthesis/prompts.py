@@ -158,7 +158,9 @@ def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
     omitia prob_exito em 100% das tentativas (smoke 1-merito 12151 + 50).
     """
     factsheets = req.mov_factsheets or []
-    factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or ""))
+    # MESMA chave (data ASC, mov_id ASC) do build_processo_synthesis_prompt e do
+    # split_movs_chronological — as 3 ordens batem (determinismo; review 2026-06-22).
+    factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or "", f.mov_id or ""))
 
     # Render tudo p/ processo normal (REV4); filtra ruido/baixa só p/ processo gigante.
     timeline_block = _render_timeline(factsheets_sorted, "(sem movimentacoes)")

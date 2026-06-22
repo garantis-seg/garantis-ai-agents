@@ -14,10 +14,13 @@ import logging
 import os
 from typing import Optional
 
+from garantis_shared.llm_chunking import map_reduce_classify
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
+from .chunking import reduce_processo_synthesis_cards, split_movs_chronological
 from .prompts import build_probabilidade_exito_prompt, build_processo_synthesis_prompt
 from .schemas import ProbabilidadeExito, ProcessoSynthesisCard, ProcessoSynthesisRequest
 
@@ -71,8 +74,13 @@ async def classify_processo_synthesis(
     request: ProcessoSynthesisRequest | dict,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
+    _no_chunk: bool = False,
 ) -> dict:
     """Synthesize a processo + classify probabilidade_exito (2 LLM calls em paralelo).
+
+    Processo GIGANTE (render dos movs > L2_CHUNK_CHARS) entra no chunk gate: split em
+    lotes cronológicos → map-reduce paralelo (cada lote re-entra com _no_chunk=True). O
+    caso normal (split=None) é byte-idêntico ao path histórico.
 
     Returns:
         {"card": ProcessoSynthesisCard.model_dump() | error_dict,
@@ -84,6 +92,48 @@ async def classify_processo_synthesis(
         request = ProcessoSynthesisRequest(**request)
     if model is None:
         model = DEFAULT_MODEL
+
+    # CHUNK GATE: processo GIGANTE (render dos movs > L2_CHUNK_CHARS) vira 1 prompt único de
+    # 250s+ → estoura TIMEOUT_LAYER2_S=180s no worker → retry/loop. Split em lotes
+    # CRONOLÓGICOS → classifica cada lote em PARALELO (_no_chunk=True → caminho normal de 2
+    # calls sobre <=200 movs, prompt pequeno/rápido) → reduce por campo. Lê COMPLETO sem
+    # timeout. Roda DENTRO do 1 HTTP do worker (o worker vê 1 resposta → step DBOS é 1 só →
+    # replay-safe). Processo normal: split retorna None → caminho quente byte-idêntico.
+    if not _no_chunk:
+        variants = split_movs_chronological(request)
+        if variants:
+            result = await map_reduce_classify(
+                variants=variants,
+                classify_one=lambda v: classify_processo_synthesis(
+                    v, model, provider, _no_chunk=True,
+                ),
+                reduce_cards=reduce_processo_synthesis_cards,
+                label="l2_chunk",
+            )
+            # §F4/F6: lote(s) que falharam (parse/exception) são descartados pelo framework →
+            # o reduce rodou sobre janela PARCIAL (pode ter perdido a janela load-bearing).
+            # Torna VISÍVEL (não silent-swallow): log estruturado + clampa confianca pelo
+            # ratio de sobrevivência. NÃO fail-closed (gigante tem que completar); o sinal
+            # fica greppable + confianca rebaixada pro L3/auditoria. (Stricter: fail-closed.)
+            n_ok, n_var = result.get("n_ok"), result.get("n_variants")
+            card = result.get("card") or {}
+            if (n_ok is not None and n_var and n_ok < n_var
+                    and isinstance(card, dict) and "error" not in card):
+                logger.warning(
+                    "L2_CHUNK_PARTIAL pn=%s kept=%d total=%d — reduce sobre janela parcial; "
+                    "confianca clampada",
+                    request.processo_numero, n_ok, n_var,
+                )
+                if card.get("confianca") is not None:
+                    card["confianca"] = round(card["confianca"] * n_ok / n_var, 3)
+            # L2 tipa raw_response/llm_raw_prompt como dict {synthesis, prob_exito} (a route
+            # ProcessoSynthesisResponse EXIGE dict). O framework devolve marker string →
+            # embrulha pro shape do L2 (senão a serialização da response 500a).
+            marker_raw = result.get("raw_response")
+            marker_prompt = result.get("llm_raw_prompt")
+            result["raw_response"] = {"synthesis": marker_raw, "prob_exito": marker_raw}
+            result["llm_raw_prompt"] = {"synthesis": marker_prompt, "prob_exito": marker_prompt}
+            return result
 
     llm_provider = create_provider(provider)
 
@@ -112,9 +162,28 @@ async def classify_processo_synthesis(
         )
     else:
         prob_exito_task = _call_probabilidade_exito(llm_provider, request, model, provider)
+        # §F5: return_exceptions=True — uma call que LEVANTA (TPM timeout/503 sob a saturação
+        # que o chunking enfrenta) não pode descartar o lote inteiro. synthesis é load-bearing
+        # (re-raise como antes); call B que levanta degrada pra prob vazio (mesmo fallback do
+        # exito-gate) preservando a synthesis boa — espelha a degradação graciosa do _parse_prob_exito.
         synthesis_result, prob_exito_result = await asyncio.gather(
-            synthesis_task, prob_exito_task,
+            synthesis_task, prob_exito_task, return_exceptions=True,
         )
+        if isinstance(synthesis_result, BaseException):
+            raise synthesis_result
+        if isinstance(prob_exito_result, BaseException):
+            if not isinstance(prob_exito_result, Exception):
+                raise prob_exito_result  # CancelledError etc — não engole
+            logger.warning(
+                "prob_exito RAISED pn=%s: %r — card sai com probabilidade_exito vazio",
+                request.processo_numero, prob_exito_result,
+            )
+            prob_exito_result = {
+                "raw_response": "{}",
+                "prompt": "(prob_exito raised — degradado pra vazio)",
+                "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+            }
+            n_calls = 1
 
     card_data = _merge_results(request, synthesis_result, prob_exito_result)
     usage = _merge_usage(
