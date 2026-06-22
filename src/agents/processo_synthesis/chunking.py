@@ -1,11 +1,22 @@
 # -*- coding: utf-8 -*-
 """Chunk map-reduce de processo GIGANTE no L2 (2026-06-22).
 
-Processo com 2000+ movs vira 1 prompt único que o Gemini leva 250s+ → estoura
-TIMEOUT_LAYER2_S=180s no worker → retry → loop. A v2.3 (decisão Elton) tirou o cap
-_MAX_MOVS_INLINE de propósito ("ler completo"); o conserto NÃO é re-introduzir cap, é
-ENCOLHER via chunking — split dos movs em lotes CRONOLÓGICOS → classifica cada lote em
-PARALELO (cada um < timeout) → reduz por semântica de campo. Lê COMPLETO sem timeout.
+Processo com muito SINAL vira 1 prompt único que o Gemini leva 250s+ → estoura
+TIMEOUT_LAYER2_S=180s no worker → retry → loop. O filtro de relevância (2026-06-20) já
+encolhe os procedural-giants (dropa ruido/baixa → 84s); o chunking é o 2º eixo, pro caso
+em que até o SINAL filtrado é grande demais: split em lotes CRONOLÓGICOS → classifica cada
+lote em PARALELO (cada um < timeout) → reduz por semântica de campo.
+
+⭐ COMPÕE com o filtro (fix 2026-06-22): detector + split operam sobre o conjunto FILTRADO
+(`_filtered_cards`), NÃO sobre todos os movs. Chunkar os brutos relia os procedurais que o
+filtro dropa = 6× mais trabalho → regrediu procedural-giants (680046 timeout vs 84s
+filtrado). Agora processo procedural-giant não chunka (via filtrada); só chunka quando o
+sinal filtrado passa de 120k. Ver split_movs_chronological.
+
+Aqui só o split (por-layer) + reduce (por-layer), puros e testáveis. A orquestração
+genérica (gather paralelo → filtra OK → reduce → soma usage) é
+`garantis_shared.llm_chunking.map_reduce_classify`, chamada no agent.py. ESPELHA o
+padrão do L1 (mov_factsheet/chunking.py).
 
 Aqui só o split (por-layer) + reduce (por-layer), puros e testáveis. A orquestração
 genérica (gather paralelo → filtra OK → reduce → soma usage) é
@@ -37,17 +48,25 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from .prompts import _summarize_factsheet
+from .prompts import _filtered_cards, _summarize_factsheet
 from .schemas import ProcessoSynthesisRequest
 
-# Orçamento de render por LOTE (chars). Cada lote vira 1 prompt L2 = render + ~15-40k de
-# scaffolding/matriz; 120k + scaffolding < ~200k = teto comprovado dos ~60s/call.
-# env-configurável pra calibrar empíricamente sob carga (handoff §6.3).
+# DOIS thresholds distintos (fix 2026-06-22 — antes era 1 só, e baixo demais):
+#
+# DETECTOR (quando chunkar): o render FILTRADO precisa passar disto. Medido: o 680046
+# (pior gigante monit, ~530k de timeline filtrada) roda como CHAMADA ÚNICA em ~84s — bem
+# sob os 180s. Ou seja, a via filtrada única aguenta os gigantes conhecidos; chunkar eles
+# só ADICIONA carga na instância (foi o que death-spiralou). Então só chunka quando o sinal
+# filtrado é grande demais pro single call arriscar o timeout (~800k ≈ ~127s extrapolado).
+# Na prática: dormente pros monit atuais (filtro resolve), rede de segurança pros monstros.
+_L2_CHUNK_DETECT_CHARS = int(os.getenv("L2_CHUNK_DETECT_CHARS", "800000"))
+# ORÇAMENTO POR LOTE (quando chunka): cada lote vira 1 prompt pequeno/rápido (~120k +
+# scaffolding < ~200k = teto dos ~60s/call). env-configurável (handoff §6.3).
 L2_CHUNK_CHARS = int(os.getenv("L2_CHUNK_CHARS", "120000"))
 
 # Teto de movs por lote = o threshold do filtro de relevância (_render_timeline em
-# prompts.py). Mantém o filtro de NUNCA disparar DENTRO de um lote → cada lote lê TODAS
-# as suas movs ("ler completo" do Elton). Cross-check: prompts._L2_CARD_FILTER_THRESHOLD.
+# prompts.py). Os lotes operam sobre o conjunto FILTRADO (já só sinal), e ficar <= esse
+# teto garante que o filtro não RE-dispara dentro do lote. Cross-check: _L2_CARD_FILTER_THRESHOLD.
 _L2_BATCH_MAX_MOVS = 200
 
 
@@ -58,28 +77,42 @@ def _est_render_chars(movs: list) -> int:
 
 
 def split_movs_chronological(
-    req: ProcessoSynthesisRequest, budget: Optional[int] = None,
+    req: ProcessoSynthesisRequest,
+    detect_chars: Optional[int] = None,
+    batch_chars: Optional[int] = None,
 ) -> Optional[list[ProcessoSynthesisRequest]]:
-    """Divide mov_factsheets em lotes CRONOLÓGICOS (ordem temporal = evolução do processo)
-    quando o render total estoura o orçamento. Cada lote fecha ao atingir o orçamento de
-    chars OU _L2_BATCH_MAX_MOVS movs (o que vier 1º). Clona o request por lote com aquele
-    subconjunto de movs. None quando NÃO precisa chunkar (caminho quente byte-idêntico).
+    """Divide os cards em lotes CRONOLÓGICOS quando o SINAL filtrado é grande demais.
+
+    COMPÕE COM O FILTRO DE RELEVÂNCIA (fix 2026-06-22): detector e split operam sobre o
+    conjunto FILTRADO (`_filtered_cards` — só sinal + cauda, o MESMO que a chamada única
+    renderiza), NÃO sobre todos os movs. Chunkar os brutos relia milhares de procedurais que
+    o filtro dropa = 6× mais trabalho → regrediu procedural-giants (680046: filtro fazia 84s;
+    chunk-tudo dava timeout 180s).
+
+    DOIS thresholds: `detect_chars` (quando chunkar — render filtrado precisa passar disto;
+    default _L2_CHUNK_DETECT_CHARS alto → via filtrada única é preferida pros gigantes
+    conhecidos) e `batch_chars` (tamanho de cada lote quando chunka; default L2_CHUNK_CHARS
+    pequeno → lote rápido). Cada lote fecha ao atingir batch_chars OU _L2_BATCH_MAX_MOVS cards.
+    None quando não precisa chunkar (caminho quente byte-idêntico).
 
     Determinismo: MESMA ordenação do build_processo_synthesis_prompt (data ASC, mov_id ASC)
     → lotes estáveis entre cascades → reduce determinístico (invariante de replay).
     """
-    budget = budget or L2_CHUNK_CHARS
+    detect_chars = detect_chars or _L2_CHUNK_DETECT_CHARS
+    batch_chars = batch_chars or L2_CHUNK_CHARS
     movs = req.mov_factsheets or []
-    if _est_render_chars(movs) <= budget:
+    movs_sorted = sorted(movs, key=lambda f: (f.data or "", f.mov_id or ""))
+    # Só o conteúdo FILTRADO é renderizado no prompt — é ele que o detector mede e o split fatia.
+    kept, _ = _filtered_cards(movs_sorted)
+    if _est_render_chars(kept) <= detect_chars:
         return None
 
-    movs_sorted = sorted(movs, key=lambda f: (f.data or "", f.mov_id or ""))
     batches: list[list] = []
     cur: list = []
     cur_chars = 0
-    for f in movs_sorted:
+    for f in kept:
         sz = len(_summarize_factsheet(f)) + 4
-        if cur and (cur_chars + sz > budget or len(cur) >= _L2_BATCH_MAX_MOVS):
+        if cur and (cur_chars + sz > batch_chars or len(cur) >= _L2_BATCH_MAX_MOVS):
             batches.append(cur)
             cur, cur_chars = [], 0
         cur.append(f)
@@ -87,7 +120,7 @@ def split_movs_chronological(
     if cur:
         batches.append(cur)
     if len(batches) < 2:
-        # 1 mov gigante sozinho estourou o orçamento — chunkar não ajuda (1 lote só).
+        # 1 card gigante sozinho estourou o orçamento — chunkar não ajuda (1 lote só).
         return None
 
     return [req.model_copy(update={"mov_factsheets": batch}) for batch in batches]
