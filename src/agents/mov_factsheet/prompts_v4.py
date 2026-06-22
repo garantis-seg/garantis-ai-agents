@@ -194,6 +194,20 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
 - tem_decisao: true SÓ com decisão material. Expediente/intimação/juntada/penhora-online/
   vista/conclusão/processamento de recurso = false (e então natureza/recorrente/provido/
   resultado_interlocutorio = null). Penhora online NÃO é decisão de mérito.
+- natureza/tem_decisao: classifique pelo ATO DESTE documento, NÃO pela decisão que ele
+  menciona/transcreve. Dois casos críticos:
+  · EMBARGOS DE DECLARAÇÃO (acolhidos OU rejeitados — inclusive "conhecidos e no mérito
+    rejeitados"/"negado provimento aos embargos de declaração"): são recurso INTEGRATIVO,
+    NÃO julgam o mérito da causa => natureza='interlocutoria'. O "mérito" aqui é o mérito
+    DOS EMBARGOS (se há omissão/contradição), não o da ação — NÃO copie o "improcedente"/
+    "procedente" da sentença/acórdão embargado pro card do EDcl. Só vira mérito se o texto
+    diz "acolhidos COM EFEITOS INFRINGENTES" alterando o resultado.
+  · DOCUMENTO MERAMENTE INFORMATIVO/CARTORÁRIO (certidão de inteiro teor, certidão de objeto
+    e pé/narratória, relatório/extrato de andamento) que só REPORTA/TRANSCREVE atos já
+    praticados: tem_decisao=false, natureza=null — não é o ato decisório (a decisão pertence
+    ao ato original, que tem movimento próprio), MESMO que transcreva sentenças/acórdãos.
+    Exceção: certidão que CERTIFICA trânsito em julgado explícito => transito_certificado=true
+    (mas tem_decisao continua false).
 - recorrente_polo + provido: SÓ em decisão de RECURSO. Leia no texto QUEM recorreu (apelante/
   agravante/recorrente), ache em qual polo ele está ('ativo'/'passivo'), e o resultado
   (provido/negado/parcial/não-conhecido). Se não der pra identificar o recorrente =>

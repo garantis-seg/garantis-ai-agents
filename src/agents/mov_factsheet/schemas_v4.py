@@ -77,7 +77,15 @@ from pydantic import BaseModel, Field, field_validator
 #   - v3.1 INTOCADO (cap próprio de 8k no render). day_factsheet (caps 20/8/6k SQL)
 #     fora do escopo — follow-up próprio (prompt agregado por dia, orçamento distinto).
 #   - Custo: censo 2026-06-10 mediu ~8,9x de input sem cap — decisão qualidade>custo.
-PROMPT_VERSION_V4 = "mov_factsheet.v4.4"
+# v4.5 (2026-06-22, L1 misread triage sessão gabi/Poletto): _REGRAS_CRUS (prompts_v4)
+#   ganhou regra natureza/tem_decisao "classifique pelo ATO, não pelo que transcreve":
+#   (a) Embargos de Declaração (acolhidos/rejeitados) => natureza='interlocutoria' (NÃO
+#   copiar improcedente da decisão embargada) — conserta M1; (b) certidão de inteiro teor/
+#   relatório de andamento => tem_decisao=false — conserta M2. Validado offline v4 4/4 em
+#   ED + certidão, control (acórdão de mérito real) preservado improcedente/e_pivo=true.
+#   derivar_e_pivo já trata interlocutoria/tem_decisao=false => e_pivo=false (sem mudar
+#   derivacoes). Ver memory l1-misread-m1-load-m2-orfao.
+PROMPT_VERSION_V4 = "mov_factsheet.v4.5"
 
 # Taxonomia tipo_doc (34) — idêntica à v3.1 (`schemas.py` / `fundacao.TAXONOMIA_TIPO_DOC`).
 # Mantida aqui pra o módulo v4 ser auto-contido/reversível; insumo de `categoria` (DERIVED).
