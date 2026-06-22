@@ -4,19 +4,20 @@ Single LLM call por movimentacao, extrai 13 campos estruturados.
 Substitui mov_summarizer durante coexistencia (kind='mov_factsheet' vs kind='movimentacao').
 """
 
-import asyncio
 import hashlib
 import json
 import logging
 import os
 from typing import Optional
 
+from garantis_shared.llm_chunking import map_reduce_classify
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT, call_l1_with_vision_fallback
 from .._utils.feature_flags import flag_enabled
-from .chunking import reduce_peca_cards, split_large_peca_variants, sum_usage
+from .chunking import reduce_peca_cards, split_large_peca_variants
 from .prompts import build_mov_factsheet_prompt
 from .fundacao import derivar_categoria, derivar_status_garantia
 from .schemas import (
@@ -353,41 +354,31 @@ async def classify_mov_factsheet(
 async def _classify_chunked(
     processo, mov, variants, fb_typed, model, provider, classe,
 ) -> dict:
-    """Map-reduce de peça grande: N variantes (chunks) → classify em PARALELO (cada uma
-    com _no_chunk=True → 1 call normal) → reduz os cards + RE-DERIVA (categoria/status/...
-    consistentes com a base reduzida). Custo somado. Lógica pura em chunking.py."""
+    """Map-reduce de peça grande via framework compartilhado: N variantes (chunks) →
+    classify em PARALELO (cada uma com _no_chunk=True → 1 call normal) → reduz os cards +
+    RE-DERIVA (categoria/status/... consistentes com a base reduzida). Custo somado.
+    Orquestração genérica em garantis_shared.llm_chunking; reduce por-layer em chunking.py."""
+    return await map_reduce_classify(
+        variants=variants,
+        classify_one=lambda v: classify_mov_factsheet(
+            processo, mov, v, fb_typed, model, provider, classe, _no_chunk=True,
+        ),
+        reduce_cards=_reduce_peca_and_rederive,
+        label="chunked",
+        on_all_fail={
+            "card": {"error": "all chunks failed", "mov_id": mov.mov_id},
+            "raw_response": "", "llm_raw_prompt": "", "prompt_version": None, "usage": {},
+        },
+    )
+
+
+def _reduce_peca_and_rederive(cards: list[dict]) -> dict:
+    """reduce_peca_cards + RE-DERIVA (categoria/status/...) na base reduzida. Passado como
+    reduce_cards pro map_reduce_classify — o re-derive entra DENTRO do reduce (o card de
+    saída fica byte-idêntico ao do _classify_chunked pré-extração)."""
     from garantis_shared.engine_v6.layer1_mov_factsheet.derivacoes import (
         aplicar_derivados_sujeito_indep,
     )
-
-    results = await asyncio.gather(
-        *[
-            classify_mov_factsheet(
-                processo, mov, v, fb_typed, model, provider, classe, _no_chunk=True
-            )
-            for v in variants
-        ],
-        return_exceptions=True,
-    )
-    ok = [r for r in results if isinstance(r, dict)]
-    cards = [
-        r["card"] for r in ok
-        if isinstance(r.get("card"), dict) and "error" not in r["card"]
-    ]
-    if not cards:
-        # todos os chunks falharam → devolve o 1o resultado (com seu erro), não mascara
-        logger.error(f"L1_CHUNK_ALL_FAIL mov_id={mov.mov_id} variants={len(variants)}")
-        return ok[0] if ok else {
-            "card": {"error": "all chunks failed", "mov_id": mov.mov_id},
-            "raw_response": "", "llm_raw_prompt": "", "prompt_version": None, "usage": {},
-        }
-
     reduced = reduce_peca_cards(cards)
     aplicar_derivados_sujeito_indep(reduced)  # re-derive na base reduzida
-    return {
-        "card": reduced,
-        "raw_response": f"[chunked:{len(cards)}/{len(variants)} partes]",
-        "llm_raw_prompt": f"[chunked:{len(variants)} partes de peca grande]",
-        "prompt_version": ok[0].get("prompt_version"),
-        "usage": sum_usage([r.get("usage") or {} for r in ok]),
-    }
+    return reduced

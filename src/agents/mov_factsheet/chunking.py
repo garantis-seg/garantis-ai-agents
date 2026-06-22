@@ -13,6 +13,15 @@ construídos e RE-DERIVA (categoria/status/...) pra consistência.
 """
 from __future__ import annotations
 
+# split_text/sum_usage genéricos + a orquestração map_reduce_classify moraram aqui;
+# extraídos pro garantis_shared.llm_chunking (PR chunking shared 2026-06-22) pra L2/L3
+# reusarem. split/reduce POR-LAYER do L1 (split_large_peca_variants/reduce_peca_cards)
+# FICAM aqui. Re-export (alias redundante = re-export intencional, ruff não dropa) pra
+# callers/tests existentes seguirem importando daqui: _split_text é usado internamente,
+# sum_usage é só re-export.
+from garantis_shared.llm_chunking import split_text as _split_text
+from garantis_shared.llm_chunking import sum_usage as sum_usage
+
 from .prompts_v4 import _doc_reading_profile
 from .schemas import DocAnexado
 
@@ -20,21 +29,6 @@ CHUNK_SIZE = 180_000   # < 200k (margem pro marcador + mov + outros docs no prom
                        # 200k de prompt é o teto comprovado dos 60s)
 _RESUMO_CAP = 3000
 _REL = {"alta": 3, "media": 2, "baixa": 1, "ruido": 0}
-
-
-def _split_text(text: str, size: int = CHUNK_SIZE) -> list[str]:
-    """Pedaços <= size, quebrando em '\\n' quando há um na 2a metade (não corta linha)."""
-    out: list[str] = []
-    i, n = 0, len(text)
-    while i < n:
-        end = min(i + size, n)
-        if end < n:
-            nl = text.rfind("\n", i + size // 2, end)
-            if nl != -1:
-                end = nl + 1
-        out.append(text[i:end])
-        i = end
-    return out
 
 
 def split_large_peca_variants(docs: list[DocAnexado]) -> list[list[DocAnexado]] | None:
@@ -51,7 +45,7 @@ def split_large_peca_variants(docs: list[DocAnexado]) -> list[list[DocAnexado]] 
     if big_idx is None:
         return None
     big = docs[big_idx]
-    pieces = _split_text(big.text_content or "")  # len>CHUNK_SIZE ⇒ sempre ≥2 pedaços
+    pieces = _split_text(big.text_content or "", size=CHUNK_SIZE)  # len>CHUNK_SIZE ⇒ ≥2 pedaços
     n = len(pieces)
     variants: list[list[DocAnexado]] = []
     for j, piece in enumerate(pieces):
@@ -133,19 +127,4 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
     if any(("cdas" in c or "processos_citados" in c) for c in cards):  # ramo petição
         out["cdas"] = _union(cards, "cdas", "numero")
         out["processos_citados"] = _union(cards, "processos_citados", "cnj")
-    return out
-
-
-def sum_usage(usages: list[dict]) -> dict:
-    """Soma tokens/custo dos N chunks; model/provider/variant do 1o."""
-    out = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0}
-    for u in usages:
-        out["input_tokens"] += u.get("input_tokens", 0) or 0
-        out["output_tokens"] += u.get("output_tokens", 0) or 0
-        out["total_tokens"] += u.get("total_tokens", 0) or 0
-        out["cost_usd"] += u.get("cost_usd", 0.0) or 0.0
-    if usages:
-        for k in ("model", "provider", "model_variant"):
-            if usages[0].get(k) is not None:
-                out[k] = usages[0][k]
     return out
