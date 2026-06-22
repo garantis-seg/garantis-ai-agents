@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Chunk map-reduce de processo gigante no L2 (2026-06-22) — split + reduce."""
 from src.agents.processo_synthesis.chunking import (
+    _L2_CHUNK_DETECT_CHARS,
     L2_CHUNK_CHARS,
     reduce_processo_synthesis_cards,
     split_movs_chronological,
@@ -12,9 +13,12 @@ from src.agents.processo_synthesis.schemas import (
 )
 
 
-def _mov(i, resumo="x", data="2020-01-01"):
-    # data constante → sort por (data, mov_id) = ordem de mov_id (insertion order)
-    return MovFactSheetMin(mov_id=f"mov{i:05d}", data=data, resumo_ato=resumo)
+def _mov(i, resumo="x", data="2020-01-01", rel=None):
+    # data constante → sort por (data, mov_id) = ordem de mov_id (insertion order).
+    # rel=None → procedural (ruido/baixa → filtrado fora p/ >200); rel='alta' → sinal (mantido).
+    return MovFactSheetMin(
+        mov_id=f"mov{i:05d}", data=data, resumo_ato=resumo, relevancia_merito=rel,
+    )
 
 
 def _req(movs):
@@ -23,7 +27,7 @@ def _req(movs):
     )
 
 
-# ── split_movs_chronological ───────────────────────────────────────────────
+# ── split_movs_chronological (detect_chars = quando; batch_chars = tamanho do lote) ─────
 
 def test_split_none_para_pequeno():
     assert split_movs_chronological(_req([_mov(i, "curto") for i in range(10)])) is None
@@ -31,40 +35,56 @@ def test_split_none_para_pequeno():
 
 def test_split_lotes_por_tamanho_cobre_tudo_e_ordena():
     big = "a" * 4000
-    req = _req([_mov(i, big) for i in range(40)])   # ~160k render > 120k budget
-    variants = split_movs_chronological(req)
+    req = _req([_mov(i, big) for i in range(40)])   # ~160k filtrado (40<=200, tudo mantido)
+    variants = split_movs_chronological(req, detect_chars=120_000)  # > detect → chunka
     assert variants and len(variants) >= 2
     # cobre TODAS as movs (sem perder/duplicar)
     flat = [f.mov_id for v in variants for f in v.mov_factsheets]
     assert len(flat) == 40 and len(set(flat)) == 40
     # ordem cronológica (data, mov_id) preservada na concatenação dos lotes
     assert flat == sorted(flat)
-    # cada lote respeita o teto de 200 movs
     assert all(len(v.mov_factsheets) <= 200 for v in variants)
 
 
-def test_split_respeita_teto_200_movs():
-    # 600 movs pequenas (~245 render cada) ~147k > budget → chunka; teto 200/lote binda 1º
-    req = _req([_mov(i, "y" * 220) for i in range(600)])
-    variants = split_movs_chronological(req)
+def test_split_signal_giant_chunka_respeita_teto_200():
+    # 600 movs de SINAL (rel=alta) ~134k filtrado > detect → chunka; teto 200/lote binda 1º.
+    req = _req([_mov(i, "y" * 220, rel="alta") for i in range(600)])
+    variants = split_movs_chronological(req, detect_chars=120_000)
     assert variants
     assert all(len(v.mov_factsheets) <= 200 for v in variants)
     assert sum(len(v.mov_factsheets) for v in variants) == 600
 
 
-def test_split_um_mov_gigante_sozinho_none():
-    # 1 mov estoura o budget sozinho — chunkar não ajuda (só daria 1 lote)
-    assert split_movs_chronological(_req([_mov(0, "z" * 500_000)])) is None
+def test_split_procedural_giant_NAO_chunka():
+    # ⭐ FIX 2026-06-22: 600 movs PROCEDURAIS (sem rel). Render BRUTO ~182k > detect, MAS o
+    # filtro dropa tudo menos a cauda-30 → filtrado ~9k <= detect → NÃO chunka (via filtrada).
+    # Esse era o caso que regredia o 680046 (84s filtrado virava 180s timeout chunkado).
+    req = _req([_mov(i, "p" * 300) for i in range(600)])
+    assert split_movs_chronological(req, detect_chars=120_000) is None
 
 
-def test_split_budget_override():
-    req = _req([_mov(i, "k" * 100) for i in range(20)])
-    assert split_movs_chronological(req) is None             # sob 120k default
-    assert split_movs_chronological(req, budget=500) is not None  # budget minúsculo → chunka
+def test_split_giant_conhecido_nao_chunka_com_detect_default():
+    # ⭐ Com o detect default ALTO (800k), até 600 cards de SINAL (~134k) NÃO chunkam — a via
+    # filtrada única é preferida (680046 ~530k filtrado roda em 84s). Chunk só p/ >800k.
+    req = _req([_mov(i, "y" * 220, rel="alta") for i in range(600)])
+    assert split_movs_chronological(req) is None
 
 
-def test_split_chunk_chars_default():
-    assert L2_CHUNK_CHARS == 120_000
+def test_split_um_card_gigante_sozinho_none():
+    # 1 card estoura o detect sozinho — chunkar não ajuda (só daria 1 lote)
+    req = _req([_mov(0, "z" * 500_000)])
+    assert split_movs_chronological(req, detect_chars=100_000, batch_chars=100_000) is None
+
+
+def test_split_thresholds_override():
+    req = _req([_mov(i, "k" * 100) for i in range(20)])  # ~2k filtrado
+    assert split_movs_chronological(req) is None  # default detect 800k → não chunka
+    assert split_movs_chronological(req, detect_chars=500, batch_chars=500) is not None
+
+
+def test_split_chunk_chars_defaults():
+    assert L2_CHUNK_CHARS == 120_000          # orçamento por lote (pequeno/rápido)
+    assert _L2_CHUNK_DETECT_CHARS == 800_000  # trigger (alto → via filtrada p/ gigantes conhecidos)
 
 
 # ── reduce_processo_synthesis_cards ────────────────────────────────────────

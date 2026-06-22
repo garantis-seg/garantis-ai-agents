@@ -127,21 +127,29 @@ def _card_carrega_sinal(f, is_tail: bool) -> bool:
     )
 
 
+def _filtered_cards(factsheets_sorted: list) -> tuple[list, int]:
+    """Os cards que o L2 REALMENTE renderiza: TUDO se <= threshold; senão só os de sinal +
+    a cauda recente (procedural ruido/baixa é dropado). Retorna (kept, n_omit). FONTE ÚNICA
+    do filtro — usada pelo render E pelo detector de chunk (chunkar o que o filtro DROPA
+    seria reler procedural à toa = regressão 2026-06-22; o chunk opera no MESMO conjunto)."""
+    n = len(factsheets_sorted)
+    if n <= _L2_CARD_FILTER_THRESHOLD:
+        return list(factsheets_sorted), 0
+    tail_start = n - _L2_TAIL_KEEP
+    kept = [f for i, f in enumerate(factsheets_sorted)
+            if _card_carrega_sinal(f, i >= tail_start)]
+    return kept, n - len(kept)
+
+
 def _render_timeline(factsheets_sorted: list, empty: str) -> str:
     """Timeline pro prompt L2. Processo normal (<= threshold): render TUDO (REV4 intacto).
     Processo gigante: filtra pelo sinal que o L1 já computou + marcador dos omitidos (no
     silent cap). Bound determinístico que evita o TIMEOUT_LAYER2 sem cortar sinal."""
-    n = len(factsheets_sorted)
-    if n <= _L2_CARD_FILTER_THRESHOLD:
-        return "\n  ".join(_summarize_factsheet(f) for f in factsheets_sorted) or empty
-    tail_start = n - _L2_TAIL_KEEP
-    kept = [f for i, f in enumerate(factsheets_sorted)
-            if _card_carrega_sinal(f, i >= tail_start)]
+    kept, n_omit = _filtered_cards(factsheets_sorted)
     block = "\n  ".join(_summarize_factsheet(f) for f in kept) or empty
-    n_omit = n - len(kept)
     if n_omit:
         block += (
-            f"\n  [+{n_omit} movs procedurais omitidas (de {n} no total) — o L1 marcou "
+            f"\n  [+{n_omit} movs procedurais omitidas (de {len(factsheets_sorted)} no total) — o L1 marcou "
             "ruido/baixa (penhora/intimacao/conclusao/expediente); nao alteram "
             "decisao_vigente/estado/garantia. Preservado: decisoes, eventos de garantia, "
             "peticao inicial e as 30 movs mais recentes.]"
