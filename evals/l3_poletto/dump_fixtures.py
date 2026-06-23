@@ -67,18 +67,28 @@ def _pg_array(items: list[str]) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=0, help="amostra N meritos (0=todos)")
+    ap.add_argument("--merito-ids", type=str, default="",
+                    help="CSV de merito_ids especificos (ex: '6995,680012'). Vazio=todos rotulados.")
+    ap.add_argument("--out-dir", type=str, default="",
+                    help="dir de saida (default: ./fixtures). Use um dir separado p/ subset fresco.")
     args = ap.parse_args()
-    FIX_DIR.mkdir(parents=True, exist_ok=True)
+    out_dir = Path(args.out_dir) if args.out_dir else FIX_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    id_filter = ""
+    if args.merito_ids.strip():
+        ids = [x.strip() for x in args.merito_ids.split(",") if x.strip().isdigit()]
+        id_filter = f"AND merito_id = ANY(ARRAY[{','.join(ids)}]::bigint[])"
     token = _token()
 
     # 1) Meritos rotulados + metadata + risco de producao + decomposicao.
     print("[1/6] meritos rotulados + producao...", file=sys.stderr)
     rows = q(
-        """
+        f"""
         WITH pol AS (
           SELECT DISTINCT ON (merito_id) merito_id, risco_poletto, apolice_aceita
           FROM monitoramento.apolices_monitoradas
           WHERE merito_id IS NOT NULL AND risco_poletto IS NOT NULL
+          {id_filter}
           ORDER BY merito_id, id
         ),
         card AS (
@@ -246,11 +256,11 @@ def main() -> int:
             },
             "payload": payload,
         }
-        (FIX_DIR / f"{mid}.json").write_text(
+        (out_dir / f"{mid}.json").write_text(
             json.dumps(fixture, ensure_ascii=False), encoding="utf-8"
         )
         written += 1
-    print(f"OK: {written} fixtures em {FIX_DIR}", file=sys.stderr)
+    print(f"OK: {written} fixtures em {out_dir}", file=sys.stderr)
     return 0
 
 
