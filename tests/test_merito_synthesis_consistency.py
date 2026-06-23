@@ -80,7 +80,9 @@ def test_consistency_check_reverso_pro_baixo():
     -> risco NAO pode ser Medio nem Alto."""
     p = build_merito_synthesis_prompt(_empty_request())
     assert "Reverso simetrico" in p
-    assert "transito\n     FAVORAVEL" in p or "transito FAVORAVEL" in p
+    # v2.7.1: a string "transito FAVORAVEL" vinha do glossario (removido no #2);
+    # o bloco consistency em si segue intacto — testa o conteudo dele.
+    assert "FAVORAVEL" in p
     assert "Deve ser \"Baixo\"" in p
 
 

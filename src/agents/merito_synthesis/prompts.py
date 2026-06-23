@@ -113,7 +113,22 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #   - Pareado com flip do override no worker: JURISPRUDENCE_PATH_ENABLED
 #     prob_base->shadow (o veredito do LLM passa a valer; matriz fica dormente).
 #   - Rollback: revert do PR (regen COLD na v2.6) + flag de volta pra prob_base.
-PROMPT_VERSION_BASE = "merito_synthesis.v2.7"
+#
+# v2.7.1 (2026-06-23, TOMADOR-FATO — unico win da busca de simplificacao L3):
+#   - GLOSSARIO ROLES + REGRA DURA 3-step "grosseira" (tomador==vencedor->Baixo
+#     senao->Alto, que contradizia a matriz) REMOVIDOS. O Tomador entra como FATO
+#     (razao_social/CNPJ via _build_glossary_roles(req), nome mantido p/ compat) +
+#     1 linha anti-inversao. Ref do lembrete GLOSSARIO->O TOMADOR.
+#   - Validado no harness (evals/l3_poletto, 234 r3 denoised, --no-override), 3 runs:
+#     false_baixo (miss-perigoso) 12.4%->11.1% ESTAVEL (3/3); exact ~neutro; within1
+#     leve queda ~ruido; mean_signed +0.03 (~ruido). Trade na direcao certa p/ seguro
+#     (-miss-perigoso por +over-rating minimo) + simplifica.
+#   - Os outros 4 candidatos de simplificacao (prob-por-processo, comprimir
+#     consistency, comprimir filtro, remover templates) REGREDIRAM/borderline-neg e
+#     foram DESCARTADOS — v2.7 e otimo-local exceto pela REGRA DURA. Detalhe: memory
+#     l3-consolidacao-2026-06-23.
+#   - Rollback: revert do PR (regen COLD na v2.7).
+PROMPT_VERSION_BASE = "merito_synthesis.v2.7.1"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -334,29 +349,24 @@ def _build_intro() -> str:
     )
 
 
-def _build_glossary_roles() -> str:
-    """Glossario Tomador/Segurado/Garantido + REGRA DURA 3-step. Comum.
-
-    Bug 5a handoff: glossario fixo elimina oscilacao Tomador/Segurado entre
-    cascades. Terminologia e a mesma em fiscal/trabalhista/civel — soh muda
-    quem ocupa cada papel (em fiscal Tomador=contribuinte, em trabalhista
-    Tomador=empregador, em civel Tomador=devedor)."""
-    return """=== GLOSSARIO ROLES EM SEGURO GARANTIA JUDICIAL (LEIA ANTES DE CLASSIFICAR) ===
-
-- Tomador: quem contrata o seguro (paga premio). Em execucao fiscal = contribuinte/devedor.
-- Segurado/Garantido: beneficiario (recebe se Tomador inadimplir). Em execucao fiscal = Fazenda Publica.
-- Sentenca FAVORAVEL ao Tomador (procedente p/ contribuinte) -> Tomador ganhou -> BAIXO risco pro seguro.
-- Sentenca DESFAVORAVEL ao Tomador (improcedente p/ contribuinte) -> Tomador perdeu -> ALTO risco pro seguro.
-- "Sentenca procedente" SEM contexto: identificar PEDIDO antes de classificar. Quem pediu? Quem ganhou?
-- Recurso pendente NAO neutraliza desfavoravel: ALTO permanece ate transito FAVORAVEL ao Tomador.
-
-REGRA DURA: antes de redigir justificativa, identifique de forma explicita:
-  (a) quem e o Tomador no merito (consultar bloco TOMADOR);
-  (b) quem ganhou na ultima decisao_vigente (consultar processo_syntheses);
-  (c) se "(a) == (b)" -> tendencia BAIXO; se "(a) != (b)" -> tendencia ALTO.
-NUNCA usar "Garantido" e "Tomador" como sinonimos. NUNCA inverter "favoravel/desfavoravel"
-na narrativa (se a decisao foi DESFAVORAVEL ao Tomador, NAO escrever "sentenca favoravel ao
-Banco Mercantil" quando o Banco e o Tomador)."""
+def _build_glossary_roles(req: MeritoSynthesisRequest) -> str:
+    """#2 (2026-06-23): Tomador injetado como FATO (substitui glossario + REGRA
+    DURA 3-step "grosseira"). Validado no harness: exact/within1 = v2.7,
+    false_baixo -1,3% (miss-perigoso melhor), recall +3,4%. Nome mantido p/ compat."""
+    nome = req.razao_social or req.cnpj_principal or "(titular do merito)"
+    cnpj = f" (CNPJ {req.cnpj_principal})" if req.cnpj_principal else ""
+    return (
+        "=== O TOMADOR (FATO — nao precisa derivar) ===\n"
+        f"O Tomador deste merito e {nome}{cnpj} — quem contratou o seguro garantia. "
+        "O Segurado/beneficiario e a contraparte (em execucao fiscal, a Fazenda).\n"
+        "\n"
+        "O campo `sentido` de cada decisao_vigente JA vem do ponto de vista do TOMADOR: "
+        "`favoravel` = o Tomador ganhou (-> tende a risco BAIXO); `desfavoravel` = o "
+        "Tomador perdeu (-> tende a risco mais alto). NAO reinverta esse sinal na narrativa "
+        "(se a decisao foi DESFAVORAVEL ao Tomador, nao a descreva como favoravel a ele). "
+        "Recurso pendente NAO neutraliza um desfavoravel. O nivel final vem da Matriz de "
+        "Risco pelo ESTAGIO, nao so pela direcao."
+    )
 
 
 def _build_consistency_check() -> str:
@@ -1004,7 +1014,7 @@ def _build_lembrete_final(req: MeritoSynthesisRequest) -> str:
     """
     return f"""<lembrete_final>
 Antes de emitir risco final, confirme:
-1. Polos identificados? Tomador eh quem? (releia GLOSSARIO ROLES no topo).
+1. Tomador identificado? (releia O TOMADOR no topo). NAO reinverteu o `sentido` do L2.
 2. Consistency check OK? Argumentos pro-Alto exigem risco=Alto/Altissimo
    (releia CONSISTENCY CHECK no topo).
 3. Default = Baixo. Subida requer sinal explicito citando CNJ + evento
@@ -1748,7 +1758,7 @@ def build_prompt_and_version(
     )
     parts = [
         _build_intro(),
-        _build_glossary_roles(),
+        _build_glossary_roles(req),
         _build_consistency_check(),
         _build_merito_header_block(req),
         _build_processos_block(req),

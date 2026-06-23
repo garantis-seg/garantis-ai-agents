@@ -112,23 +112,34 @@ async def _classify_one(payload: dict, runs: int, no_override: bool = False) -> 
     }
 
 
-async def _pairs_live(fixtures: list[dict], runs: int, no_override: bool = False) -> list[Pair]:
+async def _pairs_live(
+    fixtures: list[dict], runs: int, no_override: bool = False, concurrency: int = 6,
+) -> list[Pair]:
+    """Roda os fixtures CONCORRENTES (semaforo) — cada merito e independente, entao
+    o paralelismo nao muda o resultado, so o wall-clock (~6x). Cap conservador
+    pra nao estourar TPM da key de eval."""
     if not os.environ.get("GEMINI_API_KEY"):
         raise SystemExit(
             "GEMINI_API_KEY nao setada. Use a _EVAL:\n"
             "  export GEMINI_API_KEY=$(gcloud secrets versions access latest "
             "--secret=GEMINI_API_KEY_EVAL --project=neqsti)"
         )
-    pairs = []
-    for i, fx in enumerate(fixtures, 1):
-        out = await _classify_one(fx["payload"], runs, no_override=no_override)
+    sem = asyncio.Semaphore(concurrency)
+    done = 0
+    total = len(fixtures)
+
+    async def _one(fx: dict) -> Pair:
+        nonlocal done
+        async with sem:
+            out = await _classify_one(fx["payload"], runs, no_override=no_override)
+        done += 1
         print(
-            f"  [{i}/{len(fixtures)}] m={fx['merito_id']} "
+            f"  [{done}/{total}] m={fx['merito_id']} "
             f"final={out['final']} (llm={out['llm']} derived={out['derived']} "
             f"promoted={out['promoted']}) poletto={fx['poletto']['risco']}",
             file=sys.stderr,
         )
-        pairs.append(Pair(
+        return Pair(
             merito_id=fx["merito_id"],
             engine=out["final"],
             poletto=fx["poletto"]["risco"],
@@ -138,8 +149,9 @@ async def _pairs_live(fixtures: list[dict], runs: int, no_override: bool = False
             derived=out["derived"],
             apolice_aceita=fx["poletto"].get("apolice_aceita"),
             promoted=out["promoted"],
-        ))
-    return pairs
+        )
+
+    return list(await asyncio.gather(*[_one(fx) for fx in fixtures]))
 
 
 def _report_to_dict(r: Report) -> dict:
@@ -160,7 +172,15 @@ def main() -> int:
     ap.add_argument("--compare-to", type=str, default="", help="compara com baseline salvo (DELTA)")
     ap.add_argument("--no-override", action="store_true",
                     help="final = veredito do LLM puro (sem override matriz/prob_base); so --live")
+    ap.add_argument("--concurrency", type=int, default=6,
+                    help="fixtures concorrentes (semaforo); so --live. ~6x mais rapido.")
+    ap.add_argument("--fixtures-dir", type=str, default="",
+                    help="dir de fixtures alternativo (default: ./fixtures). Use p/ subset fresco.")
     args = ap.parse_args()
+
+    if args.fixtures_dir:
+        global FIX_DIR
+        FIX_DIR = Path(args.fixtures_dir)
 
     fixtures = _load_fixtures(args.limit)
     if not fixtures:
@@ -170,7 +190,7 @@ def main() -> int:
     mode = "live (re-roda L3)" if args.live else "from-snapshot (producao gravada)"
     print(f"Modo: {mode} | fixtures: {len(fixtures)}", file=sys.stderr)
     if args.live:
-        pairs = asyncio.run(_pairs_live(fixtures, args.runs, no_override=args.no_override))
+        pairs = asyncio.run(_pairs_live(fixtures, args.runs, no_override=args.no_override, concurrency=args.concurrency))
     else:
         pairs = _pairs_from_snapshot(fixtures)
 
