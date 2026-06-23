@@ -17,8 +17,8 @@ from src.agents.merito_synthesis.schemas import (
 )
 
 
-def test_version_bumped_v2_5():
-    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.5"
+def test_version_bumped():
+    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.7.1"
 
 
 def test_lifecycle_completo_sem_cap_de_5():
