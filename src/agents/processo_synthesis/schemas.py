@@ -479,8 +479,25 @@ class ProcessoSynthesisRequest(BaseModel):
     provider: Optional[str] = None
 
 
+class ProcessoSynthesisCardRich(ProcessoSynthesisCard):
+    """Card PERSISTIDO/SERVIDO (rota + ProcessoSynthesisResponse). Igual ao
+    ProcessoSynthesisCard MAS com `decisao_vigente` RICO (os 3 campos echo projetados em
+    codigo pela condicao A deterministica).
+
+    Por que separado: o `response_schema` do Gemini (agent.py:307) DEVE continuar
+    ProcessoSynthesisCard LEAN (decisao_vigente = DecisaoVigente v2.3) — retipar a chamada do
+    LLM pra Rich re-introduz o drift do risco_factual (schema e instrucao; provado no canario).
+    Este card rico vive FORA da chamada do LLM: a rota/persistencia serializam por ele pra os
+    3 campos NAO serem stripados na borda HTTP. Bug pre-fix (2026-06-25): a rota re-validava por
+    ProcessoSynthesisCard (DecisaoVigente extra='ignore') e dropava os campos -> condicao A
+    inerte. Memory: l2-condicaoA-deterministica-built-2026-06-25.
+    """
+
+    decisao_vigente: DecisaoVigenteRich = Field(default_factory=DecisaoVigenteRich)
+
+
 class ProcessoSynthesisResponse(BaseModel):
-    card: ProcessoSynthesisCard
+    card: ProcessoSynthesisCardRich  # RICO: preserva os 3 campos echo na serializacao da rota
     # dict[str,str] desde split em 2 LLM calls: {"synthesis": ..., "prob_exito": ...}
     raw_response: Optional[dict[str, Any]] = None
     llm_raw_prompt: Optional[dict[str, Any]] = None

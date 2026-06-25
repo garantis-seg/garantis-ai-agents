@@ -12,9 +12,10 @@ from src.agents.processo_synthesis.prompts import (
 from src.agents.processo_synthesis.schemas import MovFactSheetMin
 
 
-def _m(i, rel="ruido", *, tem_decisao=False, cautelar=None, evento=None):
+def _m(i, rel="ruido", *, tem_decisao=False, cautelar=None, evento=None, data=None):
     return MovFactSheetMin(
-        mov_id=f"{i:08d}-0000-4000-8000-000000000000", data=f"2020-01-{(i % 28) + 1:02d}",
+        mov_id=f"{i:08d}-0000-4000-8000-000000000000",
+        data=data or f"2020-01-{(i % 28) + 1:02d}",
         relevancia_merito=rel,
         decisao={"tem_decisao": tem_decisao, "instrumento_cautelar": cautelar},
         evento_garantia={"tipo": evento or "nenhum"},
@@ -65,3 +66,15 @@ def test_suspension_signal_always_kept_even_if_media():
     movs.append(susp)
     kept, _ = _filtered_cards(movs)
     assert susp.mov_id in {m.mov_id for m in kept}
+
+
+def test_old_hard_signal_media_survives_cap_squeeze():
+    """Negativo (dim 4, a colisão REAL): um mov 'media' que TAMBÉM carrega sinal hard
+    (tem_decisao), ANTIGO, espremido por >=50 media mais RECENTES. O teste de suspensão acima
+    passa mesmo sob if/elif trocado (sobra room no soft); este força a colisão — o hard tem que
+    sobreviver ao teto independentemente da idade."""
+    old_hard = _m(1, "media", tem_decisao=True, data="2018-01-01")          # antigo + media + HARD
+    recent_media = [_m(1000 + i, "media", data=f"2024-{(i % 12) + 1:02d}-15") for i in range(120)]
+    noise = [_m(5000 + i, "ruido", data="2019-06-01") for i in range(250)]
+    kept, _ = _filtered_cards([old_hard, *recent_media, *noise])
+    assert old_hard.mov_id in {m.mov_id for m in kept}  # hard nunca evictado, mesmo velho

@@ -100,7 +100,69 @@ def test_project_noop_when_no_decided_mov():
     assert card["decisao_vigente"] == before  # inalterado
 
 
+def test_http_response_preserves_echo_fields_AND_base_strips():
+    """O BUG (verificacao adversarial da mae): a rota re-serializava por ProcessoSynthesisCard
+    BASE (decisao_vigente = DecisaoVigente, extra='ignore') -> os 3 campos echo sumiam no JSON.
+    Fix: ProcessoSynthesisResponse.card = ProcessoSynthesisCardRich. Round-trip que faltava (o
+    report validou o dict in-process, NAO a resposta serializada)."""
+    from src.agents.processo_synthesis.schemas import (
+        ProcessoSynthesisCard, ProcessoSynthesisCardRich, ProcessoSynthesisResponse,
+    )
+    card_data = {"processo_numero": "123", "decisao_vigente": {
+        "natureza": "extinto_sem_merito", "motivo_extincao": "satisfacao",
+        "instrumento_cautelar": "suspensao_exigibilidade_ctn", "efeito_suspensivo": True}}
+    # FIX: via ProcessoSynthesisResponse (o que a rota retorna) os 3 SOBREVIVEM
+    dv = ProcessoSynthesisResponse(
+        card=ProcessoSynthesisCardRich(**card_data)
+    ).model_dump()["card"]["decisao_vigente"]
+    assert dv["motivo_extincao"] == "satisfacao"
+    assert dv["instrumento_cautelar"] == "suspensao_exigibilidade_ctn"
+    assert dv["efeito_suspensivo"] is True
+    # REGRESSAO-GUARD: o card BASE ainda stripa (prova que o tipo Rich e necessario)
+    assert "motivo_extincao" not in ProcessoSynthesisCard(**card_data).model_dump()["decisao_vigente"]
+
+
+def test_projection_does_not_mutate_risk_or_other_fields():
+    """Negativo (dim 4): a projecao SO toca decisao_vigente — risco_factual/jurisprudencial/
+    estado/prob_exito ficam intactos. Guarda a direcao under-rating contra refactor."""
+    import copy
+    card = {"risco_factual": "Alto", "risco_jurisprudencial": "Medio",
+            "risco_processo_intermediario": "Alto", "estado_processual": "execucao em curso",
+            "probabilidade_exito": {"classificacao": "possivel"},
+            "decisao_vigente": {"natureza": "extinto_sem_merito"}}
+    snapshot = copy.deepcopy({k: v for k, v in card.items() if k != "decisao_vigente"})
+    _project_decisao_facts(card, [_mov("x", "2022-01-01", natureza="extinto_sem_merito",
+                                       motivo_extincao="terminativa")])
+    assert {k: v for k, v in card.items() if k != "decisao_vigente"} == snapshot  # risco intacto
+    assert card["decisao_vigente"]["motivo_extincao"] == "terminativa"
+
+
 def test_project_never_raises_on_garbage():
     _project_decisao_facts({"error": "x"}, [])          # no-op
     _project_decisao_facts({}, None)                     # no-op
     _project_decisao_facts({"decisao_vigente": None}, [])  # no-op
+
+
+def test_route_http_roundtrip_preserves_echo(monkeypatch):
+    """⭐ O teste que FALTAVA (o bug escapou por isto): HTTP de verdade pela rota com o agent
+    mockado — os 3 campos echo têm que estar na resposta JSON. Sem isto, o strip volta silencioso."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    import src.api.routes.processo_synthesis as route_mod
+
+    async def _fake_classify(*a, **k):
+        return {"card": {"processo_numero": "1", "decisao_vigente": {
+                    "natureza": "extinto_sem_merito", "motivo_extincao": "satisfacao",
+                    "instrumento_cautelar": "suspensao_exigibilidade_ctn", "efeito_suspensivo": True}},
+                "raw_response": {}, "llm_raw_prompt": {},
+                "prompt_version": "processo_synthesis.v2.3", "usage": {}}
+
+    monkeypatch.setattr(route_mod, "classify_processo_synthesis", _fake_classify)
+    app = FastAPI(); app.include_router(route_mod.router)
+    r = TestClient(app).post("/processo-synthesis/classify",
+                             json={"processo_numero": "1", "tipo_judicial": "fiscal", "mov_factsheets": []})
+    assert r.status_code == 200
+    dv = r.json()["card"]["decisao_vigente"]
+    assert dv["motivo_extincao"] == "satisfacao"
+    assert dv["instrumento_cautelar"] == "suspensao_exigibilidade_ctn"
+    assert dv["efeito_suspensivo"] is True

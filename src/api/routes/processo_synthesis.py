@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 
 from ...agents.processo_synthesis.agent import classify_processo_synthesis
 from ...agents.processo_synthesis.schemas import (
-    ProcessoSynthesisCard,
+    ProcessoSynthesisCardRich,
     ProcessoSynthesisRequest,
     ProcessoSynthesisResponse,
 )
@@ -36,7 +36,9 @@ async def classify_processo_synthesis_endpoint(request: ProcessoSynthesisRequest
             )
 
         return ProcessoSynthesisResponse(
-            card=ProcessoSynthesisCard(**card_data),
+            # RICO (nao o base): preserva motivo_extincao/instrumento_cautelar/efeito_suspensivo
+            # projetados em decisao_vigente — o base ProcessoSynthesisCard os stripa (extra=ignore).
+            card=ProcessoSynthesisCardRich(**card_data),
             raw_response=result.get("raw_response"),
             llm_raw_prompt=result.get("llm_raw_prompt"),
             prompt_version=result.get("prompt_version"),
