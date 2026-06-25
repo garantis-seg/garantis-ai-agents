@@ -109,35 +109,55 @@ from garantis_shared.engine_v6.matrices.daycoval import (
 # cortar a petição antiga). Só liga ACIMA do threshold → processo normal fica byte-idêntico.
 # ponytail: threshold conserva o caminho quente (99% dos procs) intocado; sobe se algum
 # proc de ~150-200 movs ainda estourar.
-_L2_CARD_FILTER_THRESHOLD = 200   # <= isto: render tudo (sem mudança vs REV4)
-_L2_TAIL_KEEP = 30                # últimas N movs sempre entram (estado corrente)
-_L2_KEEP_REL = {"alta", "media"}
+# GIANT-FILTER v2 (2026-06-25): os 2 stragglers (633163/1409966 = L2 ReadTimeout em
+# giant) provaram que o filtro v1 "não reduz o bastante" — kept ainda dava centenas de
+# media -> prompt enorme -> 180s. Fix (handoff giant-readtimeout + adendo): TETO DURO de
+# cards renderizados (_L2_MAX_KEPT) + tail menor. Tier: HARD (nunca cortável) = decisão/
+# garantia/peça-pivô/petição/suspensão/alta + cauda; SOFT = media (só preenche até o teto).
+# Guardrail (adendo): o teto NUNCA evicta sinal em favor de media — hard entra inteiro
+# mesmo acima do teto; media só ocupa o que sobrar. ≤200 cards continua byte-idêntico.
+_L2_CARD_FILTER_THRESHOLD = 200   # <= isto: render tudo (caminho quente, sem mudança)
+_L2_TAIL_KEEP = 12                # cauda recente (era 30 — reduzido no giant-filter v2)
+_L2_MAX_KEPT = 50                 # teto de cards renderizados em giant (anti-180s)
+_L2_HARD_REL = {"alta"}           # media saiu do hard -> vira SOFT (cortável sob o teto)
 
 
-def _card_carrega_sinal(f, is_tail: bool) -> bool:
-    """True se o L2 PRECISA deste card: cauda recente, ou sinal que o L1 já marcou
-    (relevância alta/media, decisão, evento de garantia, peça-pivô, petição inicial)."""
+def _carrega_sinal_hard(f, is_tail: bool) -> bool:
+    """Sinal que NUNCA pode ser cortado (nem pelo teto): cauda recente, decisão, evento de
+    garantia, peça-pivô, petição inicial, alta relevância, OU sinal de suspensão
+    (instrumento_cautelar/efeito_suspensivo — preserva o mov pra quando a suspensão
+    derivada determinística aterrissar, condição A 2026-06-25)."""
+    d = f.decisao or {}
     return bool(
         is_tail
-        or (f.relevancia_merito in _L2_KEEP_REL)
-        or (f.decisao or {}).get("tem_decisao")
+        or (f.relevancia_merito in _L2_HARD_REL)
+        or d.get("tem_decisao")
         or ((f.evento_garantia or {}).get("tipo") not in (None, "nenhum"))
         or (f.peca_pivo or {}).get("e_pivo")
         or str(f.mov_id or "").startswith("peticao-")
+        or (d.get("instrumento_cautelar") not in (None, "nenhum"))
+        or d.get("efeito_suspensivo")
     )
 
 
 def _filtered_cards(factsheets_sorted: list) -> tuple[list, int]:
-    """Os cards que o L2 REALMENTE renderiza: TUDO se <= threshold; senão só os de sinal +
-    a cauda recente (procedural ruido/baixa é dropado). Retorna (kept, n_omit). FONTE ÚNICA
-    do filtro — usada pelo render E pelo detector de chunk (chunkar o que o filtro DROPA
-    seria reler procedural à toa = regressão 2026-06-22; o chunk opera no MESMO conjunto)."""
+    """Os cards que o L2 REALMENTE renderiza: TUDO se <= threshold; senão HARD (sinal,
+    sempre) + media até o teto _L2_MAX_KEPT (mais recentes). Retorna (kept, n_omit). FONTE
+    ÚNICA do filtro — usada pelo render E pelo detector de chunk (mesmo conjunto). O teto
+    nunca corta HARD: se houver mais sinal que o teto, kept passa do teto (segurança > custo)."""
     n = len(factsheets_sorted)
     if n <= _L2_CARD_FILTER_THRESHOLD:
         return list(factsheets_sorted), 0
     tail_start = n - _L2_TAIL_KEEP
-    kept = [f for i, f in enumerate(factsheets_sorted)
-            if _card_carrega_sinal(f, i >= tail_start)]
+    hard_idx, soft_idx = [], []
+    for i, f in enumerate(factsheets_sorted):
+        if _carrega_sinal_hard(f, i >= tail_start):
+            hard_idx.append(i)
+        elif f.relevancia_merito == "media":
+            soft_idx.append(i)
+    room = max(0, _L2_MAX_KEPT - len(hard_idx))
+    keep_idx = set(hard_idx) | set(soft_idx[-room:] if room else [])  # media: as mais recentes
+    kept = [factsheets_sorted[i] for i in sorted(keep_idx)]
     return kept, n - len(kept)
 
 
@@ -149,10 +169,10 @@ def _render_timeline(factsheets_sorted: list, empty: str) -> str:
     block = "\n  ".join(_summarize_factsheet(f) for f in kept) or empty
     if n_omit:
         block += (
-            f"\n  [+{n_omit} movs procedurais omitidas (de {len(factsheets_sorted)} no total) — o L1 marcou "
-            "ruido/baixa (penhora/intimacao/conclusao/expediente); nao alteram "
-            "decisao_vigente/estado/garantia. Preservado: decisoes, eventos de garantia, "
-            "peticao inicial e as 30 movs mais recentes.]"
+            f"\n  [+{n_omit} movs omitidas (de {len(factsheets_sorted)} no total) — processo gigante: "
+            "L1 marcou ruido/baixa (penhora/intimacao/conclusao/expediente) + media excedente ao teto; "
+            "nao alteram decisao_vigente/estado/garantia. PRESERVADO inteiro: decisoes, eventos de "
+            "garantia, peca-pivo, peticao inicial, sinais de suspensao e as movs mais recentes.]"
         )
     return block
 

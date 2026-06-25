@@ -22,7 +22,12 @@ from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
 from .chunking import reduce_processo_synthesis_cards, split_movs_chronological
 from .prompts import build_probabilidade_exito_prompt, build_processo_synthesis_prompt
-from .schemas import ProbabilidadeExito, ProcessoSynthesisCard, ProcessoSynthesisRequest
+from .schemas import (
+    DecisaoVigenteRich,
+    ProbabilidadeExito,
+    ProcessoSynthesisCard,
+    ProcessoSynthesisRequest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +138,9 @@ async def classify_processo_synthesis(
             marker_prompt = result.get("llm_raw_prompt")
             result["raw_response"] = {"synthesis": marker_raw, "prob_exito": marker_raw}
             result["llm_raw_prompt"] = {"synthesis": marker_prompt, "prob_exito": marker_prompt}
+            # Condicao A: projeta os fatos ECHO no card REDUZIDO usando os movs COMPLETOS
+            # (request.mov_factsheets), nao os subsets dos chunks.
+            _project_decisao_facts(result.get("card"), request.mov_factsheets)
             return result
 
     llm_provider = create_provider(provider)
@@ -186,6 +194,10 @@ async def classify_processo_synthesis(
             n_calls = 1
 
     card_data = _merge_results(request, synthesis_result, prob_exito_result)
+    # Condicao A: projeta os fatos ECHO SO no outer call (nao nos sub-calls _no_chunk=True,
+    # que veem subsets de movs). Proc normal: _no_chunk=False -> projeta com os movs completos.
+    if not _no_chunk:
+        _project_decisao_facts(card_data, request.mov_factsheets)
     usage = _merge_usage(
         synthesis_result["usage"], prob_exito_result["usage"], model, provider, calls=n_calls,
     )
@@ -203,6 +215,62 @@ async def classify_processo_synthesis(
         "prompt_version": PROMPT_VERSION,
         "usage": usage,
     }
+
+
+# ── Condicao A deterministica (2026-06-25): projecao code-side dos fatos ECHO ──
+# O LLM (response_schema = DecisaoVigente v2.3 INTOCADA) NAO emite estes campos —
+# faze-lo rebaixava o risco_factual (canario: 6 quedas estaveis; e o SCHEMA, nao so o
+# prompt). Aqui copiamos do mov L1 que SUSTENTA a decisao vigente, SEM tocar a chamada
+# do LLM. Inerte ate o L3 ler. Memory: l2-propagar-fatos-canary-finding-2026-06-25.
+_ECHO_FIELDS = ("motivo_extincao", "instrumento_cautelar", "efeito_suspensivo")
+
+
+def _decisao_of(mov) -> dict:
+    """decisao dict de um mov (MovFactSheetMin OU dict — o chunk passa objetos)."""
+    d = getattr(mov, "decisao", None)
+    if d is None and isinstance(mov, dict):
+        d = mov.get("decisao")
+    return d or {}
+
+
+def _vigente_mov(mov_factsheets, natureza):
+    """Mov L1 que sustenta a decisao_vigente (CRUX do matching): o mais recente com
+    tem_decisao cuja natureza == a do card; fallback = o mais recente com tem_decisao.
+    None quando nenhum mov tem decisao (card sem ancora -> nada a projetar)."""
+    decided = [m for m in (mov_factsheets or []) if _decisao_of(m).get("tem_decisao")]
+    if not decided:
+        return None
+
+    def _key(m):
+        return (getattr(m, "data", None) or (m.get("data") if isinstance(m, dict) else "") or "",
+                getattr(m, "mov_id", None) or (m.get("mov_id") if isinstance(m, dict) else "") or "")
+
+    decided.sort(key=_key)
+    if natureza:
+        match = [m for m in decided if _decisao_of(m).get("natureza") == natureza]
+        if match:
+            return match[-1]
+    return decided[-1]
+
+
+def _project_decisao_facts(card, mov_factsheets) -> None:
+    """Projeta os 3 fatos ECHO do mov L1 vigente pro decisao_vigente do card (dict),
+    validando via DecisaoVigenteRich. No-op se card sem decisao_vigente/ancora. NUNCA
+    levanta (best-effort — projecao nao pode derrubar a cascade)."""
+    try:
+        if not isinstance(card, dict) or "error" in card:
+            return
+        dv = card.get("decisao_vigente")
+        if not isinstance(dv, dict):
+            return
+        mov = _vigente_mov(mov_factsheets, dv.get("natureza"))
+        if mov is None:
+            return
+        d = _decisao_of(mov)
+        enriched = {**dv, **{f: d.get(f) for f in _ECHO_FIELDS}}
+        card["decisao_vigente"] = DecisaoVigenteRich(**enriched).model_dump()
+    except Exception as e:  # noqa: BLE001 — projecao e best-effort
+        logger.warning("L2_PROJECT_FACTS_FAIL: %r", e)
 
 
 def _exito_gate_enabled() -> bool:

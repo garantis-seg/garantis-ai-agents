@@ -54,6 +54,39 @@ class DecisaoVigente(BaseModel):
     )
 
 
+class DecisaoVigenteRich(DecisaoVigente):
+    """Card PERSISTIDO (NAO e o response_schema do LLM). DecisaoVigente v2.3 + os fatos
+    ECHO do L1 projetados EM CODIGO (condicao A deterministica, 2026-06-25).
+
+    Por que separado: fazer o LLM EMITIR estes campos rebaixava o risco_factual de forma
+    real e sistematica — medido no canario (repeatability N=3: 6 quedas estaveis, incl.
+    2x Alto->Baixo) e provado ser o SCHEMA, nao so o prompt (structured output e instrucao).
+    Por isso o response_schema do Gemini fica = DecisaoVigente v2.3 INTOCADA (chamada
+    byte-identica), e estes 3 fatos sao copiados do mov L1 vigente pos-parse (agent.py::
+    _project_decisao_facts). Memory: l2-propagar-fatos-canary-finding-2026-06-25.
+
+    suspensao_ativa/motivo_suspensao foram ADIADOS (75% True = ruidosos; derivacao
+    determinista de 'suspensao corrente' e follow-up proprio — garantia aceita != suspensao).
+    """
+
+    motivo_extincao: Optional[Literal[
+        "terminativa", "consensual", "satisfacao", "nenhum",
+    ]] = Field(
+        default=None,
+        description=(
+            "ECHO do motivo_extincao do mov L1 vigente (so != null quando a decisao vigente "
+            "e extinto_sem_merito). satisfacao=divida quitada/paga; terminativa=ilegitimidade/"
+            "abandono/prescricao; consensual=acordo/desistencia. Discriminador alvo do m473."
+        ),
+    )
+    instrumento_cautelar: Optional[Literal[
+        "suspensao_seguranca", "suspensao_exigibilidade_ctn", "nenhum",
+    ]] = Field(default=None, description="ECHO do instrumento_cautelar do mov L1 vigente.")
+    efeito_suspensivo: Optional[bool] = Field(
+        default=None, description="ECHO do efeito_suspensivo do mov L1 vigente.",
+    )
+
+
 class LifecycleGarantiaEvent(BaseModel):
     """Evento no ciclo de vida da garantia/apolice neste processo.
 
