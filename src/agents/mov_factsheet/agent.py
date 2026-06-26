@@ -30,7 +30,7 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = os.getenv("MOV_FACTSHEET_MODEL", "gemini-2.5-flash-lite")
+DEFAULT_MODEL = os.getenv("MOV_FACTSHEET_MODEL", "gemini-3.1-flash-lite")  # 2026-06-26: upgrade 2.5->3.1 (2.5-flash-lite 503 high-demand). Elton.
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # Bump quando alterar build_mov_factsheet_prompt OR MovFactSheetCard schema.
