@@ -384,6 +384,12 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
   NÃO converta números incompletos pra 20 dígitos: se o número no documento não está
   no formato CNJ completo (RE/AREsp/ADI/registros curtos), NÃO o estique — ignore.
+- processos_administrativos_citados[]: números de PROCESSO ADMINISTRATIVO citados na petição —
+  o processo administrativo fiscal FEDERAL (NUP/RFB, formato NNNNN.NNNNNN/AAAA-DD, tipo='paf')
+  ou o AIIM/auto de infração ESTADUAL de SP (N.NNN.NNN-D, tipo='tit_sp'), ESCRITOS no documento.
+  Número LITERAL. Do número NÃO dá pra afirmar CARF => federal genérico = 'paf'. NÃO são processo
+  administrativo: CDA/inscrição em dívida ativa (=> cdas[]), processo JUDICIAL/CNJ (=>
+  processos_citados[]), artigo de lei. Só o que ESTÁ escrito no documento.
 - NÃO deduza direção do par (quem é mais novo/velho) — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores (texto limpo=alta; OCR
   ruidoso/citações ambíguas=baixa).
@@ -484,6 +490,10 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
   NÃO converta números incompletos pra 20 dígitos — se não está no formato CNJ
   completo, ignore.
+- processos_administrativos_citados[]: PROCESSO ADMINISTRATIVO citado (PAF/RFB federal
+  NNNNN.NNNNNN/AAAA-DD tipo='paf'; AIIM/TIT SP N.NNN.NNN-D tipo='tit_sp'), ESCRITO no doc.
+  Do número NÃO dá pra afirmar CARF => 'paf'. NÃO é admin: CDA (=> cdas[]), CNJ judicial
+  (=> processos_citados[]), artigo de lei.
 - NÃO deduza direção do par — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores. Documento de tipo incerto
   ou OCR ruidoso => comece de 0.7 pra baixo.

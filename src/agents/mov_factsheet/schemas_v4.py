@@ -327,11 +327,13 @@ class MovFactSheetCardV4(BaseModel):
 # Alfredo); na duvida 'incerto' (a integracao decide com company-coherence). + anti-
 # esticamento (nao converter RE/AREsp/ADI pra 20 digitos). Enforcement real continua
 # DETERMINISTICO no sink/formacao (papel = hint, nunca cria aresta sozinho).
-PETICAO_PROMPT_VERSION = "peticao_extract.v1.2"
+# v1.3 (2026-06-27, WS-D): + processos_administrativos_citados[] (PAF/RFB federal + AIIM/TIT SP)
+# como conector cross-type J->A do 1.B. Bump invalida o cache v1.2 -> re-extrai 1x com admin.
+PETICAO_PROMPT_VERSION = "peticao_extract.v1.3"
 # Ramo 1X: doc de tipo NAO identificado (fallback L3 do identify) — mesmo
 # schema superset do 1P (tipo_doc classificado em vez de cravado). Versao por
 # ramo: bump do 1X nao invalida cache do 1P nem do mov, e vice-versa.
-DOC_INCERTO_PROMPT_VERSION = "doc_incerto_extract.v1"
+DOC_INCERTO_PROMPT_VERSION = "doc_incerto_extract.v1.1"   # WS-D: + processos_administrativos_citados[]
 
 
 class CdaPeticao(BaseModel):
@@ -372,6 +374,24 @@ class ProcessoCitado(BaseModel):
     )
 
 
+class ProcessoAdminCitado(BaseModel):
+    """Processo ADMINISTRATIVO citado na petição (PAF/RFB federal ou AIIM/TIT estadual SP).
+    Conector cross-type J->A da formação de conexos — taxpayer-specific. (WS-D 2026-06-27.)"""
+
+    numero: str = Field(description="Número LITERAL do processo administrativo como aparece no texto.")
+    tipo: Literal["paf", "tit_sp"] = Field(
+        default="paf",
+        description=(
+            "'paf'=processo administrativo fiscal FEDERAL (NUP/RFB, NNNNN.NNNNNN/AAAA-DD) — "
+            "default; do número NÃO dá pra afirmar CARF. 'tit_sp'=AIIM/auto de infração "
+            "ESTADUAL de SP (N.NNN.NNN-D)."
+        ),
+    )
+    contexto: Optional[str] = Field(
+        default=None, description="Snippet ~120 chars ao redor da citação (auditoria).",
+    )
+
+
 class PeticaoExtractCardV4(MovFactSheetCardV4):
     """response_schema do ramo PETIÇÃO: o card v4 + extração dirigida de conectores.
 
@@ -389,6 +409,10 @@ class PeticaoExtractCardV4(MovFactSheetCardV4):
     processos_citados: list[ProcessoCitado] = Field(
         default_factory=list,
         description="Processos citados na petição, com papel. [] se nenhum.",
+    )
+    processos_administrativos_citados: list[ProcessoAdminCitado] = Field(
+        default_factory=list,
+        description="Processos administrativos (PAF/RFB federal, AIIM/TIT SP) citados na petição. [] se nenhum.",
     )
     confianca_extracao: float = Field(
         default=0.7, ge=0.0, le=1.0,
