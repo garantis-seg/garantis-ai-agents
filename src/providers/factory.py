@@ -240,33 +240,6 @@ class LLMFactory:
         except ImportError as e:
             logger.debug(f"Gemini provider not available: {e}")
 
-        # Register OpenAI provider
-        try:
-            from .openai import OpenAIProvider
-
-            cls.register_provider("openai", OpenAIProvider)
-            logger.debug("Registered OpenAI provider")
-        except ImportError as e:
-            logger.debug(f"OpenAI provider not available: {e}")
-
-        # Register Groq provider
-        try:
-            from .groq import GroqProvider
-
-            cls.register_provider("groq", GroqProvider)
-            logger.debug("Registered Groq provider")
-        except ImportError as e:
-            logger.debug(f"Groq provider not available: {e}")
-
-        # Register OpenRouter provider
-        try:
-            from .openrouter import OpenRouterProvider
-
-            cls.register_provider("openrouter", OpenRouterProvider)
-            logger.debug("Registered OpenRouter provider")
-        except ImportError as e:
-            logger.debug(f"OpenRouter provider not available: {e}")
-
 
 # Convenience functions for easy usage
 def create_provider(provider: Optional[str] = None, **kwargs) -> BaseLLMProvider:
