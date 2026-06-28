@@ -10,7 +10,10 @@ authors = [
 ]
 
 dependencies = [
-    "google-genai>=0.8.0",
+    # >=1.46.0: floor pro http_options custom-httpx (socket_options keepalive) ser
+    # honrado — ver requirements.txt. httpx agora dep direta (models/factory.py).
+    "google-genai>=1.46.0",
+    "httpx>=0.28.0",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "pydantic>=2.10.0",

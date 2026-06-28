@@ -211,8 +211,12 @@ class GeminiProvider(BaseLLMProvider):
                 "google-genai package not installed. Install with: pip install google-genai"
             )
 
-        # Initialize client
-        self._client = genai.Client(api_key=self.api_key)
+        # Initialize client via factory — transport httpx com TCP keepalive (sync+
+        # async) pro hop ai-agents->Google nao pendurar em conexao half-open stale
+        # sob burst (hedge do stall L2; ver models/factory.py).
+        from ..models.factory import create_genai_client
+
+        self._client = create_genai_client(self.api_key)
         self._default_model = DEFAULT_MODEL
 
         logger.info(f"GeminiProvider initialized with default model: {self._default_model}")
