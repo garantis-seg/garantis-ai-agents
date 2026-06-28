@@ -87,10 +87,32 @@ async def _fetch_pdf_bytes(storage_client, gcs_url: str) -> Optional[bytes]:
         return None
 
 
+# Stub "acesso restrito" da jusbrasil — byte-idêntico, ~46% dos PDFs baixados num
+# proc trabalhista real (498/1076). LibreOffice 1-pág "Documento não existe ou possui
+# acesso restrito". Vision só devolveria "ilegível", então dropamos ANTES da call →
+# cai no fallback text-only (mais barato) em vez de gastar tokens de PDF.
+# (PDF 0-página/corrompido NÃO entra aqui: é raro e o guard de
+# call_l1_with_vision_fallback já o pega via o Gemini 400 → fallback text. Mantém
+# este filtro stdlib-only e trivial de testar.)
+# ponytail: hash-set de stubs conhecidos; cresce se a jusbrasil trocar o placeholder
+# (sniff pelo texto "acesso restrito" seria o upgrade se virar zoo de variantes).
+_KNOWN_UNREADABLE_PDF_SHA256 = {
+    "cd7214ba72437d624548b9493174f7d51080670cc4eee2269db8f1a06b75f712",
+}
+
+
+def _pdf_is_unreadable(pdf_bytes: bytes) -> bool:
+    """True se o PDF é um stub conhecido de 'acesso restrito' (byte-idêntico)."""
+    import hashlib
+
+    return hashlib.sha256(pdf_bytes).hexdigest() in _KNOWN_UNREADABLE_PDF_SHA256
+
+
 async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
-    """Baixa N PDFs do GCS em paralelo. Aplica APENAS sanity cap por PDF
-    (100MB — defende contra bug de GCS read absurdo). Resto vai pra
-    `call_vision_l1` que decide inline vs Files API.
+    """Baixa N PDFs do GCS em paralelo. Aplica sanity cap por PDF (100MB —
+    defende contra bug de GCS read absurdo) e dropa PDFs ilegíveis/stub
+    (`_pdf_is_unreadable`). Resto vai pra `call_vision_l1` que decide inline
+    vs Files API.
     """
     if not gcs_urls:
         return []
@@ -120,6 +142,11 @@ async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
         if len(b) > _MAX_PDF_BYTES:
             logger.warning(
                 f"[VisionL1] PDF {len(b)}B > {_MAX_PDF_BYTES}B sanity cap — dropado"
+            )
+            continue
+        if _pdf_is_unreadable(b):
+            logger.info(
+                f"[VisionL1] PDF ilegível/stub ({len(b)}B) — dropado (skip Vision)"
             )
             continue
         accepted.append(b)
@@ -319,18 +346,25 @@ async def call_l1_with_vision_fallback(
             pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
 
     if pdf_bytes_list:
-        return await call_vision_l1(
-            provider,
-            model=model,
-            prompt=prompt,
-            pdf_bytes_list=pdf_bytes_list,
-            response_schema=response_schema,
-            temperature=0.0,
-            thinking_budget=thinking_budget,
-            max_tokens=max_tokens,
-        )
-
-    if gcs_urls and flag_enabled(vision_flag_name):
+        try:
+            return await call_vision_l1(
+                provider,
+                model=model,
+                prompt=prompt,
+                pdf_bytes_list=pdf_bytes_list,
+                response_schema=response_schema,
+                temperature=0.0,
+                thinking_budget=thinking_budget,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            # Guard: Gemini 400 (ex: "document has no pages" em PDF corrompido) ou
+            # qualquer falha da Vision call NÃO pode derrubar a cascade — cai no
+            # text-only abaixo. ponytail: fallback existente cobre; sem reraise.
+            logger.warning(
+                f"[VisionL1] {log_label}: Vision call falhou ({exc!r}); fallback pra text-only",
+            )
+    elif gcs_urls and flag_enabled(vision_flag_name):
         logger.warning(
             f"[VisionL1] {log_label}: flag ON mas 0 PDFs fetchados; fallback pra text-only",
         )

@@ -118,6 +118,10 @@ _gemini_tpm_limiter = _TokenRateLimiter(
 
 # Model pricing (USD per 1M tokens) - Updated Dec 2024
 GEMINI_PRICING = {
+    # Gemini 3.x (2026-06-26) — preço oficial paid tier; espelha
+    # garantis-shared engine_v6/cost_pricing.py. Sem isto, get_model_pricing
+    # devolve 0/0 e engine_llm_calls grava cost_usd=0 pro cascade 3.1.
+    "gemini-3.1-flash-lite": {"input_per_1m": 0.25, "output_per_1m": 1.50},
     "gemini-2.5-pro": {"input_per_1m": 1.25, "output_per_1m": 10.00},
     "gemini-2.5-flash": {"input_per_1m": 0.15, "output_per_1m": 0.60},
     "gemini-2.5-flash-lite": {"input_per_1m": 0.075, "output_per_1m": 0.30},
