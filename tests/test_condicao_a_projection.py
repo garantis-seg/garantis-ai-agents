@@ -20,11 +20,13 @@ from src.agents.processo_synthesis.schemas import (
 
 
 def _mov(mov_id, data, *, tem_decisao=True, natureza=None, motivo_extincao=None,
-         instrumento_cautelar=None, efeito_suspensivo=None) -> MovFactSheetMin:
+         instrumento_cautelar=None, efeito_suspensivo=None,
+         transito_certificado=False) -> MovFactSheetMin:
     return MovFactSheetMin(mov_id=mov_id, data=data, decisao={
         "tem_decisao": tem_decisao, "natureza": natureza,
         "motivo_extincao": motivo_extincao, "instrumento_cautelar": instrumento_cautelar,
         "efeito_suspensivo": efeito_suspensivo,
+        "transito_certificado": transito_certificado,
     })
 
 
@@ -141,6 +143,26 @@ def test_project_never_raises_on_garbage():
     _project_decisao_facts({"error": "x"}, [])          # no-op
     _project_decisao_facts({}, None)                     # no-op
     _project_decisao_facts({"decisao_vigente": None}, [])  # no-op
+
+
+# ── L0 DADO (2026-06-28): a projecao NAO deriva/override transito ─────────────
+# Decisao de design (provada por A/B LLM): a distincao merito-vs-execucao e text-only
+# -> uma correcao deterministica de transito quebra o trap Acao Rescisoria (movs de
+# execucao tem natureza de merito). Logo a projecao deixa transito_certificado COMO O
+# LLM emitiu; o fix vive no PROMPT v2.4. Guarda contra reintroduzir o override fragil.
+
+
+def test_projection_leaves_transito_as_llm_emitted():
+    """A projecao copia os 3 echo facts mas NAO toca transito_certificado — fica o valor
+    do LLM (corrigido pelo prompt v2.4), tanto pra true quanto pra false."""
+    for transito in (True, False):
+        card = {"processo_numero": "p", "decisao_vigente": {
+            "natureza": "improcedente", "transito_certificado": transito}}
+        # ate com uma "re-adjudicacao" depois, transito permanece como veio do LLM
+        movs = [_mov("t", "2022-11-23", natureza="improcedente", transito_certificado=True),
+                _mov("exec", "2023-05-31", natureza="procedente")]  # excecao pre-exec (execucao)
+        _project_decisao_facts(card, movs)
+        assert card["decisao_vigente"]["transito_certificado"] is transito
 
 
 def test_route_http_roundtrip_preserves_echo(monkeypatch):

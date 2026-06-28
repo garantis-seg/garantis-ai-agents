@@ -122,6 +122,17 @@ def test_prompt_determinismo_same_date_different_mov_ids():
     assert 0 <= pos_a < pos_z
 
 
+def test_prompt_has_suspensao_transito_rule():
+    """L0 DADO v2.4: o prompt deve conter a REGRA DE SUSPENSAO E TRANSITO com a distincao
+    merito-vs-execucao (IRDR/anulacao vs Acao Rescisoria/RJ). Guarda contra revert silencioso."""
+    p = build_processo_synthesis_prompt(_make_request([
+        _make_factsheet("uuid-1", "2024-01-01"),
+    ]))
+    assert "REGRA DE SUSPENSAO E TRANSITO" in p
+    for token in ("IRDR", "Acao Rescisoria", "Recuperacao Judicial", "CUMPRIMENTO"):
+        assert token in p, f"prompt perdeu o token {token!r}"
+
+
 def test_summarize_factsheet_renders_short_mov_id():
     """_summarize_factsheet usa _short_mov_id no #<id>."""
     fs = _make_factsheet("550e8400-e29b-41d4-a716-446655440000", "2024-01-01")

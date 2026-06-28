@@ -65,8 +65,15 @@ class DecisaoVigenteRich(DecisaoVigente):
     byte-identica), e estes 3 fatos sao copiados do mov L1 vigente pos-parse (agent.py::
     _project_decisao_facts). Memory: l2-propagar-fatos-canary-finding-2026-06-25.
 
-    suspensao_ativa/motivo_suspensao foram ADIADOS (75% True = ruidosos; derivacao
-    determinista de 'suspensao corrente' e follow-up proprio — garantia aceita != suspensao).
+    suspensao_ativa/motivo_suspensao + transito DERIVADO ficam DEFERIDOS: a distincao
+    merito-vs-execucao (IRDR/sobrestamento-de-merito vs Acao Rescisoria/RJ/parcelamento)
+    vive em TEXTO LIVRE e NAO e derivavel com seguranca dos marcadores L1 estruturados.
+    Provado por A/B (LLM, 2026-06-28): uma correcao "novo merito apos transito -> false"
+    quebra o trap Acao Rescisoria, porque movs de FASE DE EXECUCAO (excecao de
+    pre-executividade / embargos a execucao / impugnacao a liquidacao) carregam natureza
+    procedente/improcedente IDENTICA a uma re-adjudicacao real. Essa distincao fica no
+    PROMPT (L2 v2.4, REGRA DE SUSPENSAO E TRANSITO) + no L1 GUARD monotonico (proposta L1).
+    Memory: l2-transito-overclaim-rootcause-2026-06-28.
     """
 
     motivo_extincao: Optional[Literal[

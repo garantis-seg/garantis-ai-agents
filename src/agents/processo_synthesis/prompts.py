@@ -692,10 +692,31 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
      (a) reformada por instancia superior (nova sentenca/acordao substituindo), OU
      (b) transitada em julgado (vira o estado final), OU
      (c) substituida por outra decisao de mesmo OU maior nivel hierarquico.
-   Interlocutorias RECENTES (suspensao, conclusao, despacho, penhora online,
+   Interlocutorias RECENTES de mero impulso (conclusao, despacho, penhora online,
    bloqueio, novo prazo) NAO substituem decisao de merito anterior — elas
    apenas MODULAM o estado_processual. Reflete-as em estado_processual com
    contexto, mas mantenha decisao_vigente ancorada na ultima decisao de merito.
+   (Suspensao/sobrestamento NAO sao "mero impulso" e NAO entram nesta lista —
+   ver REGRA DE SUSPENSAO E TRANSITO abaixo: podem MOVER a decisao_vigente.)
+
+   REGRA DE SUSPENSAO E TRANSITO (distincao MERITO-vs-EXECUCAO — OBRIGATORIA antes
+   de cravar transito_certificado=true): nem toda suspensao e ruido procedural.
+   Classifique a suspensao / sobrestamento / reabertura MAIS RECENTE:
+   - SUSPENSAO ou REABERTURA DE MERITO -> o merito NAO e final -> transito_certificado=FALSE
+     e a decisao de merito antiga NAO transitou: sobrestamento por IRDR / Tema repetitivo /
+     repercussao geral / recurso de merito (REsp/RE/RR) ainda PENDENTE de julgamento;
+     decisao de merito ANULADA; revogacao-da-suspensao ou desarquivamento que REATIVA a
+     discussao. Aqui o processo voltou a discutir o merito — NAO certifique transito mesmo
+     que exista sentenca/acordao adverso antigo; ancore a decisao_vigente no estado reaberto.
+   - SUSPENSAO DE EXECUCAO POS-TRANSITO -> o merito JA transitou; a suspensao so pausa a
+     COBRANCA -> transito_certificado PERMANECE true: Acao Rescisoria em tramite, Recuperacao
+     Judicial do devedor, parcelamento/transacao de divida ja transitada. Uma Acao Rescisoria
+     so existe PORQUE o processo ja transitou — NAO rebaixe o transito por causa dela.
+   DESEMPATE: se ha certidao/mov de TRANSITO EM JULGADO ANTERIOR a suspensao e a suspensao e
+   da EXECUCAO (rescisoria / RJ / parcelamento), MANTENHA transito=true; se a suspensao precede
+   a finalidade ou REABRE o merito (IRDR / anulacao / reativacao), transito_certificado=false.
+   CUMPRIMENTO ou EXECUCAO DE SENTENCA nao e decisao de merito NOVA — e a fase de cobranca de
+   uma decisao ja existente; NAO o use como decisao_vigente nem como prova de transito.
 
    EXEMPLO CONCRETO: processo tem sentenca de improcedencia de Embargos em 2022
    + apelacao pendente + decisao interlocutoria de bloqueio online em 2024.
@@ -709,7 +730,9 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
    - natureza: procedente | improcedente | parcialmente_procedente | extinto_sem_merito |
      homologatoria | interlocutoria
    - data: YYYY-MM-DD
-   - transito_certificado: true SO se ha mov certificando transito
+   - transito_certificado: true SO se ha mov certificando transito E nao ha
+     suspensao-de-merito / anulacao / reabertura POSTERIOR (REGRA DE SUSPENSAO E
+     TRANSITO). Suspensao-de-execucao-pos-transito (rescisoria/RJ) MANTEM true.
    - recorrida: true se houve recurso interposto contra esta decisao
    - Se NAO ha decisao de merito (sentenca/acordao/homologatoria), deixe
      sentido/natureza=null. Use interlocutoria SOMENTE se TOTAL ausencia de
@@ -773,6 +796,8 @@ E. Suspensao e ambigua: explicite POR QUE no estado_processual (acordo/RJ/prejud
 
 F. ESTABILIDADE TEMPORAL — decisao_vigente NAO deve oscilar entre cuts/snapshots
    sucessivos do MESMO processo so porque chegaram movs procedurais novos.
+   (EXCECAO: suspensao-de-merito / anulacao / reativacao NAO sao "procedurais" —
+   elas DEVEM mover a decisao_vigente e zerar transito; ver REGRA DE SUSPENSAO E TRANSITO.)
    Backtest 2026-05-24 detectou padrao de instabilidade: cuts antigos
    classificaram corretamente (ancorados em sentenca/acordao), cut recente
    trocou pra interlocutoria nova (despacho/conclusao/bloqueio) e mudou
@@ -789,6 +814,9 @@ em qual polo? procedente=quem venceu?).
 Extincao SEM merito em Tomador-AUTOR: ver <regra_extincao_tomador_autor> —
 sentido='desfavoravel', NAO 'neutro'.
 decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA F).
+Antes de transito_certificado=true: houve suspensao-de-merito / anulacao / reativacao
+DEPOIS da decisao? Se sim, transito=false (REGRA DE SUSPENSAO E TRANSITO). Suspensao-de-
+execucao-pos-transito (Acao Rescisoria / Recuperacao Judicial) MANTEM transito=true.
 </lembrete_final>
 
 Output: JSON estruturado conforme schema ProcessoSynthesisCard (enforced via

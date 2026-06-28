@@ -81,7 +81,20 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #     + split por documento ('<id>:<doc>').
 #   - CAVEAT regra_polos atualizado pro sentido deterministico on-read (v4).
 #   - Rollback: revert do PR (regen COLD na versao anterior).
-PROMPT_VERSION = "processo_synthesis.v2.3"
+#
+# v2.4 (2026-06-28, L0 DADO — fix do over-claim de transito_certificado):
+#   - PROMPT-ONLY: REGRA DE SUSPENSAO E TRANSITO (distincao MERITO-vs-EXECUCAO) +
+#     suspensao tirada da lista de "mero impulso" + carve-out na REGRA F +
+#     lembrete_final. Suspensao-de-merito (IRDR/Tema/sobrestamento/recurso
+#     pendente)/anulacao/reativacao -> transito=false; suspensao-de-execucao-
+#     pos-transito (Acao Rescisoria/RJ/parcelamento) -> mantem true.
+#   - SEM derivacao deterministica de transito: foi construida + MEDIDA (A/B) e
+#     quebra o trap Acao Rescisoria (movs de execucao tem natureza de merito) ->
+#     a distincao e text-only, fica no prompt + L1 GUARD. Ver _project_decisao_facts.
+#   - Bump invalida cache do L2 -> cards novos pegam o prompt; existentes limpam
+#     no re-cascade (handoff prompt-DADO-fix-transito-L2). Memory:
+#     l2-transito-overclaim-rootcause-2026-06-28.
+PROMPT_VERSION = "processo_synthesis.v2.4"
 
 
 async def classify_processo_synthesis(
@@ -232,6 +245,17 @@ async def classify_processo_synthesis(
 # prompt). Aqui copiamos do mov L1 que SUSTENTA a decisao vigente, SEM tocar a chamada
 # do LLM. Inerte ate o L3 ler. Memory: l2-propagar-fatos-canary-finding-2026-06-25.
 _ECHO_FIELDS = ("motivo_extincao", "instrumento_cautelar", "efeito_suspensivo")
+
+# Por que NAO ha derivacao deterministica de transito aqui (L0 DADO 2026-06-28):
+# uma correcao "novo merito apos transito -> transito=false" FOI construida e MEDIDA
+# (LLM A/B nos 23 cards transito=true) e quebrou o trap Acao Rescisoria 00107231 —
+# movs de FASE DE EXECUCAO (excecao de pre-executividade, embargos a execucao,
+# impugnacao a liquidacao) carregam natureza procedente/improcedente IDENTICA a uma
+# re-adjudicacao real, entao nenhum marcador L1 estruturado separa
+# IRDR-de-merito de Acao-Rescisoria-de-execucao. A distincao vive em TEXTO LIVRE ->
+# fica com o PROMPT (REGRA DE SUSPENSAO E TRANSITO, v2.4) + com o L1 GUARD monotonico
+# (proposta L1, que so SOBE risco -> nao pode quebrar trap). Memory:
+# l2-transito-overclaim-rootcause-2026-06-28.
 
 
 def _decisao_of(mov) -> dict:
