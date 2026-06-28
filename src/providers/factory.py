@@ -106,50 +106,6 @@ class LLMFactory:
         return list(cls._registry.keys())
 
     @classmethod
-    def is_provider_available(cls, provider: str) -> bool:
-        """
-        Check if a specific provider is available.
-
-        Args:
-            provider: Provider name to check.
-
-        Returns:
-            True if provider is available, False otherwise.
-        """
-        cls._ensure_providers_registered()
-        return provider.lower() in cls._registry
-
-    @classmethod
-    def get_provider_info(cls) -> Dict[str, Dict]:
-        """
-        Get information about all available providers.
-
-        Returns:
-            Dict with provider info including models and capabilities.
-        """
-        cls._ensure_providers_registered()
-        provider_info = {}
-
-        for name, provider_class in cls._registry.items():
-            try:
-                # Try to create instance and get info
-                instance = cls.create_provider(name, use_cache=True)
-                provider_info[name] = {
-                    "default_model": instance.get_default_model(),
-                    "available_models": instance.get_available_models(),
-                    "supports_structured_output": instance.supports_structured_output(),
-                    "supports_async": instance.supports_async(),
-                    "class": provider_class.__name__,
-                }
-            except Exception as e:
-                provider_info[name] = {
-                    "error": str(e),
-                    "class": provider_class.__name__,
-                }
-
-        return provider_info
-
-    @classmethod
     def test_provider(cls, provider: str) -> bool:
         """
         Test if a provider is working correctly.
@@ -166,51 +122,6 @@ class LLMFactory:
         except Exception as e:
             logger.error(f"Provider test failed for {provider}: {e}")
             return False
-
-    @classmethod
-    def create_with_fallback(
-        cls,
-        primary_provider: str,
-        fallback_provider: str = "gemini",
-    ) -> BaseLLMProvider:
-        """
-        Create provider with fallback support.
-
-        Args:
-            primary_provider: Preferred provider to try first.
-            fallback_provider: Fallback provider if primary fails.
-
-        Returns:
-            Working LLM provider instance.
-
-        Raises:
-            RuntimeError: If both providers fail.
-        """
-        # Try primary provider
-        try:
-            service = cls.create_provider(primary_provider, use_cache=False)
-            if service.test_connection():
-                logger.info(f"Using primary provider: {primary_provider}")
-                return service
-        except Exception as e:
-            logger.warning(f"Primary provider {primary_provider} failed: {e}")
-
-        # Try fallback provider
-        try:
-            service = cls.create_provider(fallback_provider, use_cache=False)
-            if service.test_connection():
-                logger.info(f"Using fallback provider: {fallback_provider}")
-                return service
-        except Exception as e:
-            logger.error(f"Fallback provider {fallback_provider} failed: {e}")
-
-        raise RuntimeError(f"Both {primary_provider} and {fallback_provider} providers failed")
-
-    @classmethod
-    def clear_cache(cls) -> None:
-        """Clear the instance cache."""
-        cls._instances.clear()
-        logger.debug("Provider instance cache cleared")
 
     @classmethod
     def get_default_provider(cls) -> str:
