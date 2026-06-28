@@ -1791,6 +1791,74 @@ def build_prompt_and_version(
     return "\n\n".join(p for p in parts if p) + "\n", version
 
 
+# ─── L2 PROSA — passe de redacao (2026-06-28) ──────────────────────────────
+# "Codigo decide o risco, LLM redige." O risco entra FIXO; este prompt so
+# verbaliza a prosa. Reusa os _build_*_block de FATOS do L3 (NAO os blocos de
+# DECISAO: matriz, escala, protocolo, consistency — o passe nao re-decide) +
+# _build_filtro_redacao() VERBATIM como ultima coisa (recency anchor).
+REDACAO_PROMPT_VERSION = "redacao.v1"
+
+_RISCO_POR_EXTENSO = {
+    "Baixo": "baixo", "Medio": "medio", "Alto": "alto", "Altissimo": "altissimo",
+}
+
+
+def build_redacao_prompt(req: "RedacaoRequest") -> str:
+    """Prompt do passe de redacao: o risco JA foi decidido (req.risco_final) e
+    entra como FATO IMUTAVEL; a tarefa e SO escrever a prosa que o explica.
+
+    Consistencia risco<->prosa garantida por construcao: o LLM nao classifica,
+    so verbaliza. Reusa o filtro do socio (_build_filtro_redacao) VERBATIM.
+    """
+    risco = req.risco_final
+    risco_lc = _RISCO_POR_EXTENSO.get(risco, risco.lower())
+    intro = (
+        "Voce e analista juridico-securitario brasileiro especializado em SEGURO\n"
+        "GARANTIA JUDICIAL. O risco de acionamento da apolice deste merito JA FOI\n"
+        f"DECIDIDO por analise previa: **risco = {risco}**. Este valor e IMUTAVEL.\n"
+        "\n"
+        "Sua tarefa NAO e classificar nem recalcular o risco — e ESCREVER a\n"
+        f"justificativa que explica, a partir dos FATOS abaixo, por que o risco e {risco}.\n"
+        "Se os fatos parecerem apontar outro nivel, descreva os CONTRAPESOS reais que\n"
+        f"sustentam {risco} (ex: recurso com efeito suspensivo, garantia ja aceita,\n"
+        "tese ainda em aberto) — NUNCA invente fato e NUNCA contradiga o risco dado."
+    )
+    tarefa = (
+        "=== O QUE ESCREVER (campos de prosa) ===\n"
+        "Emita JSON com estes campos, todos em portugues juridico AMIGAVEL e\n"
+        "ACESSIVEL (advogado de seguradora le isto), com gramatica correta e sem\n"
+        "infantilizar:\n"
+        f"  - justificativa: 2-4 paragrafos. (1) estado factual: qual processo carrega\n"
+        "    a decisao mais decisiva e seu sentido pro tomador; (2) aspectos suportivos\n"
+        "    (apolice aceita? CDAs/AIIMs? RJ?); (3) por que o risco e\n"
+        f"    {risco} e nao o nivel adjacente. Cite o CNJ dos processos relevantes.\n"
+        f"  - narrativa_executiva: 1 frase resumindo o estado do caso, terminando com o\n"
+        f"    nivel ('Risco {risco}.').\n"
+        "  - contribuicao_no_risco: 1 frase JURIDICA ligando a perspectiva de exito das\n"
+        "    teses ao risco (em palavras, NUNCA numero/percentual).\n"
+        "  - decisao_justificativa_breve: 1 frase sobre a decisao vigente que governa o\n"
+        "    merito hoje.\n"
+        "  - peca_pivo_motivo: 1-2 frases sobre a movimentacao mais decisiva (string\n"
+        "    vazia se nao houver peca clara — NAO invente).\n"
+        "  - proximos_passos_provaveis: 2-4 acoes esperadas pro merito.\n"
+        f"\nTodos os campos devem ser COERENTES com risco {risco_lc}; nenhum pode sugerir\n"
+        "um nivel diferente do decidido."
+    )
+    parts = [
+        intro,
+        _build_glossary_roles(req),
+        _build_merito_header_block(req),
+        _build_processos_block(req),
+        _build_cdas_block(req),
+        _build_aiims_block(req),
+        _build_tomador_block_section(req),
+        tarefa,
+        # filtro do socio VERBATIM, ULTIMO (recency absoluto, igual ao L3).
+        _build_filtro_redacao(),
+    ]
+    return "\n\n".join(p for p in parts if p) + "\n"
+
+
 def build_merito_synthesis_prompt(
     req: MeritoSynthesisRequest,
     bucket: str | None = None,

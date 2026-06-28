@@ -488,3 +488,69 @@ class MeritoSynthesisResponse(BaseModel):
     # PR6 Architecture D — echo do bucket que rodou (pro materializer L3
     # persistir card['l3_ab_test'][bucket]).
     bucket: Optional[str] = None
+
+
+# ── L2 PROSA — passe de redacao (2026-06-28) ──────────────────────────────
+# "Codigo decide o risco, LLM redige." O risco JA foi decidido (holistico +
+# guards determ.) e entra FIXO; este passe so verbaliza a prosa aplicando o
+# <filtro_redacao_advogado> VERBATIM. Reusa todos os _build_*_block do prompt
+# L3 (por isso RedacaoRequest e subclasse de MeritoSynthesisRequest — carrega
+# os MESMOS fatos que o materializer ja monta no payload), so adicionando
+# risco_final. Ver prompts.build_redacao_prompt + redacao.redact_merito_synthesis.
+
+
+class RedacaoRequest(MeritoSynthesisRequest):
+    """MeritoSynthesisRequest + o risco JA decidido (input imutavel do passe)."""
+
+    risco_final: Literal["Baixo", "Medio", "Alto", "Altissimo"]
+
+
+class RedacaoCard(BaseModel):
+    """So a PROSA — o passe nao re-decide risco nem mexe em valores/agregados.
+
+    Os campos espelham os que o <filtro_redacao_advogado> lista. Todos texto
+    livre PT-BR (sem enum -> sem o loop do decoder Gemini com Literal). O
+    materializer escreve cada um de volta no card persistido.
+    """
+
+    justificativa: Optional[str] = Field(
+        default="",
+        description=(
+            "2-4 paragrafos PT-BR pro ADVOGADO. Paragrafo 1: estado factual. "
+            "Paragrafo 2: aspectos suportivos. Paragrafo 3: por que este nivel e "
+            "nao o adjacente. Cite CNJ. SEM jargao interno (ver filtro)."
+        ),
+    )
+    narrativa_executiva: Optional[str] = Field(
+        default=None,
+        description="1 frase pro time comercial resumindo o estado do caso. SEM jargao interno.",
+    )
+    contribuicao_no_risco: Optional[str] = Field(
+        default=None,
+        description="1 frase JURIDICA: como a perspectiva de exito influenciou o risco. SEM score/numero.",
+    )
+    decisao_justificativa_breve: Optional[str] = Field(
+        default=None,
+        description="1 frase explicando a decisao vigente que governa o merito hoje.",
+    )
+    peca_pivo_motivo: Optional[str] = Field(
+        default=None,
+        description="1-2 frases: por que a peca-pivo define o estado do merito. Vazio se nao ha peca clara.",
+    )
+    proximos_passos_provaveis: list[str] = Field(
+        default_factory=list,
+        description="2-4 acoes esperadas pro merito, em portugues corrente.",
+    )
+
+
+class RedacaoResponse(BaseModel):
+    card: RedacaoCard
+    raw_response: Optional[str] = None
+    llm_raw_prompt: Optional[str] = None
+    prompt_version: Optional[str] = None
+    usage: Optional[dict[str, Any]] = None
+    # Diagnostico do guard: 'llm' (passou limpo), 'llm_retry' (vazou 1x, retry
+    # limpou) ou 'template' (vazou 2x -> fallback determ.). prose_leak_cats =
+    # categorias que vazaram no 1o output (telemetria de vazamento).
+    prose_source: Literal["llm", "llm_retry", "template"] = "llm"
+    prose_leak_cats: list[str] = Field(default_factory=list)

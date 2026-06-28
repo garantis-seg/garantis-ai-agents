@@ -5,10 +5,14 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from ...agents.merito_synthesis.agent import classify_merito_synthesis
+from ...agents.merito_synthesis.redacao import redact_merito_synthesis
 from ...agents.merito_synthesis.schemas import (
     MeritoSynthesisCardOut,
     MeritoSynthesisRequest,
     MeritoSynthesisResponse,
+    RedacaoCard,
+    RedacaoRequest,
+    RedacaoResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,4 +53,33 @@ async def classify_merito_synthesis_endpoint(request: MeritoSynthesisRequest):
         raise
     except Exception as e:
         logger.error(f"merito_synthesis classify failed: {repr(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=repr(e))
+
+
+@router.post("/redacao", response_model=RedacaoResponse)
+async def redacao_merito_synthesis_endpoint(request: RedacaoRequest):
+    """L2 PROSA — passe de redacao. Recebe o risco JA decidido (risco_final) +
+    os FATOS do merito; retorna SO a prosa (justificativa/narrativa/etc.),
+    aplicando o <filtro_redacao_advogado> VERBATIM + guard prose_lint
+    (retry -> fallback template). NAO re-decide o risco. Ver redacao.py.
+    """
+    try:
+        result = await redact_merito_synthesis(
+            request=request,
+            model=request.model,
+            provider=request.provider or "gemini",
+        )
+        return RedacaoResponse(
+            card=RedacaoCard(**(result.get("card") or {})),
+            raw_response=result.get("raw_response"),
+            llm_raw_prompt=result.get("llm_raw_prompt"),
+            prompt_version=result.get("prompt_version"),
+            usage=result.get("usage", {}),
+            prose_source=result.get("prose_source", "llm"),
+            prose_leak_cats=result.get("prose_leak_cats", []),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"merito_synthesis redacao failed: {repr(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=repr(e))
