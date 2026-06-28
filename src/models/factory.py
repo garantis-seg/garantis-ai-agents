@@ -26,8 +26,14 @@ for _opt_name, _opt_val in (("TCP_KEEPIDLE", 10), ("TCP_KEEPINTVL", 5), ("TCP_KE
     if _opt is not None:
         _GENAI_SOCKET_OPTIONS.append((socket.IPPROTO_TCP, _opt, _opt_val))
 
+# max_keepalive_connections env-tunavel (2026-06-28): =0 desliga reuse de conexao
+# (conexao FRESCA por call) — teste decisivo do stall sob burst (keepalive nao pega
+# reuse-rapido: a conexao e reusada antes do TCP_KEEPIDLE=10s sondar). Se com 0 o
+# stall sumir = era stale-conn-reuse; se persistir = Gemini server-side. Default 40
+# preserva o comportamento atual. Pode virar o fix (set em services.yaml) se provar.
+_GENAI_MAX_KEEPALIVE = int(os.getenv("GENAI_MAX_KEEPALIVE_CONNECTIONS", "40"))
 _GENAI_LIMITS = httpx.Limits(
-    max_connections=100, max_keepalive_connections=40, keepalive_expiry=15.0,
+    max_connections=100, max_keepalive_connections=_GENAI_MAX_KEEPALIVE, keepalive_expiry=15.0,
 )
 
 # HttpOptions.timeout (MILISSEGUNDOS) e a UNICA forma de dar timeout ao httpx do
