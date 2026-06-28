@@ -31,7 +31,13 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = os.getenv("PROCESSO_SYNTHESIS_MODEL", "gemini-2.5-flash")
+# 2026-06-28: default 2.5-flash -> 3.1-flash-lite. O 2.5-flash PENDURA deterministico
+# em certos prompts de L2 (1 proc/merito, request no vazio 0-token ate o teto; isolation-
+# provado, NAO load/conn/size — keepalive/concorrencia descartados). O 3.1 (mesmo do L1)
+# nao tem o bug. CAVEAT: o lite e mais VOLATIL na sintese (validacao 29 vs Poletto:
+# extremos, alguns under-ratings Alto->Baixo) — alvo de qualidade real e o 3.1-flash
+# NAO-lite (sem quota GCP hoje). Decisao Elton: manter lite ate provisionar a quota.
+DEFAULT_MODEL = os.getenv("PROCESSO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # Bump quando alterar build_processo_synthesis_prompt, build_probabilidade_exito_prompt

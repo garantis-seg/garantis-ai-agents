@@ -22,9 +22,11 @@ from .schemas import MeritoSynthesisCard, MeritoSynthesisCardOut, MeritoSynthesi
 
 logger = logging.getLogger(__name__)
 
-# Default Flash (sintese final precisa de qualidade). Pro pode ser override via env
-# quando o usuario quiser maior performance ao custo de 8x preco.
-DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-2.5-flash")
+# 2026-06-28: default 2.5-flash -> 3.1-flash-lite, alinhado ao L2 (decisao Elton).
+# NOTA: o L3 NAO foi observado pendurando (so o L2 tinha o hang do 2.5-flash) — mover
+# o L3 e alinhamento, nao fix; como e a sintese FINAL (qualidade), o lite aqui e o que
+# mais preocupa. Alvo real = 3.1-flash NAO-lite quando a quota GCP existir. Override via env.
+DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 

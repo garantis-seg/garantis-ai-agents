@@ -18,22 +18,20 @@ from google.genai import types
 # Com SO_KEEPALIVE o OS sonda conexoes idle e DERRUBA as mortas -> o reuse vira
 # ConnectError rapido (transport retries=2 reabsorve) em vez de ReadTimeout no
 # vazio. Linux-only opts via getattr (Cloud Run = Linux; no-op no dev box).
-# ponytail: keepalive e o hedge pro stall do L2 — a CAUSA ainda nao foi provada
-# (timeout != stale-conn deterministico); medir antes/depois sob burst.
+# 2026-06-28 UPDATE: keepalive NAO era a causa do stall de L2. Provado por teste:
+# conexao fresca (keepalive=0) E baixa concorrencia (sem=2) deram o MESMO ~79% stall;
+# e o stall reproduz em ISOLAMENTO num proc especifico. A causa REAL era o
+# gemini-2.5-flash PENDURANDO deterministico em certos prompts (fix = trocar o modelo
+# pro 3.1, ver agents/*/agent.py). Este keepalive fica como higiene geral do hop
+# (nao prejudica), nao como fix do stall.
 _GENAI_SOCKET_OPTIONS: list = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)]
 for _opt_name, _opt_val in (("TCP_KEEPIDLE", 10), ("TCP_KEEPINTVL", 5), ("TCP_KEEPCNT", 3)):
     _opt = getattr(socket, _opt_name, None)
     if _opt is not None:
         _GENAI_SOCKET_OPTIONS.append((socket.IPPROTO_TCP, _opt, _opt_val))
 
-# max_keepalive_connections env-tunavel (2026-06-28): =0 desliga reuse de conexao
-# (conexao FRESCA por call) — teste decisivo do stall sob burst (keepalive nao pega
-# reuse-rapido: a conexao e reusada antes do TCP_KEEPIDLE=10s sondar). Se com 0 o
-# stall sumir = era stale-conn-reuse; se persistir = Gemini server-side. Default 40
-# preserva o comportamento atual. Pode virar o fix (set em services.yaml) se provar.
-_GENAI_MAX_KEEPALIVE = int(os.getenv("GENAI_MAX_KEEPALIVE_CONNECTIONS", "40"))
 _GENAI_LIMITS = httpx.Limits(
-    max_connections=100, max_keepalive_connections=_GENAI_MAX_KEEPALIVE, keepalive_expiry=15.0,
+    max_connections=100, max_keepalive_connections=40, keepalive_expiry=15.0,
 )
 
 # HttpOptions.timeout (MILISSEGUNDOS) e a UNICA forma de dar timeout ao httpx do
