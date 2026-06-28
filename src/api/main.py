@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from garantis_shared.logging_setup import setup_logging
 
+from .middleware import GeminiCallTimeoutMiddleware
 from .routes import apolice_lifecycle, categorization, court_state_classifier, health, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, risk_classification, summarization, text, timing, validation
 
 # Carregar variáveis de ambiente
@@ -42,6 +43,9 @@ app = FastAPI(
     version="0.5.0",
     lifespan=lifespan,
 )
+
+# Per-call Gemini timeout do engine (header X-Gemini-Timeout-Ms -> ContextVar)
+app.add_middleware(GeminiCallTimeoutMiddleware)
 
 # Configurar CORS
 app.add_middleware(

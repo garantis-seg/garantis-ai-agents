@@ -6,6 +6,7 @@ structured output via response_schema.
 """
 
 import asyncio
+import contextvars
 import os
 import logging
 import time
@@ -33,6 +34,20 @@ logger = logging.getLogger(__name__)
 _GEMINI_RATE = float(os.getenv("GEMINI_RATE_LIMIT_RPS", "5.0"))
 _GEMINI_BURST = int(os.getenv("GEMINI_RATE_LIMIT_BURST", "10"))
 _GEMINI_ACQUIRE_TIMEOUT_S = float(os.getenv("GEMINI_RATE_LIMIT_TIMEOUT_S", "60.0"))
+
+# ── Per-call timeout do generate_content (TIER 2 do L2-hang, 2026-06-28) ──────
+# O generate_content NAO tinha timeout proprio: quando o Gemini stalla, a call
+# pendurava ate o teto de-facto do SDK (~230-250s observado nos logs) enquanto o
+# engine ja desistiu aos 45s (read-timeout) e gravou timeout 0-token -> slot de
+# worker + chamada Gemini PAGA desperdicados num orfao. O engine manda o header
+# X-Gemini-Timeout-Ms (= seu read-timeout - buffer); o middleware ASGI poe no CV
+# abaixo; agenerate capa a call nesse teto via asyncio.wait_for -> falha rapido
+# (retryable no caller) e a cancelacao aborta a conexao orfa. Header ausente
+# (testes/outros callers) -> backstop generoso que nao corta L3 legitimo.
+gemini_call_timeout_cv: "contextvars.ContextVar[Optional[float]]" = (
+    contextvars.ContextVar("gemini_call_timeout_s", default=None)
+)
+_GEMINI_CALL_TIMEOUT_BACKSTOP_S = float(os.getenv("GEMINI_CALL_TIMEOUT_S", "600.0"))
 
 _gemini_rate_limiter = TokenBucketRateLimiter(
     rate=_GEMINI_RATE,
@@ -376,12 +391,28 @@ class GeminiProvider(BaseLLMProvider):
         _est_tokens = (len(prompt) if isinstance(prompt, str) else 4096) // 4 + 2048
         await _gemini_tpm_limiter.acquire(_est_tokens, timeout=_GEMINI_ACQUIRE_TIMEOUT_S)
 
-        # Make async API call
-        response = await self._client.aio.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=config,
-        )
+        # Make async API call — BOUNDED (TIER 2): sem isto o generate_content pendura
+        # ate o teto do SDK (~230-250s) quando o Gemini stalla. O CV vem do header
+        # X-Gemini-Timeout-Ms (engine read-timeout - buffer); ausente -> backstop.
+        # wait_for cancela a coroutine no estouro -> aborta a chamada orfa.
+        _call_timeout_s = gemini_call_timeout_cv.get() or _GEMINI_CALL_TIMEOUT_BACKSTOP_S
+        try:
+            response = await asyncio.wait_for(
+                self._client.aio.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=config,
+                ),
+                timeout=_call_timeout_s,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "GEMINI_CALL_TIMEOUT model=%s timeout=%.0fs prompt_chars=%d — "
+                "abortado (retryable no caller)",
+                model, _call_timeout_s,
+                len(prompt) if isinstance(prompt, str) else -1,
+            )
+            raise
 
         # Extract token counts
         input_tokens = 0
