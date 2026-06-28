@@ -37,6 +37,9 @@ logger = logging.getLogger(__name__)
 # nao tem o bug. CAVEAT: o lite e mais VOLATIL na sintese (validacao 29 vs Poletto:
 # extremos, alguns under-ratings Alto->Baixo) — alvo de qualidade real e o 3.1-flash
 # NAO-lite (sem quota GCP hoje). Decisao Elton: manter lite ate provisionar a quota.
+# 2026-06-28 (shared 1.232.0): o ENGINE agora manda `model` no payload (SSOT;
+# ENGINE_LAYER2_MODEL no worker) -> este default so vale como FALLBACK pra callers
+# nao-engine (curl/eval). O caller do engine sobrescreve via request.model.
 DEFAULT_MODEL = os.getenv("PROCESSO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 

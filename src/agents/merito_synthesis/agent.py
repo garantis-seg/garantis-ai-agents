@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 # NOTA: o L3 NAO foi observado pendurando (so o L2 tinha o hang do 2.5-flash) — mover
 # o L3 e alinhamento, nao fix; como e a sintese FINAL (qualidade), o lite aqui e o que
 # mais preocupa. Alvo real = 3.1-flash NAO-lite quando a quota GCP existir. Override via env.
+# 2026-06-28 (shared 1.232.0): o ENGINE agora manda `model` no payload (SSOT;
+# ENGINE_LAYER3_MODEL no worker) -> este default so vale como FALLBACK pra callers
+# nao-engine. O caller do engine sobrescreve via request.model.
 DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
