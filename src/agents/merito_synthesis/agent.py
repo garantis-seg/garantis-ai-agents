@@ -22,6 +22,53 @@ from .schemas import MeritoSynthesisCard, MeritoSynthesisCardOut, MeritoSynthesi
 
 logger = logging.getLogger(__name__)
 
+# extracao-sinais-merito-level (2026-06-29): fatos merito-level copiados do decisao_vigente
+# do processo GOVERNANTE pro decisao_atual do card. Os 3 primeiros sao echo do L2
+# DecisaoVigenteRich; os 3 ultimos sao o sinal #2 (suspensao deterministica da timeline).
+_MERITO_ECHO_FIELDS = (
+    "motivo_extincao", "instrumento_cautelar", "efeito_suspensivo",
+    "suspensao_processual", "suspensao_vigente", "suspensao_data",
+)
+
+
+def _norm_pn(s) -> str:
+    """Digits-only de um CNJ (formatado OU normalizado) — pra casar processo_de_origem
+    com processo_synthesis.processo_numero independente de formatacao."""
+    return "".join(ch for ch in str(s or "") if ch.isdigit())
+
+
+def _project_merito_decisao_facts(card, processo_syntheses) -> None:
+    """Copia os fatos merito-level (3 echo L2 + 3 suspensao) do decisao_vigente do processo
+    GOVERNANTE (decisao_atual.processo_de_origem) pro decisao_atual do card. Sem isso o
+    merito read-model era 0/244 nos 3 echo (o sinal morria na borda L2->L3). NUNCA levanta
+    (best-effort — projecao nao pode derrubar a cascade)."""
+    try:
+        if not isinstance(card, dict) or "error" in card:
+            return
+        da = card.get("decisao_atual")
+        if not isinstance(da, dict):
+            return
+        origem = _norm_pn(da.get("processo_de_origem"))
+        if not origem:
+            return
+        match = None
+        for ps in processo_syntheses or []:
+            pn = ps.get("processo_numero") if isinstance(ps, dict) else getattr(ps, "processo_numero", None)
+            if _norm_pn(pn) == origem:
+                match = ps
+                break
+        if match is None:
+            return
+        dv = match.get("decisao_vigente") if isinstance(match, dict) else getattr(match, "decisao_vigente", None)
+        if not isinstance(dv, dict):
+            return
+        for f in _MERITO_ECHO_FIELDS:
+            if dv.get(f) is not None:
+                da[f] = dv.get(f)
+        card["decisao_atual"] = da
+    except Exception as e:  # noqa: BLE001 — projecao e best-effort
+        logger.warning("L3_PROJECT_MERITO_FACTS_FAIL: %r", e)
+
 # 2026-06-28: default 2.5-flash -> 3.1-flash-lite, alinhado ao L2 (decisao Elton).
 # NOTA: o L3 NAO foi observado pendurando (so o L2 tinha o hang do 2.5-flash) — mover
 # o L3 e alinhamento, nao fix; como e a sintese FINAL (qualidade), o lite aqui e o que
@@ -140,6 +187,10 @@ async def classify_merito_synthesis(
         # ciclo_garantia montado em CÓDIGO (não pelo LLM — ver schemas.py): o LLM
         # loopava re-listando os eventos. Determinístico dos lifecycle_garantia do input.
         card_data["ciclo_garantia"] = _assemble_ciclo_garantia(request.processo_syntheses)
+        # Projeta os fatos merito-level (echo L2 + suspensao) do processo governante pro
+        # decisao_atual — determinístico, pós-LLM (mesma mecânica do ciclo_garantia). Fecha
+        # o "satisfacao=0/86": sem isso o merito read-model perdia os sinais na borda L2->L3.
+        _project_merito_decisao_facts(card_data, request.processo_syntheses)
         logger.info(
             "ciclo_garantia assembled merito_id=%s n_eventos=%d lifecycle_lens=%s",
             request.merito_id, len(card_data["ciclo_garantia"]),

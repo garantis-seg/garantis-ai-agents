@@ -40,6 +40,40 @@ class DecisaoAtual(BaseModel):
     recorrida: bool = False
 
 
+class DecisaoAtualRich(DecisaoAtual):
+    """Card PERSISTIDO/SERVIDO (NAO o response_schema do LLM). DecisaoAtual + os fatos
+    merito-level projetados EM CODIGO (extracao-sinais-merito-level, 2026-06-29).
+
+    Por que separado (mesma licao do L2 DecisaoVigenteRich): pedir pro LLM EMITIR estes
+    campos perturba a decisao holistica + repete o drift do canario. O response_schema do
+    Gemini fica = DecisaoAtual LEAN (chamada byte-identica); estes campos sao COPIADOS, pos-LLM,
+    do decisao_vigente do processo que governa a decisao_atual (processo_de_origem) via
+    agent._project_merito_decisao_facts. Sem isso o merito read-model (merito_risk_current.
+    decisao_atual) era 0/244 nos 3 echo — o sinal morria na borda L2->L3 ("satisfacao=0/86").
+
+    Destrava os overrides DETERMINISTICOS dormentes: R1 (satisfacao -> teto Baixo;
+    parcelamento -> teto Medio), T4 (suspensao_processual=irdr_tema_repetitivo vigente
+    pos-transito -> -1 banda). A decisao de banda em si fica na prompt risco-state-current.
+    """
+
+    # Echo do L2 DecisaoVigenteRich do processo governante.
+    motivo_extincao: Optional[Literal[
+        "terminativa", "consensual", "satisfacao", "nenhum",
+    ]] = Field(default=None, description="ECHO do decisao_vigente do processo de origem (so != null se extinto).")
+    instrumento_cautelar: Optional[Literal[
+        "suspensao_seguranca", "suspensao_exigibilidade_ctn", "nenhum",
+    ]] = Field(default=None, description="ECHO do decisao_vigente do processo de origem.")
+    efeito_suspensivo: Optional[bool] = Field(
+        default=None, description="ECHO do decisao_vigente do processo de origem.",
+    )
+    # Sinal #2 (suspensao deterministica da timeline).
+    suspensao_processual: Optional[Literal[
+        "irdr_tema_repetitivo", "causa_prejudicial", "parcelamento_transacao", "nenhum",
+    ]] = Field(default=None, description="Categoria de suspensao VIGENTE do processo de origem (timeline-derived).")
+    suspensao_vigente: Optional[bool] = Field(default=None)
+    suspensao_data: Optional[str] = Field(default=None, description="YYYY-MM-DD da suspensao governante.")
+
+
 class CicloGarantiaEvent(BaseModel):
     """1 evento cross-processo no ciclo da garantia/apolice neste merito.
 
@@ -510,6 +544,13 @@ class MeritoSynthesisCardOut(MeritoSynthesisCard):
     (agent._assemble_ciclo_garantia) e vive SÓ aqui — senão o response_model (que tipa
     card por esta classe) o estriparia da resposta.
     """
+
+    # decisao_atual RICO: igual ao base MAS com os 6 campos merito-level projetados em
+    # codigo (extracao-sinais-merito-level 2026-06-29). O response_schema do LLM
+    # (MeritoSynthesisCard base, DecisaoAtual LEAN) fica INTOCADO; este card OUT vive FORA
+    # da chamada do LLM (parse + resposta HTTP + persistencia) pra os campos NAO serem
+    # stripados na borda. Mesma mecanica do L2 ProcessoSynthesisCardRich.
+    decisao_atual: DecisaoAtualRich = Field(default_factory=DecisaoAtualRich)
 
     # list[dict], NÃO list[CicloGarantiaEvent]: o shape é controlado pelo _assemble, mas
     # os VALORES vêm do lifecycle real (evento pode ser 'acionamento'/'nenhum', 'reforco'
