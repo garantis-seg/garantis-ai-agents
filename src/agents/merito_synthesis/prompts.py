@@ -809,7 +809,7 @@ sinal de Baixo (sem evidencia explicita) OU classificacao indevida."""
 
 
 def _build_field_instructions() -> str:
-    """=== INSTRUCOES POR CAMPO === — 11 itens sobre formato JSON output.
+    """=== INSTRUCOES POR CAMPO === — 12 itens sobre formato JSON output.
 
     Comum a todos os tipos: schema de output e o mesmo independente do
     tipo_judicial dominante. Soh os exemplos textuais sao genericos
@@ -872,7 +872,16 @@ def _build_field_instructions() -> str:
 
 11. evidence_artifacts: 3-7 itens citando OS PROCESSOS/CARDS mais decisivos.
     kind = processo_synthesis | mov_factsheet | apolice | conexo | cda | aiim | tomador | merito
-    ref = processo_numero, mov_id, cda_number, cnpj_basico, etc."""
+    ref = processo_numero, mov_id, cda_number, cnpj_basico, etc.
+
+12. citacoes: para CADA decisao/evento concreto que voce NOMEIA na justificativa (transito
+    em julgado, sentenca/acordao desfavoravel, decisao mantida em 2g, penhora deferida, etc.),
+    emita 1 Citacao ligando a frase ao ato real:
+    - trecho: copie LITERAL a frase exata da justificativa que nomeia o evento — sem
+      parafrasear (o front casa por substring; tem que bater caractere a caractere).
+    - processo_numero: o CNJ do processo que carrega aquele evento.
+    NAO preencha movimento_id (o codigo preenche do peca_pivo_candidata da camada 2 daquele
+    processo). NAO invente eventos: so cite o que esta ESCRITO na justificativa."""
 
 
 def _build_filtro_redacao() -> str:
