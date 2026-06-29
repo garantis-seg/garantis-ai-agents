@@ -128,7 +128,16 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #     foram DESCARTADOS — v2.7 e otimo-local exceto pela REGRA DURA. Detalhe: memory
 #     l3-consolidacao-2026-06-23.
 #   - Rollback: revert do PR (regen COLD na v2.7).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.7.1"
+#
+# v2.7.2 (2026-06-29, extracao-sinais-merito-level):
+#   - SCHEMA do card OUT: decisao_atual vira DecisaoAtualRich (motivo_extincao/
+#     instrumento_cautelar/efeito_suspensivo + suspensao_processual/vigente/data),
+#     PROJETADOS em codigo pos-LLM do decisao_vigente do processo governante
+#     (_project_merito_decisao_facts). Fecha o "satisfacao=0/86" (o sinal morria na
+#     borda L2->L3). PROMPT + response_schema do LLM (DecisaoAtual LEAN) INTOCADOS.
+#   - Bump = provenance do schema novo; o lift real exige re-cascade COLD. Memory:
+#     extracao-sinais-merito-level-2026-06-29.
+PROMPT_VERSION_BASE = "merito_synthesis.v2.7.2"
 
 
 def _prompt_version_for(tipo: str) -> str:

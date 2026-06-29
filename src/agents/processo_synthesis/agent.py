@@ -94,7 +94,20 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #   - Bump invalida cache do L2 -> cards novos pegam o prompt; existentes limpam
 #     no re-cascade (handoff prompt-DADO-fix-transito-L2). Memory:
 #     l2-transito-overclaim-rootcause-2026-06-28.
-PROMPT_VERSION = "processo_synthesis.v2.4"
+#
+# v2.5 (2026-06-29, extracao-sinais-merito-level):
+#   - SCHEMA: DecisaoVigenteRich ganha suspensao_processual/suspensao_vigente/
+#     suspensao_data (sinal #2) — marcador DETERMINISTICO injetado pelo materializer L2
+#     da timeline crua (suspensao_classifier), NAO do LLM. Resolve "suspensao vive so na
+#     timeline" -> destrava override T4 (sobrestamento) + R1 (parcelamento vs quitacao).
+#   - PRECISAO sinal #1: _project_decisao_facts agora GATEIA motivo_extincao em
+#     natureza='extinto_sem_merito' (matava ~50% de FP: motivo de mov-extincao colado em
+#     card procedente/interlocutoria). Ver _project_decisao_facts.
+#   - response_schema do LLM (ProcessoSynthesisCard, DecisaoVigente LEAN) INTOCADO — os
+#     campos novos sao out-of-band (materializer/projecao), preservam o byte-identico da
+#     chamada e a licao do canario (risco_factual drift). Memory:
+#     extracao-sinais-merito-level-2026-06-29.
+PROMPT_VERSION = "processo_synthesis.v2.5"
 
 
 async def classify_processo_synthesis(
@@ -301,6 +314,13 @@ def _project_decisao_facts(card, mov_factsheets) -> None:
             return
         d = _decisao_of(mov)
         enriched = {**dv, **{f: d.get(f) for f in _ECHO_FIELDS}}
+        # Gate de precisao (sinal #1, 2026-06-29): motivo_extincao so e valido quando a
+        # decisao VIGENTE do card e EXTINCAO. _vigente_mov faz fallback pro mov decidido
+        # mais recente quando nenhum casa a natureza do card -> pode trazer o motivo de um
+        # mov de extincao enquanto a decisao vigente e procedente/interlocutoria (FP medido:
+        # ~50% precisao no satisfacao; 2 de 6 eram cards procedente). So sobrevive em extinto.
+        if enriched.get("natureza") != "extinto_sem_merito":
+            enriched["motivo_extincao"] = None
         card["decisao_vigente"] = DecisaoVigenteRich(**enriched).model_dump()
     except Exception as e:  # noqa: BLE001 — projecao e best-effort
         logger.warning("L2_PROJECT_FACTS_FAIL: %r", e)

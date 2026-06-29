@@ -93,6 +93,31 @@ class DecisaoVigenteRich(DecisaoVigente):
         default=None, description="ECHO do efeito_suspensivo do mov L1 vigente.",
     )
 
+    # Sinal #2 (suspensao_processual, 2026-06-29): marcador DETERMINISTICO derivado da
+    # TIMELINE crua (leads.processos_movimentos) pelo materializer L2 — NAO do LLM nem do
+    # mov L1. Injetado out-of-band pos-classify (igual pipeline_quality); upsert grava o
+    # dict cru. Resolve o gap "suspensao vive so na timeline" + destrava override T4
+    # (sobrestamento-pos-transito -> -1 banda) e R1 (parcelamento -> teto Medio vs quitacao
+    # -> Baixo). Ver garantis_shared.engine_v6.layer2_processo_synthesis.suspensao_classifier.
+    suspensao_processual: Optional[Literal[
+        "irdr_tema_repetitivo", "causa_prejudicial", "parcelamento_transacao", "nenhum",
+    ]] = Field(
+        default=None,
+        description=(
+            "Categoria de suspensao/sobrestamento VIGENTE do processo, derivada da timeline. "
+            "irdr_tema_repetitivo=suspensao de merito (IRDR/Tema/repercussao/art.1030); "
+            "causa_prejudicial=depende de outra causa; parcelamento_transacao=exigibilidade "
+            "suspensa por parcelamento/transacao; nenhum/null=sem sinal."
+        ),
+    )
+    suspensao_vigente: Optional[bool] = Field(
+        default=None,
+        description="True se a suspensao mais recente NAO foi levantada depois (heuristica latest-event; o risco-state-current refina).",
+    )
+    suspensao_data: Optional[str] = Field(
+        default=None, description="YYYY-MM-DD da mov de suspensao governante.",
+    )
+
 
 class LifecycleGarantiaEvent(BaseModel):
     """Evento no ciclo de vida da garantia/apolice neste processo.
