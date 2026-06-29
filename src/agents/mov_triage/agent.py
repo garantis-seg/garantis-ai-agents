@@ -23,7 +23,7 @@ from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
-from ..mov_factsheet.agent import _L1_ESCALATE_MODEL, _resumo_looks_like_json_meta_leak
+from ..mov_factsheet.agent import _resumo_looks_like_json_meta_leak
 from .prompts import build_mov_triage_prompt
 from .schemas import (
     DocAnexado,
@@ -118,25 +118,17 @@ async def classify_mov_triage(
         logger.error(f"mov_triage parse failed mov_id={mov.mov_id}: {repr(e)}")
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
 
-    # Leak guard + escalação (2026-06-29): mesma degeneração do mov_factsheet — JSON válido
-    # cujo resumo_ato carrega meta-erro/inglês. No leak, re-roda 1x no flash (recursão
-    # guardada anti-loop); se o flash também vazar → failed → _retry_failed_units.
+    # Leak guard (2026-06-29): mesma degeneração do mov_factsheet — JSON válido cujo VALOR
+    # de resumo_ato é o meta-erro/inglês do modelo. NULL só o resumo_ato e mantém o card
+    # (não devolver erro -> 500 -> engine retenta 6x à toa; esses movs degeneram em
+    # flash-lite E flash). Front cai no texto cru do evento.
     if (isinstance(card_data, dict) and not card_data.get("error")
             and _resumo_looks_like_json_meta_leak(card_data.get("resumo_ato"))):
-        if model != _L1_ESCALATE_MODEL:
-            logger.warning(
-                "L1_TRIAGE_RESUMO_META_LEAK mov_id=%s model=%s -> escalando p/ %s",
-                mov.mov_id, model, _L1_ESCALATE_MODEL,
-            )
-            return await classify_mov_triage(
-                processo, mov, documentos_anexados=docs_typed,
-                fallback_context=fb_typed, model=_L1_ESCALATE_MODEL, provider=provider,
-            )
         logger.warning(
-            "L1_TRIAGE_RESUMO_META_LEAK mov_id=%s model=%s (escalado) ainda vazou -> failed",
-            mov.mov_id, model,
+            "L1_TRIAGE_RESUMO_META_LEAK mov_id=%s -> resumo_ato=None (card mantido)",
+            mov.mov_id,
         )
-        card_data = {"error": "resumo_ato_meta_leak", "raw": raw_response, "mov_id": mov.mov_id}
+        card_data["resumo_ato"] = None
 
     usage = {
         "input_tokens": response.input_tokens or 0,
