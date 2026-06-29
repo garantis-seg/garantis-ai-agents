@@ -30,6 +30,27 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
+# Frases EN que NUNCA aparecem num resumo_ato legitimo (PT) — assinaturas das 2 formas
+# de degeneracao do Gemini observadas em prod (2026-06-29): (a) o modelo vaza o proprio
+# meta-erro de JSON ("The JSON was not valid... Here is the schema again"); (b) o modelo
+# quebra a meio e RE-ESCREVE o resumo em ingles ("The process has been concluded. This is
+# a routine administrative action..."). Em ambas o JSON e VALIDO e o schema (resumo_ato:
+# str) aceita -> ia cru pro card e poluia a timeline. Set tight p/ zero falso-positivo.
+_RESUMO_META_LEAK_MARKERS = (
+    "the json", "valid json", "json should", "schema again", "wrapped in markdown",
+    "control characters", "the process has been", "this is a routine",
+    "does not involve", "does not mention", "in the;",
+)
+
+
+def _resumo_looks_like_json_meta_leak(resumo) -> bool:
+    """True se o resumo_ato carrega assinatura de degeneracao (meta-JSON ou EN). Match
+    por substring lowercase contra _RESUMO_META_LEAK_MARKERS."""
+    if not isinstance(resumo, str):
+        return False
+    low = resumo.lower()
+    return any(m in low for m in _RESUMO_META_LEAK_MARKERS)
+
 DEFAULT_MODEL = os.getenv("MOV_FACTSHEET_MODEL", "gemini-3.1-flash-lite")  # 2026-06-26: upgrade 2.5->3.1 (2.5-flash-lite 503 high-demand). Elton.
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
@@ -328,6 +349,19 @@ async def classify_mov_factsheet(
             len(prompt or ""), _phash, len(raw_response or ""), (raw_response or "")[-120:],
         )
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
+
+    # Leak guard (2026-06-29): JSON VALIDO mas resumo_ato carrega o meta-erro/ingles do
+    # modelo (passa no schema permissivo). Trata como erro -> materializer marca failed ->
+    # _retry_failed_units re-dispara (retry "de graca" pela plumbing existente); se
+    # persistir, mov fica SEM card (melhor que card-lixo na timeline). Mesma raiz dos 31
+    # cards saneados — memory v2b-citacoes-deploy-2026-06-29.
+    if (isinstance(card_data, dict) and not card_data.get("error")
+            and _resumo_looks_like_json_meta_leak(card_data.get("resumo_ato"))):
+        logger.warning(
+            "L1_RESUMO_META_LEAK mov_id=%s resumo_head=%r -> failed (retry via _retry_failed_units)",
+            mov.mov_id, (card_data.get("resumo_ato") or "")[:80],
+        )
+        card_data = {"error": "resumo_ato_meta_leak", "raw": raw_response, "mov_id": mov.mov_id}
 
     usage = {
         "input_tokens": response.input_tokens or 0,
