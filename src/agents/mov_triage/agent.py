@@ -119,16 +119,16 @@ async def classify_mov_triage(
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
 
     # Leak guard (2026-06-29): mesma degeneração do mov_factsheet — JSON válido cujo VALOR
-    # de resumo_ato é o meta-erro/inglês do modelo. NULL só o resumo_ato e mantém o card
-    # (não devolver erro -> 500 -> engine retenta 6x à toa; esses movs degeneram em
-    # flash-lite E flash). Front cai no texto cru do evento.
+    # de resumo_ato é o meta-erro/inglês do modelo. Troca pelo TEXTO CRU do evento e mantém
+    # o card. Não pode ser None (schema str -> ValidationError->500->engine retenta 6x à
+    # toa) nem erro (idem). Esses movs degeneram em flash-lite E flash.
     if (isinstance(card_data, dict) and not card_data.get("error")
             and _resumo_looks_like_json_meta_leak(card_data.get("resumo_ato"))):
         logger.warning(
-            "L1_TRIAGE_RESUMO_META_LEAK mov_id=%s -> resumo_ato=None (card mantido)",
+            "L1_TRIAGE_RESUMO_META_LEAK mov_id=%s -> texto cru (card mantido)",
             mov.mov_id,
         )
-        card_data["resumo_ato"] = None
+        card_data["resumo_ato"] = (getattr(mov, "texto", "") or "").strip()[:500] or "(resumo indisponivel)"
 
     usage = {
         "input_tokens": response.input_tokens or 0,
