@@ -52,6 +52,9 @@ def _resumo_looks_like_json_meta_leak(resumo) -> bool:
     return any(m in low for m in _RESUMO_META_LEAK_MARKERS)
 
 DEFAULT_MODEL = os.getenv("MOV_FACTSHEET_MODEL", "gemini-3.1-flash-lite")  # 2026-06-26: upgrade 2.5->3.1 (2.5-flash-lite 503 high-demand). Elton.
+# Model pro qual escalar quando o flash-lite degenera o resumo_ato (FU1 2026-06-29).
+# Espelha DEFAULT_L1_ESCALATE_MODEL do client engine (flash-lite -> flash).
+_L1_ESCALATE_MODEL = os.getenv("MOV_FACTSHEET_ESCALATE_MODEL", "gemini-2.5-flash")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # Bump quando alterar build_mov_factsheet_prompt OR MovFactSheetCard schema.
@@ -350,16 +353,29 @@ async def classify_mov_factsheet(
         )
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
 
-    # Leak guard (2026-06-29): JSON VALIDO mas resumo_ato carrega o meta-erro/ingles do
-    # modelo (passa no schema permissivo). Trata como erro -> materializer marca failed ->
-    # _retry_failed_units re-dispara (retry "de graca" pela plumbing existente); se
-    # persistir, mov fica SEM card (melhor que card-lixo na timeline). Mesma raiz dos 31
-    # cards saneados — memory v2b-citacoes-deploy-2026-06-29.
+    # Leak guard + escalação (2026-06-29): JSON VÁLIDO mas resumo_ato carrega o meta-erro
+    # de JSON / inglês do modelo (passa no schema permissivo resumo_ato: str). O flash-lite
+    # degenera ATÉ em inputs triviais ("Encerrada a conclusão" 33 chars). FU1: ao detectar
+    # o leak, re-roda 1x no flash (gemini-2.5-flash, que extrai esses limpo) via recursão
+    # guardada (só escala se ainda não for o flash → sem loop). A escalação in-call() é
+    # INERTE sob ENGINE_RESILIENCE_V2 (attempts=1), por isso aqui. Se o flash TAMBÉM vazar
+    # → erro → materializer pula + _retry_failed_units; mov fica SEM card (> card-lixo).
+    # Mesma raiz dos 31 cards saneados — memory v2b-citacoes-deploy-2026-06-29.
     if (isinstance(card_data, dict) and not card_data.get("error")
             and _resumo_looks_like_json_meta_leak(card_data.get("resumo_ato"))):
+        if model != _L1_ESCALATE_MODEL:
+            logger.warning(
+                "L1_RESUMO_META_LEAK mov_id=%s model=%s -> escalando p/ %s",
+                mov.mov_id, model, _L1_ESCALATE_MODEL,
+            )
+            return await classify_mov_factsheet(
+                processo, mov, documentos_anexados=docs_typed,
+                fallback_context=fb_typed, model=_L1_ESCALATE_MODEL,
+                provider=provider, classe=classe, _no_chunk=_no_chunk,
+            )
         logger.warning(
-            "L1_RESUMO_META_LEAK mov_id=%s resumo_head=%r -> failed (retry via _retry_failed_units)",
-            mov.mov_id, (card_data.get("resumo_ato") or "")[:80],
+            "L1_RESUMO_META_LEAK mov_id=%s model=%s (escalado) ainda vazou -> failed",
+            mov.mov_id, model,
         )
         card_data = {"error": "resumo_ato_meta_leak", "raw": raw_response, "mov_id": mov.mov_id}
 
