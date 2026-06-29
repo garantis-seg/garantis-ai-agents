@@ -86,6 +86,38 @@ class PecaPivoMerito(BaseModel):
         return str(v) if not isinstance(v, str) else v
 
 
+class Citacao(BaseModel):
+    """Liga um trecho da justificativa ao movimento DECISIVO que o sustenta — a
+    movimentacao (com mov_id) que pesou na decisao de risco. Torna o fator de
+    decisao explicito/auditavel e clicavel no front (salta pro movimento exato).
+
+    O LLM emite trecho + processo_numero (que ele sabe fazer bem); o movimento_id
+    e preenchido DETERMINISTICAMENTE pos-LLM (peca_pivo_candidata da camada 2 do
+    processo) pra evitar transcricao de UUID pelo modelo. Ver materializer.
+    """
+
+    trecho: Optional[str] = Field(
+        default=None,
+        description=(
+            "Trecho EXATO copiado da justificativa que nomeia o evento/decisao "
+            "(ex: 'transito em julgado de decisao contraria a tese da empresa'). "
+            "Copie literalmente — o front casa por substring."
+        ),
+    )
+    processo_numero: Optional[str] = None
+    movimento_id: Optional[str] = Field(
+        default=None,
+        description="mov_id do movimento decisivo daquele processo. Preenchido pelo codigo se ausente.",
+    )
+
+    @field_validator("movimento_id", mode="before")
+    @classmethod
+    def _coerce_movimento_id(cls, v: Any) -> Optional[str]:
+        if v is None:
+            return None
+        return str(v) if not isinstance(v, str) else v
+
+
 class BreakdownProcesso(BaseModel):
     """Breakdown agregacao prob_exito por processo do merito.
 
@@ -224,6 +256,16 @@ class MeritoSynthesisCard(BaseModel):
             "NUNCA inclua jargao interno (score/decimal, snake_case, T-B1, "
             "Daycoval/Poletto/Architecture D, 'matriz determ/sem nuance', 'piso "
             "minimo', 'merito'+numero, mov_id). Ver <filtro_redacao_advogado>."
+        ),
+    )
+    citacoes: list[Citacao] = Field(
+        default_factory=list,
+        description=(
+            "Movimentos DECISIVOS por tras da justificativa: para cada decisao/"
+            "evento concreto citado no texto (transito, sentenca adversa, acordao "
+            "mantido, etc.), emita 1 Citacao com o TRECHO exato copiado da "
+            "justificativa + o processo_numero. Liga a prosa ao ato real "
+            "(auditavel + clicavel). NAO inventar; so eventos que estao na prosa."
         ),
     )
     narrativa_executiva: Optional[str] = Field(
