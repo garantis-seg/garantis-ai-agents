@@ -353,18 +353,18 @@ async def classify_mov_factsheet(
     # Leak guard (2026-06-29): JSON VÁLIDO mas o VALOR de resumo_ato carrega o meta-erro de
     # JSON / inglês do modelo (passa no schema permissivo resumo_ato: str). O resto do card
     # (tipo_doc, categoria, decisao, evento_garantia) parseou OK — só o texto do resumo é
-    # lixo. Então NULL só o resumo_ato e mantém o card (preserva todo o sinal estruturado
-    # pra L2/L3; a timeline cai no texto cru do evento). NÃO devolver erro: erro vira 500 ->
-    # engine retenta 6x (~3min) à toa e volta lixo igual — MEDIDO: esses movs degeneram em
-    # flash-lite E flash (não é flakiness; escalar não recupera). Raiz dos 31 cards saneados
-    # — memory v2b-citacoes-deploy-2026-06-29.
+    # lixo. O resto do card (tipo_doc/categoria/decisao) parseou OK — só o texto é lixo.
+    # Troca o resumo pelo TEXTO CRU do evento (mov.texto) e mantém o card. NÃO pode ser
+    # None (schema resumo_ato: str — vira ValidationError->500->engine retenta 6x ~3min à
+    # toa) e NÃO devolver erro (idem). MEDIDO: esses movs degeneram em flash-lite E flash
+    # (não é flakiness; escalar não recupera). Raiz dos 31 saneados — v2b-citacoes-deploy.
     if (isinstance(card_data, dict) and not card_data.get("error")
             and _resumo_looks_like_json_meta_leak(card_data.get("resumo_ato"))):
         logger.warning(
-            "L1_RESUMO_META_LEAK mov_id=%s resumo_head=%r -> resumo_ato=None (card mantido)",
+            "L1_RESUMO_META_LEAK mov_id=%s resumo_head=%r -> texto cru (card mantido)",
             mov.mov_id, (card_data.get("resumo_ato") or "")[:80],
         )
-        card_data["resumo_ato"] = None
+        card_data["resumo_ato"] = (getattr(mov, "texto", "") or "").strip()[:500] or "(resumo indisponivel)"
 
     usage = {
         "input_tokens": response.input_tokens or 0,
