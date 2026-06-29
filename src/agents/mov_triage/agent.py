@@ -23,6 +23,7 @@ from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
+from ..mov_factsheet.agent import _resumo_looks_like_json_meta_leak
 from .prompts import build_mov_triage_prompt
 from .schemas import (
     DocAnexado,
@@ -116,6 +117,16 @@ async def classify_mov_triage(
     except (json.JSONDecodeError, Exception) as e:
         logger.error(f"mov_triage parse failed mov_id={mov.mov_id}: {repr(e)}")
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
+
+    # Leak guard (2026-06-29): mesma degeneracao do mov_factsheet — JSON valido cujo
+    # resumo_ato carrega meta-erro/ingles. Trata como erro -> failed -> _retry_failed_units.
+    if (isinstance(card_data, dict) and not card_data.get("error")
+            and _resumo_looks_like_json_meta_leak(card_data.get("resumo_ato"))):
+        logger.warning(
+            "L1_TRIAGE_RESUMO_META_LEAK mov_id=%s -> failed (retry via _retry_failed_units)",
+            mov.mov_id,
+        )
+        card_data = {"error": "resumo_ato_meta_leak", "raw": raw_response, "mov_id": mov.mov_id}
 
     usage = {
         "input_tokens": response.input_tokens or 0,
