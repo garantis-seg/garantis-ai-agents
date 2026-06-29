@@ -876,9 +876,13 @@ def _build_field_instructions() -> str:
 
 12. citacoes: para CADA decisao/evento concreto que voce NOMEIA na justificativa (transito
     em julgado, sentenca/acordao desfavoravel, decisao mantida em 2g, penhora deferida, etc.),
-    emita 1 Citacao ligando a frase ao ato real:
-    - trecho: copie LITERAL a frase exata da justificativa que nomeia o evento — sem
-      parafrasear (o front casa por substring; tem que bater caractere a caractere).
+    emita 1 Citacao ligando a EXPRESSAO do evento ao ato real:
+    - trecho: copie um TRECHO CURTO — SO a expressao do evento, ~2 a 6 palavras, NAO a frase
+      inteira. LITERAL/verbatim da justificativa, sem parafrasear (o front casa por substring e
+      EMBUTE o link NO MEIO do texto; tem que bater caractere a caractere). Escolha o trecho mais
+      curto que identifica o evento de forma inequivoca. Ex: "transitada em julgado",
+      "rejeitada pelas instancias superiores", "sentenca de primeiro grau favoravel". NUNCA copie
+      a sentenca toda nem inclua o numero CNJ no trecho (o CNJ ja e linkado separado).
     - processo_numero: o CNJ do processo que carrega aquele evento.
     NAO preencha movimento_id (o codigo preenche do peca_pivo_candidata da camada 2 daquele
     processo). NAO invente eventos: so cite o que esta ESCRITO na justificativa."""
