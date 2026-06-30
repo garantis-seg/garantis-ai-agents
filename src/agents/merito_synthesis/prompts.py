@@ -908,7 +908,8 @@ def _build_field_instructions() -> str:
     Regras:
     - A frase entre colchetes e o texto que o leitor VE — escreva natural e legivel.
       NAO precisa ser curta, NAO precisa ser verbatim de lugar nenhum (NAO ha mais
-      casamento de string — a tag JA esta no lugar certo).
+      casamento de string — a tag JA esta no lugar certo). NAO use colchetes `[ ]`
+      DENTRO da frase marcada (ex: nada de `[sic]`/`[g.n.]` no meio) — quebra a tag.
     - O alvo entre parenteses e SO o CNJ mascarado. NAO escreva mov_id/uuid ali (o
       codigo resolve o movimento). NAO ponha texto extra dentro dos parenteses.
     - Marque so eventos REAIS que voce esta citando; nao invente. Pode marcar o mesmo
