@@ -19,7 +19,7 @@ from garantis_shared.llm_chunking import map_reduce_classify
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
-from .._utils import MODEL_VARIANT_TEXT
+from .._utils import MODEL_VARIANT_TEXT, seed_for
 from .chunking import reduce_processo_synthesis_cards, split_movs_chronological
 from .prompts import build_probabilidade_exito_prompt, build_processo_synthesis_prompt
 from .schemas import (
@@ -355,10 +355,15 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
     em gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
     """
     prompt = build_processo_synthesis_prompt(request)
+    # seed determinístico (proc + prompt): re-síntese L2 reproduzível dado o input
+    # — fecha a fonte que faz o risco oscilar sob resynthesize/L1-congelado (memory
+    # volatilidade-L3-raiz-e-reextração). Gated (ENGINE_LLM_SEED_ENABLED).
+    seed = seed_for("processo_synthesis", request.processo_numero, prompt)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt, model=model, temperature=0.0,
         response_schema=ProcessoSynthesisCard,
         thinking_budget=0,
+        seed=seed,
         # max_tokens 16384(default)->65536 (2026-06-17): processos com MUITOS movs
         # (ex 680067, 393) geravam card grande demais -> JSON truncado -> 0 L2 cards.
         max_tokens=65536,
@@ -375,10 +380,13 @@ async def _call_probabilidade_exito(llm_provider, request, model, provider) -> d
     Determinismo Bug 4: temperature=0.0 (era 0.1) + thinking_budget=0.
     """
     prompt = build_probabilidade_exito_prompt(request)
+    # seed determinístico (proc + prompt da call B) — mesma reprodutibilidade da call A.
+    seed = seed_for("probabilidade_exito", request.processo_numero, prompt)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt, model=model, temperature=0.0,
         response_schema=ProbabilidadeExito,
         thinking_budget=0,
+        seed=seed,
     )
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
 

@@ -16,7 +16,7 @@ from typing import Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
-from .._utils import MODEL_VARIANT_TEXT
+from .._utils import MODEL_VARIANT_TEXT, seed_for
 from .prompts import build_prompt_and_version
 from .schemas import MeritoSynthesisCard, MeritoSynthesisCardOut, MeritoSynthesisRequest
 
@@ -149,12 +149,16 @@ async def classify_merito_synthesis(
     # (lição L2 v2.1).
     # Determinismo Bug 4 handoff: temperature=0.0 + thinking_budget=0 em
     # gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
+    # + seed determinístico (mérito + prompt): fecha o ~2% de micro-ruído residual
+    # do L3 a temp=0 → mesmo input, mesma banda N×. Gated (ENGINE_LLM_SEED_ENABLED).
+    seed = seed_for("merito_synthesis", request.merito_id, bucket, prompt)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt,
         model=model,
         temperature=0.0,
         response_schema=MeritoSynthesisCard,
         thinking_budget=0,
+        seed=seed,
         # max_tokens 16384(default)->65536 (teto Gemini 2.5), 2026-06-17: meritos
         # GIGANTES (ex Petrobras 680195, 25 processos) geravam >16k tokens de output
         # -> JSON truncado -> JSONDecodeError -> retryable_500 5x -> indeterminado.
