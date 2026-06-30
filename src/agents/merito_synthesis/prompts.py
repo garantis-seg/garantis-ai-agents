@@ -146,7 +146,24 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #   inclui o prompt, e o snapshot anterior muda a cada cascade -> prompt muda ->
 #   seed muda -> a convergencia so valia com input congelado. O schema
 #   previous_snapshot fica Optional (compat com worker antigo); so o RENDER morreu.
-PROMPT_VERSION_BASE = "merito_synthesis.v2.7.3"
+#
+# v2.8 (2026-06-30, CITACOES INLINE — feedback do socio, fim do string-match).
+#   Rebase pos-v2.7.3: mantem a remocao do bloco SNAPSHOT ANTERIOR (acima) E
+#   adiciona as tags inline; numero > v2.7.3 mas branch e anterior (por isso a
+#   data e menor). Conteudo:
+#   - O evento decisivo agora e marcado INLINE na justificativa como link markdown
+#     `[frase](CNJ)` (instrucao 12 reescrita), em vez do array `citacoes` separado
+#     casado por substring no front. Motivo: o casamento falhava ~24% da carteira
+#     (LLM parafraseava o trecho -> nao batia caractere-a-caractere -> link sumia)
+#     e era ambiguo em trecho duplicado. A tag inline esta no lugar por construcao.
+#   - O campo `citacoes` continua no schema mas e DERIVADO em codigo (materializer
+#     garantis-shared parseia as tags + resolve mov_id pelo peca_pivo) — telemetria
+#     e back-compat preservados. Schema Citacao/justificativa/citacoes atualizados.
+#   - Front (garantis-app citacao-tags.ts) parseia a tag e renderiza in-place;
+#     back-compat: snapshot V2b (sem tag) cai no string-match antigo.
+#   - Rollback: revert do PR (regen COLD na v2.7.1); materializer + front auto-detectam
+#     o formato (sem tag -> caminho antigo), entao a ordem de deploy e tolerante.
+PROMPT_VERSION_BASE = "merito_synthesis.v2.8"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -827,6 +844,7 @@ def _build_field_instructions() -> str:
    - Paragrafo 2: aspectos suportivos (apolice aceita? CDAs/AIIMs? tomador com risco?)
    - Paragrafo 3: justificativa do nivel escolhido vs nivel adjacente
    - Cite ID/CNJ dos processos relevantes.
+   - MARQUE cada decisao/evento decisivo INLINE como link (vide instrucao 12).
 
 3. narrativa_executiva: 1 frase pro time comercial. Estilo: "Mérito em fase de execucao
    com 3 CDAs ICMS estaduais (~R$ 5M), apólice aceita, sentenca de 1g desfavoravel
@@ -874,18 +892,28 @@ def _build_field_instructions() -> str:
     kind = processo_synthesis | mov_factsheet | apolice | conexo | cda | aiim | tomador | merito
     ref = processo_numero, mov_id, cda_number, cnpj_basico, etc.
 
-12. citacoes: para CADA decisao/evento concreto que voce NOMEIA na justificativa (transito
-    em julgado, sentenca/acordao desfavoravel, decisao mantida em 2g, penhora deferida, etc.),
-    emita 1 Citacao ligando a EXPRESSAO do evento ao ato real:
-    - trecho: copie um TRECHO CURTO — SO a expressao do evento, ~2 a 6 palavras, NAO a frase
-      inteira. LITERAL/verbatim da justificativa, sem parafrasear (o front casa por substring e
-      EMBUTE o link NO MEIO do texto; tem que bater caractere a caractere). Escolha o trecho mais
-      curto que identifica o evento de forma inequivoca. Ex: "transitada em julgado",
-      "rejeitada pelas instancias superiores", "sentenca de primeiro grau favoravel". NUNCA copie
-      a sentenca toda nem inclua o numero CNJ no trecho (o CNJ ja e linkado separado).
-    - processo_numero: o CNJ do processo que carrega aquele evento.
-    NAO preencha movimento_id (o codigo preenche do peca_pivo_candidata da camada 2 daquele
-    processo). NAO invente eventos: so cite o que esta ESCRITO na justificativa."""
+12. tags inline de evento (NA justificativa — NAO emita o campo `citacoes`):
+    Ao escrever a justificativa, para CADA decisao/evento decisivo que voce NOMEIA
+    (transito em julgado, sentenca/acordao desfavoravel, decisao mantida em 2g, penhora
+    deferida, etc.), envolva a frase do evento num LINK MARKDOWN inline, NO LUGAR onde
+    ela aparece no texto:
+
+        [frase do evento](CNJ)
+
+    onde CNJ e o numero MASCARADO (NNNNNNN-DD.AAAA.J.TR.OOOO) do processo que carrega
+    aquele evento. Exemplo dentro da prosa:
+        "...a Fazenda obteve o [transito em julgado da decisao desfavoravel ao
+        contribuinte](0011534-49.2010.8.19.0045), sem recurso pendente..."
+
+    Regras:
+    - A frase entre colchetes e o texto que o leitor VE — escreva natural e legivel.
+      NAO precisa ser curta, NAO precisa ser verbatim de lugar nenhum (NAO ha mais
+      casamento de string — a tag JA esta no lugar certo).
+    - O alvo entre parenteses e SO o CNJ mascarado. NAO escreva mov_id/uuid ali (o
+      codigo resolve o movimento). NAO ponha texto extra dentro dos parenteses.
+    - Marque so eventos REAIS que voce esta citando; nao invente. Pode marcar o mesmo
+      CNJ em frases diferentes (cada uma vira seu proprio link).
+    - NAO emita o campo `citacoes` no JSON — o codigo deriva das tags inline."""
 
 
 def _build_filtro_redacao() -> str:
@@ -1810,7 +1838,8 @@ def build_prompt_and_version(
 # verbaliza a prosa. Reusa os _build_*_block de FATOS do L3 (NAO os blocos de
 # DECISAO: matriz, escala, protocolo, consistency — o passe nao re-decide) +
 # _build_filtro_redacao() VERBATIM como ultima coisa (recency anchor).
-REDACAO_PROMPT_VERSION = "redacao.v1"
+# v1.1 (2026-06-30): justificativa pede tags inline `[frase](CNJ)` (V2c, igual ao L3).
+REDACAO_PROMPT_VERSION = "redacao.v1.1"
 
 _RISCO_POR_EXTENSO = {
     "Baixo": "baixo", "Medio": "medio", "Alto": "alto", "Altissimo": "altissimo",
@@ -1846,6 +1875,9 @@ def build_redacao_prompt(req: "RedacaoRequest") -> str:
         "    a decisao mais decisiva e seu sentido pro tomador; (2) aspectos suportivos\n"
         "    (apolice aceita? CDAs/AIIMs? RJ?); (3) por que o risco e\n"
         f"    {risco} e nao o nivel adjacente. Cite o CNJ dos processos relevantes.\n"
+        "    MARQUE cada decisao/evento decisivo INLINE como link markdown\n"
+        "    `[frase do evento](CNJ mascarado)`, no lugar onde a frase aparece (o front\n"
+        "    renderiza o link). O alvo e SO o CNJ; nao escreva mov_id ali.\n"
         f"  - narrativa_executiva: 1 frase resumindo o estado do caso, terminando com o\n"
         f"    nivel ('Risco {risco}.').\n"
         "  - contribuicao_no_risco: 1 frase JURIDICA ligando a perspectiva de exito das\n"
