@@ -224,83 +224,48 @@ def test_agents_pass_thinking_budget_zero():
         )
 
 
-# ── L3 classified_at us truncation (Bug 4 followup) ────────────────────────
+# ── L3 previous_snapshot fora do prompt (v2.7.3, 2026-07-02) ────────────────
+# Supersede os testes de truncation do Bug 4: o bloco SNAPSHOT ANTERIOR foi
+# REMOVIDO por inteiro (ancora + quebrava o seed deterministico entre cascades
+# — o seed_for inclui o prompt, e o snapshot anterior mudava a cada cascade).
+# A propriedade que os testes antigos perseguiam (prompt identico entre
+# cascades) agora vale TOTALMENTE: previous_snapshot nao influencia o prompt.
 
 
-def test_l3_classified_at_truncated_to_date():
-    """Bug 4 followup #2: L3 prompt ainda divergia em hora/min/seg do
-    classified_at do snapshot anterior. Cada cascade nova ve um snapshot
-    diferente (gerado pela cascade imediatamente previa), com horario
-    diferente no mesmo dia. Fix: truncar [:10] pra YYYY-MM-DD.
-
-    Acceptance: 2 cascades no MESMO DIA com horarios diferentes produzem
-    L3 prompt IDENTICO.
-    """
-    from src.agents.merito_synthesis.prompts import _summarize_previous
-    from src.agents.merito_synthesis.schemas import PreviousSnapshot
-
-    # Prod cascades 9db68047 (10:53) vs bd5697c3 (10:35) — mesmo dia,
-    # horarios diferentes (drift de 2 chars que sobrou pos-us fix).
-    prev1 = PreviousSnapshot(
-        risco_anterior="Medio",
-        classified_at_anterior="2026-05-23 10:35:26.937755",
-    )
-    prev2 = PreviousSnapshot(
-        risco_anterior="Medio",
-        classified_at_anterior="2026-05-23 10:53:26.334197",
+def test_l3_prompt_invariante_a_previous_snapshot():
+    """Acceptance do fix C (frescor/convergencia): o prompt L3 e BYTE-IDENTICO
+    com previous_snapshot presente, ausente ou variando — seed estavel entre
+    cascades reais."""
+    from src.agents.merito_synthesis.prompts import build_merito_synthesis_prompt
+    from src.agents.merito_synthesis.schemas import (
+        MeritoSynthesisRequest,
+        PreviousSnapshot,
+        ProcessoSynthesisMin,
     )
 
-    out1 = _summarize_previous(prev1)
-    out2 = _summarize_previous(prev2)
-
-    # Output IDENTICO entre os 2 (horario truncado, fica so YYYY-MM-DD)
-    assert out1 == out2, (
-        f"classified_at hora nao foi truncada:\n  out1={out1!r}\n  out2={out2!r}"
+    ps = [ProcessoSynthesisMin(
+        processo_numero="0000000-00.0000.0.00.0000", tipo_judicial="fiscal",
+    )]
+    base = MeritoSynthesisRequest(merito_id=1, processo_syntheses=ps)
+    com_prev = MeritoSynthesisRequest(
+        merito_id=1, processo_syntheses=ps,
+        previous_snapshot=PreviousSnapshot(
+            risco_anterior="Altissimo",
+            classified_at_anterior="2026-05-23 10:35:26.937755",
+            decisao_anterior={"natureza": "improcedente"},
+        ),
     )
-    # Confirma que data aparece (preserve staleness signal)
-    assert "2026-05-23" in out1
-    # Hora/min/seg NAO aparecem
-    assert "10:35" not in out1
-    assert "10:53" not in out1
-
-
-def test_l3_classified_at_different_days_diverge():
-    """Sanity: diferentes DIAS ainda divergem (preserva staleness signal).
-    Snapshot anterior de hoje vs de 30d atras NAO deve ser igual no prompt."""
-    from src.agents.merito_synthesis.prompts import _summarize_previous
-    from src.agents.merito_synthesis.schemas import PreviousSnapshot
-
-    prev_recent = PreviousSnapshot(
-        risco_anterior="Medio",
-        classified_at_anterior="2026-05-23 10:00:00.000000",
-    )
-    prev_stale = PreviousSnapshot(
-        risco_anterior="Medio",
-        classified_at_anterior="2026-04-23 10:00:00.000000",
+    com_prev2 = MeritoSynthesisRequest(
+        merito_id=1, processo_syntheses=ps,
+        previous_snapshot=PreviousSnapshot(
+            risco_anterior="Baixo",
+            classified_at_anterior="2026-07-01 08:00:00.000000",
+        ),
     )
 
-    out_recent = _summarize_previous(prev_recent)
-    out_stale = _summarize_previous(prev_stale)
-
-    assert out_recent != out_stale, "dias diferentes deveriam divergir"
-    assert "2026-05-23" in out_recent
-    assert "2026-04-23" in out_stale
-
-
-def test_l3_classified_at_none_handled():
-    """Sem classified_at -> nao chora."""
-    from src.agents.merito_synthesis.prompts import _summarize_previous
-    from src.agents.merito_synthesis.schemas import PreviousSnapshot
-
-    prev = PreviousSnapshot(risco_anterior="Medio", classified_at_anterior=None)
-    out = _summarize_previous(prev)
-    assert "classified_at" not in out
-    assert "Medio" in out
-
-
-def test_l3_no_previous_snapshot():
-    """Primeiro cascade — sem prev."""
-    from src.agents.merito_synthesis.prompts import _summarize_previous
-
-    out = _summarize_previous(None)
-    assert "PRIMEIRA CLASSIFICACAO" in out
+    p_base = build_merito_synthesis_prompt(base)
+    assert p_base == build_merito_synthesis_prompt(com_prev)
+    assert p_base == build_merito_synthesis_prompt(com_prev2)
+    # O bloco morreu de verdade (nem o header sobra)
+    assert "SNAPSHOT ANTERIOR" not in p_base
+    assert "risco_anterior" not in p_base

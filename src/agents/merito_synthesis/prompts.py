@@ -23,7 +23,8 @@ from .schemas import (
     # campo saiu do request; o summarizer morto saiu junto).
     MeritoSynthesisRequest,
     # PR7.2 (2026-05-31): ParadigmaMin removido (paradigmas Poletto curados drop).
-    PreviousSnapshot,
+    # v2.7.3 (2026-07-02): PreviousSnapshot removido do import (render do bloco
+    # SNAPSHOT ANTERIOR deletado; o campo segue Optional no request schema).
     ProcessoSynthesisMin,
     TomadorCardMin,
 )
@@ -137,7 +138,15 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #     borda L2->L3). PROMPT + response_schema do LLM (DecisaoAtual LEAN) INTOCADOS.
 #   - Bump = provenance do schema novo; o lift real exige re-cascade COLD. Memory:
 #     extracao-sinais-merito-level-2026-06-29.
-PROMPT_VERSION_BASE = "merito_synthesis.v2.7.2"
+#
+# v2.7.3 (2026-07-02, frescor/convergencia): bloco SNAPSHOT ANTERIOR REMOVIDO do
+#   prompt. Duplo dano do bloco: (a) ancora o LLM no risco anterior (o proprio
+#   header dizia "engine v6 nao usa hoje pra trajetoria; informativo" — input pago
+#   sem consumidor); (b) QUEBRAVA o seed deterministico entre cascades — o seed_for
+#   inclui o prompt, e o snapshot anterior muda a cada cascade -> prompt muda ->
+#   seed muda -> a convergencia so valia com input congelado. O schema
+#   previous_snapshot fica Optional (compat com worker antigo); so o RENDER morreu.
+PROMPT_VERSION_BASE = "merito_synthesis.v2.7.3"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -288,24 +297,8 @@ def _summarize_tomador(tom: TomadorCardMin) -> str:
 # via regras J/J.1/J.2). Nenhum call site em nenhum repo (grep 2026-06-12).
 
 
-def _summarize_previous(prev: PreviousSnapshot | None) -> str:
-    if not prev or not prev.risco_anterior:
-        return "PRIMEIRA CLASSIFICACAO (sem snapshot anterior)"
-    parts = [f"  risco_anterior: {prev.risco_anterior}"]
-    if prev.classified_at_anterior:
-        # Bug 4 followup: truncate pra YYYY-MM-DD (data so, sem horario).
-        # Cada cascade nova ve um snapshot anterior gerado pela cascade
-        # imediatamente previa — hora/min/seg variam entre runs no mesmo dia
-        # e poluem L3 prompt_hash sem agregar sinal util ao LLM (granularidade
-        # de "dia" basta p/ avaliar staleness do snapshot prev vs hoje).
-        cls_at = str(prev.classified_at_anterior)[:10]
-        parts.append(f"classified_at: {cls_at}")
-    if prev.decisao_anterior:
-        # v2.5: sem [:200] — truncar json.dumps no meio gerava JSON quebrado
-        # no prompt (e era cap de dado). classified_at segue [:10] (data-only,
-        # Bug 4: estabilidade do prompt_hash entre cascades do mesmo dia).
-        parts.append(f"decisao_anterior: {json.dumps(prev.decisao_anterior, ensure_ascii=False)}")
-    return "\n".join(parts)
+# v2.7.3 (2026-07-02): _summarize_previous DELETADO junto com o bloco SNAPSHOT
+# ANTERIOR (ancora + quebrava o seed entre cascades; ver changelog no topo).
 
 
 # ─── Routing (axis: tipo_judicial dominante) ───────────────────────────────
@@ -471,9 +464,7 @@ def _build_tomador_block_section(req: MeritoSynthesisRequest) -> str:
 # qualquer repo, grep 2026-06-12).
 
 
-def _build_snapshot_anterior_block(req: MeritoSynthesisRequest) -> str:
-    prev_block = _summarize_previous(req.previous_snapshot)
-    return f"=== SNAPSHOT ANTERIOR (referencia historica — engine v6 nao usa hoje pra trajetoria; informativo) ===\n{prev_block}"
+# v2.7.3 (2026-07-02): _build_snapshot_anterior_block DELETADO (ver changelog).
 
 
 # PR7.2 (2026-05-31): _format_paradigma + _build_paradigmas_block REMOVIDOS.
@@ -1791,7 +1782,8 @@ def build_prompt_and_version(
         # PR7.2 (2026-05-31): _build_paradigmas_block REMOVIDO. Curadoria
         # interna ref.tese_decisao_individual dropada. Architecture D promote
         # (mode=new) + LLM prompt rescrito assume papel jurisprudencial.
-        _build_snapshot_anterior_block(req),
+        # v2.7.3 (2026-07-02): _build_snapshot_anterior_block REMOVIDO (ancora
+        # + quebrava o seed deterministico entre cascades; ver changelog).
         _build_protocolo_postura_default(),
         _build_bloqueio_prob_exito(),
         _build_templates_poletto(),
@@ -1886,7 +1878,8 @@ def build_merito_synthesis_prompt(
     bucket: str | None = None,
 ) -> str:
     """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda/aiim
-    + previous_snapshot pra computar risco do MERITO (juris vive no L2 desde v2.2).
+    pra computar risco do MERITO (juris vive no L2 desde v2.2; previous_snapshot
+    NAO e mais renderizado desde v2.7.3 — anti-ancora + seed estavel).
 
     Dispatch determ.:
     - >=80% fiscal -> vocab EF, Anulatoria, Tema 372/1226/DIFAL
