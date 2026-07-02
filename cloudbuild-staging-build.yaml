@@ -1,15 +1,31 @@
-# Staging-only: build the ai-agents image with Kaniko (same builder as prod, which
-# handles the .dockerignore *.md vs COPY README.md correctly) and push to a staging
-# tag. NO deploy step — the -staging service is updated separately. Not used by any
-# trigger; manual `gcloud builds submit --config=cloudbuild-staging-build.yaml .`.
+# Staging-ISOLADO (garantis-ai-agents-staging): build Kaniko + deploy com FLAGS PERSISTIDAS.
+# O deploy usa `run services update` com --update-env-vars (ADITIVO): preserva
+# DB_HOST do clone (muda a cada refresh-staging-from-prod) e secrets, e
+# RE-ASSERTA as flags que antes evaporavam (aplicadas so a mao via
+# --update-env-vars). Fonte das flags: memoria prod-congelado-demo-staging-env
+# + convergencia seed/monotonic/MAX-K + frescor 2026-07-02.
+# Uso: cd . && gcloud builds submit --config=cloudbuild-staging-build.yaml .
 steps:
   - name: 'gcr.io/kaniko-project/executor:latest'
     args:
       - '--dockerfile=Dockerfile'
       - '--context=.'
-      - '--destination=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api:staging-frescor'
+      - '--destination=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api:staging-latest'
       - '--cache=true'
       - '--cache-ttl=168h'
       - '--cache-repo=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api-cache'
+    timeout: '900s'
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'services'
+      - 'update'
+      - 'garantis-ai-agents-staging'
+      - '--image=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api:staging-latest'
+      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true'
+      - '--region=southamerica-east1'
+      - '--project=neqsti'
+timeout: '1500s'
 options:
   logging: CLOUD_LOGGING_ONLY
