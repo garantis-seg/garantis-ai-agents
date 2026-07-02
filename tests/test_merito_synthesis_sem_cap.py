@@ -2,23 +2,19 @@
 stale juris (intro nao promete mais payload que nao chega desde v2.2)."""
 from __future__ import annotations
 
-import json
-
 from src.agents.merito_synthesis.prompts import (
     PROMPT_VERSION_BASE,
-    _summarize_previous,
     _summarize_processo_synthesis,
     build_merito_synthesis_prompt,
 )
 from src.agents.merito_synthesis.schemas import (
     MeritoSynthesisRequest,
-    PreviousSnapshot,
     ProcessoSynthesisMin,
 )
 
 
 def test_version_bumped():
-    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.7.1"
+    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.7.3"
 
 
 def test_lifecycle_completo_sem_cap_de_5():
@@ -53,16 +49,9 @@ def test_criterios_completos_e_justificativa_sem_truncagem():
     assert "c" * 200 in block                               # antes [:160]
 
 
-def test_decisao_anterior_json_integro():
-    prev = PreviousSnapshot(
-        risco_anterior="Medio",
-        classified_at_anterior="2026-06-01T10:00:00",
-        decisao_anterior={"natureza": "improcedente", "motivo": "m" * 300},
-    )
-    block = _summarize_previous(prev)
-    payload = block.split("decisao_anterior: ", 1)[1]
-    json.loads(payload)  # antes [:200] quebrava o JSON no meio
-    assert "classified_at: 2026-06-01" in block  # [:10] data-only PRESERVADO
+# v2.7.3 (2026-07-02): test_decisao_anterior_json_integro DELETADO — o bloco
+# SNAPSHOT ANTERIOR saiu do prompt (anti-ancora + seed estavel); a invariancia
+# do prompt a previous_snapshot e testada em test_gemini_determinism.py.
 
 
 def test_intro_nao_promete_jurisprudencia():
