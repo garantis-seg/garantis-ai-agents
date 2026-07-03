@@ -121,27 +121,24 @@ class PecaPivoMerito(BaseModel):
 
 
 class Citacao(BaseModel):
-    """Liga um trecho da justificativa ao movimento DECISIVO que o sustenta — a
-    movimentacao (com mov_id) que pesou na decisao de risco. Torna o fator de
-    decisao explicito/auditavel e clicavel no front (salta pro movimento exato).
+    """Liga um trecho da justificativa ao movimento DECISIVO que o sustenta.
 
-    O LLM emite trecho + processo_numero (que ele sabe fazer bem); o movimento_id
-    e preenchido DETERMINISTICAMENTE pos-LLM (peca_pivo_candidata da camada 2 do
-    processo) pra evitar transcricao de UUID pelo modelo. Ver materializer.
+    V2c (2026-06-30): NAO e mais emitida pelo LLM. O LLM marca o evento INLINE na
+    propria justificativa como link markdown `[trecho](<CNJ>)`; o materializer
+    (garantis-shared) parseia as tags, resolve movimento_id pelo peca_pivo do L2 e
+    DERIVA este array a partir do que esta REALMENTE marcado na prosa. Fica como
+    contrato do shape persistido (telemetria + back-compat front V2b). Ver prompt
+    item 12 + materializer._apply_citacoes_override.
     """
 
     trecho: Optional[str] = Field(
         default=None,
-        description=(
-            "Trecho EXATO copiado da justificativa que nomeia o evento/decisao "
-            "(ex: 'transito em julgado de decisao contraria a tese da empresa'). "
-            "Copie literalmente — o front casa por substring."
-        ),
+        description="Frase do evento marcada inline na justificativa (derivada em codigo).",
     )
     processo_numero: Optional[str] = None
     movimento_id: Optional[str] = Field(
         default=None,
-        description="mov_id do movimento decisivo daquele processo. Preenchido pelo codigo se ausente.",
+        description="mov_id do movimento decisivo daquele processo. Preenchido pelo codigo.",
     )
 
     @field_validator("movimento_id", mode="before")
@@ -287,19 +284,18 @@ class MeritoSynthesisCard(BaseModel):
             "2-4 paragrafos PT-BR (texto pro ADVOGADO) citando evidencias. "
             "Paragrafo 1: estado factual. Paragrafo 2: aspectos suportivos. "
             "Paragrafo 3: justificativa do nivel vs nivel adjacente. Cite CNJs. "
-            "NUNCA inclua jargao interno (score/decimal, snake_case, T-B1, "
-            "Daycoval/Poletto/Architecture D, 'matriz determ/sem nuance', 'piso "
-            "minimo', 'merito'+numero, mov_id). Ver <filtro_redacao_advogado>."
+            "MARQUE cada decisao/evento decisivo INLINE como link markdown "
+            "`[frase do evento](<CNJ mascarado>)` (vide instrucao 12) — o front "
+            "renderiza o link no lugar. NUNCA inclua jargao interno (score/decimal, "
+            "snake_case, T-B1, Daycoval/Poletto/Architecture D, 'matriz determ/sem "
+            "nuance', 'piso minimo', 'merito'+numero, mov_id). Ver <filtro_redacao_advogado>."
         ),
     )
     citacoes: list[Citacao] = Field(
         default_factory=list,
         description=(
-            "Movimentos DECISIVOS por tras da justificativa: para cada decisao/"
-            "evento concreto citado no texto (transito, sentenca adversa, acordao "
-            "mantido, etc.), emita 1 Citacao com o TRECHO exato copiado da "
-            "justificativa + o processo_numero. Liga a prosa ao ato real "
-            "(auditavel + clicavel). NAO inventar; so eventos que estao na prosa."
+            "NAO emita este campo. E DERIVADO em codigo das tags inline da "
+            "justificativa (vide instrucao 12). Marque os eventos na PROSA, nao aqui."
         ),
     )
     narrativa_executiva: Optional[str] = Field(
@@ -601,7 +597,8 @@ class RedacaoCard(BaseModel):
         description=(
             "2-4 paragrafos PT-BR pro ADVOGADO. Paragrafo 1: estado factual. "
             "Paragrafo 2: aspectos suportivos. Paragrafo 3: por que este nivel e "
-            "nao o adjacente. Cite CNJ. SEM jargao interno (ver filtro)."
+            "nao o adjacente. Cite CNJ. Marque eventos decisivos INLINE como "
+            "`[frase](CNJ)` (o codigo resolve o movimento). SEM jargao interno (ver filtro)."
         ),
     )
     narrativa_executiva: Optional[str] = Field(
