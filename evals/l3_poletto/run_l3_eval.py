@@ -84,11 +84,15 @@ async def _classify_one(payload: dict, runs: int, no_override: bool = False) -> 
     Testa o desenho "LLM decide com as regras injetadas" (a Matriz de Risco no prompt).
     """
     from src.agents.merito_synthesis import classify_merito_synthesis  # local agent
-    from garantis_shared.engine_v6.matrices import build_risk_decomposition
+    from garantis_shared.engine_v6.matrices import resolve_banda_matriz
 
     ps_cards = payload["processo_syntheses"]
-    decomp = build_risk_decomposition(mode="new", ps_cards=ps_cards)
-    derived = decomp["derived_aggregate"]
+    # R1/C (2026-07-05): build_risk_decomposition/derive_aggregated_risk (matriz-5x5) foram
+    # DELETADOS na grande poda; o decisor agora e resolve_banda_matriz (leitura de 3 eixos).
+    # FIEL a producao: ambiguous (needs_review/acumulacao) => o LLM decide => Indeterminado
+    # (nao promovido). O split factual/jurisprudencial da matriz-5x5 nao existe mais -> None.
+    agg = resolve_banda_matriz(ps_cards, tipo_principal=payload.get("tipo_principal"))
+    derived = "Indeterminado" if agg.get("ambiguous") else agg["banda"]
     finals, llms = [], []
     for _ in range(runs):
         res = await classify_merito_synthesis(payload)
@@ -105,8 +109,8 @@ async def _classify_one(payload: dict, runs: int, no_override: bool = False) -> 
         "final": final_majority[0][0] if final_majority else None,
         "llm": llm_majority[0][0] if llm_majority else None,
         "derived": derived,
-        "factual_agg": decomp["risco_factual_aggregated"],
-        "juris_agg": decomp["risco_jurisprudencial_aggregated"],
+        "factual_agg": None,   # split factual/juris da matriz-5x5 deletado no R1/C (poda)
+        "juris_agg": None,
         "promoted": derived in _LEVELS,
         "runs_final": finals,
     }
