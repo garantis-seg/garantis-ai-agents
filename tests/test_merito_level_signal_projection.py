@@ -95,3 +95,30 @@ def test_l3_error_card_is_noop():
     card = {"error": "boom"}
     _project_merito_decisao_facts(card, [])
     assert card == {"error": "boom"}
+
+
+# ── regressao 2026-07-06: echo do instrumento BR nao pode matar a validacao L3 ──
+
+def test_l3_echo_instrumento_parcelamento_valida():
+    """A ponte BR (reducer P1.5 gated) injeta instrumento_cautelar=
+    'suspensao_por_parcelamento' no dv do card L2; o echo copiado pro decisao_atual
+    tem de VALIDAR no DecisaoAtualRich (staging 2026-07-06: 680016/680021/680039/
+    680057 caiam com retryable_500 em todas as runs do eval)."""
+    from src.agents.merito_synthesis.schemas import DecisaoAtualRich
+
+    card = {"decisao_atual": {"processo_de_origem": "0001234-56.2020.8.26.0001"}}
+    ps = [{
+        "processo_numero": "00012345620208260001",
+        "decisao_vigente": {
+            "instrumento_cautelar": "suspensao_por_parcelamento",
+            "suspensao_processual": "parcelamento_transacao",
+            "suspensao_vigente": True,
+            "suspensao_data": "2026-05-01",
+        },
+    }]
+    _project_merito_decisao_facts(card, ps)
+    da = card["decisao_atual"]
+    assert da["instrumento_cautelar"] == "suspensao_por_parcelamento"
+    # a validacao que estourava 500:
+    rich = DecisaoAtualRich(**da)
+    assert rich.instrumento_cautelar == "suspensao_por_parcelamento"

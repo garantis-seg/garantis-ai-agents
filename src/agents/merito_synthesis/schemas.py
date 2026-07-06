@@ -60,8 +60,16 @@ class DecisaoAtualRich(DecisaoAtual):
     motivo_extincao: Optional[Literal[
         "terminativa", "consensual", "satisfacao", "nenhum",
     ]] = Field(default=None, description="ECHO do decisao_vigente do processo de origem (so != null se extinto).")
+    # 'suspensao_por_parcelamento' NAO vem do LLM: e o valor que a ponte BR do reducer
+    # (garantis-shared P1.5, braco DEMOVE gated) INJETA no decisao_vigente do card L2
+    # (parcelamento vigente sem instrumento -> materializa pro F-M2). O echo em codigo
+    # (_project_merito_decisao_facts) copia pro decisao_atual; sem o valor no Literal a
+    # VALIDACAO do MeritoSynthesisCardOut estoura 500 e o merito inteiro cai (staging
+    # 2026-07-06: 680016/680021/680039/680057 sem banda em TODAS as runs do eval —
+    # exatamente a familia parcelamento, com L2_EXTRACTION_DEMOTE_ENABLED=true).
     instrumento_cautelar: Optional[Literal[
-        "suspensao_seguranca", "suspensao_exigibilidade_ctn", "nenhum",
+        "suspensao_seguranca", "suspensao_exigibilidade_ctn",
+        "suspensao_por_parcelamento", "nenhum",
     ]] = Field(default=None, description="ECHO do decisao_vigente do processo de origem.")
     efeito_suspensivo: Optional[bool] = Field(
         default=None, description="ECHO do decisao_vigente do processo de origem.",
