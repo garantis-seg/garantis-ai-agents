@@ -7,47 +7,6 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-class OCRCorrectionRequest(BaseModel):
-    """Request for OCR text correction."""
-
-    text: str = Field(description="Text to correct")
-    preserve_structure: bool = Field(
-        default=True, description="Preserve markdown/formatting structure"
-    )
-    language: str = Field(default="pt-BR", description="Text language")
-
-
-class OCRCorrectionResult(BaseModel):
-    """Result of OCR correction."""
-
-    original_length: int = Field(description="Original text length")
-    corrected_length: int = Field(description="Corrected text length")
-    corrected_text: str = Field(description="Corrected text")
-    changes_made: bool = Field(description="Whether any changes were made")
-    success: bool = Field(default=True)
-    error: Optional[str] = Field(default=None)
-
-
-class TextFormattingRequest(BaseModel):
-    """Request for text formatting."""
-
-    text: str = Field(description="Text to format")
-    target_format: str = Field(
-        default="markdown",
-        description="Target format: 'markdown', 'plain', 'structured'"
-    )
-    preserve_line_breaks: bool = Field(default=True)
-
-
-class TextFormattingResult(BaseModel):
-    """Result of text formatting."""
-
-    formatted_text: str = Field(description="Formatted text")
-    format_applied: str = Field(description="Format that was applied")
-    success: bool = Field(default=True)
-    error: Optional[str] = Field(default=None)
-
-
 class KeyInfoExtractionRequest(BaseModel):
     """Request for key information extraction."""
 

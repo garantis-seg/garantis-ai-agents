@@ -1,31 +1,19 @@
 """
 Text Processor Agent - AI-powered text processing and correction.
 
-Provides OCR correction, text formatting, and other text processing tasks.
+Provides key information extraction and other text processing tasks.
 """
 
 from .agent import (
-    correct_ocr_text,
-    format_text,
     extract_key_info,
 )
 from .schemas import (
-    OCRCorrectionRequest,
-    OCRCorrectionResult,
-    TextFormattingRequest,
-    TextFormattingResult,
     KeyInfoExtractionRequest,
     KeyInfoExtractionResult,
 )
 
 __all__ = [
-    "correct_ocr_text",
-    "format_text",
     "extract_key_info",
-    "OCRCorrectionRequest",
-    "OCRCorrectionResult",
-    "TextFormattingRequest",
-    "TextFormattingResult",
     "KeyInfoExtractionRequest",
     "KeyInfoExtractionResult",
 ]
