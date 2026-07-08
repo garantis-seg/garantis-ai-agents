@@ -47,9 +47,13 @@ pypdf>=4.0.0
 # When bumping garantis-shared: publish it, then bump this pin (and fe-api's).
 # 1.203.0 (2026-06-22) — chunking shared framework: ai-agents passa a importar
 # garantis_shared.llm_chunking (map_reduce_classify) no L1 (mov_factsheet) e L2
-# (processo_synthesis). VERIFICAR o número real publicado no AR antes do push de
-# ai-agents (PRs paralelos em shared podem subir a versão acima de 1.203.0).
-garantis-shared==1.203.0
+# (processo_synthesis).
+# 2026-07-08 (E15 limpeza-2): bump 1.203.0 -> 1.284.0 (estava 81 versões atrás do
+# fe-api/AR — gap de processo, não decisão). Mantém == (o >= quebra o cache Kaniko,
+# ver acima). ⚠️ ENGINE-PATH: o próximo deploy DELIBERADO do ai-agents puxa 81
+# versões de shared (metodologia de risco recente, majoritariamente GATED) — smoke
+# de freeze (245 grades hash) OBRIGATÓRIO no deploy; se mudar grade, segurar.
+garantis-shared==1.284.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
