@@ -19,9 +19,11 @@ python-dotenv>=1.0.0
 PyMuPDF>=1.24.0
 pypdf>=4.0.0
 
-# Optional LLM providers (uncomment as needed)
-openai>=1.0.0
-groq>=0.4.0
+# Optional LLM providers (uncomment as needed — extras [openai]/[groq]/[all] no pyproject
+# instalam sob demanda; comentados aqui pra não baixar 2 SDKs LLM pesados que o factory
+# nunca importa — só GeminiProvider é registrado). E14 limpeza-geral-2.
+# openai>=1.0.0
+# groq>=0.4.0
 
 # Shared utilities (from Artifact Registry — URL set via PIP_EXTRA_INDEX_URL env)
 # Bumped 2026-05-31 (Architecture D PR2) — agents/processo_synthesis/prompts.py
