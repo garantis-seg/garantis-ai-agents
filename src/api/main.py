@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from garantis_shared.logging_setup import setup_logging
 
 from .middleware import GeminiCallTimeoutMiddleware
-from .routes import apolice_lifecycle, court_state_classifier, health, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, summarization, text, timing
+from .routes import apolice_lifecycle, court_state_classifier, health, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, summarization, text
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -60,7 +60,6 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(prompts.router)
 app.include_router(providers.router)
-app.include_router(timing.router)
 app.include_router(summarization.router)
 app.include_router(text.router)
 app.include_router(pdf.router)
@@ -80,7 +79,6 @@ async def root():
         "version": "0.5.0",
         "docs": "/docs",
         "endpoints": {
-            "timing": "/timing",
             "summarization": "/summarization",
             "text": "/text",
             "pdf": "/pdf",

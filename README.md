@@ -6,10 +6,9 @@ Repositório centralizado de AI Agents com suporte a múltiplos LLM providers.
 
 | Agente | Descrição | Endpoint |
 |--------|-----------|----------|
-| **Timing Analysis** | Análise de timing para processos judiciais | `/timing/analyze` |
-| **Edital Categorizer** | Categorização L1/L2/L3 de editais | `/categorization/full` |
-| **Domain Validator** | Validação de domínios de escritórios | `/validation/domain` |
-| **Text Processor** | Correção OCR, formatação, extração | `/text/*` |
+| **Text Processor** | Extração de info-chave | `/text/extract` |
+
+> Nota: os agentes vivos do engine v6 (L1/L2/L3: mov_factsheet, processo_synthesis, merito_synthesis, apolice_lifecycle, court_state_classifier, mov_summarizer, pdf/ocr) são montados via `src/api/main.py` — esta tabela cobre só utilitários. Timing Analysis foi REMOVIDO (pré-engine-v6, 2026-07-08).
 
 ## Providers Suportados
 
@@ -49,10 +48,8 @@ uvicorn src.api.main:app --reload
 ## API Endpoints
 
 - `GET /health` - Health check
-- `POST /timing/analyze` - Timing analysis
-- `POST /categorization/full` - Full categorization
-- `POST /validation/domain` - Domain validation
-- `POST /text/correct-ocr` - OCR correction
+- `POST /text/extract` - Extração de info-chave
+- `GET /prompts/engine-v6/raw-templates` - Templates de prompt do engine v6
 - `GET /providers` - List providers
 
 ## Variáveis de Ambiente

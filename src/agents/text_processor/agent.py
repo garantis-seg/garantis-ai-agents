@@ -1,7 +1,7 @@
 """
 Text Processor Agent implementation.
 
-AI-powered text processing including OCR correction, formatting, and extraction.
+AI-powered text processing including key information extraction.
 """
 
 import logging
@@ -9,156 +9,16 @@ import os
 from typing import List, Optional
 
 from ...providers import LLMFactory
-from .prompts import (
-    build_ocr_correction_prompt,
-    build_formatting_prompt,
-    build_extraction_prompt,
-)
+from .prompts import build_extraction_prompt
 from .schemas import (
     KeyInfoExtractionResult,
     LLMExtractionResponse,
-    OCRCorrectionResult,
-    TextFormattingResult,
 )
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash-lite")
-
-# Gemini token limit (~800K tokens, ~3.2M characters)
-MAX_CHUNK_SIZE = 700_000  # characters per chunk
-
-
-async def correct_ocr_text(
-    text: str,
-    preserve_structure: bool = True,
-    language: str = "português brasileiro",
-    provider: str = DEFAULT_PROVIDER,
-    model: Optional[str] = None,
-) -> OCRCorrectionResult:
-    """
-    Correct OCR errors in text.
-
-    Args:
-        text: Text to correct
-        preserve_structure: Whether to preserve markdown/formatting
-        language: Text language
-        provider: LLM provider to use
-        model: Model to use
-
-    Returns:
-        OCRCorrectionResult with corrected text
-    """
-    if not text.strip():
-        return OCRCorrectionResult(
-            original_length=0,
-            corrected_length=0,
-            corrected_text="",
-            changes_made=False,
-        )
-
-    try:
-        llm = LLMFactory.create_provider(provider)
-
-        # Handle large documents by chunking
-        if len(text) <= MAX_CHUNK_SIZE:
-            corrected = await _correct_chunk(text, language, llm, model)
-        else:
-            # Process in chunks
-            chunks = []
-            for i in range(0, len(text), MAX_CHUNK_SIZE):
-                chunk = text[i:i + MAX_CHUNK_SIZE]
-                corrected_chunk = await _correct_chunk(chunk, language, llm, model)
-                chunks.append(corrected_chunk)
-            corrected = "".join(chunks)
-
-        return OCRCorrectionResult(
-            original_length=len(text),
-            corrected_length=len(corrected),
-            corrected_text=corrected,
-            changes_made=corrected != text,
-            success=True,
-        )
-
-    except Exception as e:
-        logger.error(f"OCR correction failed: {e}")
-        return OCRCorrectionResult(
-            original_length=len(text),
-            corrected_length=len(text),
-            corrected_text=text,  # Return original on error
-            changes_made=False,
-            success=False,
-            error=str(e),
-        )
-
-
-async def _correct_chunk(
-    text: str,
-    language: str,
-    llm,
-    model: Optional[str],
-) -> str:
-    """Correct a single chunk of text."""
-    prompt = build_ocr_correction_prompt(text, language)
-
-    response = await llm.generate_async(
-        prompt=prompt,
-        model=model,
-    )
-
-    return response.text.strip()
-
-
-async def format_text(
-    text: str,
-    target_format: str = "markdown",
-    preserve_line_breaks: bool = True,
-    provider: str = DEFAULT_PROVIDER,
-    model: Optional[str] = None,
-) -> TextFormattingResult:
-    """
-    Format text to a specific format.
-
-    Args:
-        text: Text to format
-        target_format: Target format ('markdown', 'plain', 'structured')
-        preserve_line_breaks: Whether to preserve original line breaks
-        provider: LLM provider
-        model: Model to use
-
-    Returns:
-        TextFormattingResult with formatted text
-    """
-    if not text.strip():
-        return TextFormattingResult(
-            formatted_text="",
-            format_applied=target_format,
-        )
-
-    try:
-        llm = LLMFactory.create_provider(provider)
-        prompt = build_formatting_prompt(text, target_format)
-
-        response = await llm.generate_async(
-            prompt=prompt,
-            model=model,
-        )
-
-        return TextFormattingResult(
-            formatted_text=response.text.strip(),
-            format_applied=target_format,
-            success=True,
-        )
-
-    except Exception as e:
-        logger.error(f"Text formatting failed: {e}")
-        return TextFormattingResult(
-            formatted_text=text,
-            format_applied="none",
-            success=False,
-            error=str(e),
-        )
 
 
 async def extract_key_info(
@@ -235,5 +95,3 @@ async def extract_key_info(
             success=False,
             error=str(e),
         )
-
-
