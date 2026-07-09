@@ -45,11 +45,14 @@ gigantes. O reduce faz o raciocínio cross-janela; o LLM só sintetiza cada jane
 """
 from __future__ import annotations
 
+import logging
 import os
 from typing import Optional
 
 from .prompts import _filtered_cards, _summarize_factsheet
 from .schemas import ProcessoSynthesisRequest
+
+logger = logging.getLogger(__name__)
 
 # DOIS thresholds distintos (fix 2026-06-22 — antes era 1 só, e baixo demais):
 #
@@ -237,4 +240,34 @@ def reduce_processo_synthesis_cards(cards: list[dict]) -> dict:
     out["movs_processed"] = sum(int(c.get("movs_processed") or 0) for c in cards)
     out["confianca"] = min((c.get("confianca") or 0.7 for c in cards), default=0.7)
     out["evidence_artifacts"] = _merge_evidence(cards)
+
+    # ── DEFER em conflito de DIREÇÃO entre janelas (2026-07-09) ─────────────────
+    # "Qual decisão governa o processo" é julgamento GLOBAL; o reduce, vendo só resumos
+    # por-janela, NÃO o reproduz — nenhuma dec_score mecânica reproduz o holístico (split mais
+    # fino só piora, medido). Quando janelas de MÉRITO discordam de DIREÇÃO (favoravel E
+    # desfavoravel coexistem), o anchor pode cravar a janela errada = favoravel mascarando um
+    # improcedente 2g de outra = under-rate surety-fatal. Então NÃO cravamos: marca needs_review
+    # -> reduce_decisao_vigente OR-preserva -> resolve_banda_matriz lê -> ambiguous -> o L3
+    # (guard monotônico + LLM) decide a banda. Espelha o L2_CHUNK_PARTIAL (visível, não silencioso)
+    # + clampa confianca pra auditoria/coverage-gate. `parcial`/`neutro` ficam FORA dos dois
+    # conjuntos (conflito = coexistência favoravel×desfavoravel). Monotônico: needs_review só
+    # mantém/SOBE a banda (guard é piso), nunca rebaixa -> impossível introduzir under-rate.
+    # Byte-idêntico quando janelas concordam (conflict=False -> nenhum campo novo). NÃO usar
+    # MAX_risk entre janelas (super-flaga de-escalação real; ver docstring do módulo). Dormente
+    # hoje (nada chunka); insurance p/ quando algum processo passar do teto de chunk.
+    merit_dirs = {
+        (c.get("decisao_vigente") or {}).get("sentido")
+        for c in cards
+        if (c.get("decisao_vigente") or {}).get("natureza") in _MERITO_NAT
+    }
+    if "desfavoravel" in merit_dirs and "favoravel" in merit_dirs:
+        decisao["needs_review"] = True   # resolve_banda_matriz: needs_review -> ambiguous -> LLM
+        out["confianca"] = min(out.get("confianca") or 0.7, 0.5)
+        logger.warning(
+            "L2_REDUCE_SENTIDO_CONFLICT pn=%s dirs=%s anchor_sentido=%s — janelas de mérito "
+            "discordam de direção; deferido pro L3 (needs_review) + confianca clampada",
+            cards[0].get("processo_numero"),
+            sorted(d for d in merit_dirs if d),
+            decisao.get("sentido"),
+        )
     return out

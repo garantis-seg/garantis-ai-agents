@@ -7,8 +7,10 @@ from src.agents.processo_synthesis.chunking import (
     split_movs_chronological,
 )
 from src.agents.processo_synthesis.schemas import (
+    DecisaoVigenteRich,
     MovFactSheetMin,
     ProcessoSynthesisCard,
+    ProcessoSynthesisCardRich,
     ProcessoSynthesisRequest,
 )
 
@@ -219,3 +221,57 @@ def test_reduce_card_valida_no_schema():
     card = ProcessoSynthesisCard(**out)
     assert card.processo_numero == "123"
     assert card.risco_factual == "Alto"   # do anchor (c0, com a decisão)
+
+
+# ── DEFER em conflito de direção entre janelas (2026-07-09) ─────────────────
+
+def test_reduce_sentido_conflict_defers():
+    # Janelas de MÉRITO discordam de DIREÇÃO (improcedente/desfavoravel × procedente/favoravel)
+    # + uma procedural -> o reduce NÃO crava a direção: needs_review + confianca clampada.
+    out = reduce_processo_synthesis_cards([
+        _card(decisao_vigente={"natureza": "improcedente", "sentido": "desfavoravel",
+                               "instancia": "2g", "data": "2023-01-01"}),
+        _card(decisao_vigente={"natureza": "procedente", "sentido": "favoravel",
+                               "instancia": "1g", "data": "2022-01-01"}),
+        _card(decisao_vigente={"natureza": "interlocutoria", "sentido": None, "data": "2024-01-01"}),
+    ])
+    assert out["decisao_vigente"]["needs_review"] is True
+    assert out["confianca"] <= 0.5
+
+
+def test_reduce_same_direction_nao_defere():
+    # Janelas concordam de direção (ambas favoravel) + procedural -> SEM conflito: needs_review
+    # ausente e confianca intacta (byte-idêntico ao comportamento atual = min dos inputs).
+    out = reduce_processo_synthesis_cards([
+        _card(decisao_vigente={"natureza": "procedente", "sentido": "favoravel",
+                               "instancia": "1g", "data": "2022-01-01"}, confianca=0.8),
+        _card(decisao_vigente={"natureza": "homologatoria", "sentido": "favoravel",
+                               "instancia": "1g", "data": "2023-01-01"}, confianca=0.8),
+        _card(decisao_vigente={"natureza": "interlocutoria", "sentido": None}, confianca=0.8),
+    ])
+    assert "needs_review" not in out["decisao_vigente"]
+    assert out["confianca"] == 0.8
+
+
+def test_reduce_parcial_neutro_nao_forcam_conflito():
+    # parcial/neutro ficam FORA dos dois conjuntos: com um favoravel não há conflito de direção.
+    out = reduce_processo_synthesis_cards([
+        _card(decisao_vigente={"natureza": "parcialmente_procedente", "sentido": "parcial",
+                               "instancia": "1g", "data": "2022-01-01"}),
+        _card(decisao_vigente={"natureza": "procedente", "sentido": "favoravel",
+                               "instancia": "1g", "data": "2023-01-01"}),
+    ])
+    assert "needs_review" not in out["decisao_vigente"]
+
+
+def test_decisao_vigente_rich_preserva_needs_review():
+    # Regressão do bug de PROPAGAÇÃO: DecisaoVigenteRich/ProcessoSynthesisCardRich usavam
+    # extra='ignore' e dropavam needs_review em agent.py::_project_decisao_facts + na rota HTTP.
+    # Com o field em DecisaoVigenteRich (base DecisaoVigente = response_schema do LLM intacto),
+    # sobrevive o MESMO canal Rich dos campos echo até a borda.
+    dv = DecisaoVigenteRich(natureza="improcedente", sentido="desfavoravel",
+                            needs_review=True).model_dump()
+    assert dv["needs_review"] is True
+    card = ProcessoSynthesisCardRich(processo_numero="1", tipo_judicial="fiscal",
+                                     decisao_vigente=dv).model_dump()
+    assert card["decisao_vigente"]["needs_review"] is True

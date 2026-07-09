@@ -118,6 +118,17 @@ class DecisaoVigenteRich(DecisaoVigente):
         default=None, description="YYYY-MM-DD da mov de suspensao governante.",
     )
 
+    # DEFER do reduce de chunk (2026-07-09): quando janelas cronológicas de MÉRITO discordam de
+    # DIREÇÃO, o reduce (chunking.py) não crava a direção e marca isto -> reduce_decisao_vigente
+    # OR-preserva -> resolve_banda_matriz lê -> ambiguous -> o L3 (guard+LLM) decide. Vive em
+    # DecisaoVigenteRich (NÃO no DecisaoVigente base = response_schema do LLM), então NÃO bumpa
+    # PROMPT_VERSION nem re-cascata; ride o MESMO canal Rich dos campos echo até a borda HTTP
+    # (sem field aqui, extra='ignore' o dropava em agent.py::_project_decisao_facts + na rota).
+    needs_review: bool = Field(
+        default=False,
+        description="True quando o reduce de chunk detectou conflito de direção entre janelas de mérito -> deferir pro L3.",
+    )
+
 
 class LifecycleGarantiaEvent(BaseModel):
     """Evento no ciclo de vida da garantia/apolice neste processo.
