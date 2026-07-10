@@ -1,5 +1,9 @@
-"""ficha_writer — testa o prompt (deterministico), a validacao de shape/tipo do
+"""ficha_writer — testa o prompt (deterministico), a validacao de slots do
 agent (com provider MOCKADO) e a rota (mount isolado do router). NAO chama LLM.
+
+Contrato ACHATADO: cada slot e uma string individual ("bullets[0]", "merito.p1",
+...) com limite em `max`. Retry cirurgico: campos_com_erro presente -> gera SO
+os slots com erro e responde SO com eles.
 """
 from __future__ import annotations
 
@@ -28,7 +32,8 @@ from src.api.routes.ficha_writer import router
 class _FakeProvider:
     """Provider fake: devolve `text` fixo + metadata sem chamar LLM.
 
-    Captura os kwargs da ultima call (p/ assertar JSON mode / temperature).
+    Captura os kwargs da ultima call (p/ assertar JSON mode / temperature /
+    conteudo do prompt).
     """
 
     def __init__(self, text: str, cost: float = 0.0123, model_out: str = "gemini-2.5-flash"):
@@ -50,13 +55,15 @@ class _FakeProvider:
 
 def _campos() -> list[CampoSpec]:
     return [
-        CampoSpec(nome="resumo", tipo="string", limite_chars=120,
-                  guidance="1 frase sobre o estado do caso.",
+        CampoSpec(nome="merito.p1", path="merito.p1", max=600,
+                  guidance="Primeiro paragrafo do merito.",
                   exemplos=["Execucao fiscal em fase de garantia."]),
-        CampoSpec(nome="pontos", tipo="array_string", limite_chars=80, quantidade=2,
-                  guidance="Bullets de risco."),
-        CampoSpec(nome="par", tipo="objeto_p1_p2", limite_chars=200,
-                  guidance="Dois paragrafos."),
+        CampoSpec(nome="merito.p2", path="merito.p2", max=600,
+                  guidance="Segundo paragrafo do merito."),
+        CampoSpec(nome="bullets[0]", path="bullets[0]", max=150,
+                  guidance="Primeiro bullet de risco."),
+        CampoSpec(nome="bullets[1]", path="bullets[1]", max=150,
+                  guidance="Segundo bullet de risco."),
     ]
 
 
@@ -71,9 +78,10 @@ def _req(campos=None, campos_com_erro=None) -> FichaWriteFieldsRequest:
 
 def _good_payload() -> str:
     return json.dumps({
-        "resumo": "Execucao fiscal com garantia apresentada.",
-        "pontos": ["Decisao de 1o grau desfavoravel.", "Recurso pendente."],
-        "par": {"p1": "Primeiro paragrafo.", "p2": "Segundo paragrafo."},
+        "merito.p1": "Execucao fiscal com garantia apresentada.",
+        "merito.p2": "Recurso pendente de julgamento em segunda instancia.",
+        "bullets[0]": "Decisao de 1o grau desfavoravel.",
+        "bullets[1]": "Garantia aceita nos autos.",
     }, ensure_ascii=False)
 
 
@@ -90,10 +98,10 @@ def test_prompt_carries_persona_dossie_campos_and_rules():
     assert "SUBSCRITOR SENIOR" in p
     assert "como voce sabe disso?" in p
     assert "ACME LTDA" in p and "0001234-56.2020.8.26.0100" in p  # dossie serializado
-    # cada campo pedido aparece com nome + limite
-    assert '"resumo"' in p and "120 chars" in p
-    assert '"pontos"' in p and "2 itens" in p
-    assert '"par"' in p and '{"p1"' in p
+    # cada slot pedido aparece com nome + limite `max` + saida plana string
+    assert '"merito.p1"' in p and "600 chars" in p
+    assert '"bullets[0]"' in p and "150 chars" in p
+    assert "STRING simples" in p
     # <regras_de_redacao> por ULTIMO (recency anchor)
     assert "<regras_de_redacao>" in p
     assert p.rstrip().endswith("</regras_de_redacao>")
@@ -108,16 +116,20 @@ def test_prompt_embeds_the_nevers():
         assert termo in flat, termo
 
 
-def test_prompt_retry_block_present_only_on_retry():
+def test_prompt_retry_asks_only_error_slots():
     assert "CORRECAO OBRIGATORIA" not in build_write_fields_prompt(_req())
     req = _req(campos_com_erro=[
-        CampoComErro(nome="resumo", erro="estourou limite: 142/120 chars",
+        CampoComErro(nome="bullets[1]", erro="bullets[1] > 150 chars",
                      valor_anterior="texto longo demais que passou do limite ..."),
     ])
-    p = build_write_fields_prompt(req)
+    alvo = [c for c in req.campos if c.nome == "bullets[1]"]
+    p = build_write_fields_prompt(req, campos_alvo=alvo)
     assert "CORRECAO OBRIGATORIA" in p
-    assert "estourou limite: 142/120 chars" in p
-    assert '"resumo"' in p
+    assert "bullets[1] > 150 chars" in p
+    # shape da saida so pede o slot com erro (nao os demais)
+    shape = p[p.index("FORMATO DA SAIDA"):p.index("CORRECAO OBRIGATORIA")]
+    assert '"bullets[1]"' in shape
+    assert '"merito.p1"' not in shape and '"bullets[0]"' not in shape
     # retry vem ANTES das regras (regras seguem sendo o ultimo bloco)
     assert p.index("CORRECAO OBRIGATORIA") < p.index("<regras_de_redacao>")
 
@@ -130,9 +142,9 @@ def test_happy_path_returns_all_fields_and_cost(monkeypatch):
     out = asyncio.run(write_ficha_fields(_req()))
     assert out.success is True
     assert out.error is None
-    assert set(out.campos.keys()) == {"resumo", "pontos", "par"}
-    assert out.campos["pontos"] == ["Decisao de 1o grau desfavoravel.", "Recurso pendente."]
-    assert out.campos["par"] == {"p1": "Primeiro paragrafo.", "p2": "Segundo paragrafo."}
+    assert set(out.campos.keys()) == {"merito.p1", "merito.p2", "bullets[0]", "bullets[1]"}
+    assert all(isinstance(v, str) for v in out.campos.values())
+    assert out.campos["bullets[0]"] == "Decisao de 1o grau desfavoravel."
     assert out.cost_usd == 0.0123
     assert out.model == "gemini-2.5-flash"
     # JSON mode SEM schema estatico + determinismo
@@ -141,35 +153,27 @@ def test_happy_path_returns_all_fields_and_cost(monkeypatch):
     assert prov.last_kwargs.get("temperature") == 0.0
 
 
-# ── Agent: campo faltando / tipo errado -> success=false ───────────────────
+# ── Agent: slot faltando / nao-string -> success=false ─────────────────────
 
 
 def test_missing_field_fails_softly(monkeypatch):
-    payload = json.dumps({"resumo": "ok", "pontos": ["a", "b"]})  # falta "par"
+    payload = json.dumps({"merito.p1": "ok", "merito.p2": "ok",
+                          "bullets[0]": "ok"})  # falta bullets[1]
     _install(monkeypatch, _FakeProvider(payload))
     out = asyncio.run(write_ficha_fields(_req()))
     assert out.success is False
     assert out.campos == {}
-    assert "par" in out.error and "ausente" in out.error
+    assert "bullets[1]" in out.error and "ausente" in out.error
 
 
-def test_wrong_type_fails_softly(monkeypatch):
-    # "pontos" deveria ser lista de strings, veio string
-    payload = json.dumps({"resumo": "ok", "pontos": "nao e lista",
-                          "par": {"p1": "a", "p2": "b"}})
+def test_non_string_value_fails_softly(monkeypatch):
+    # slot achatado: lista/objeto NAO sao aceitos
+    payload = json.dumps({"merito.p1": "ok", "merito.p2": "ok",
+                          "bullets[0]": ["nao", "e", "string"], "bullets[1]": "ok"})
     _install(monkeypatch, _FakeProvider(payload))
     out = asyncio.run(write_ficha_fields(_req()))
     assert out.success is False
-    assert "pontos" in out.error
-
-
-def test_objeto_p1_p2_missing_part_fails(monkeypatch):
-    payload = json.dumps({"resumo": "ok", "pontos": ["a", "b"],
-                          "par": {"p1": "so p1"}})  # falta p2
-    _install(monkeypatch, _FakeProvider(payload))
-    out = asyncio.run(write_ficha_fields(_req()))
-    assert out.success is False
-    assert "par" in out.error
+    assert "bullets[0]" in out.error and "string" in out.error
 
 
 def test_parse_fail_reports_cost_and_model(monkeypatch):
@@ -181,17 +185,49 @@ def test_parse_fail_reports_cost_and_model(monkeypatch):
     assert out.cost_usd == 0.005  # custo propagado mesmo no erro
 
 
-def test_retry_only_requested_fields_still_returns_full_object(monkeypatch):
-    """No retry o prompt inclui o erro; a resposta ainda traz TODOS os campos."""
-    prov = _install(monkeypatch, _FakeProvider(_good_payload()))
+# ── Agent: retry cirurgico ─────────────────────────────────────────────────
+
+
+def test_retry_returns_only_error_slots(monkeypatch):
+    """Retry: gera SO os slots de campos_com_erro; response SO com eles."""
+    retry_payload = json.dumps({"bullets[1]": "Bullet corrigido, curto."})
+    prov = _install(monkeypatch, _FakeProvider(retry_payload))
     req = _req(campos_com_erro=[
-        CampoComErro(nome="resumo", erro="estourou limite", valor_anterior="x" * 200),
+        CampoComErro(nome="bullets[1]", erro="bullets[1] > 150 chars",
+                     valor_anterior="x" * 200),
     ])
     out = asyncio.run(write_ficha_fields(req))
     assert out.success is True
-    assert set(out.campos.keys()) == {"resumo", "pontos", "par"}
-    # o prompt enviado carregou o bloco de correcao
-    assert "CORRECAO OBRIGATORIA" in prov.last_kwargs["prompt"]
+    assert out.campos == {"bullets[1]": "Bullet corrigido, curto."}
+    # o prompt enviado carregou o bloco de correcao + so pediu o slot com erro
+    prompt = prov.last_kwargs["prompt"]
+    assert "CORRECAO OBRIGATORIA" in prompt
+    assert "bullets[1] > 150 chars" in prompt
+    shape = prompt[prompt.index("FORMATO DA SAIDA"):]
+    assert '"merito.p1"' not in shape
+
+
+def test_retry_missing_error_slot_in_response_fails(monkeypatch):
+    """Retry cujo LLM nao devolve o slot pedido -> success=false."""
+    _install(monkeypatch, _FakeProvider(json.dumps({"outra_coisa": "x"})))
+    req = _req(campos_com_erro=[
+        CampoComErro(nome="bullets[1]", erro="estourou", valor_anterior="y"),
+    ])
+    out = asyncio.run(write_ficha_fields(req))
+    assert out.success is False
+    assert "bullets[1]" in out.error
+
+
+def test_retry_error_slot_without_spec_fails(monkeypatch):
+    """campo_com_erro sem spec correspondente em `campos` -> erro claro, sem call."""
+    prov = _install(monkeypatch, _FakeProvider(_good_payload()))
+    req = _req(campos_com_erro=[
+        CampoComErro(nome="slot_fantasma", erro="estourou", valor_anterior="y"),
+    ])
+    out = asyncio.run(write_ficha_fields(req))
+    assert out.success is False
+    assert "slot_fantasma" in out.error
+    assert prov.last_kwargs == {}  # LLM nem foi chamado
 
 
 # ── Rota (mount isolado, provider mockado) ─────────────────────────────────
@@ -208,32 +244,56 @@ def client(monkeypatch):
 def test_route_happy_path(client):
     body = {
         "dossie": {"razao_social": "ACME LTDA"},
-        "campos": [{"nome": "resumo", "tipo": "string", "limite_chars": 120,
-                    "guidance": "1 frase", "exemplos": []},
-                   {"nome": "pontos", "tipo": "array_string", "limite_chars": 80,
-                    "quantidade": 2, "guidance": "bullets", "exemplos": []},
-                   {"nome": "par", "tipo": "objeto_p1_p2", "limite_chars": 200,
-                    "guidance": "dois p", "exemplos": []}],
+        "campos": [
+            {"nome": "merito.p1", "path": "merito.p1", "max": 600,
+             "guidance": "p1", "exemplos": []},
+            {"nome": "merito.p2", "path": "merito.p2", "max": 600,
+             "guidance": "p2", "exemplos": []},
+            {"nome": "bullets[0]", "path": "bullets[0]", "max": 150,
+             "guidance": "b0", "exemplos": []},
+            {"nome": "bullets[1]", "path": "bullets[1]", "max": 150,
+             "guidance": "b1", "exemplos": []},
+        ],
     }
     r = client.post("/ficha/write-fields", json=body)
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["success"] is True
-    assert set(data["campos"].keys()) == {"resumo", "pontos", "par"}
+    assert set(data["campos"].keys()) == {"merito.p1", "merito.p2",
+                                          "bullets[0]", "bullets[1]"}
+    assert all(isinstance(v, str) for v in data["campos"].values())
     assert data["cost_usd"] == 0.02
     assert data["error"] is None
 
 
-def test_route_validation_error_is_soft_200(monkeypatch):
-    _install(monkeypatch, _FakeProvider(json.dumps({"resumo": "ok"})))  # faltam campos
+def test_route_retry_only_error_slots(monkeypatch):
+    _install(monkeypatch, _FakeProvider(json.dumps({"bullets[2]": "curto agora"})))
     app = FastAPI()
     app.include_router(router)
     c = TestClient(app)
     body = {
         "dossie": {},
-        "campos": [{"nome": "resumo", "tipo": "string", "limite_chars": 120},
-                   {"nome": "pontos", "tipo": "array_string", "limite_chars": 80,
-                    "quantidade": 2}],
+        "campos": [{"nome": "bullets[2]", "path": "bullets[2]", "max": 150,
+                    "guidance": "b2", "exemplos": []}],
+        "campos_com_erro": [{"nome": "bullets[2]", "erro": "bullets[2] > 150 chars",
+                             "valor_anterior": "x" * 200}],
+    }
+    r = c.post("/ficha/write-fields", json=body)
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["success"] is True
+    assert data["campos"] == {"bullets[2]": "curto agora"}
+
+
+def test_route_validation_error_is_soft_200(monkeypatch):
+    _install(monkeypatch, _FakeProvider(json.dumps({"merito.p1": "ok"})))  # falta p2
+    app = FastAPI()
+    app.include_router(router)
+    c = TestClient(app)
+    body = {
+        "dossie": {},
+        "campos": [{"nome": "merito.p1", "max": 600},
+                   {"nome": "merito.p2", "max": 600}],
     }
     r = c.post("/ficha/write-fields", json=body)
     assert r.status_code == 200
