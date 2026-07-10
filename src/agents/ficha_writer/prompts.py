@@ -1,16 +1,20 @@
 """Prompt do ficha_writer — escreve os slots de texto de uma ficha (FichaJSON v2).
 
 "Codigo decide os numeros; o LLM so redige texto." Este passe NUNCA produz
-numero/data/status — so texto dentro de limite_chars DURO. As regras de redacao
-(persona + <regras_de_redacao>) sao embutidas VERBATIM abaixo; a saida e
-ESTRITAMENTE o JSON schema pedido (um objeto com exatamente os nomes de campo).
+numero/data/status — so texto dentro do limite DURO (`max`) de cada slot. As
+regras de redacao (persona + <regras_de_redacao>) sao embutidas VERBATIM abaixo;
+a saida e ESTRITAMENTE um objeto JSON PLANO nome -> string, com exatamente os
+nomes pedidos.
+
+Retry cirurgico: quando campos_com_erro esta presente, o prompt so pede os slots
+com erro (specs deles seguem em campos) e ecoa erro + valor_anterior de cada um.
 """
 
 import json
 
 from .schemas import CampoSpec, FichaWriteFieldsRequest
 
-PROMPT_VERSION = "ficha_writer_v1"
+PROMPT_VERSION = "ficha_writer_v2"
 
 
 # ── Persona + regras de redacao (VERBATIM) ─────────────────────────────────
@@ -55,8 +59,9 @@ NUNCA faca o seguinte (sao erros que reprovam o texto):
    descreve o estado em portugues corrente.
 
 ALEM DISSO:
-- Respeite o limite_chars de CADA campo como restricao DURA. O layout do PDF
-  QUEBRA se o texto estourar. Conte os caracteres e fique DENTRO do limite.
+- Respeite o limite `max` de caracteres de CADA slot como restricao DURA. O
+  layout do PDF QUEBRA se o texto estourar. Conte os caracteres e fique DENTRO
+  do limite.
 - Escreva em portugues do Brasil, CORRETAMENTE ACENTUADO.
 - Voce NAO cria numeros, datas nem status: use SO os que o dossie ja traz. Se
   um fato nao esta no dossie, nao o afirme.
@@ -72,23 +77,12 @@ def _build_dossie_block(dossie: dict) -> str:
     return f"=== DOSSIE (os FATOS — unica fonte de verdade) ===\n{body}"
 
 
-def _tipo_instrucao(spec: CampoSpec) -> str:
-    """Descreve a forma do valor esperado p/ o campo, no JSON de saida."""
-    if spec.tipo == "array_string":
-        qtd = spec.quantidade if spec.quantidade is not None else "os itens necessarios"
-        return (
-            f"lista JSON de strings ({qtd} itens); cada item <= {spec.limite_chars} chars"
-        )
-    if spec.tipo == "objeto_p1_p2":
-        return (
-            'objeto JSON {"p1": "...", "p2": "..."}; cada parte (p1 e p2) '
-            f"<= {spec.limite_chars} chars"
-        )
-    return f"string; <= {spec.limite_chars} chars"
-
-
 def _build_campo_spec_block(spec: CampoSpec) -> str:
-    parts = [f"- campo \"{spec.nome}\" ({_tipo_instrucao(spec)})"]
+    header = f"- slot \"{spec.nome}\" (string; <= {spec.max} chars"
+    if spec.path and spec.path != spec.nome:
+        header += f"; path: {spec.path}"
+    header += ")"
+    parts = [header]
     if spec.guidance:
         parts.append(f"    guidance: {spec.guidance}")
     if spec.exemplos:
@@ -99,46 +93,39 @@ def _build_campo_spec_block(spec: CampoSpec) -> str:
 
 def _build_campos_block(campos: list[CampoSpec]) -> str:
     specs = "\n".join(_build_campo_spec_block(c) for c in campos)
-    return f"=== CAMPOS A ESCREVER ===\n{specs}"
+    return f"=== SLOTS A ESCREVER ===\n{specs}"
 
 
 def _build_output_shape_block(campos: list[CampoSpec]) -> str:
-    """Descreve o JSON de saida EXATO: um objeto so com os nomes pedidos."""
-    lines = []
-    for c in campos:
-        if c.tipo == "array_string":
-            shape = "[...]  (lista de strings)"
-        elif c.tipo == "objeto_p1_p2":
-            shape = '{"p1": "...", "p2": "..."}'
-        else:
-            shape = '"..."'
-        lines.append(f'  "{c.nome}": {shape}')
+    """Descreve o JSON de saida EXATO: objeto PLANO nome -> string, so com os
+    nomes pedidos."""
+    lines = [f'  "{c.nome}": "..."' for c in campos]
     body = "{\n" + ",\n".join(lines) + "\n}"
     nomes = ", ".join(f'"{c.nome}"' for c in campos)
     return (
         "=== FORMATO DA SAIDA (obrigatorio) ===\n"
-        "Responda ESTRITAMENTE com UM objeto JSON contendo EXATAMENTE estas "
-        f"chaves (nenhuma a mais, nenhuma a menos): {nomes}.\n"
+        "Responda ESTRITAMENTE com UM objeto JSON PLANO onde cada valor e uma "
+        "STRING simples (nunca lista, nunca objeto aninhado), contendo EXATAMENTE "
+        f"estas chaves (nenhuma a mais, nenhuma a menos): {nomes}.\n"
         "Shape:\n" + body
     )
 
 
 def _build_retry_block(campos_com_erro) -> str:
-    """Bloco de correcao cirurgica (retry). Vem antes das <regras_de_redacao>
-    mas depois do resto; ecoa o erro + o valor anterior de cada campo."""
+    """Bloco de correcao cirurgica (retry): ecoa erro + valor_anterior de cada
+    slot reprovado. A saida pedida ja e SO estes slots (output shape acima)."""
     lines = ["=== CORRECAO OBRIGATORIA (retry) ==="]
     lines.append(
-        "Sua resposta anterior REPROVOU nos campos abaixo. Corrija CIRURGICAMENTE "
-        "SO estes campos — mantenha os demais como estavam. Para cada um, o erro e "
-        "o valor que falhou:"
+        "Os slots abaixo REPROVARAM na validacao. Gere/corrija SOMENTE estes "
+        "slots — nenhum outro. Para cada um, o erro e o valor que falhou:"
     )
     for ce in campos_com_erro:
         prev = json.dumps(ce.valor_anterior, ensure_ascii=False, default=str)
         lines.append(f'- "{ce.nome}": ERRO = {ce.erro} | valor_anterior = {prev}')
     lines.append(
-        "Reescreva cada um desses campos respeitando o erro apontado (tipicamente "
-        "o limite de caracteres) sem perder o sentido. Ainda assim, devolva o "
-        "objeto JSON COMPLETO com TODAS as chaves pedidas."
+        "Reescreva cada um respeitando o erro apontado (tipicamente o limite de "
+        "caracteres) sem perder o sentido. Devolva o objeto JSON SO com as chaves "
+        "listadas no FORMATO DA SAIDA."
     )
     return "\n".join(lines)
 
@@ -146,17 +133,25 @@ def _build_retry_block(campos_com_erro) -> str:
 # ── Montagem ───────────────────────────────────────────────────────────────
 
 
-def build_write_fields_prompt(req: FichaWriteFieldsRequest) -> str:
-    """Monta o prompt completo. Ordem: persona -> dossie -> campos -> shape ->
-    (retry, se houver) -> <regras_de_redacao> (ultimo = recency anchor)."""
+def build_write_fields_prompt(
+    req: FichaWriteFieldsRequest,
+    campos_alvo: list[CampoSpec] | None = None,
+) -> str:
+    """Monta o prompt completo. Ordem: persona -> dossie -> slots -> shape ->
+    (retry, se houver) -> <regras_de_redacao> (ultimo = recency anchor).
+
+    `campos_alvo`: subset de req.campos a pedir (retry cirurgico). Default =
+    todos os req.campos.
+    """
+    campos = campos_alvo if campos_alvo is not None else req.campos
     parts = [
         _build_persona(),
         "",
         _build_dossie_block(req.dossie),
         "",
-        _build_campos_block(req.campos),
+        _build_campos_block(campos),
         "",
-        _build_output_shape_block(req.campos),
+        _build_output_shape_block(campos),
     ]
     if req.campos_com_erro:
         parts += ["", _build_retry_block(req.campos_com_erro)]
