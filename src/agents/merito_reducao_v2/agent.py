@@ -30,7 +30,12 @@ DEFAULT_MODEL = "gemini-3.5-flash"
 # gate-0 rodou com thinking-default e não truncou. max alto cobre thinking+JSON de méritos GIGANTES.
 _MAX_TOKENS = 32768
 
-# ── CONVENTION — VERBATIM de oracle_wf.js (a semente do B1) ────────────────────────────
+# ── CONVENTION — semente = oracle_wf.js + R5 sharpening (2026-07-11, decisao Elton) ───────
+# Rules 4/5 apertadas pra fechar os 2 danger-unders do E2E (680048 RE-sobrestado, 680136 agravo-
+# interno residual): sobrestamento != exigibilidade; recurso residual/sobrestado apos merito ja
+# rejeitado -> a derrota governa. + carve supersessao (parcelamento pos-transito -> Medio). Medido
+# offline (report-R5-calibration-B1-2026-07-11.md): 680048->Alto, danger-unders eliminados, erro
+# todo surety-safe. Ao apertar mais, edite AQUI e re-valide na escada do gate-0/r5cal.
 CONVENTION = """
 Voce e o passo de SINTESE/REDUCAO de um motor de risco de SEGURO-GARANTIA JUDICIAL (Garantis).
 Um "merito" e um CLUSTER de processos conexos sobre UMA divida/disputa de UM Tomador (o segurado da apolice).
@@ -72,9 +77,25 @@ REGRAS DE LEITURA (aplique com rigor):
 3. NULIDADE/ANULACAO: se uma sentenca de merito foi ANULADA/CASSADA em grau recursal (nulidade / ausencia de fundamentacao),
    o merito volta a INDECIDIDO -- nao trate a derrota anulada como final.
 4. SUSPENSAO e causa-consciente: execucao suspensa por garantia-aceita / anulatoria-pendente / parcelamento-com-garantia
-   DIFERE o risco (nao o eleva sozinha). MAS um TRANSITO adverso em QUALQUER processo do cluster PREVALECE sobre a suspensao.
-5. ESGOTAMENTO: recursos esgotados (STF/STJ/TST rejeitaram) + derrota de merito = Altissimo mesmo sem intimacao de pagamento.
-   Recurso ainda VIVO mantem Medio/Alto.
+   DIFERE o risco (nao o eleva sozinha). MAS um TRANSITO adverso em QUALQUER processo do cluster PREVALECE sobre uma
+   suspensao PASSIVA (garantia aceita / sobrestamento) anterior.
+   ATENCAO ao que conta como efeito suspensivo: o que REBAIXA o risco e o efeito suspensivo da EXIGIBILIDADE (embargos
+   recebidos no efeito suspensivo, tutela cautelar ativa). O SOBRESTAMENTO de um recurso (RE/REsp sobrestado por
+   repercussao geral / Tema STF-STJ) suspende o PROCESSAMENTO do recurso, NAO a exigibilidade -- a execucao prossegue,
+   entao NAO rebaixa o risco por si so.
+   EXCECAO (supersessao / recencia): um PARCELAMENTO homologado com garantia mantida que e POSTERIOR a uma derrota
+   transitada NAO e mera suspensao passiva -- e um NOVO ato dispositivo (o Tomador esta PAGANDO/negociou) que, sendo o
+   ULTIMO ato do cluster, SUPERSEDE a derrota transitada => Medio, nao Altissimo. (Regra geral: entre atos dispositivos
+   que se contradizem no tempo, o MAIS RECENTE governa.)
+5. ESGOTAMENTO e RECURSO RESIDUAL (o divisor Medio/Alto/Altissimo):
+   - Recursos de MERITO esgotados (STF/STJ/TST rejeitaram/nao conheceram) + derrota de merito = Altissimo, mesmo sem
+     intimacao de pagamento.
+   - Recurso ainda VIVO so mantem Medio/Alto quando e recurso de MERITO substantivo genuinamente pendente (apelacao/REsp/RE
+     ainda NAO julgado) COM efeito suspensivo real da exigibilidade.
+   - NAO segura em Medio (a derrota de merito CONFIRMADA governa -> Alto, ou Altissimo se transitada/esgotada):
+     (a) recurso RESIDUAL/procedimental (agravo interno, embargos de declaracao) interposto DEPOIS de o merito ja ter
+         sido decidido adverso e os recursos de merito (apelacao/REsp/RE) ja rejeitados/nao conhecidos;
+     (b) recurso SOBRESTADO por repercussao geral sobre derrota de merito JA CONFIRMADA em 2a instancia.
 6. REDUCAO (o nucleo da sua tarefa): a banda do merito e governada pelo processo/decisao que dirige a EXPOSICAO -- em geral
    o desfecho de merito da PROPRIA divida, nao uma decisao lateral favoravel. NAO tome o max ingenuo dos cards por-processo,
    e NAO deixe uma interlocutoria/decisao favoravel em um processo ESCONDER uma derrota de merito em outro. Identifique a
