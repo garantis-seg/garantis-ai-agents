@@ -78,12 +78,19 @@ class CelulaClassifyOut(BaseModel):
     reasoning: str
 
 
+class CelulaVerifyOut(BaseModel):
+    refuted: bool
+    veredito_final: _BAND
+    notes: str
+
+
 class CelulaBaseClassifyRequest(BaseModel):
     merito_id: int
     dossier: str
     model: Optional[str] = None
     provider: Optional[str] = None
     n: int = DEFAULT_N
+    run_verify: bool = True
     model_config = {"extra": "ignore"}
 
 
@@ -96,6 +103,28 @@ def _prompt(merito_id: int, dossier: str) -> str:
         f"e a elton_band (celula-base -> Medio; transito/esgotamento -> Alto/Altissimo). Seja rigoroso com "
         f"valencia (quem e o Tomador). governing_citation = trecho curto do dossie que governa a exposicao. "
         f"Retorne o schema."
+    )
+
+
+def _verify_prompt(merito_id: int, dossier: str) -> str:
+    # FAVORAVEL-ONLY (refinado da medicao 2026-07-11): o refutador da referencia tinha 2 gatilhos
+    # (favoravel OU derrota-transitada->Alto/Altissimo). O 2o e CONTRAPRODUCENTE pra um piso que so faz
+    # Baixo->Medio: refutar um merito que na verdade e Alto/Altissimo o DEIXA em Baixo (under MAIOR) em vez
+    # de deixa-lo subir pra Medio (under menor) — no path B1-autoritativo o guard/DT nao re-escala. Entao o
+    # verify AQUI so pergunta: ha um sinal FAVORAVEL REAL que faca o merito ser genuinamente BAIXO? (a classe
+    # 680007 VALE: embargos procedente que o classify-only le como adverso). Merito MAIS grave NAO refuta —
+    # continua sendo floored pra Medio (surety-safe; a escalada acima de Medio e problema de outro eixo).
+    return (
+        f"{CONVENTION}\n\nVERIFICADOR ADVERSARIAL (so o eixo FAVORAVEL). Um adjudicador classificou o merito "
+        f"{merito_id} como CELULA-BASE (Baixo->Medio): divida adversa viva + garantia aceita + SEM sinal "
+        f"favoravel. O piso so eleva Baixo->Medio (nunca abaixa e nunca passa de Medio). Leia o dossie e "
+        f"responda UMA pergunta: existe um sinal FAVORAVEL de merito REAL e vivo (decisao procedente/favoravel "
+        f"ao Tomador, divida sendo extinta/anulada/quitada, Tomador claramente vencendo a discussao de merito) "
+        f"que torne o merito genuinamente BAIXO? Se sim, refuted=true (o piso NAO deve elevar). "
+        f"⚠️ NAO refute so porque a derrota e PIOR (transitada/esgotada/Alto/Altissimo): um merito mais grave "
+        f"continua corretamente elevado a Medio por este piso (a escalada acima de Medio e de outro eixo do "
+        f"motor). refuted=true SOMENTE pra sinal FAVORAVEL genuino. Seja cetico mas honesto.\n\nDOSSIE do "
+        f"merito {merito_id}:\n\n```\n{dossier}\n```\n\nRetorne o schema."
     )
 
 
@@ -162,15 +191,41 @@ async def classify_celula_base(
     # UNANIME so quando os N pedidos deram voto E concordam (voto faltando != unanime -> needs_review).
     unanimous = len(votes) == n and len(set(votes_cb)) == 1
     celula_base = votes_cb[0] if unanimous else None
-    needs_review = celula_base is None
     # banda de exibicao/audit: moda (informativa; o piso so usa celula_base)
     elton_band = Counter(votes_band).most_common(1)[0][0]
     rep = votes[0]
 
+    # VERIFY adversarial (mede refutou 680007 na referencia): so sobre movers (celula=True). O classify-only
+    # N=3 (flash E sonnet) over-reacha na classe favoravel-que-parece-celula (680007 VALE: embargos procedente
+    # lido como adverso); o refutador, prompted a ACHAR o favoravel, demote pra needs_review. Surety-safe: SO
+    # rebaixa celula->needs_review, nunca promove. Falha do verify = conservador (mantem o sinal do classify).
+    verify_refuted = None
+    if celula_base is True and request.run_verify:
+        try:
+            vseed = seed_for("celula_base_verify", request.merito_id)
+            vresp: LLMResponse = await llm.agenerate(
+                prompt=_verify_prompt(request.merito_id, request.dossier), model=model,
+                temperature=0.0, response_schema=CelulaVerifyOut, seed=vseed, max_tokens=4096,
+            )
+            verify = CelulaVerifyOut(**json.loads(vresp.text))
+            verify_refuted = verify.refuted
+            vu = _usage(vresp, model, provider)
+            for key in ("input_tokens", "output_tokens", "total_tokens"):
+                usage[key] += vu[key]
+            usage["cost_usd"] = (usage["cost_usd"] or 0) + (vu["cost_usd"] or 0)
+            if verify.refuted:
+                celula_base = None  # refutado (sinal favoravel real) -> needs_review, NAO floora
+                logger.info("CELULA_VERIFY_REFUTED merito_id=%s -> needs_review (%s)",
+                            request.merito_id, verify.notes[:120])
+        except Exception as e:  # noqa: BLE001 — verify best-effort; falha mantem o sinal do classify
+            logger.warning("CELULA_VERIFY_FAIL merito_id=%s: %r", request.merito_id, e)
+
+    needs_review = celula_base is None
     card = {
         "celula_base": celula_base,
         "unanimous": unanimous,
         "needs_review": needs_review,
+        "verify_refuted": verify_refuted,
         "votes_cb": votes_cb,
         "votes_band": votes_band,
         "elton_band": elton_band,
