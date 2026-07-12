@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from garantis_shared.logging_setup import setup_logging
 
 from .middleware import GeminiCallTimeoutMiddleware
-from .routes import apolice_lifecycle, court_state_classifier, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, summarization, text
+from .routes import apolice_lifecycle, celula_base_classifier, court_state_classifier, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, summarization, text
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -70,6 +70,7 @@ app.include_router(mov_factsheet.router)
 app.include_router(processo_synthesis.router)
 app.include_router(merito_synthesis.router)
 app.include_router(merito_reducao_v2.router)
+app.include_router(celula_base_classifier.router)
 
 
 @app.get("/")
