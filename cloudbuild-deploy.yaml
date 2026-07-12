@@ -76,7 +76,7 @@ steps:
       # 715 calls medidos (memory l1-triage-503-burst-quota-semaphore-rootcause). PONTE ate
       # a fila DBOS de triagem + bump de quota flash-lite (GCP) deixarem lite voltar barato.
       # Estava --update-env-vars (rev 00242); persistido aqui pra nao resetar no proximo deploy.
-      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,MOV_TRIAGE_MODEL=gemini-2.5-flash,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on'
+      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,MOV_TRIAGE_MODEL=gemini-2.5-flash,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true'
       - '--set-secrets'
       - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
 
