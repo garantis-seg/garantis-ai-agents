@@ -162,7 +162,12 @@ def _flag_enabled(name: str, default: str = "true") -> bool:
 #     back-compat: snapshot V2b (sem tag) cai no string-match antigo.
 #   - Rollback: revert do PR (regen COLD na v2.7.1); materializer + front auto-detectam
 #     o formato (sem tag -> caminho antigo), entao a ordem de deploy e tolerante.
-PROMPT_VERSION_BASE = "merito_synthesis.v2.8"
+# v2.9 (2026-07-14): remove residuo textual 'aiim' do texto do prompt (intro,
+#   lista de kinds de evidence_artifacts, regra C, campos de prosa). O card AIIM
+#   saiu do payload no teardown autos-wide (v2.8, #90/#91) e o texto ficou
+#   incoerente com o payload servido. Muda prompt_hash (esperado). OK Elton
+#   2026-07-14; efeito diferido ate proximo deploy deliberado do ai-agents.
+PROMPT_VERSION_BASE = "merito_synthesis.v2.9"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -349,7 +354,7 @@ def _build_intro() -> str:
         "Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.\n"
         "\n"
         "Sua tarefa: classificar o RISCO DE ACIONAMENTO DA APOLICE pro MERITO inteiro. Voce recebe\n"
-        "os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda/aiim\n"
+        "os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda\n"
         "+ snapshot anterior (referencia historica). A jurisprudencia da tese NAO vem\n"
         "neste payload — ela ja foi absorvida pelo risco_processo_intermediario de cada\n"
         "processo na camada 2 (regras J/J.1/J.2).\n"
@@ -833,7 +838,7 @@ def _build_field_instructions() -> str:
 
 2. justificativa: 2-4 paragrafos PT-BR.
    - Paragrafo 1: estado factual (qual processo carrega a decisao mais decisiva, sentido)
-   - Paragrafo 2: aspectos suportivos (apolice aceita? CDAs/AIIMs? tomador com risco?)
+   - Paragrafo 2: aspectos suportivos (apolice aceita? CDAs? tomador com risco?)
    - Paragrafo 3: justificativa do nivel escolhido vs nivel adjacente
    - Cite ID/CNJ dos processos relevantes.
    - MARQUE cada decisao/evento decisivo INLINE como link (vide instrucao 12).
@@ -881,7 +886,7 @@ def _build_field_instructions() -> str:
     - < 0.5 quando dados muito esparsos
 
 11. evidence_artifacts: 3-7 itens citando OS PROCESSOS/CARDS mais decisivos.
-    kind = processo_synthesis | mov_factsheet | apolice | conexo | cda | aiim | tomador | merito
+    kind = processo_synthesis | mov_factsheet | apolice | conexo | cda | tomador | merito
     ref = processo_numero, mov_id, cda_number, cnpj_basico, etc.
 
 12. tags inline de evento (NA justificativa — NAO emita o campo `citacoes`):
@@ -1393,7 +1398,7 @@ _REGRAS_DE_OURO_HEADER = "=== REGRAS DE OURO ==="
 _REGRAS_AD_COMUM = """A. NAO INVENTE. Se nenhum processo_synthesis tem decisao_vigente, decisao_atual.sentido=null.
 B. Tomador em RJ NAO sobe risco automaticamente. RJ pode SUSPENDER o processo (Baixo).
    Mas se ha processo com decisao desfavoravel TRANSITADA + tomador em RJ -> Altissimo.
-C. CDA/AIIM contam pra magnitude do valor em disputa MAS nao mudam o risco diretamente -
+C. CDAs contam pra magnitude do valor em disputa MAS nao mudam o risco diretamente -
    sao contexto descritivo. Risco vem do ESTADO DOS PROCESSOS.
 D. Peca-pivo do merito pode ser de CONEXO (nao do principal). Ex: anulatória conexa
    julgou improcedente -> isso e pivo mesmo se principal e Embargos sem sentenca."""
@@ -1865,7 +1870,7 @@ def build_redacao_prompt(req: "RedacaoRequest") -> str:
         "infantilizar:\n"
         f"  - justificativa: 2-4 paragrafos. (1) estado factual: qual processo carrega\n"
         "    a decisao mais decisiva e seu sentido pro tomador; (2) aspectos suportivos\n"
-        "    (apolice aceita? CDAs/AIIMs? RJ?); (3) por que o risco e\n"
+        "    (apolice aceita? CDAs? RJ?); (3) por que o risco e\n"
         f"    {risco} e nao o nivel adjacente. Cite o CNJ dos processos relevantes.\n"
         "    MARQUE cada decisao/evento decisivo INLINE como link markdown\n"
         "    `[frase do evento](CNJ mascarado)`, no lugar onde a frase aparece (o front\n"
