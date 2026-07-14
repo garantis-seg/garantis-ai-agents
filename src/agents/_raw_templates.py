@@ -127,7 +127,6 @@ def _processo_synthesis_template() -> str:
 def _merito_synthesis_template() -> str:
     from .merito_synthesis.prompts import build_merito_synthesis_prompt
     from .merito_synthesis.schemas import (
-        AIIMCardMin,
         CDACardMin,
         MeritoSynthesisRequest,
         PreviousSnapshot,
@@ -156,13 +155,6 @@ def _merito_synthesis_template() -> str:
                 cda_number="{{cda_number}}",
                 tipo_tributo="{{tipo_tributo}}",
                 ente="{{ente}}",
-            )
-        ],
-        aiims=[
-            AIIMCardMin(
-                tipo="{{tipo}}",
-                numero="{{numero}}",
-                relacao="{{relacao}}",
             )
         ],
         tomador=TomadorCardMin(nome="{{nome_tomador}}", cnpj_basico="{{cnpj_basico}}"),
