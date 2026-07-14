@@ -17,7 +17,6 @@ from collections import Counter
 from typing import Literal
 
 from .schemas import (
-    AIIMCardMin,
     CDACardMin,
     # v2.5 (2026-06-12): JurisprudenciaMin removido (dead code desde v2.2 —
     # campo saiu do request; o summarizer morto saiu junto).
@@ -274,15 +273,6 @@ def _summarize_cda(cda: CDACardMin) -> str:
     return " | ".join(parts)
 
 
-def _summarize_aiim(aiim: AIIMCardMin) -> str:
-    parts = [f"  {aiim.tipo or 'AIIM'} {aiim.numero or '?'}"]
-    if aiim.relacao:
-        parts.append(f"relacao: {aiim.relacao}")
-    if aiim.contexto_snippet:
-        parts.append(aiim.contexto_snippet)
-    return " | ".join(parts)
-
-
 def _summarize_tomador(tom: TomadorCardMin) -> str:
     """Renderiza summary tomador pro prompt L3.
 
@@ -466,9 +456,11 @@ def _build_cdas_block(req: MeritoSynthesisRequest) -> str:
     return f"=== CDA / DIVIDAS ATIVAS ===\n{cdas_block}"
 
 
-def _build_aiims_block(req: MeritoSynthesisRequest) -> str:
-    aiims_block = "\n".join(_summarize_aiim(a) for a in (req.aiims or [])) or "  (sem AIIM/PAF materializado)"
-    return f"=== AIIM / PAFs ADMINISTRATIVOS ===\n{aiims_block}"
+# v2.8 (2026-07-14): _build_aiims_block + _summarize_aiim REMOVIDOS (decisao
+# Elton, teardown autos-wide): a fonte (leads.admin_processes_extracted) foi
+# dropada e a regra C ja limitava o bloco a magnitude ("nao mudam o risco
+# diretamente"). PAs relevantes chegam como MEMBROS do conexo (role list,
+# 1.A Kelveng + 1.B peticao). Cards 'aiim' historicos nao sao renderizados.
 
 
 def _build_tomador_block_section(req: MeritoSynthesisRequest) -> str:
@@ -1805,7 +1797,6 @@ def build_prompt_and_version(
         _build_merito_header_block(req),
         _build_processos_block(req),
         _build_cdas_block(req),
-        _build_aiims_block(req),
         _build_tomador_block_section(req),
         # v2.2: _build_jurisprudencia_block dropado (juris vive em L2 agora).
         # PR7.2 (2026-05-31): _build_paradigmas_block REMOVIDO. Curadoria
@@ -1897,7 +1888,6 @@ def build_redacao_prompt(req: "RedacaoRequest") -> str:
         _build_merito_header_block(req),
         _build_processos_block(req),
         _build_cdas_block(req),
-        _build_aiims_block(req),
         _build_tomador_block_section(req),
         tarefa,
         # filtro do socio VERBATIM, ULTIMO (recency absoluto, igual ao L3).

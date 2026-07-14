@@ -10,7 +10,6 @@ Persiste em monitoramento.risk_snapshots (via orchestrator no frontend-api).
 
 from .agent import classify_merito_synthesis
 from .schemas import (
-    AIIMCardMin,
     CDACardMin,
     DecisaoAtual,
     EvidenceArtifact,
@@ -25,7 +24,6 @@ from .schemas import (
 
 __all__ = [
     "classify_merito_synthesis",
-    "AIIMCardMin",
     "CDACardMin",
     "DecisaoAtual",
     "EvidenceArtifact",

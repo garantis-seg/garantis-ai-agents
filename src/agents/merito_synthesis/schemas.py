@@ -451,18 +451,6 @@ class CDACardMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
-class AIIMCardMin(BaseModel):
-    """AIIM card (kind='aiim') pra contexto administrativo no merito."""
-
-    tipo: Optional[str] = None
-    numero: Optional[str] = None
-    relacao: Optional[str] = None
-    contexto_snippet: Optional[str] = None
-    justificativa: Optional[str] = None
-
-    model_config = {"extra": "ignore"}
-
-
 class TomadorCardMin(BaseModel):
     """Tomador card (kind='tomador') agregado por cnpj_basico."""
 
@@ -507,7 +495,8 @@ class MeritoSynthesisRequest(BaseModel):
     processo_syntheses: list[ProcessoSynthesisMin] = Field(default_factory=list)
     tomador: Optional[TomadorCardMin] = None
     cdas: list[CDACardMin] = Field(default_factory=list)
-    aiims: list[AIIMCardMin] = Field(default_factory=list)
+    # v2.8: aiims REMOVIDO (teardown autos-wide 2026-07-14); extra='ignore'
+    # tolera payloads antigos que ainda mandem o campo.
     # jurisprudencia removido — agora vive em L2 ps_card (regras J/J.1/J.2).
     # PR7.2 (2026-05-31): paradigmas: list[ParadigmaMin] REMOVIDO
     # (ref.tese_decisao_individual dropped).

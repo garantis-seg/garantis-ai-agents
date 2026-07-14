@@ -182,7 +182,7 @@ async def classify_merito_synthesis(
             parsed["cards_index"] = {
                 "processo_synthesis": len(request.processo_syntheses or []),
                 "cda": len(request.cdas or []),
-                "aiim": len(request.aiims or []),
+                "aiim": 0,  # v2.8: fonte autos-wide dropada
                 "tomador": 1 if request.tomador else 0,
             }
         card = MeritoSynthesisCardOut(**parsed)  # subclasse COM ciclo_garantia (response_model
