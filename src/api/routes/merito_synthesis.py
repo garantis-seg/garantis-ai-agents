@@ -22,8 +22,10 @@ router = APIRouter(prefix="/merito-synthesis", tags=["merito-synthesis"])
 @router.post("/classify", response_model=MeritoSynthesisResponse)
 async def classify_merito_synthesis_endpoint(request: MeritoSynthesisRequest):
     """Output primario da engine v6_meritos. Recebe processo_syntheses + tomador
-    + cda/aiim + jurisprudencia + previous_snapshot. Retorna risco + justificativa
-    + trajetoria + peca_pivo do merito.
+    + cda + jurisprudencia + previous_snapshot. Retorna risco + justificativa
+    + trajetoria + peca_pivo do merito. (Aiims saiu do payload na v2.8,
+    2026-07-14 — teardown autos-wide; requests com aiims sao ignorados via
+    extra='ignore'.)
 
     Persiste em monitoramento.risk_snapshots via orchestrator no frontend-api.
     """

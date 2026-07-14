@@ -1,9 +1,10 @@
 """Merito Synthesis Agent - engine v6_meritos camada 3 (OUTPUT PRIMARIO).
 
 Single LLM call por MERITO. Recebe processo_syntheses de TODOS processos do
-merito + tomador + cda/aiim + snapshot anterior. Output:
+merito + tomador + cda + snapshot anterior. Output:
 risco + justificativa + trajetoria + peca_pivo + proximos_passos.
-(Jurisprudencia saiu do payload na v2.2 — vive no L2, regras J/J.1/J.2.)
+(Jurisprudencia saiu do payload na v2.2 — vive no L2, regras J/J.1/J.2.
+Aiims saiu na v2.8, 2026-07-14 — teardown autos-wide, card AIIM removido.)
 
 Persiste em monitoramento.risk_snapshots (orchestrator no frontend-api).
 """
