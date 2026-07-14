@@ -84,15 +84,15 @@ def test_routing_80_20_at_threshold():
 
 def test_prompt_version_format():
     """_prompt_version_for(tipo) concatena base + tipo dominante."""
-    assert _prompt_version_for("fiscal") == "merito_synthesis.v2.8-fiscal"
-    assert _prompt_version_for("trabalhista") == "merito_synthesis.v2.8-trabalhista"
-    assert _prompt_version_for("civel") == "merito_synthesis.v2.8-civel"
-    assert _prompt_version_for("misto") == "merito_synthesis.v2.8-misto"
+    assert _prompt_version_for("fiscal") == "merito_synthesis.v2.9-fiscal"
+    assert _prompt_version_for("trabalhista") == "merito_synthesis.v2.9-trabalhista"
+    assert _prompt_version_for("civel") == "merito_synthesis.v2.9-civel"
+    assert _prompt_version_for("misto") == "merito_synthesis.v2.9-misto"
 
 
 def test_prompt_version_base_constant():
-    """PROMPT_VERSION_BASE = v2.8 (citacoes inline, 2026-06-30)."""
-    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.8"
+    """PROMPT_VERSION_BASE = v2.9 (remove residuo aiim do texto, 2026-07-14)."""
+    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.9"
     assert PROMPT_VERSION_BASE.startswith("merito_synthesis.")
 
 
