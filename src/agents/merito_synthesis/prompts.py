@@ -1900,9 +1900,10 @@ def build_merito_synthesis_prompt(
     req: MeritoSynthesisRequest,
     bucket: str | None = None,
 ) -> str:
-    """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda/aiim
+    """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda
     pra computar risco do MERITO (juris vive no L2 desde v2.2; previous_snapshot
-    NAO e mais renderizado desde v2.7.3 — anti-ancora + seed estavel).
+    NAO e mais renderizado desde v2.7.3 — anti-ancora + seed estavel; aiims
+    saiu do payload na v2.8, 2026-07-14 — teardown autos-wide).
 
     Dispatch determ.:
     - >=80% fiscal -> vocab EF, Anulatoria, Tema 372/1226/DIFAL

@@ -51,8 +51,10 @@ acionamento real = risco financeiro direto pra seguradora). false_alto/exact sã
 ## Fidelidade ao caminho de produção
 
 - Fixtures = saída de `_build_payload_and_context` (mesmas queries dos loaders L3:
-  `load_processo_syntheses` / `load_tomador_card` / `load_cdas_aiims` / role list), com
-  `processo_numero` forçado a dígitos como em produção.
+  `load_processo_syntheses` / `load_tomador_card` / `load_cdas` / role list), com
+  `processo_numero` forçado a dígitos como em produção. (v2.8, 2026-07-14: `aiims`
+  saiu do payload L3 — card AIIM removido no teardown autos-wide; o loader
+  `load_cdas_aiims` virou `load_cdas` no garantis-shared, #178.)
 - `--live` chama o agente L3 **local** (`src.agents.merito_synthesis`) → pega `card['risco']`
   (LLM) → aplica `build_risk_decomposition(mode="new")` (garantis-shared) → se
   `derived ∈ {Baixo..Altissimo}` o final = derived (matriz promove), senão = LLM. Idêntico

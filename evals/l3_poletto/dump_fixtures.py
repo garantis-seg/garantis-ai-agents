@@ -5,7 +5,8 @@ Para cada merito rotulado pelo Poletto (monitoramento.apolices_monitoradas):
   - risco de PRODUCAO atual + decomposicao (factual_agg/juris_agg/derived/llm_legacy)
     do ultimo card merito_synthesis  -> baseline `--from-snapshot`
   - PAYLOAD de input do L3 (mesmas queries dos loaders do materializer L3) ->
-    `processo_syntheses` (com role injetado) + tomador + cdas + aiims + previous
+    `processo_syntheses` (com role injetado) + tomador + cdas + previous
+    (v2.8, 2026-07-14: aiims REMOVIDO do payload — teardown autos-wide)
 
 Reproduz FIELMENTE garantis_shared.engine_v6.layer3_merito_synthesis.loaders +
 materializer._build_payload_and_context (SQL copiado de la). Read-only: usa o
@@ -160,25 +161,22 @@ def main() -> int:
             ps_by_pn[r["pn"]] = r["summary"]
     print(f"  {len(ps_by_pn)}/{len(all_pns)} processos com ps_card", file=sys.stderr)
 
-    # 4) cda/aiim cards — copia load_cdas_aiims.
-    print("[4/6] cda/aiim cards...", file=sys.stderr)
+    # 4) cda cards — copia load_cdas (v2.8: kind='aiim' saiu do loader/payload).
+    print("[4/6] cda cards...", file=sys.stderr)
     cda_by_pn: dict[str, list] = {}
-    aiim_by_pn: dict[str, list] = {}
     for ch in _chunks(all_pns, 60):
         crows = q(
             f"""
-            SELECT entity_id AS pn, kind, summary
+            SELECT entity_id AS pn, summary
             FROM leitura_conexos.dossier_artifacts
             WHERE entity_type='processo' AND entity_id = ANY({_pg_array(ch)})
-              AND kind IN ('cda','aiim') AND superseded_at IS NULL
-            ORDER BY kind, generated_at DESC
+              AND kind = 'cda' AND superseded_at IS NULL
+            ORDER BY generated_at DESC
             """,
             token,
         )
         for r in crows:
-            (cda_by_pn if r["kind"] == "cda" else aiim_by_pn).setdefault(
-                r["pn"], []
-            ).append(r["summary"])
+            cda_by_pn.setdefault(r["pn"], []).append(r["summary"])
 
     # 5) tomador cards (por cnpj_basico) — copia load_tomador_card.
     print("[5/6] tomador cards...", file=sys.stderr)
@@ -226,7 +224,6 @@ def main() -> int:
         cnpj = meta.get("cnpj_principal") or ""
         basico = cnpj.replace(".", "").replace("/", "").replace("-", "")[:8]
         cdas = [c for pn, _ in roles for c in cda_by_pn.get(pn, [])]
-        aiims = [a for pn, _ in roles for a in aiim_by_pn.get(pn, [])]
         payload = {
             "merito_id": mid,
             "merito_context": "global",
@@ -237,7 +234,6 @@ def main() -> int:
             "processo_syntheses": ps_cards,
             "tomador": tom_by_basico.get(basico),
             "cdas": cdas,
-            "aiims": aiims,
             "previous_snapshot": None,  # nao usado pro risco; trajetoria desabilitada
         }
         fixture = {
