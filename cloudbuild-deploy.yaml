@@ -76,7 +76,12 @@ steps:
       # 715 calls medidos (memory l1-triage-503-burst-quota-semaphore-rootcause). PONTE ate
       # a fila DBOS de triagem + bump de quota flash-lite (GCP) deixarem lite voltar barato.
       # Estava --update-env-vars (rev 00242); persistido aqui pra nao resetar no proximo deploy.
-      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,MOV_TRIAGE_MODEL=gemini-2.5-flash,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true'
+      # GEMINI_BACKEND=vertex (2026-07-18): Gemini via Vertex AI (aiplatform) em vez do
+      # AI Studio, que bateu o tier spending cap (US$250/mes, imposto pelo Google;
+      # creditos GCP nao cobrem o AI Studio). Vertex = mesmos modelos, mesmo preco/token,
+      # sem esse teto. Lido por garantis_shared.gemini_backend (default aistudio no codigo).
+      # Reverter: trocar pra aistudio aqui + redeploy. Requer SA com roles/aiplatform.user.
+      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,MOV_TRIAGE_MODEL=gemini-2.5-flash,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
       - '--set-secrets'
       - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
 
