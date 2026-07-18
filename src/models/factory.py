@@ -57,14 +57,19 @@ def create_genai_client(api_key: Optional[str] = None) -> genai.Client:
     Raises:
         ValueError: Se não houver API key disponível.
     """
-    api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if not api_key:
+    # Kill-switch GEMINI_BACKEND (aistudio|vertex) via garantis_shared. O guard de
+    # key só vale no modo aistudio (vertex autentica pelo SA — sem key). Toda a
+    # construção do Client (endpoint + auth) é decidida pelo helper; aqui só
+    # passamos o http_options (transport/keepalive/limits) que vale nos dois modos.
+    from garantis_shared.gemini_backend import gemini_available, make_genai_client
+
+    if not gemini_available(api_key):
         raise ValueError("GEMINI_API_KEY environment variable not set")
 
     # NOTA: sync e async exigem instancias de transport SEPARADAS (httpx.HTTPTransport
     # vs httpx.AsyncHTTPTransport — classes diferentes, nao da pra compartilhar).
-    return genai.Client(
-        api_key=api_key,
+    return make_genai_client(
+        api_key,
         http_options=types.HttpOptions(
             timeout=_GENAI_TIMEOUT_MS,
             client_args={
