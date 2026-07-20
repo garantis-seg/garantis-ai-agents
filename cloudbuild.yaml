@@ -1,3 +1,4 @@
+# ⚠️ LEGACY — NÃO RODE À MÃO: usa --set-env-vars com 2 vars e CLOBBERA o env do serviço (derruba GEMINI_BACKEND=vertex e todas as flags). Deploy real = cloudbuild-deploy.yaml (trigger). Ver incidente freeze-drop 2026-07-13.
 steps:
   # Build + push with Kaniko (cache enabled — pip install cached when requirements.txt unchanged)
   - name: 'gcr.io/kaniko-project/executor:latest'
