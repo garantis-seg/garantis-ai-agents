@@ -48,7 +48,9 @@ steps:
     # (394302633873@cloudbuild.gserviceaccount.com, roles/aiplatform.user).
     # A key GEMINI_API_KEY_EVAL abaixo segue injetada como FALLBACK aistudio
     # (flipar removendo esta env ou setando GEMINI_BACKEND=aistudio).
-    env: ['GEMINI_BACKEND=vertex']
+    # MOV_FACTSHEET_MODEL explicito = paridade com prod (eval testava 2.5 por
+    # default do provider enquanto prod roda 3.1 — F0 2026-07-21).
+    env: ['GEMINI_BACKEND=vertex', 'MOV_FACTSHEET_MODEL=gemini-3.1-flash-lite']
     secretEnv: ['GEMINI_API_KEY']
     timeout: '300s'
 
