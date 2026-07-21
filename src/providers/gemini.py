@@ -246,9 +246,14 @@ class GeminiProvider(BaseLLMProvider):
         passa thinking_budget=0 p/ disable (elimina variabilidade dos thinking
         tokens, ver Bug 4 handoff).
         """
+        # Clamp único (F0 2.5→3.1, 2026-07-21): teto da família Gemini 2.5 no
+        # Vertex é 65535 — max_output_tokens=65536 dá 400 INVALID_ARGUMENT.
+        # 3.1 aceita mais, mas 65535 não muda comportamento na prática (saídas
+        # reais são ordens de magnitude menores). Clampar aqui cobre todo
+        # caller (generate + agenerate) sem depender de literal por-agent.
         config_params: Dict[str, Any] = {
             "temperature": temperature,
-            "max_output_tokens": max_tokens,
+            "max_output_tokens": min(max_tokens, 65535),
         }
 
         # Structured output
