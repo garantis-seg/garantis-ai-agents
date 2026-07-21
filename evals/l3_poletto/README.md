@@ -34,8 +34,9 @@ python dump_fixtures.py                 # -> fixtures/<merito_id>.json (55 méri
 # 2) Baseline SEM LLM (valida o harness reproduzindo o diagnóstico)
 python run_l3_eval.py                    # --from-snapshot (usa o risco de produção gravado)
 
-# 3) Re-rodar o L3 de verdade (precisa da key de EVAL, NUNCA a de prod)
-export GEMINI_API_KEY=$(gcloud secrets versions access latest --secret=GEMINI_API_KEY_EVAL --project=neqsti)
+# 3) Re-rodar o L3 de verdade — vertex/ADC por default, sem key
+#    (aistudio legacy = GEMINI_BACKEND=aistudio + GEMINI_API_KEY manual, NUNCA a de prod;
+#     a key GEMINI_API_KEY_EVAL foi aposentada 2026-07-21)
 python run_l3_eval.py --live --runs 3                 # 3-run majority sobre os cards congelados
 python run_l3_eval.py --live --limit 3               # smoke
 

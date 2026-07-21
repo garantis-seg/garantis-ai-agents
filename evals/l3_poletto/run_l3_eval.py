@@ -11,9 +11,10 @@ DOIS modos:
                     cards congelados dos fixtures, 3-run majority, aplica o
                     risk_decomposition mode=new (FIEL a producao: a matriz
                     substitui o LLM quando derived != Indeterminado), e compara
-                    com Poletto. Precisa de GEMINI_API_KEY (use a _EVAL, NUNCA prod):
-                      export GEMINI_API_KEY=$(gcloud secrets versions access latest \
-                        --secret=GEMINI_API_KEY_EVAL --project=neqsti)
+                    com Poletto. Backend default = vertex/ADC, sem key
+                    (`gcloud auth application-default login`); aistudio legacy =
+                    GEMINI_BACKEND=aistudio explicito + GEMINI_API_KEY manual
+                    (NUNCA a de prod; a _EVAL foi aposentada 2026-07-21).
 
 A/B (gate estilo gate_v4): rodar --live com o prompt ATUAL e `--save base.json`;
 trocar o prompt (outra branch) e rodar `--compare-to base.json` -> imprime o DELTA
@@ -122,11 +123,14 @@ async def _pairs_live(
     """Roda os fixtures CONCORRENTES (semaforo) — cada merito e independente, entao
     o paralelismo nao muda o resultado, so o wall-clock (~6x). Cap conservador
     pra nao estourar TPM da key de eval."""
-    if not os.environ.get("GEMINI_API_KEY"):
+    # Guard backend-aware (garantis_shared): vertex (default) = ADC, sem key;
+    # so exige GEMINI_API_KEY sob GEMINI_BACKEND=aistudio explicito.
+    from garantis_shared.gemini_backend import gemini_available
+
+    if not gemini_available():
         raise SystemExit(
-            "GEMINI_API_KEY nao setada. Use a _EVAL:\n"
-            "  export GEMINI_API_KEY=$(gcloud secrets versions access latest "
-            "--secret=GEMINI_API_KEY_EVAL --project=neqsti)"
+            "GEMINI_BACKEND=aistudio sem GEMINI_API_KEY setada "
+            "(default = vertex/ADC, sem key; a _EVAL foi aposentada 2026-07-21)"
         )
     sem = asyncio.Semaphore(concurrency)
     done = 0
@@ -169,7 +173,8 @@ def _report_to_dict(r: Report) -> dict:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--live", action="store_true", help="re-roda o L3 local (precisa GEMINI_API_KEY_EVAL)")
+    ap.add_argument("--live", action="store_true",
+                    help="re-roda o L3 local (vertex/ADC default; key so com GEMINI_BACKEND=aistudio)")
     ap.add_argument("--runs", type=int, default=3, help="N runs por merito (majority); so --live")
     ap.add_argument("--limit", type=int, default=0, help="amostra N fixtures")
     ap.add_argument("--save", type=str, default="", help="salva o report (baseline) em FILE")
