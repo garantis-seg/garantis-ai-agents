@@ -24,7 +24,9 @@ de cards atuais. Falha se accuracy regredir além de threshold configurado.
 Requisitos:
 
 - Node 20+ e Python 3.11+
-- `GEMINI_API_KEY` no env (ou via `gcloud secrets versions access`)
+- Auth Gemini: default = vertex/ADC (`gcloud auth application-default login`, sem
+  key). Aistudio legacy = `GEMINI_BACKEND=aistudio` + `GEMINI_API_KEY` manual
+  (a key `GEMINI_API_KEY_EVAL` foi aposentada 2026-07-21)
 - Conexão ao Cloud SQL pra gerar snapshot (`cloud-sql-proxy` apontando pra
   instância `neqsti:southamerica-east1:garantis-db`)
 
@@ -35,7 +37,7 @@ npm ci
 
 # Gerar snapshot inicial (precisa DB connection)
 $env:DATABASE_URL = "postgresql://USER:PASS@localhost:5432/garantis"
-$env:GEMINI_API_KEY = (gcloud secrets versions access latest --secret=GEMINI_API_KEY --project=neqsti)
+# Auth Gemini = vertex/ADC por default (sem key; ver Requisitos acima)
 python scripts/build_golden_snapshot.py --out golden/snapshot_v1.yaml --sample 30
 
 # Rodar eval
@@ -84,7 +86,8 @@ no final). User vira pra **block** removendo `||true` depois de validar
 estabilidade.
 
 Variáveis disponíveis no step:
-- `GEMINI_API_KEY` via Secret Manager (`projects/$PROJECT_ID/secrets/GEMINI_API_KEY/versions/latest`)
+- Auth Gemini = `GEMINI_BACKEND=vertex` + ADC do SA do Cloud Build
+  (`roles/aiplatform.user`) — sem secret injetado desde 2026-07-21
 - Snapshot lido de `golden/snapshot_v1.yaml` (commitado no repo)
 - Cloud Build SA precisa de `roles/secretmanager.secretAccessor`
 
@@ -111,7 +114,7 @@ e casos KNIFE-EDGE que flipam com qualquer perturbação de byte (marcados
 Pra gatear uma mudança de prompt/schema do v4 de forma honesta:
 
 ```bash
-export GEMINI_API_KEY=$(gcloud secrets versions access latest --secret=GEMINI_API_KEY_EVAL --project=neqsti)
+# Auth = vertex/ADC por default (sem key; aistudio legacy = GEMINI_BACKEND=aistudio + key manual)
 # na base (ex: master):
 python gate_v4.py --runs 3 --save baseline_master.json
 # no branch com a mudança:

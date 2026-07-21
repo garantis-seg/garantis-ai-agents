@@ -46,26 +46,16 @@ steps:
     # GEMINI_BACKEND=vertex: eval roda em Vertex por DEFAULT (paridade com prod +
     # sem o spending cap do AI Studio). Auth = ADC do SA do Cloud Build
     # (394302633873@cloudbuild.gserviceaccount.com, roles/aiplatform.user).
-    # A key GEMINI_API_KEY_EVAL abaixo segue injetada como FALLBACK aistudio
-    # (flipar removendo esta env ou setando GEMINI_BACKEND=aistudio).
+    # 2026-07-21: a key GEMINI_API_KEY_EVAL foi APOSENTADA (secret deletado do
+    # GSM) — o eval é ADC PURO, sem availableSecrets. Rodar em aistudio legacy =
+    # setar GEMINI_BACKEND=aistudio aqui + prover GEMINI_API_KEY manualmente
+    # (NUNCA a key de prod: o promptfoo roda direto do build container, bypassa
+    # o rate-limiter do ai-agents e dividir a key saturou a quota do cascade —
+    # incidente fila congelada 2026-06-10).
     # MOV_FACTSHEET_MODEL explicito = paridade com prod (eval testava 2.5 por
     # default do provider enquanto prod roda 3.1 — F0 2026-07-21).
     env: ['GEMINI_BACKEND=vertex', 'MOV_FACTSHEET_MODEL=gemini-3.1-flash-lite']
-    secretEnv: ['GEMINI_API_KEY']
     timeout: '300s'
-
-availableSecrets:
-  secretManager:
-    # GEMINI_API_KEY_EVAL: key DEDICADA do eval (API key GCP restrita a
-    # generativelanguage.googleapis.com, quota separada) — hoje FALLBACK aistudio
-    # (backend default do eval = vertex via env acima; a key só é usada se
-    # GEMINI_BACKEND voltar pra aistudio). NUNCA usar a
-    # GEMINI_API_KEY de prod aqui — o promptfoo roda direto do build container
-    # (bypassa o rate-limiter do ai-agents) a cada push em master, e dividir a
-    # key saturava a quota do cascade user-facing (incidente fila congelada
-    # 2026-06-10, findings dbos-cascade-resilience-2026-06-10).
-    - versionName: projects/$PROJECT_ID/secrets/GEMINI_API_KEY_EVAL/versions/latest
-      env: 'GEMINI_API_KEY'
 
 options:
   logging: CLOUD_LOGGING_ONLY

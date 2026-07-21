@@ -13,9 +13,9 @@ A resposta: rodar N vezes (default 3), decidir por MAIORIA por caso, e comparar
 contra um sumário de baseline — só reprova em regressão NOVA (caso que era
 majority-PASS no baseline e virou majority-FAIL), ignorando os _boundary.
 
-Uso (precisa de GEMINI_API_KEY — usar a GEMINI_API_KEY_EVAL, NUNCA a de prod):
-  export GEMINI_API_KEY=$(gcloud secrets versions access latest \
-      --secret=GEMINI_API_KEY_EVAL --project=neqsti)
+Uso (backend default = vertex/ADC, sem key — `gcloud auth application-default login`
+basta; aistudio legacy = GEMINI_BACKEND=aistudio explícito + GEMINI_API_KEY manual,
+NUNCA a de prod — a key GEMINI_API_KEY_EVAL foi aposentada 2026-07-21):
   # 1) na base de comparação (ex: master):
   python gate_v4.py --runs 3 --save baseline_master.json
   # 2) no branch com a mudança:
@@ -84,8 +84,15 @@ def main() -> int:
     ap.add_argument("--compare-to", help="sumário de baseline pra detectar regressão nova")
     args = ap.parse_args()
 
-    if not os.environ.get("GEMINI_API_KEY"):
-        raise SystemExit("GEMINI_API_KEY não setada (use a GEMINI_API_KEY_EVAL)")
+    # Guard backend-aware (garantis_shared): vertex (default) = ADC, sem key;
+    # só exige GEMINI_API_KEY sob GEMINI_BACKEND=aistudio explícito.
+    from garantis_shared.gemini_backend import gemini_available
+
+    if not gemini_available():
+        raise SystemExit(
+            "GEMINI_BACKEND=aistudio sem GEMINI_API_KEY setada "
+            "(default = vertex/ADC, sem key; a _EVAL foi aposentada 2026-07-21)"
+        )
 
     # Dir nomeado (não auto-removido): preserva runs parciais se um run travar
     # (quota/timeout) e evita o PermissionError do cleanup com node órfão
