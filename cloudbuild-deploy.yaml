@@ -81,9 +81,19 @@ steps:
       # creditos GCP nao cobrem o AI Studio). Vertex = mesmos modelos, mesmo preco/token,
       # sem esse teto. Lido por garantis_shared.gemini_backend (default aistudio no codigo).
       # Reverter: trocar pra aistudio aqui + redeploy. Requer SA com roles/aiplatform.user.
-      - 'DEFAULT_MODEL=gemini-2.5-flash-lite,MOV_TRIAGE_MODEL=gemini-2.5-flash,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
-      - '--set-secrets'
-      - 'GOOGLE_API_KEY=GEMINI_API_KEY:latest'
+      # Trilha A (2026-07-21, OK Elton): DEFAULT_MODEL 2.5-flash-lite -> 3.1-flash-lite e
+      # MOV_TRIAGE_MODEL 2.5-flash -> 3.1-flash-lite (gold staging 16/26 vs 15/26; familia
+      # transito-julgado nao reproduz). A ponte "flash FULL por 503 do 2.5-lite" (2026-06-27,
+      # acima) fica HISTORICA — sob Vertex o 3.1-flash-lite nao tem aquela quota compartilhada.
+      # NUNCA usar gemini-3.1-flash NAO-lite: nao existe no Vertex (404).
+      - 'DEFAULT_MODEL=gemini-3.1-flash-lite,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
+      # Fase 3 vertex-sem-key (2026-07-21, OK Elton): GOOGLE_API_KEY=GEMINI_API_KEY:latest
+      # REMOVIDO — auth e ADC do service account (GEMINI_BACKEND=vertex; provado em staging
+      # 2026-07-21 rodando sem key nenhuma). --clear-secrets (e nao so tirar a flag) porque
+      # sem ele o secret da revisao anterior fica grudado na proxima revisao. Era o UNICO
+      # secret do servico (verificado no live 2026-07-21). Reverter: restaurar
+      # `--set-secrets GOOGLE_API_KEY=GEMINI_API_KEY:latest` no lugar do clear.
+      - '--clear-secrets'
 
 options:
   logging: CLOUD_LOGGING_ONLY

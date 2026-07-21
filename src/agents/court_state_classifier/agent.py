@@ -34,7 +34,9 @@ from .schemas import CourtStateClassification, CourtStateClassifierRequest
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_MODEL = os.getenv("COURT_STATE_CLASSIFIER_MODEL", "gemini-2.5-flash-lite")
+# Trilha A (2026-07-21, OK Elton): 2.5-flash-lite -> 3.1-flash-lite (gold staging 16/26 vs 15/26).
+# NUNCA usar gemini-3.1-flash NAO-lite — nao existe no Vertex (404).
+DEFAULT_MODEL = os.getenv("COURT_STATE_CLASSIFIER_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 

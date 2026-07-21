@@ -38,7 +38,8 @@ async def health_check():
         "status": "healthy",
         "service": "garantis-ai-agents",
         "version": "0.5.0",
-        "model_default": os.getenv("DEFAULT_MODEL", "gemini-2.5-flash-lite"),
+        # Trilha A (2026-07-21): display default 2.5-flash-lite -> 3.1-flash-lite.
+        "model_default": os.getenv("DEFAULT_MODEL", "gemini-3.1-flash-lite"),
         "prompt_default": os.getenv("DEFAULT_PROMPT_VERSION", "v3"),
         "timestamp": datetime.now().isoformat(),
         "uptime_seconds": round(uptime, 2),
@@ -67,7 +68,8 @@ async def readiness_check(response: Response):
         logger.warning("Gemini API key not configured")
 
     # Check model configuration
-    default_model = os.getenv("DEFAULT_MODEL", "gemini-2.5-flash-lite")
+    # Trilha A (2026-07-21): display default 2.5-flash-lite -> 3.1-flash-lite.
+    default_model = os.getenv("DEFAULT_MODEL", "gemini-3.1-flash-lite")
     checks["model_config"] = {"ready": True, "model": default_model, "status": "ready"}
 
     result = {
