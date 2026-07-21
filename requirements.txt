@@ -53,7 +53,7 @@ pypdf>=4.0.0
 # ver acima). ⚠️ ENGINE-PATH: o próximo deploy DELIBERADO do ai-agents puxa 81
 # versões de shared (metodologia de risco recente, majoritariamente GATED) — smoke
 # de freeze (245 grades hash) OBRIGATÓRIO no deploy; se mudar grade, segurar.
-garantis-shared==1.320.0
+garantis-shared==1.324.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
