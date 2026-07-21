@@ -43,13 +43,21 @@ steps:
           exit 0
         }
         echo "[promptfoo] eval passed"
+    # GEMINI_BACKEND=vertex: eval roda em Vertex por DEFAULT (paridade com prod +
+    # sem o spending cap do AI Studio). Auth = ADC do SA do Cloud Build
+    # (394302633873@cloudbuild.gserviceaccount.com, roles/aiplatform.user).
+    # A key GEMINI_API_KEY_EVAL abaixo segue injetada como FALLBACK aistudio
+    # (flipar removendo esta env ou setando GEMINI_BACKEND=aistudio).
+    env: ['GEMINI_BACKEND=vertex']
     secretEnv: ['GEMINI_API_KEY']
     timeout: '300s'
 
 availableSecrets:
   secretManager:
     # GEMINI_API_KEY_EVAL: key DEDICADA do eval (API key GCP restrita a
-    # generativelanguage.googleapis.com, quota separada). NUNCA usar a
+    # generativelanguage.googleapis.com, quota separada) — hoje FALLBACK aistudio
+    # (backend default do eval = vertex via env acima; a key só é usada se
+    # GEMINI_BACKEND voltar pra aistudio). NUNCA usar a
     # GEMINI_API_KEY de prod aqui — o promptfoo roda direto do build container
     # (bypassa o rate-limiter do ai-agents) a cada push em master, e dividir a
     # key saturava a quota do cascade user-facing (incidente fila congelada

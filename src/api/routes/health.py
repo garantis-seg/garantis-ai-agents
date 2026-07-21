@@ -16,9 +16,14 @@ _start_time = datetime.now()
 
 
 def check_gemini_api() -> bool:
-    """Check if Gemini API key is configured."""
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
-    return api_key is not None and len(api_key) > 0
+    """Check if Gemini is callable (backend-aware).
+
+    Sob GEMINI_BACKEND=vertex a auth é ADC do service account — healthy sem key.
+    Sob aistudio (default), exige GEMINI_API_KEY/GOOGLE_API_KEY no ambiente.
+    """
+    from garantis_shared.gemini_backend import gemini_available
+
+    return gemini_available()
 
 
 @router.get("/health")

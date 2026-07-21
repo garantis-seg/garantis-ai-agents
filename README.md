@@ -39,6 +39,7 @@ pip install ".[client]"
 
 ```bash
 # Configurar variáveis de ambiente
+# (prod roda GEMINI_BACKEND=vertex via ADC — a key é o fallback aistudio)
 export GOOGLE_API_KEY=your-api-key
 
 # Rodar servidor
@@ -56,7 +57,8 @@ uvicorn src.api.main:app --reload
 
 | Variável | Descrição | Default |
 |----------|-----------|---------|
-| `GOOGLE_API_KEY` | Chave API do Gemini | - |
+| `GOOGLE_API_KEY` | Chave API do Gemini (fallback aistudio; em prod use `GEMINI_BACKEND=vertex` com ADC, sem key) | - |
+| `GEMINI_BACKEND` | Backend Gemini: `vertex` (prod, auth ADC) ou `aistudio` (key) | `aistudio` |
 | `DEFAULT_PROVIDER` | Provider padrão | `gemini` |
 | `DEFAULT_MODEL` | Modelo padrão | `gemini-2.5-flash-lite` |
 
