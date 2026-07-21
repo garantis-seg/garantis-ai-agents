@@ -26,6 +26,15 @@ sys.path.insert(0, str(_REPO_ROOT))
 
 from src.agents.mov_factsheet import classify_mov_factsheet  # noqa: E402
 
+# UM event loop persistente pro processo inteiro do provider (F0 2.5→3.1,
+# 2026-07-21): `LLMFactory._instances` cacheia o provider — e o client httpx
+# do google-genai — entre casos; `asyncio.run()` por caso fechava o loop ao
+# qual o client cacheado ficou preso → "Event loop is closed" em ~50% dos
+# casos seguintes. Loop único = o client vive sempre no loop em que nasceu.
+# Fix EVAL-ONLY: em prod o factory roda num worker long-lived com 1 loop, o
+# cache lá é correto e não muda.
+_LOOP = asyncio.new_event_loop()
+
 
 def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     """Sync entrypoint exigido pelo PromptFoo. Delega pra coroutine.
@@ -38,7 +47,7 @@ def call_api(prompt: str, options: dict[str, Any], context: dict[str, Any]) -> d
     Returns:
         { "output": <json string do card>, "tokenUsage": {...}, "cost": float, "cached": false }
     """
-    return asyncio.run(_call_api_async(context))
+    return _LOOP.run_until_complete(_call_api_async(context))
 
 
 def _empty_to_none(d: dict[str, Any] | None) -> dict[str, Any] | None:

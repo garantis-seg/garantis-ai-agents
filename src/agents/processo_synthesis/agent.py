@@ -364,9 +364,11 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
         response_schema=ProcessoSynthesisCard,
         thinking_budget=0,
         seed=seed,
-        # max_tokens 16384(default)->65536 (2026-06-17): processos com MUITOS movs
+        # max_tokens 16384(default)->65535 (2026-06-17): processos com MUITOS movs
         # (ex 680067, 393) geravam card grande demais -> JSON truncado -> 0 L2 cards.
-        max_tokens=65536,
+        # 65535 (nao 65536): limite da familia 2.5 no Vertex — 65536 da 400
+        # INVALID_ARGUMENT (F0 2.5→3.1, 2026-07-21; GeminiProvider tambem clampa).
+        max_tokens=65535,
     )
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
 
