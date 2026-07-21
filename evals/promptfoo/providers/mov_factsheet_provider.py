@@ -74,7 +74,11 @@ async def _call_api_async(context: dict[str, Any]) -> dict[str, Any]:
             mov=mov,
             documentos_anexados=docs,
             fallback_context=fb_ctx,
-            model=os.getenv("MOV_FACTSHEET_MODEL", "gemini-2.5-flash-lite"),
+            # Default espelha o AGENTE de prod (src/agents/mov_factsheet/agent.py,
+            # 3.1-flash-lite desde 2026-06-26). Drift 2.5 aqui deixava o eval
+            # testando modelo errado E morto no Vertex (400: max_tokens=65536 >
+            # limite 65535 da familia 2.5) — F0 do projeto 2.5→3.1, 2026-07-21.
+            model=os.getenv("MOV_FACTSHEET_MODEL", "gemini-3.1-flash-lite"),
             provider=os.getenv("DEFAULT_PROVIDER", "gemini"),
         )
     except Exception as e:
