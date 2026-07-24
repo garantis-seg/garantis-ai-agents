@@ -53,7 +53,12 @@ pypdf>=4.0.0
 # ver acima). ⚠️ ENGINE-PATH: o próximo deploy DELIBERADO do ai-agents puxa 81
 # versões de shared (metodologia de risco recente, majoritariamente GATED) — smoke
 # de freeze (245 grades hash) OBRIGATÓRIO no deploy; se mudar grade, segurar.
-garantis-shared==1.330.0
+# 2026-07-24 (trem registro de modelos): bump p/ a versao que traz
+# garantis_shared.llm_models (providers/gemini.py GEMINI_PRICING agora LE o catalogo).
+# ⚠️ TREM — CONFERIR: este == DEVE ser a versao REAL publicada no AR pos-merge do
+# shared PR (feat/llm-models-registry) + #213. Estimativa 1.333.0 (1.331 last + 2
+# merges); "corrida de pin" ja aconteceu 2x — validar antes do deploy deliberado.
+garantis-shared==1.333.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0

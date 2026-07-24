@@ -116,19 +116,17 @@ _gemini_tpm_limiter = _TokenRateLimiter(
     name="gemini-tpm",
 )
 
-# Model pricing (USD per 1M tokens) - Updated Dec 2024
+# Model pricing (USD per 1M tokens) — derivado do catalogo UNICO
+# garantis_shared.llm_models.MODELS (fonte de verdade cross-repo). Antes era uma
+# copia hardcoded que driftava do cost_pricing.py do shared; agora e o MESMO valor
+# byte-a-byte + inclui gemini-3.5-flash (o modelo do B1). Sem a entry do 3.5-flash,
+# get_model_pricing devolvia 0/0 e engine_llm_calls gravava cost_usd=0 pro cascade
+# B1 (~US$25/semana invisivel — F2 2026-07-24).
+from garantis_shared.llm_models import gemini_pricing_pairs
+
 GEMINI_PRICING = {
-    # Gemini 3.x (2026-06-26) — preço oficial paid tier; espelha
-    # garantis-shared engine_v6/cost_pricing.py. Sem isto, get_model_pricing
-    # devolve 0/0 e engine_llm_calls grava cost_usd=0 pro cascade 3.1.
-    "gemini-3.1-flash-lite": {"input_per_1m": 0.25, "output_per_1m": 1.50},
-    "gemini-2.5-pro": {"input_per_1m": 1.25, "output_per_1m": 10.00},
-    "gemini-2.5-flash": {"input_per_1m": 0.15, "output_per_1m": 0.60},
-    "gemini-2.5-flash-lite": {"input_per_1m": 0.075, "output_per_1m": 0.30},
-    "gemini-2.0-flash": {"input_per_1m": 0.10, "output_per_1m": 0.40},
-    "gemini-2.0-flash-lite": {"input_per_1m": 0.075, "output_per_1m": 0.30},
-    "gemini-1.5-pro": {"input_per_1m": 1.25, "output_per_1m": 5.00},
-    "gemini-1.5-flash": {"input_per_1m": 0.075, "output_per_1m": 0.30},
+    model: {"input_per_1m": inp, "output_per_1m": out}
+    for model, (inp, out) in gemini_pricing_pairs().items()
 }
 
 DEFAULT_MODEL = "gemini-2.5-flash-lite"
