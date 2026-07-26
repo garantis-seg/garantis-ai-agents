@@ -18,20 +18,19 @@ steps:
   # exclui `tests/` e o Dockerfile so faz COPY de src/.)
   # Medido em python:3.11-slim (2026-07-26): install 61s + suite 4s.
   #
-  # ⚠️ OS 8 --deselect JA ESTAO VERMELHOS EM master — sao o que este gate EXPOE, nao o
+  # ⚠️ OS 7 --deselect JA ESTAO VERMELHOS EM master — sao o que este gate EXPOE, nao o
   # que ele protege. NAO cresca esta lista pra fazer build passar.
-  #   7 deles sao STALE de texto de prompt (test_merito_synthesis_{consistency,routing}):
-  #     assertam 'Tema 372' / 'Tema 725' / frases removidas DE PROPOSITO nos commits
-  #     a0a82f8 (2026-05-25) e c4452ea (2026-06-20). Conserto = atualizar o assert.
-  #   ⚠️ 1 NAO E STALE e NAO E de prompt:
-  #     test_gemini_determinism.py::test_agents_pass_thinking_budget_zero le o
-  #     FONTE (inspect.getsource) e exige `thinking_budget=0` E `temperature=0.0` nos
-  #     3 agents. Ficou vermelho em 9425766 (2026-05-28, "Vision helper + safety caps"),
-  #     que apagou `temperature=0.0` de src/agents/mov_factsheet/agent.py — hoje
-  #     `grep -c temperature src/agents/mov_factsheet/` = 0, contra 4 e 2 nos outros
-  #     dois agents. Era o UNICO guard automatico desse par, e variancia run-a-run do
-  #     B1 e lane ABERTA. Repor a temperature muda saida de risco => precisa de OK
-  #     explicito do Elton (CLAUDE.md raiz); por isso fica parado AQUI, nomeado.
+  # Sao todos STALE de texto de prompt (test_merito_synthesis_{consistency,routing}):
+  # assertam 'Tema 372' / 'Tema 725' / frases removidas DE PROPOSITO nos commits
+  # a0a82f8 (2026-05-25) e c4452ea (2026-06-20). Conserto = atualizar o assert.
+  #
+  # (Havia um 8o — test_gemini_determinism::test_agents_pass_thinking_budget_zero.
+  #  Foi INVESTIGADO em vez de parqueado: o commit 9425766 (2026-05-28) nao perdeu o
+  #  guard, EXTRAIU a chamada do L1 pro helper `_utils/vision.py` e a `temperature=0.0`
+  #  desceu junto. Medido no boundary do SDK com o modelo de prod, o L1 sai com
+  #  temperature=0.0 nos dois ramos. Era o TESTE que olhava o modulo errado — corrigido
+  #  neste mesmo PR, com mutation testing (pega `thinking_budget=8192` no agent E
+  #  `temperature=0.7` no helper; a versao ingenua deixava as duas passarem).)
   - name: 'python:3.11-slim'
     id: 'unit-tests'
     entrypoint: 'bash'
@@ -44,7 +43,6 @@ steps:
           pip install --quiet --no-cache-dir -r requirements.txt
         pip install --quiet --no-cache-dir "pytest>=8.0.0" "pytest-asyncio>=0.24.0"
         python -m pytest -q -p no:cacheprovider \
-          --deselect "tests/test_gemini_determinism.py::test_agents_pass_thinking_budget_zero" \
           --deselect "tests/test_merito_synthesis_consistency.py::test_consistency_check_lists_pro_alto_phrases" \
           --deselect "tests/test_merito_synthesis_consistency.py::test_consistency_check_releitura_explicit" \
           --deselect "tests/test_merito_synthesis_routing.py::test_rules_fiscal_keywords" \
