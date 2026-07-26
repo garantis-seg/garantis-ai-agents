@@ -1,7 +1,63 @@
 steps:
+  # ── GATE fail-closed (2026-07-26): unit tests ANTES de queimar imagem e deployar ──
+  # Este deploy era kaniko -> gcloud run deploy, SEM verificacao nenhuma. Os 227
+  # testes existem, rodam em 4s, nao tocam rede nem secret — e nunca rodaram em build
+  # algum (o repo tambem nao tem CI de PR). O que passava batido e especificamente
+  # QUEBRA DE CONTRATO com o garantis-shared em import LAZY (ex.
+  # `from garantis_shared.engine_v6...derivacoes import` DENTRO da funcao, em
+  # src/agents/mov_factsheet/agent.py:135): nao derruba o boot, entao o `run deploy`
+  # conclui VERDE e o dano so aparece como 500 no hot path L1 -> l1_degraded ->
+  # merito indeterminado. A suite importa 14 modulos do garantis_shared e tem canario
+  # de pin de preco (test_vision_filter.py:24) — o mesmo drift que ja custou
+  # "~US$25/semana invisivel" (comentario em src/providers/gemini.py:123-124).
+  #
+  # Canal de deps IDENTICO ao cloudbuild-eval.yaml (keyring + ADC do SA do Cloud
+  # Build pro AR) e imagem IDENTICA a base do Dockerfile. DIFERENCA pro eval: sem
+  # `set +e` e sem `|| exit 0` — pytest != 0 aborta o build e o kaniko NEM RODA.
+  # (Os testes rodam em step proprio, e nao dentro da imagem, porque .dockerignore:12
+  # exclui `tests/` e o Dockerfile so faz COPY de src/.)
+  # Medido em python:3.11-slim (2026-07-26): install 61s + suite 4s.
+  #
+  # ⚠️ OS 8 --deselect JA ESTAO VERMELHOS EM master — sao o que este gate EXPOE, nao o
+  # que ele protege. NAO cresca esta lista pra fazer build passar.
+  #   7 deles sao STALE de texto de prompt (test_merito_synthesis_{consistency,routing}):
+  #     assertam 'Tema 372' / 'Tema 725' / frases removidas DE PROPOSITO nos commits
+  #     a0a82f8 (2026-05-25) e c4452ea (2026-06-20). Conserto = atualizar o assert.
+  #   ⚠️ 1 NAO E STALE e NAO E de prompt:
+  #     test_gemini_determinism.py::test_agents_pass_thinking_budget_zero le o
+  #     FONTE (inspect.getsource) e exige `thinking_budget=0` E `temperature=0.0` nos
+  #     3 agents. Ficou vermelho em 9425766 (2026-05-28, "Vision helper + safety caps"),
+  #     que apagou `temperature=0.0` de src/agents/mov_factsheet/agent.py — hoje
+  #     `grep -c temperature src/agents/mov_factsheet/` = 0, contra 4 e 2 nos outros
+  #     dois agents. Era o UNICO guard automatico desse par, e variancia run-a-run do
+  #     B1 e lane ABERTA. Repor a temperature muda saida de risco => precisa de OK
+  #     explicito do Elton (CLAUDE.md raiz); por isso fica parado AQUI, nomeado.
+  - name: 'python:3.11-slim'
+    id: 'unit-tests'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -eo pipefail
+        pip install --quiet --no-cache-dir keyrings.google-artifactregistry-auth
+        PIP_EXTRA_INDEX_URL=https://southamerica-east1-python.pkg.dev/$PROJECT_ID/python-packages/simple/ \
+          pip install --quiet --no-cache-dir -r requirements.txt
+        pip install --quiet --no-cache-dir "pytest>=8.0.0" "pytest-asyncio>=0.24.0"
+        python -m pytest -q -p no:cacheprovider \
+          --deselect "tests/test_gemini_determinism.py::test_agents_pass_thinking_budget_zero" \
+          --deselect "tests/test_merito_synthesis_consistency.py::test_consistency_check_lists_pro_alto_phrases" \
+          --deselect "tests/test_merito_synthesis_consistency.py::test_consistency_check_releitura_explicit" \
+          --deselect "tests/test_merito_synthesis_routing.py::test_rules_fiscal_keywords" \
+          --deselect "tests/test_merito_synthesis_routing.py::test_rules_trabalhista_keywords" \
+          --deselect "tests/test_merito_synthesis_routing.py::test_rules_misto_keywords_and_confidence" \
+          --deselect "tests/test_merito_synthesis_routing.py::test_prompt_dispatch_by_dominant_tipo[fiscal-must_contain0-must_not_contain0]" \
+          --deselect "tests/test_merito_synthesis_routing.py::test_prompt_dispatch_by_dominant_tipo[trabalhista-must_contain1-must_not_contain1]"
+    timeout: '600s'
+
   # Build + push with Kaniko (cache enabled — pip install cached when requirements.txt unchanged)
   - name: 'gcr.io/kaniko-project/executor:latest'
     id: 'kaniko-build'
+    waitFor: ['unit-tests']  # gate: imagem so e queimada com a suite verde
     args:
       - '--dockerfile=Dockerfile'
       - '--context=.'
