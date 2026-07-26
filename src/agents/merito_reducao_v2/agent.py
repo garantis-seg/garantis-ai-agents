@@ -26,8 +26,11 @@ logger = logging.getLogger(__name__)
 # provou que carrega o raciocínio da redução (iguala/supera opus). O engine injeta o model
 # (SSOT ENGINE_LAYER3_V2_MODEL); este default é só fallback.
 DEFAULT_MODEL = "gemini-3.5-flash"
-# thinking dinâmico (SDK default p/ 3.5) — o provider só aplica thinking_budget em "2.5"; o
-# gate-0 rodou com thinking-default e não truncou. max alto cobre thinking+JSON de méritos GIGANTES.
+# thinking DINÂMICO de propósito: este agent não passa thinking_budget, então vale o
+# default do modelo (3.5-flash pensa). Não é acidente do gate `"2.5"` (removido
+# 2026-07-26) — é a config MEDIDA: A/B 86 dossiês do gold x N=3, desligar o thinking
+# custa 4 casos da zona-consenso (35->31) e cria 2 danger-under NOVOS. O gate-0 já
+# tinha rodado com thinking-default e não truncou. max alto cobre thinking+JSON de méritos GIGANTES.
 _MAX_TOKENS = 32768
 
 # ── CONVENTION — semente = oracle_wf.js + R5 sharpening (2026-07-11, decisao Elton) ───────

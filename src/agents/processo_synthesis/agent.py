@@ -351,8 +351,9 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
     Optional[str] em campos enum (sentido/instancia/natureza) por decisao
     historica — descriptions ricas em Field guiam o LLM.
 
-    Determinismo Bug 4 handoff: temperature=0.0 (era 0.1) + thinking_budget=0
-    em gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
+    Determinismo Bug 4 handoff: temperature=0.0 (era 0.1) + thinking_budget=0 (o
+    provider aplica pra QUALQUER modelo desde 2026-07-26 — antes só pra "2.5").
+    Provider aplica top_p=1.0, top_k=1 quando temp=0.
     """
     prompt = build_processo_synthesis_prompt(request)
     # seed determinístico (proc + prompt): re-síntese L2 reproduzível dado o input

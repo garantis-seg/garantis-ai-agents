@@ -2,9 +2,11 @@
 
 Cobre o helper _build_config_params que centraliza:
   - temperature=0 -> top_p=1.0, top_k=1 (greedy strict decoding)
-  - thinking_budget=0 em gemini-2.5-* (desabilita thinking mode)
-  - thinking_budget ignorado em gemini-1.x/2.0 (nao tem thinking)
+  - thinking_budget aplicado pra QUALQUER modelo quando o caller pede (o gate
+    `"2.5" in model` foi removido em 2026-07-26: era whitelist que falhava ABERTA
+    e descartou o kwarg em silencio a partir da migracao pra 3.x)
   - seed opcional (passa direto se SDK aceita)
+  - _usage_tokens: thinking entra no OUTPUT (o vendor bilheta assim)
 
 Validacao prod e via cascade m=3 — 3 runs consecutivos com mesmo input
 devem produzir L2/L3 parsed_card_hash IDENTICOS.
@@ -89,47 +91,85 @@ def test_temperature_nonzero_explicit_top_p_passed(provider):
     assert cp["top_p"] == 0.8
 
 
-# ── thinking_budget (Gemini 2.5 only) ──────────────────────────────────────
+# ── contagem de tokens: thinking e OUTPUT faturado ─────────────────────────
 
 
-def test_thinking_budget_zero_in_gemini_25(provider):
-    """gemini-2.5-* + thinking_budget=0 -> ThinkingConfig na config."""
+def test_usage_tokens_poe_thinking_no_output():
+    """`_usage_tokens` tem que somar thoughts ao output — e ser a UNICA contagem.
+
+    `thoughts_token_count` e campo separado no Gemini e nao entra em
+    `candidates_token_count`, mas o vendor bilheta os dois como OUTPUT. Contar so
+    candidates subnotificava: no A/B do B1 (86 dossies x 3 runs, gemini-3.5-flash)
+    o ledger via 6,5x menos output no agregado e 21x menos na pior chamada.
+    """
+    from src.providers.gemini import _usage_tokens
+
+    class _U:
+        prompt_token_count = 5_438
+        candidates_token_count = 408
+        thoughts_token_count = 1_818
+
+    assert _usage_tokens(_U()) == (5_438, 2_226)          # 408 + 1.818
+    assert _usage_tokens(None) == (0, 0)                  # sem usage_metadata
+    assert _usage_tokens(object()) == (0, 0)              # campos ausentes
+
+    # E os 2 call sites tem que USAR o helper — a contagem duplicada byte-a-byte foi
+    # o que deixou um dos lados escapar do fix original.
+    from pathlib import Path as _P
+    src = (_P(__file__).resolve().parent.parent / "src" / "providers" / "gemini.py"
+           ).read_text(encoding="utf-8")
+    assert src.count("_usage_tokens(response.usage_metadata)") == 2, (
+        "algum call site voltou a contar tokens na mao"
+    )
+
+
+# ── thinking_budget — o pedido do caller vale pra QUALQUER modelo ───────────
+# Ate 2026-07-26 o provider so aplicava o kwarg se `"2.5" in model`, e estes testes
+# CODIFICAVAM essa whitelist como comportamento esperado — com 0 casos em 3.x. Quando
+# a cascade migrou pra 3.x (2026-06-26) o kwarg passou a ser descartado em silencio e
+# a suite seguiu VERDE. O contrato agora e: quem pede, recebe; modelo/SDK que nao
+# suporta cai no try/except do provider.
+
+
+@pytest.mark.parametrize("model", [
+    "gemini-3.5-flash",       # B1 + escalacao L1 (o unico que pensa por default hoje)
+    "gemini-3.1-flash-lite",  # L1/L2/L3 da cascade
+    "gemini-2.5-flash",       # familia que aposenta 2026-10-16
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash",       # sem thinking mode: quem filtra e o vendor, nao nos
+    "gemini-1.5-flash",
+])
+def test_thinking_budget_zero_aplica_em_qualquer_modelo(provider, model):
+    """REGRESSAO do gate `"2.5" in model`: o kwarg NAO pode depender do nome."""
     cp = provider._build_config_params(
         temperature=0.0, max_tokens=100, response_schema=None,
-        model="gemini-2.5-flash",
+        model=model,
         thinking_budget=0,
     )
-    assert "thinking_config" in cp
+    assert "thinking_config" in cp, f"{model}: thinking_budget=0 foi descartado"
     assert cp["thinking_config"].kw == {"thinking_budget": 0}
 
 
-def test_thinking_budget_zero_in_gemini_25_lite(provider):
-    cp = provider._build_config_params(
-        temperature=0.0, max_tokens=100, response_schema=None,
-        model="gemini-2.5-flash-lite",
-        thinking_budget=0,
+def test_gate_por_nome_de_modelo_nao_volta():
+    """Mutation-guard: o fonte nao pode voltar a ramificar por nome de modelo.
+
+    Assert de texto-fonte de proposito — o teste acima passa verde se alguem
+    reintroduzir a whitelist com OUTRA familia (ex. "3.5"), porque os modelos que ele
+    cobre casariam. Este pega a FORMA. (Licao 2026-07-26: assert de texto-fonte precisa
+    de mutation test; este foi validado mutando o gate de volta.)
+    """
+    import re
+    from pathlib import Path
+
+    src = Path(__file__).resolve().parent.parent / "src" / "providers" / "gemini.py"
+    linha = [
+        ln for ln in src.read_text(encoding="utf-8").splitlines()
+        if "thinking_budget is not None" in ln and ln.strip().startswith("if ")
+    ]
+    assert len(linha) == 1, f"esperava 1 gate de thinking_budget, achei {len(linha)}"
+    assert not re.search(r'in \(?model', linha[0]), (
+        f"gate de thinking_budget voltou a ramificar por nome de modelo: {linha[0].strip()}"
     )
-    assert "thinking_config" in cp
-
-
-def test_thinking_budget_ignored_in_gemini_15(provider):
-    """gemini-1.5-* nao tem thinking mode — ignora kwarg."""
-    cp = provider._build_config_params(
-        temperature=0.0, max_tokens=100, response_schema=None,
-        model="gemini-1.5-flash",
-        thinking_budget=0,
-    )
-    assert "thinking_config" not in cp
-
-
-def test_thinking_budget_ignored_in_gemini_20(provider):
-    """gemini-2.0-* (sem thinking) ignora kwarg."""
-    cp = provider._build_config_params(
-        temperature=0.0, max_tokens=100, response_schema=None,
-        model="gemini-2.0-flash",
-        thinking_budget=0,
-    )
-    assert "thinking_config" not in cp
 
 
 def test_thinking_budget_absent_no_thinking_config(provider):
