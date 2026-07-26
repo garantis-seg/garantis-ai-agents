@@ -58,7 +58,7 @@ pypdf>=4.0.0
 # ⚠️ TREM — CONFERIR: este == DEVE ser a versao REAL publicada no AR pos-merge do
 # shared PR (feat/llm-models-registry) + #213. Estimativa 1.333.0 (1.331 last + 2
 # merges); "corrida de pin" ja aconteceu 2x — validar antes do deploy deliberado.
-garantis-shared==1.345.0
+garantis-shared==1.350.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
