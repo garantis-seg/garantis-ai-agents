@@ -141,6 +141,31 @@ DEFAULT_MODEL = "gemini-2.5-flash-lite"
 _GEMINI_NORMAL_FINISH = {"STOP", "FINISH_REASON_STOP", "MAX_TOKENS"}
 
 
+def _usage_tokens(usage: Any) -> tuple[int, int]:
+    """(input, output) do usage_metadata do Gemini, com o thinking DENTRO do output.
+
+    `thoughts_token_count` e campo SEPARADO e NAO entra em `candidates_token_count` —
+    mas o vendor bilheta os dois como OUTPUT (llm_models.py: gemini-3.5-flash
+    "output 9.00 incl. thinking"). Contar so candidates subnotificava o ledger.
+
+    Medido no A/B do B1 (86 dossies x 3 runs em gemini-3.5-flash, 2026-07-26):
+    471.729 thoughts contra 86.117 candidates => o ledger via **6,5x menos** output
+    do que o faturado no agregado, e **21x menos** na pior chamada (a razao explode
+    quando a saida visivel e curta, que e o perfil do B1).
+
+    Existe porque os 2 call sites (generate/agenerate) tinham a contagem duplicada
+    byte-a-byte — e foi a duplicacao que forcou um teste a assertar sobre o
+    texto-fonte.
+    """
+    if not usage:
+        return 0, 0
+    return (
+        getattr(usage, "prompt_token_count", 0) or 0,
+        (getattr(usage, "candidates_token_count", 0) or 0)
+        + (getattr(usage, "thoughts_token_count", 0) or 0),
+    )
+
+
 def _gemini_finish_reason(response: Any) -> Optional[str]:
     """finish_reason do 1º candidate como str (enum.name) ou None — defensivo."""
     try:
@@ -357,17 +382,7 @@ class GeminiProvider(BaseLLMProvider):
         input_tokens = 0
         output_tokens = 0
         if hasattr(response, "usage_metadata") and response.usage_metadata:
-            input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-            # thoughts_token_count e campo SEPARADO no Gemini e NAO entra em
-            # candidates_token_count — mas o vendor bilheta os dois como OUTPUT
-            # (llm_models.py: gemini-3.5-flash "output 9.00 incl. thinking"). Contar so
-            # candidates subnotificava: medido em prod (14d, 3.5-flash) output faturado
-            # 4.052.288 vs 523.787 registrado = 7,74x; por chamada chega a 78x quando a
-            # saida visivel e curta (perfil do B1, avg_out 502).
-            output_tokens = (
-                (getattr(response.usage_metadata, "candidates_token_count", 0) or 0)
-                + (getattr(response.usage_metadata, "thoughts_token_count", 0) or 0)
-            )
+            input_tokens, output_tokens = _usage_tokens(response.usage_metadata)
 
         text, finish_reason = _gemini_text_and_finish(response, model)
         return LLMResponse(
@@ -457,17 +472,7 @@ class GeminiProvider(BaseLLMProvider):
         input_tokens = 0
         output_tokens = 0
         if hasattr(response, "usage_metadata") and response.usage_metadata:
-            input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-            # thoughts_token_count e campo SEPARADO no Gemini e NAO entra em
-            # candidates_token_count — mas o vendor bilheta os dois como OUTPUT
-            # (llm_models.py: gemini-3.5-flash "output 9.00 incl. thinking"). Contar so
-            # candidates subnotificava: medido em prod (14d, 3.5-flash) output faturado
-            # 4.052.288 vs 523.787 registrado = 7,74x; por chamada chega a 78x quando a
-            # saida visivel e curta (perfil do B1, avg_out 502).
-            output_tokens = (
-                (getattr(response.usage_metadata, "candidates_token_count", 0) or 0)
-                + (getattr(response.usage_metadata, "thoughts_token_count", 0) or 0)
-            )
+            input_tokens, output_tokens = _usage_tokens(response.usage_metadata)
 
         # Reconcilia o TPM com o uso real (estimativa cobriu input+reserva; output
         # real pode estourar a reserva — debita a diferença, throttla a próxima).

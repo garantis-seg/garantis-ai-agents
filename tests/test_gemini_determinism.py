@@ -2,9 +2,11 @@
 
 Cobre o helper _build_config_params que centraliza:
   - temperature=0 -> top_p=1.0, top_k=1 (greedy strict decoding)
-  - thinking_budget=0 em gemini-2.5-* (desabilita thinking mode)
-  - thinking_budget ignorado em gemini-1.x/2.0 (nao tem thinking)
+  - thinking_budget aplicado pra QUALQUER modelo quando o caller pede (o gate
+    `"2.5" in model` foi removido em 2026-07-26: era whitelist que falhava ABERTA
+    e descartou o kwarg em silencio a partir da migracao pra 3.x)
   - seed opcional (passa direto se SDK aceita)
+  - _usage_tokens: thinking entra no OUTPUT (o vendor bilheta assim)
 
 Validacao prod e via cascade m=3 — 3 runs consecutivos com mesmo input
 devem produzir L2/L3 parsed_card_hash IDENTICOS.
@@ -92,27 +94,33 @@ def test_temperature_nonzero_explicit_top_p_passed(provider):
 # ── contagem de tokens: thinking e OUTPUT faturado ─────────────────────────
 
 
-def test_output_tokens_soma_thoughts_nos_dois_sitios():
-    """`output_tokens` tem que incluir `thoughts_token_count` nos 2 call sites.
+def test_usage_tokens_poe_thinking_no_output():
+    """`_usage_tokens` tem que somar thoughts ao output — e ser a UNICA contagem.
 
-    Em Gemini, `thoughts_token_count` e campo SEPARADO e NAO entra em
-    `candidates_token_count` — mas o vendor cobra os dois como OUTPUT. Contar so
-    candidates subnotificava o ledger: medido em prod (14d, gemini-3.5-flash) o output
-    FATURADO foi 7,74x o registrado; por chamada chega a 78x quando a saida visivel e
-    curta. Assert de FONTE porque os 2 sitios estao dentro de `generate`/`agenerate`,
-    que exigiriam o SDK inteiro stubado pra exercitar — desproporcional pro que se
-    guarda (uma soma). Mutation-tested: reverter um dos 2 sitios reprova.
+    `thoughts_token_count` e campo separado no Gemini e nao entra em
+    `candidates_token_count`, mas o vendor bilheta os dois como OUTPUT. Contar so
+    candidates subnotificava: no A/B do B1 (86 dossies x 3 runs, gemini-3.5-flash)
+    o ledger via 6,5x menos output no agregado e 21x menos na pior chamada.
     """
-    from pathlib import Path
+    from src.providers.gemini import _usage_tokens
 
-    src = (Path(__file__).resolve().parent.parent / "src" / "providers" / "gemini.py"
+    class _U:
+        prompt_token_count = 5_438
+        candidates_token_count = 408
+        thoughts_token_count = 1_818
+
+    assert _usage_tokens(_U()) == (5_438, 2_226)          # 408 + 1.818
+    assert _usage_tokens(None) == (0, 0)                  # sem usage_metadata
+    assert _usage_tokens(object()) == (0, 0)              # campos ausentes
+
+    # E os 2 call sites tem que USAR o helper — a contagem duplicada byte-a-byte foi
+    # o que deixou um dos lados escapar do fix original.
+    from pathlib import Path as _P
+    src = (_P(__file__).resolve().parent.parent / "src" / "providers" / "gemini.py"
            ).read_text(encoding="utf-8")
-    assert src.count('getattr(response.usage_metadata, "thoughts_token_count", 0) or 0') == 2, (
-        "algum call site voltou a contar so candidates_token_count — o ledger fica cego "
-        "pro thinking e subnotifica o custo do modelo mais caro da casa"
+    assert src.count("_usage_tokens(response.usage_metadata)") == 2, (
+        "algum call site voltou a contar tokens na mao"
     )
-    assert 'output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0' \
-        not in src, "sobrou um call site contando so candidates"
 
 
 # ── thinking_budget — o pedido do caller vale pra QUALQUER modelo ───────────
