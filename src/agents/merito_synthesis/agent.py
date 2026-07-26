@@ -148,8 +148,11 @@ async def classify_merito_synthesis(
     # + CardsIndexCount substituem os dict legacy. Optional[str] enum
     # apertados pra Literal[...] strict pra evitar loop infinito decoder Gemini
     # (lição L2 v2.1).
-    # Determinismo Bug 4 handoff: temperature=0.0 + thinking_budget=0 em
-    # gemini-2.5-*. Provider aplica top_p=1.0, top_k=1 quando temp=0.
+    # Determinismo Bug 4 handoff: temperature=0.0 + thinking_budget=0 (o provider
+    # aplica pra QUALQUER modelo desde 2026-07-26 — antes só pra "2.5"). Provider
+    # aplica top_p=1.0, top_k=1 quando temp=0. ⚠️ Este agent roda 3.1-flash-lite, que
+    # não pensa por default, então hoje o budget=0 é no-op; se algum dia trocar pro
+    # 3.5-flash, MEÇA antes (no B1 desligar thinking piorou).
     # + seed determinístico (mérito + prompt): fecha o ~2% de micro-ruído residual
     # do L3 a temp=0 → mesmo input, mesma banda N×. Gated (ENGINE_LLM_SEED_ENABLED).
     seed = seed_for("merito_synthesis", request.merito_id, bucket, prompt)

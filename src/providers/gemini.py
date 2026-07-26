@@ -240,9 +240,9 @@ class GeminiProvider(BaseLLMProvider):
         """Build kwargs p/ GenerateContentConfig — centralizado p/ generate/agenerate.
 
         Determinismo: quando temperature=0, force top_p=1.0 + top_k=1 (greedy
-        strict decoding). Gemini 2.5 tem thinking mode ON by default — caller
-        passa thinking_budget=0 p/ disable (elimina variabilidade dos thinking
-        tokens, ver Bug 4 handoff).
+        strict decoding). `thinking_budget=0` desliga o thinking mode; ausente =
+        default do modelo. MEDIDO 2026-07-26: 3.5-flash pensa por default (até em
+        "2+2"); 3.1-flash-lite NÃO pensa por default (mas suporta, via budget>0/-1).
         """
         # Clamp único (F0 2.5→3.1, 2026-07-21): teto da família Gemini 2.5 no
         # Vertex é 65535 — max_output_tokens=65536 dá 400 INVALID_ARGUMENT.
@@ -274,10 +274,24 @@ class GeminiProvider(BaseLLMProvider):
             if "top_k" in kwargs:
                 config_params["top_k"] = kwargs["top_k"]
 
-        # Thinking mode (Gemini 2.5 only). thinking_budget=0 desabilita.
-        # Caller opt-in: nao mexer se kwarg ausente, preserva default SDK.
+        # Thinking mode. `thinking_budget=0` desabilita; ausente = default do modelo.
+        #
+        # O gate aqui era `and "2.5" in (model or "")` — whitelist da familia mais nova
+        # de 2026-05, que FALHA ABERTA: a partir de 2026-06-26 a cascade migrou pra 3.x
+        # e todo `thinking_budget` passou a ser DESCARTADO em silencio. O `try/except`
+        # logo abaixo ja e a protecao real contra SDK/modelo que rejeita ThinkingConfig
+        # — a whitelist so amarrava o provider a uma familia que APOSENTA em 2026-10-16
+        # (llm_models.py RETIRE_2_5_FAMILY).
+        #
+        # A POLITICA de usar (ou nao) thinking e do CALLER, por papel, e e MEDIDA:
+        #   L1 extracao -> budget=0. A/B 15 casos curados x N=3 em gemini-3.5-flash:
+        #                  43/43 campos IDENTICOS com e sem thinking, 0 instaveis —
+        #                  thinking nao muda a extracao e custa 2,2x latencia e 2x $.
+        #   Sintese/B1  -> SEM budget (default do modelo = pensa). A/B 86 dossies do
+        #                  gold x N=3: desligar custa 4 do consenso (35->31) e cria 2
+        #                  danger-under NOVOS. Guarda: teste no garantis-shared.
         thinking_budget = kwargs.get("thinking_budget")
-        if thinking_budget is not None and "2.5" in (model or ""):
+        if thinking_budget is not None:
             try:
                 config_params["thinking_config"] = self._types.ThinkingConfig(
                     thinking_budget=thinking_budget,
@@ -344,7 +358,16 @@ class GeminiProvider(BaseLLMProvider):
         output_tokens = 0
         if hasattr(response, "usage_metadata") and response.usage_metadata:
             input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-            output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+            # thoughts_token_count e campo SEPARADO no Gemini e NAO entra em
+            # candidates_token_count — mas o vendor bilheta os dois como OUTPUT
+            # (llm_models.py: gemini-3.5-flash "output 9.00 incl. thinking"). Contar so
+            # candidates subnotificava: medido em prod (14d, 3.5-flash) output faturado
+            # 4.052.288 vs 523.787 registrado = 7,74x; por chamada chega a 78x quando a
+            # saida visivel e curta (perfil do B1, avg_out 502).
+            output_tokens = (
+                (getattr(response.usage_metadata, "candidates_token_count", 0) or 0)
+                + (getattr(response.usage_metadata, "thoughts_token_count", 0) or 0)
+            )
 
         text, finish_reason = _gemini_text_and_finish(response, model)
         return LLMResponse(
@@ -380,7 +403,7 @@ class GeminiProvider(BaseLLMProvider):
             max_tokens: Maximum output tokens.
             response_schema: Pydantic model for structured JSON output.
             **kwargs: Additional parameters. Reconhecidos p/ determinismo:
-                - thinking_budget (int, 0 = thinking OFF em gemini-2.5-*)
+                - thinking_budget (int, 0 = thinking OFF; vale pra qualquer modelo)
                 - top_p (float, default 1.0 quando temperature=0)
                 - top_k (int, default 1 quando temperature=0)
                 - seed (int, fixa seed do sampler se SDK suporta)
@@ -435,7 +458,16 @@ class GeminiProvider(BaseLLMProvider):
         output_tokens = 0
         if hasattr(response, "usage_metadata") and response.usage_metadata:
             input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-            output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
+            # thoughts_token_count e campo SEPARADO no Gemini e NAO entra em
+            # candidates_token_count — mas o vendor bilheta os dois como OUTPUT
+            # (llm_models.py: gemini-3.5-flash "output 9.00 incl. thinking"). Contar so
+            # candidates subnotificava: medido em prod (14d, 3.5-flash) output faturado
+            # 4.052.288 vs 523.787 registrado = 7,74x; por chamada chega a 78x quando a
+            # saida visivel e curta (perfil do B1, avg_out 502).
+            output_tokens = (
+                (getattr(response.usage_metadata, "candidates_token_count", 0) or 0)
+                + (getattr(response.usage_metadata, "thoughts_token_count", 0) or 0)
+            )
 
         # Reconcilia o TPM com o uso real (estimativa cobriu input+reserva; output
         # real pode estourar a reserva — debita a diferença, throttla a próxima).
