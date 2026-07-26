@@ -205,13 +205,33 @@ def test_response_mime_type_only_when_schema_none(provider):
 
 
 def test_agents_pass_thinking_budget_zero():
-    """Sanidade: os 3 agents criticos passam thinking_budget=0 no agenerate.
+    """Sanidade: os 3 agents criticos passam thinking_budget=0 e temperature=0.0.
     Confirma fix do Bug 4 cobre toda a cascade.
+
+    ⚠️ 2026-07-26: o commit 9425766 (2026-05-28) EXTRAIU a chamada do L1 do
+    mov_factsheet pro helper `_utils/vision.py::call_l1_with_vision_fallback`, e a
+    `temperature=0.0` desceu junto (vision.py:356 ramo vision, :375 ramo text). O
+    assert original olhava so o fonte do AGENT, entao passou a acusar regressao onde
+    nao havia — medido no boundary do SDK, o `GenerateContentConfig` do L1 sai com
+    `temperature=0.0` nos DOIS ramos. Guard intacto; o teste e que ficou pra tras.
+
+    ⛔ NAO "consertar" concatenando o fonte do helper em `src_text` antes dos dois
+    asserts: o helper contem AS DUAS strings, entao os dois viram tautologia SO pro
+    mov (o unico que usa o helper) — medido por mutacao, essa versao deixa passar
+    `thinking_budget=8192` no agent E `temperature=0.7` no helper.
+    `thinking_budget` continua cobrado NO AGENT (o helper so tem default, nao
+    substitui o call site); a temperature do helper e cobrada em TODAS as
+    ocorrencias, senao um ramo mutado se esconde atras do outro intacto.
     """
     import inspect
+    import re
+
+    from src.agents._utils import vision as vision_helper
     from src.agents.mov_factsheet import agent as mov_agent
     from src.agents.processo_synthesis import agent as ps_agent
     from src.agents.merito_synthesis import agent as ms_agent
+
+    helper_text = inspect.getsource(vision_helper)
 
     for mod in (mov_agent, ps_agent, ms_agent):
         src_text = inspect.getsource(mod)
@@ -219,9 +239,16 @@ def test_agents_pass_thinking_budget_zero():
             f"{mod.__name__} nao passa thinking_budget=0 — non-determinismo "
             "L2/L3 vai reaparecer."
         )
-        assert "temperature=0.0" in src_text, (
-            f"{mod.__name__} usa temperature != 0.0 — non-determinismo."
-        )
+        if "call_l1_with_vision_fallback" in src_text:
+            temps = re.findall(r"temperature=([0-9.]+)", helper_text)
+            assert temps and all(t == "0.0" for t in temps), (
+                f"{mod.__name__}: helper call_l1_with_vision_fallback com "
+                f"temperature != 0.0 — non-determinismo. Achado: {temps}"
+            )
+        else:
+            assert "temperature=0.0" in src_text, (
+                f"{mod.__name__} usa temperature != 0.0 — non-determinismo."
+            )
 
 
 # ── L3 previous_snapshot fora do prompt (v2.7.3, 2026-07-02) ────────────────
