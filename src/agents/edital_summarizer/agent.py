@@ -437,13 +437,18 @@ async def _generate_map_reduce(
     summary = EditalSummaryLLMResponse(**data)
 
     # Calculate total cost
+    #
+    # ⚠️ Era a 4a COPIA hardcoded do preco (0.15/0.60 "gemini-2.5-flash"), fora do
+    # catalogo — e o valor estava ERRADO: a fatura sempre cobrou 0.30/2.50 nesse
+    # modelo (output 4,167x baixo; ver garantis_shared.llm_models, price_source).
+    # Corrigir o catalogo NAO corrigia esta linha. Agora le o catalogo, que e o
+    # endereco unico, e usa o modelo REALMENTE servido em vez de um comentario.
     total_cost = 0.0
     if reduce_response.metadata:
-        # Use the pricing from the reduce call's model
-        cost_per_1m_input = 0.15  # gemini-2.5-flash
-        cost_per_1m_output = 0.60
-        total_cost = (total_input / 1_000_000 * cost_per_1m_input) + (
-            total_output / 1_000_000 * cost_per_1m_output
+        pricing = llm.get_model_pricing(model)
+        total_cost = (
+            total_input / 1_000_000 * pricing["input_per_1m"]
+            + total_output / 1_000_000 * pricing["output_per_1m"]
         )
 
     return SummarizationResponse(

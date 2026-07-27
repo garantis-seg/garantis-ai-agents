@@ -515,8 +515,24 @@ class GeminiProvider(BaseLLMProvider):
         return self._default_model
 
     def get_model_pricing(self, model: str) -> Dict[str, float]:
-        """Get pricing for a Gemini model."""
-        return GEMINI_PRICING.get(model, {"input_per_1m": 0.0, "output_per_1m": 0.0})
+        """Get pricing for a Gemini model.
+
+        Modelo fora do catalogo devolve 0/0 — mas AGORA GRITA. Esse retorno
+        silencioso e o mecanismo que esconde gasto: 39.309 calls em 2026-06-26..28
+        gravaram tokens com cost_usd=0 = US$97,61 fora do ledger, e reincidiu com o
+        gemini-3.5-flash (~US$25/semana, backfillado em 07-24) e com o gemini-3-flash
+        (US$10,93 na semana de 07-20..26, ZERO rows). Prefixo estruturado pra alert
+        policy, regra 5 do CLAUDE.md raiz.
+        """
+        pricing = GEMINI_PRICING.get(model)
+        if pricing is None:
+            logger.error(
+                "GEMINI_PRICING_MODEL_UNKNOWN model=%s — cost_usd sai 0; "
+                "adicione o modelo em garantis_shared.llm_models.MODELS "
+                "(preco da FATURA, nao da doc)", model,
+            )
+            return {"input_per_1m": 0.0, "output_per_1m": 0.0}
+        return pricing
 
     def supports_structured_output(self) -> bool:
         """Gemini supports structured output via response_schema."""
