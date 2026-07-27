@@ -156,11 +156,35 @@ def _usage_tokens(usage: Any) -> tuple[int, int]:
     Existe porque os 2 call sites (generate/agenerate) tinham a contagem duplicada
     byte-a-byte — e foi a duplicacao que forcou um teste a assertar sobre o
     texto-fonte.
+
+    Loga tambem `cached_content_token_count` (2026-07-27) — o caching IMPLICITO do
+    Vertex, automatico e gratuito quando o PREFIXO do prompt se repete. E
+    SUBCONJUNTO de prompt_token_count (nao soma, nao dobra o input) e ninguem lia:
+    o parametro `cached_tokens` de cost_pricing.compute_gemini_cost recebe sempre
+    0, entao o ledger cobra input CHEIO por token vindo do cache.
+
+    PROVADO no Vertex (gemini-3.1-flash-lite, prefixo de 8.409 tokens repetido):
+    `cachedContentTokenCount: 8161` = 97% de hit.
+    ⚠️ As 3 PRIMEIRAS chamadas devolveram 0 — o cache implicito tem WARM-UP.
+    Medir com poucas chamadas da FALSO-NEGATIVO (erro cometido na 1a leitura).
+
+    Importa alem de custo: 96-98% da nossa carga e INPUT (mov_triage 2.921
+    tok/call x 15k calls/dia; mov_factsheet 16.322 x 9,4k) e cache hit alivia a
+    pressao de TPM que gera 429. O numero responde a pergunta que decide o proximo
+    passo: os prompts estao com a parte estatica no INICIO? (condicao do hit).
     """
     if not usage:
         return 0, 0
+    prompt = getattr(usage, "prompt_token_count", 0) or 0
+    cached = getattr(usage, "cached_content_token_count", 0) or 0
+    # LOG, nao metadata: cada agent faz cherry-pick de chaves do LLMResponse.metadata
+    # (cost_usd, model_variant) — um campo novo ali seria dado MORTO, invisivel na
+    # telemetria. Uma linha por chamada no unico chokepoint responde "qual e o hit
+    # rate real em prod?" com 1 query no Cloud Logging, sem tocar em 8 agents nem
+    # em schema. Persistir so depois de saber a magnitude.
+    logger.info("GEMINI_CACHE input=%d cached=%d", prompt, cached)
     return (
-        getattr(usage, "prompt_token_count", 0) or 0,
+        prompt,
         (getattr(usage, "candidates_token_count", 0) or 0)
         + (getattr(usage, "thoughts_token_count", 0) or 0),
     )
