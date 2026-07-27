@@ -34,12 +34,14 @@ def test_modelo_conhecido_devolve_o_preco_do_catalogo_seja_qual_for():
     testes de lah o guardam contra a fatura. Aqui garantimos so o ENDERECO: o que o
     provider devolve e exatamente o que o catalogo diz, sem copia local no meio.
     (Assertar 0.30/2.50 aqui acoplaria este PR ao pin do wheel.)"""
-    from garantis_shared.llm_models import gemini_pricing_pairs
+    from garantis_shared.llm_models import cached_price_for, gemini_pricing_pairs
 
     p = _provider()
     inp, out = gemini_pricing_pairs()["gemini-2.5-flash"]
     assert p.get_model_pricing("gemini-2.5-flash") == {
-        "input_per_1m": inp, "output_per_1m": out,
+        "input_per_1m": inp,
+        "output_per_1m": out,
+        "cached_per_1m": cached_price_for("gemini-2.5-flash"),
     }
 
 

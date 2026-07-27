@@ -162,23 +162,35 @@ class BaseLLMProvider(ABC):
         return {"input_per_1m": 0.0, "output_per_1m": 0.0}
 
     def calculate_cost(
-        self, model: str, input_tokens: int, output_tokens: int
+        self, model: str, input_tokens: int, output_tokens: int,
+        cached_tokens: int = 0,
     ) -> float:
         """
         Calculate cost for token usage.
 
         Args:
             model: Model used.
-            input_tokens: Number of input tokens.
+            input_tokens: Number of input tokens (INCLUI os cacheados — é o
+                `prompt_token_count`, do qual `cached_tokens` é subconjunto).
             output_tokens: Number of output tokens.
+            cached_tokens: Input tokens served from cache, billed at the model's
+                cached rate. Default 0 = provider que não expõe o campo.
 
         Returns:
             Cost in USD.
         """
         pricing = self.get_model_pricing(model)
-        input_cost = (input_tokens / 1_000_000) * pricing.get("input_per_1m", 0)
-        output_cost = (output_tokens / 1_000_000) * pricing.get("output_per_1m", 0)
-        return input_cost + output_cost
+        input_per_1m = pricing.get("input_per_1m", 0)
+        # Sem `cached_per_1m` declarado, cached cobra input CHEIO — nunca inventa
+        # desconto (mesma regra do catálogo em garantis_shared.llm_models).
+        cached_per_1m = pricing.get("cached_per_1m", input_per_1m)
+        cached = max(0, min(int(cached_tokens or 0), int(input_tokens or 0)))
+        billable_input = int(input_tokens or 0) - cached
+        return (
+            (billable_input / 1_000_000) * input_per_1m
+            + (cached / 1_000_000) * cached_per_1m
+            + (output_tokens / 1_000_000) * pricing.get("output_per_1m", 0)
+        )
 
     def supports_structured_output(self) -> bool:
         """

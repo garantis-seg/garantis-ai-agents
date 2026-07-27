@@ -24,9 +24,12 @@ def _pdf(text: str = "conteudo", pages: int = 1) -> bytes:
 def test_pricing_31_flash_lite_present():
     from src.providers.gemini import GEMINI_PRICING
 
+    # `cached_per_1m` entrou em 2026-07-27 (cache implicito do Vertex = 10% do
+    # input; antes o token cacheado era cobrado como input cheio).
     assert GEMINI_PRICING["gemini-3.1-flash-lite"] == {
         "input_per_1m": 0.25,
         "output_per_1m": 1.50,
+        "cached_per_1m": 0.025,
     }
 
 

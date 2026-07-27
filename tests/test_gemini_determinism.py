@@ -109,9 +109,9 @@ def test_usage_tokens_poe_thinking_no_output():
         candidates_token_count = 408
         thoughts_token_count = 1_818
 
-    assert _usage_tokens(_U()) == (5_438, 2_226)          # 408 + 1.818
-    assert _usage_tokens(None) == (0, 0)                  # sem usage_metadata
-    assert _usage_tokens(object()) == (0, 0)              # campos ausentes
+    assert _usage_tokens(_U()) == (5_438, 2_226, 0)       # 408 + 1.818; cached ausente
+    assert _usage_tokens(None) == (0, 0, 0)               # sem usage_metadata
+    assert _usage_tokens(object()) == (0, 0, 0)           # campos ausentes
 
     # E os 2 call sites tem que USAR o helper — a contagem duplicada byte-a-byte foi
     # o que deixou um dos lados escapar do fix original.
