@@ -122,10 +122,19 @@ _gemini_tpm_limiter = _TokenRateLimiter(
 # byte-a-byte + inclui gemini-3.5-flash (o modelo do B1). Sem a entry do 3.5-flash,
 # get_model_pricing devolvia 0/0 e engine_llm_calls gravava cost_usd=0 pro cascade
 # B1 (~US$25/semana invisivel — F2 2026-07-24).
-from garantis_shared.llm_models import gemini_pricing_pairs
+from garantis_shared.llm_models import cached_price_for, gemini_pricing_pairs
 
+# `cached_per_1m` = preco do input servido do CACHE (10% do input onde a fatura tem
+# SKU de caching; input CHEIO onde nao tem — o catalogo nunca inventa desconto).
+# Sem ele, `calculate_cost` cobrava input cheio por token cacheado: com o preco do
+# 2.5-flash corrigido pra 0.30 isso dava US$32,10 contra US$29,98 da fatura (~7% pra
+# CIMA) porque ~9,2M tokens da semana vieram do cache implicito.
 GEMINI_PRICING = {
-    model: {"input_per_1m": inp, "output_per_1m": out}
+    model: {
+        "input_per_1m": inp,
+        "output_per_1m": out,
+        "cached_per_1m": cached_price_for(model),
+    }
     for model, (inp, out) in gemini_pricing_pairs().items()
 }
 
@@ -141,8 +150,8 @@ DEFAULT_MODEL = "gemini-2.5-flash-lite"
 _GEMINI_NORMAL_FINISH = {"STOP", "FINISH_REASON_STOP", "MAX_TOKENS"}
 
 
-def _usage_tokens(usage: Any) -> tuple[int, int]:
-    """(input, output) do usage_metadata do Gemini, com o thinking DENTRO do output.
+def _usage_tokens(usage: Any) -> tuple[int, int, int]:
+    """(input, output, cached) do usage_metadata do Gemini, thinking DENTRO do output.
 
     `thoughts_token_count` e campo SEPARADO e NAO entra em `candidates_token_count` —
     mas o vendor bilheta os dois como OUTPUT (llm_models.py: gemini-3.5-flash
@@ -157,11 +166,11 @@ def _usage_tokens(usage: Any) -> tuple[int, int]:
     byte-a-byte — e foi a duplicacao que forcou um teste a assertar sobre o
     texto-fonte.
 
-    Loga tambem `cached_content_token_count` (2026-07-27) — o caching IMPLICITO do
-    Vertex, automatico e gratuito quando o PREFIXO do prompt se repete. E
-    SUBCONJUNTO de prompt_token_count (nao soma, nao dobra o input) e ninguem lia:
-    o parametro `cached_tokens` de cost_pricing.compute_gemini_cost recebe sempre
-    0, entao o ledger cobra input CHEIO por token vindo do cache.
+    Devolve tambem `cached_content_token_count` — o caching IMPLICITO do Vertex,
+    automatico e gratuito quando o PREFIXO do prompt se repete. E SUBCONJUNTO de
+    prompt_token_count (nao soma, nao dobra o input), e desde 2026-07-27 vai pro
+    `calculate_cost`, que o cobra no `cached_per_1m` (10% do input) em vez de
+    input cheio.
 
     PROVADO no Vertex (gemini-3.1-flash-lite, prefixo de 8.409 tokens repetido):
     `cachedContentTokenCount: 8161` = 97% de hit.
@@ -174,7 +183,7 @@ def _usage_tokens(usage: Any) -> tuple[int, int]:
     passo: os prompts estao com a parte estatica no INICIO? (condicao do hit).
     """
     if not usage:
-        return 0, 0
+        return 0, 0, 0
     prompt = getattr(usage, "prompt_token_count", 0) or 0
     cached = getattr(usage, "cached_content_token_count", 0) or 0
     # LOG, nao metadata: cada agent faz cherry-pick de chaves do LLMResponse.metadata
@@ -187,6 +196,7 @@ def _usage_tokens(usage: Any) -> tuple[int, int]:
         prompt,
         (getattr(usage, "candidates_token_count", 0) or 0)
         + (getattr(usage, "thoughts_token_count", 0) or 0),
+        cached,
     )
 
 
@@ -405,8 +415,9 @@ class GeminiProvider(BaseLLMProvider):
         # Extract token counts
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
         if hasattr(response, "usage_metadata") and response.usage_metadata:
-            input_tokens, output_tokens = _usage_tokens(response.usage_metadata)
+            input_tokens, output_tokens, cached_tokens = _usage_tokens(response.usage_metadata)
 
         text, finish_reason = _gemini_text_and_finish(response, model)
         return LLMResponse(
@@ -419,7 +430,9 @@ class GeminiProvider(BaseLLMProvider):
             metadata={
                 "provider": "gemini",
                 "finish_reason": finish_reason,
-                "cost_usd": self.calculate_cost(model, input_tokens, output_tokens),
+                "cost_usd": self.calculate_cost(
+                    model, input_tokens, output_tokens, cached_tokens
+                ),
             },
         )
 
@@ -495,8 +508,9 @@ class GeminiProvider(BaseLLMProvider):
         # Extract token counts
         input_tokens = 0
         output_tokens = 0
+        cached_tokens = 0
         if hasattr(response, "usage_metadata") and response.usage_metadata:
-            input_tokens, output_tokens = _usage_tokens(response.usage_metadata)
+            input_tokens, output_tokens, cached_tokens = _usage_tokens(response.usage_metadata)
 
         # Reconcilia o TPM com o uso real (estimativa cobriu input+reserva; output
         # real pode estourar a reserva — debita a diferença, throttla a próxima).
@@ -513,7 +527,9 @@ class GeminiProvider(BaseLLMProvider):
             metadata={
                 "provider": "gemini",
                 "finish_reason": finish_reason,
-                "cost_usd": self.calculate_cost(model, input_tokens, output_tokens),
+                "cost_usd": self.calculate_cost(
+                    model, input_tokens, output_tokens, cached_tokens
+                ),
             },
         )
 
