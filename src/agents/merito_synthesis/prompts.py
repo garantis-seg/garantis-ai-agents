@@ -1836,7 +1836,18 @@ def build_prompt_and_version(
 # DECISAO: matriz, escala, protocolo, consistency — o passe nao re-decide) +
 # _build_filtro_redacao() VERBATIM como ultima coisa (recency anchor).
 # v1.1 (2026-06-30): justificativa pede tags inline `[frase](CNJ)` (V2c, igual ao L3).
-REDACAO_PROMPT_VERSION = "redacao.v1.1"
+# v1.2 (2026-07-27): a tag inline ganha instrucao NEGATIVA + par CERTO/ERRADO.
+#   Medido: 69,7% das tags saiam com o CNJ DENTRO do colchete -> o front linkava o
+#   proprio numero do processo no meio da frase (redundante: o leitor ja esta nesse
+#   processo) em vez de linkar o FATO que sustenta a banda. Causa: "Cite o CNJ dos
+#   processos relevantes." estava colada em "[frase do evento](CNJ)" na MESMA
+#   sentenca, e o passe nao tinha exemplo nenhum (o item 12 do L3 principal, que TEM
+#   exemplo, vaza 48,3% — 21 pontos a menos).
+#   ⚠️ Este passe NAO decide risco e NAO entra no seed (risco_final chega fixo) —
+#   mexer aqui e score-neutro. O item 12 do prompt PRINCIPAL tem o mesmo defeito, mas
+#   la o prompt entra no seed (agent.py: seed_for(..., prompt)) e mudar muda a banda:
+#   fica pra um PR separado, com OK explicito.
+REDACAO_PROMPT_VERSION = "redacao.v1.2"
 
 _RISCO_POR_EXTENSO = {
     "Baixo": "baixo", "Medio": "medio", "Alto": "alto", "Altissimo": "altissimo",
@@ -1871,10 +1882,25 @@ def build_redacao_prompt(req: "RedacaoRequest") -> str:
         f"  - justificativa: 2-4 paragrafos. (1) estado factual: qual processo carrega\n"
         "    a decisao mais decisiva e seu sentido pro tomador; (2) aspectos suportivos\n"
         "    (apolice aceita? CDAs? RJ?); (3) por que o risco e\n"
-        f"    {risco} e nao o nivel adjacente. Cite o CNJ dos processos relevantes.\n"
+        f"    {risco} e nao o nivel adjacente.\n"
         "    MARQUE cada decisao/evento decisivo INLINE como link markdown\n"
         "    `[frase do evento](CNJ mascarado)`, no lugar onde a frase aparece (o front\n"
-        "    renderiza o link). O alvo e SO o CNJ; nao escreva mov_id ali.\n"
+        "    renderiza o link).\n"
+        "    O texto ENTRE COLCHETES e a FRASE DO FATO: o que o juizo decidiu, quando, e\n"
+        "    com que efeito pro tomador. O CNJ vai SO entre parenteses (e o alvo do link,\n"
+        "    o leitor nao le aquilo). NUNCA ponha o numero do processo dentro dos\n"
+        "    colchetes — o leitor JA esta dentro deste processo, entao um link cujo texto\n"
+        "    e o proprio numero nao informa nada. Nao escreva mov_id ali.\n"
+        "    Voce PODE citar o CNJ na prosa corrida, FORA da tag (ex: 'na execucao fiscal\n"
+        "    5083114-60.2025.4.04.7100, ...') — util quando ha varios processos.\n"
+        "\n"
+        "    CERTO (o link cai no FATO):\n"
+        "      A decisao vigente, proferida em 19/07/2023, [indeferiu o pedido de tutela\n"
+        "      antecipada, mantendo a exigibilidade do credito](5018681-38.2023.4.03.6100).\n"
+        "\n"
+        "    ERRADO (o link cai no NUMERO — nunca faca isto):\n"
+        "      ...cenario desfavoravel ao tomador neste momento processual\n"
+        "      [5018681-38.2023.4.03.6100](5018681-38.2023.4.03.6100).\n"
         f"  - narrativa_executiva: 1 frase resumindo o estado do caso, terminando com o\n"
         f"    nivel ('Risco {risco}.').\n"
         "  - contribuicao_no_risco: 1 frase JURIDICA ligando a perspectiva de exito das\n"
