@@ -594,8 +594,9 @@ class RedacaoCard(BaseModel):
         description=(
             "2-4 paragrafos PT-BR pro ADVOGADO. Paragrafo 1: estado factual. "
             "Paragrafo 2: aspectos suportivos. Paragrafo 3: por que este nivel e "
-            "nao o adjacente. Cite CNJ. Marque eventos decisivos INLINE como "
-            "`[frase](CNJ)` (o codigo resolve o movimento). SEM jargao interno (ver filtro)."
+            "nao o adjacente. Marque eventos decisivos INLINE como `[frase do fato](CNJ)` "
+            "— entre colchetes vai o QUE FOI DECIDIDO, nunca o numero do processo "
+            "(o codigo resolve o movimento). SEM jargao interno (ver filtro)."
         ),
     )
     narrativa_executiva: Optional[str] = Field(
