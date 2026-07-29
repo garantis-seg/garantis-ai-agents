@@ -6,7 +6,7 @@ Spec canonica do plano: c:/Users/Eltonxp/.claude/plans/risk-engine-v6-meritos.md
 """
 
 from typing import Any, Literal, Optional
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, AliasPath, BaseModel, Field, field_validator
 
 
 # ── Sub-objetos ───────────────────────────────────────────────────────────
@@ -475,67 +475,41 @@ class MovFactSheetMin(BaseModel):
 # ignora a key se algum caller velho ainda mandar (extra='ignore').
 
 
-# acceptance_status do card (leads.court_presentations.current_state, ja mapeado pelo SQL
-# canonico) -> o booleano tri-estado que o prompt renderiza. Fora da classe de proposito:
-# pydantic v2 trata atributo com underscore como ModelPrivateAttr.
-_APOLICE_ACEITA = {"aceita": True, "recusada": False}
+def _do_card(nome: str, *caminho: str) -> Any:
+    """Campo que aceita o nome achatado OU o caminho aninhado do card (nesta ordem)."""
+    return Field(default=None, validation_alias=AliasChoices(nome, AliasPath(*caminho)))
 
 
 class ApoliceContextMin(BaseModel):
     """Resumo apolice card pra contexto.
 
-    ACHATA o card kind='apolice' (2026-07-29). O writer canonico
-    (garantis_shared.engine_v6.cards.apolice.build_apolice_card) ANINHA o ciclo de vida
-    em summary['lifecycle'] e a validade em summary['vigencia'] — este schema sempre leu
-    `apresentada`/`aceita` no TOPO, e com extra='ignore' os dois chegavam None em
-    100% dos cards (medido: 0 de 125.788 cards ativos tinham a chave no topo, contra
-    40.374 com lifecycle.apresentada=true e 46.771 com decisao de aceitacao). O prompt
-    renderizava so "Apolice N (seguradora) | IS=R$ X" e as linhas ACEITA/RECUSADA nunca
-    disparavam — ou seja a apolice NUNCA informou a Camada 2, nem quando o card existia.
-    `aceita` nem existe no card: e derivado de lifecycle.acceptance_status.
+    Le o card kind='apolice' NA FORMA EM QUE ELE E GRAVADO: build_apolice_card (shared)
+    aninha o ciclo de vida em summary['lifecycle'] e a validade em summary['vigencia'].
+    Ate 2026-07-29 este schema so lia o TOPO e, com extra='ignore', apresentada/aceita
+    chegavam None em 0 de 125.788 cards ativos -> a apolice nunca informou a Camada 2.
+    `aceita` nao existe no card: vem de lifecycle.acceptance_status.
 
-    ⛔ SEM bump de PROMPT_VERSION de proposito: bump = re-cascade de TODOS os procs
-    (ver chunking.py). O contrato corrigido passa a valer no proximo L2 de cada processo.
+    ⛔ SEM bump de PROMPT_VERSION: bump = re-cascade de TODOS os procs (ver chunking.py).
     Report: ~/.claude/plans/report-cards-apolice-engine-2026-07-29.md
     """
 
     numero_apolice: Optional[str] = None
     seguradora: Optional[str] = None
     valor_is: Optional[float] = None
-    apresentada: Optional[bool] = None
-    aceita: Optional[bool] = None
-    vigencia_farol: Optional[str] = None
-    vigencia_termino: Optional[str] = None
+    apresentada: Optional[bool] = _do_card("apresentada", "lifecycle", "apresentada")
+    aceita: Optional[bool] = _do_card("aceita", "lifecycle", "acceptance_status")
+    vigencia_farol: Optional[str] = _do_card("vigencia_farol", "vigencia", "farol")
+    vigencia_termino: Optional[str] = _do_card("vigencia_termino", "vigencia", "termino")
     is_central_for_merito: bool = False
 
     model_config = {"extra": "ignore"}
 
-    @model_validator(mode="before")
+    @field_validator("aceita", mode="before")
     @classmethod
-    def _achata_card(cls, data: Any) -> Any:
-        """Levanta lifecycle/vigencia aninhados pros campos do topo.
-
-        So preenche o que o caller NAO mandou explicito no topo — callers antigos que ja
-        passam `apresentada`/`aceita` achatados seguem funcionando sem mudanca.
-        """
-        if not isinstance(data, dict):
-            return data
-        lifecycle = data.get("lifecycle")
-        if isinstance(lifecycle, dict):
-            if data.get("apresentada") is None:
-                data["apresentada"] = lifecycle.get("apresentada")
-            if data.get("aceita") is None:
-                status = lifecycle.get("acceptance_status")
-                data["aceita"] = (
-                    _APOLICE_ACEITA.get(str(status).strip().lower()) if status else None
-                )
-        vigencia = data.get("vigencia")
-        if isinstance(vigencia, dict):
-            if data.get("vigencia_farol") is None:
-                data["vigencia_farol"] = vigencia.get("farol")
-            if data.get("vigencia_termino") is None:
-                data["vigencia_termino"] = vigencia.get("termino")
-        return data
+    def _status_para_bool(cls, v: Any) -> Any:
+        """acceptance_status ('aceita'/'recusada'/None) -> tri-estado. None != False:
+        o cohort 'offered' esta apresentado SEM decisao, e False diria RECUSADA."""
+        return {"aceita": True, "recusada": False}.get(v.strip().lower()) if isinstance(v, str) else v
 
 
 class ProcessoSynthesisRequest(BaseModel):
