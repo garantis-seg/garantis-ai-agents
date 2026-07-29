@@ -314,6 +314,14 @@ def _summarize_apolice(ap: ApoliceContextMin) -> str:
         parts.append("ACEITA")
     elif ap.aceita is False:
         parts.append("RECUSADA")
+    # VERMELHO na v_policy_validity_traffic_light e `termination_date < CURRENT_DATE`:
+    # apolice EXPIRADA (nao "vencendo") -> nao cobre. Whitelist nos demais de proposito:
+    # farol desconhecido/indeterminado nao vira afirmacao de vigencia.
+    farol = (ap.vigencia_farol or "").strip().lower()
+    if farol == "vermelho":
+        parts.append(f"VENCIDA em {ap.vigencia_termino}" if ap.vigencia_termino else "VENCIDA")
+    elif farol in ("verde", "amarelo", "laranja") and ap.vigencia_termino:
+        parts.append(f"vigente ate {ap.vigencia_termino}")
     if ap.is_central_for_merito:
         parts.append("(central no merito)")
     return " | ".join(parts)

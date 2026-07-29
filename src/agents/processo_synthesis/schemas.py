@@ -6,7 +6,7 @@ Spec canonica do plano: c:/Users/Eltonxp/.claude/plans/risk-engine-v6-meritos.md
 """
 
 from typing import Any, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, AliasPath, BaseModel, Field, field_validator
 
 
 # ── Sub-objetos ───────────────────────────────────────────────────────────
@@ -475,17 +475,41 @@ class MovFactSheetMin(BaseModel):
 # ignora a key se algum caller velho ainda mandar (extra='ignore').
 
 
+def _do_card(nome: str, *caminho: str) -> Any:
+    """Campo que aceita o nome achatado OU o caminho aninhado do card (nesta ordem)."""
+    return Field(default=None, validation_alias=AliasChoices(nome, AliasPath(*caminho)))
+
+
 class ApoliceContextMin(BaseModel):
-    """Resumo apolice card pra contexto."""
+    """Resumo apolice card pra contexto.
+
+    Le o card kind='apolice' NA FORMA EM QUE ELE E GRAVADO: build_apolice_card (shared)
+    aninha o ciclo de vida em summary['lifecycle'] e a validade em summary['vigencia'].
+    Ate 2026-07-29 este schema so lia o TOPO e, com extra='ignore', apresentada/aceita
+    chegavam None em 0 de 125.788 cards ativos -> a apolice nunca informou a Camada 2.
+    `aceita` nao existe no card: vem de lifecycle.acceptance_status.
+
+    ⛔ SEM bump de PROMPT_VERSION: bump = re-cascade de TODOS os procs (ver chunking.py).
+    Report: ~/.claude/plans/report-cards-apolice-engine-2026-07-29.md
+    """
 
     numero_apolice: Optional[str] = None
     seguradora: Optional[str] = None
     valor_is: Optional[float] = None
-    apresentada: Optional[bool] = None
-    aceita: Optional[bool] = None
+    apresentada: Optional[bool] = _do_card("apresentada", "lifecycle", "apresentada")
+    aceita: Optional[bool] = _do_card("aceita", "lifecycle", "acceptance_status")
+    vigencia_farol: Optional[str] = _do_card("vigencia_farol", "vigencia", "farol")
+    vigencia_termino: Optional[str] = _do_card("vigencia_termino", "vigencia", "termino")
     is_central_for_merito: bool = False
 
     model_config = {"extra": "ignore"}
+
+    @field_validator("aceita", mode="before")
+    @classmethod
+    def _status_para_bool(cls, v: Any) -> Any:
+        """acceptance_status ('aceita'/'recusada'/None) -> tri-estado. None != False:
+        o cohort 'offered' esta apresentado SEM decisao, e False diria RECUSADA."""
+        return {"aceita": True, "recusada": False}.get(v.strip().lower()) if isinstance(v, str) else v
 
 
 class ProcessoSynthesisRequest(BaseModel):
