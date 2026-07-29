@@ -6,7 +6,7 @@ Spec canonica do plano: c:/Users/Eltonxp/.claude/plans/risk-engine-v6-meritos.md
 """
 
 from typing import Any, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 # ── Sub-objetos ───────────────────────────────────────────────────────────
@@ -475,17 +475,67 @@ class MovFactSheetMin(BaseModel):
 # ignora a key se algum caller velho ainda mandar (extra='ignore').
 
 
+# acceptance_status do card (leads.court_presentations.current_state, ja mapeado pelo SQL
+# canonico) -> o booleano tri-estado que o prompt renderiza. Fora da classe de proposito:
+# pydantic v2 trata atributo com underscore como ModelPrivateAttr.
+_APOLICE_ACEITA = {"aceita": True, "recusada": False}
+
+
 class ApoliceContextMin(BaseModel):
-    """Resumo apolice card pra contexto."""
+    """Resumo apolice card pra contexto.
+
+    ACHATA o card kind='apolice' (2026-07-29). O writer canonico
+    (garantis_shared.engine_v6.cards.apolice.build_apolice_card) ANINHA o ciclo de vida
+    em summary['lifecycle'] e a validade em summary['vigencia'] — este schema sempre leu
+    `apresentada`/`aceita` no TOPO, e com extra='ignore' os dois chegavam None em
+    100% dos cards (medido: 0 de 125.788 cards ativos tinham a chave no topo, contra
+    40.374 com lifecycle.apresentada=true e 46.771 com decisao de aceitacao). O prompt
+    renderizava so "Apolice N (seguradora) | IS=R$ X" e as linhas ACEITA/RECUSADA nunca
+    disparavam — ou seja a apolice NUNCA informou a Camada 2, nem quando o card existia.
+    `aceita` nem existe no card: e derivado de lifecycle.acceptance_status.
+
+    ⛔ SEM bump de PROMPT_VERSION de proposito: bump = re-cascade de TODOS os procs
+    (ver chunking.py). O contrato corrigido passa a valer no proximo L2 de cada processo.
+    Report: ~/.claude/plans/report-cards-apolice-engine-2026-07-29.md
+    """
 
     numero_apolice: Optional[str] = None
     seguradora: Optional[str] = None
     valor_is: Optional[float] = None
     apresentada: Optional[bool] = None
     aceita: Optional[bool] = None
+    vigencia_farol: Optional[str] = None
+    vigencia_termino: Optional[str] = None
     is_central_for_merito: bool = False
 
     model_config = {"extra": "ignore"}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _achata_card(cls, data: Any) -> Any:
+        """Levanta lifecycle/vigencia aninhados pros campos do topo.
+
+        So preenche o que o caller NAO mandou explicito no topo — callers antigos que ja
+        passam `apresentada`/`aceita` achatados seguem funcionando sem mudanca.
+        """
+        if not isinstance(data, dict):
+            return data
+        lifecycle = data.get("lifecycle")
+        if isinstance(lifecycle, dict):
+            if data.get("apresentada") is None:
+                data["apresentada"] = lifecycle.get("apresentada")
+            if data.get("aceita") is None:
+                status = lifecycle.get("acceptance_status")
+                data["aceita"] = (
+                    _APOLICE_ACEITA.get(str(status).strip().lower()) if status else None
+                )
+        vigencia = data.get("vigencia")
+        if isinstance(vigencia, dict):
+            if data.get("vigencia_farol") is None:
+                data["vigencia_farol"] = vigencia.get("farol")
+            if data.get("vigencia_termino") is None:
+                data["vigencia_termino"] = vigencia.get("termino")
+        return data
 
 
 class ProcessoSynthesisRequest(BaseModel):
