@@ -59,6 +59,13 @@ steps:
     args:
       - '--dockerfile=Dockerfile'
       - '--context=.'
+      # Imagem pinada por ${BUILD_ID} (2026-07-30): o deploy abaixo puxa a tag
+      # IMUTÁVEL deste build, nunca :latest. Dois builds concorrentes re-empurrando
+      # :latest faziam o deploy resolver a imagem do OUTRO build — incidente
+      # 2026-07-18 no fe-api (builds #680/#682: /v2/filters 404 em prod com PR
+      # mergeado + build SUCCESS). Mesmo padrão que o fe-api desde 2026-07-19.
+      # :latest segue publicada só como tag de conveniência; NUNCA deployar por ela.
+      - '--destination=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:${BUILD_ID}'
       - '--destination=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest'
       - '--cache=true'
       - '--cache-ttl=168h'
@@ -82,7 +89,7 @@ steps:
       - 'deploy'
       - 'garantis-ai-agents'
       - '--image'
-      - 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest'
+      - 'southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:${BUILD_ID}'
       - '--region'
       - 'southamerica-east1'
       - '--platform'
