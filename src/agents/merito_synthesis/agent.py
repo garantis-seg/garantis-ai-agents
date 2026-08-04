@@ -223,6 +223,7 @@ async def classify_merito_synthesis(
         "input_tokens": response.input_tokens or 0,
         "output_tokens": response.output_tokens or 0,
         "total_tokens": (response.input_tokens or 0) + (response.output_tokens or 0),
+        "cached_tokens": getattr(response, "cached_tokens", 0) or 0,
         "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
         "model": model,
         "provider": provider,

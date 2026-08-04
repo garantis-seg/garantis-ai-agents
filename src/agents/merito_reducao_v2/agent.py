@@ -165,6 +165,7 @@ def _usage(resp: LLMResponse, model: str, provider: str) -> dict:
         "input_tokens": resp.input_tokens or 0,
         "output_tokens": resp.output_tokens or 0,
         "total_tokens": (resp.input_tokens or 0) + (resp.output_tokens or 0),
+        "cached_tokens": getattr(resp, "cached_tokens", 0) or 0,
         "cost_usd": (resp.metadata.get("cost_usd", 0.0) if resp.metadata else 0.0),
         "model": model,
         "provider": provider,
@@ -216,6 +217,7 @@ async def classify_merito_reducao_v2(
             usage["input_tokens"] += vusage["input_tokens"]
             usage["output_tokens"] += vusage["output_tokens"]
             usage["total_tokens"] += vusage["total_tokens"]
+            usage["cached_tokens"] += vusage["cached_tokens"]
             usage["cost_usd"] = (usage["cost_usd"] or 0) + (vusage["cost_usd"] or 0)
         except Exception as e:  # noqa: BLE001 — verify é best-effort; band-supported=None → gate-2 fecha conservador
             logger.warning("MERITO_REDUCAO_V2_VERIFY_FAIL merito_id=%s: %r", request.merito_id, e)

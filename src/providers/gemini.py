@@ -426,6 +426,7 @@ class GeminiProvider(BaseLLMProvider):
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             total_tokens=input_tokens + output_tokens,
+            cached_tokens=cached_tokens,
             raw_response=response,
             metadata={
                 "provider": "gemini",
@@ -523,6 +524,7 @@ class GeminiProvider(BaseLLMProvider):
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             total_tokens=input_tokens + output_tokens,
+            cached_tokens=cached_tokens,
             raw_response=response,
             metadata={
                 "provider": "gemini",

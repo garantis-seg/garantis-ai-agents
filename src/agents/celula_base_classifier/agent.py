@@ -133,6 +133,7 @@ def _usage(resp: LLMResponse, model: str, provider: str) -> dict:
         "input_tokens": resp.input_tokens or 0,
         "output_tokens": resp.output_tokens or 0,
         "total_tokens": (resp.input_tokens or 0) + (resp.output_tokens or 0),
+        "cached_tokens": getattr(resp, "cached_tokens", 0) or 0,
         "cost_usd": (resp.metadata.get("cost_usd", 0.0) if resp.metadata else 0.0),
         "model": model,
         "provider": provider,
@@ -161,7 +162,8 @@ async def classify_celula_base(
     prompt = _prompt(request.merito_id, request.dossier)
 
     votes: List[CelulaClassifyOut] = []
-    usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cost_usd": 0.0,
+    usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cached_tokens": 0,
+             "cost_usd": 0.0,
              "model": model, "provider": provider, "model_variant": MODEL_VARIANT_TEXT}
     for k in range(n):
         # seed VARIA por k -> mede reproducibilidade da leitura estreita (temp0). seed_for=None
@@ -175,7 +177,7 @@ async def classify_celula_base(
             vote = CelulaClassifyOut(**json.loads(resp.text))
             votes.append(vote)
             u = _usage(resp, model, provider)
-            for key in ("input_tokens", "output_tokens", "total_tokens"):
+            for key in ("input_tokens", "output_tokens", "total_tokens", "cached_tokens"):
                 usage[key] += u[key]
             usage["cost_usd"] = (usage["cost_usd"] or 0) + (u["cost_usd"] or 0)
         except Exception as e:  # noqa: BLE001 — 1 voto ruim so o descarta; TODOS ruins => card.error
@@ -210,7 +212,7 @@ async def classify_celula_base(
             verify = CelulaVerifyOut(**json.loads(vresp.text))
             verify_refuted = verify.refuted
             vu = _usage(vresp, model, provider)
-            for key in ("input_tokens", "output_tokens", "total_tokens"):
+            for key in ("input_tokens", "output_tokens", "total_tokens", "cached_tokens"):
                 usage[key] += vu[key]
             usage["cost_usd"] = (usage["cost_usd"] or 0) + (vu["cost_usd"] or 0)
             if verify.refuted:

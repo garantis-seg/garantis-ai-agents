@@ -278,6 +278,10 @@ async def call_vision_l1(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
+        # Vision NAO le cached_content_token_count (a formula de custo local acima e
+        # flat); 0 explicito pra deixar claro que e nao-instrumentado, nao ausencia
+        # de cache. Mudar isso mexeria no cost_usd de model_variant='vision'.
+        cached_tokens=0,
         metadata={
             "cost_usd": round(cost, 6),
             "model_variant": MODEL_VARIANT_VISION,
