@@ -32,6 +32,9 @@ class LLMResponse:
     total_tokens: int = 0
     """Total tokens used (input + output)."""
 
+    cached_tokens: int = 0
+    """Input tokens servidos do cache — SUBCONJUNTO de input_tokens, nao soma."""
+
     raw_response: Optional[Any] = None
     """Raw response from the provider (for debugging)."""
 

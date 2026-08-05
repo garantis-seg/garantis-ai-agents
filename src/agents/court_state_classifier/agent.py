@@ -58,8 +58,8 @@ async def classify_court_state(
           "classification": CourtStateClassification.model_dump() | error_dict,
           "raw_response": str,
           "prompt_version": str,
-          "usage": {input_tokens, output_tokens, total_tokens, cost_usd,
-                    model, provider, calls, model_variant}
+          "usage": {input_tokens, output_tokens, total_tokens, cached_tokens,
+                    cost_usd, model, provider, calls, model_variant}
         }
     """
     if isinstance(request, dict):
@@ -88,6 +88,7 @@ async def classify_court_state(
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "total_tokens": 0,
+                "cached_tokens": 0,
                 "cost_usd": 0.0,
                 "model": model,
                 "provider": provider,
@@ -125,6 +126,7 @@ async def classify_court_state(
                 "input_tokens": 0,
                 "output_tokens": 0,
                 "total_tokens": 0,
+                "cached_tokens": 0,
                 "cost_usd": 0.0,
                 "model": model,
                 "provider": provider,
@@ -186,6 +188,7 @@ def _usage_from(response: LLMResponse, *, model: str, provider: str) -> dict[str
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "total_tokens": input_tokens + output_tokens,
+        "cached_tokens": getattr(response, "cached_tokens", 0) or 0,
         "cost_usd": md.get("cost_usd", 0.0),
         "model": model,
         "provider": provider,

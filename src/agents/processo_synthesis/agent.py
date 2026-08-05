@@ -196,7 +196,7 @@ async def classify_processo_synthesis(
         prob_exito_result = {
             "raw_response": "{}",  # parseia pra ProbabilidadeExito() vazio -> sem-sinal
             "prompt": "(exito gated: sem sinal de jurisprudencia — call B pulada)",
-            "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+            "usage": {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "cost_usd": 0.0},
         }
         n_calls = 1
         logger.info(
@@ -224,7 +224,7 @@ async def classify_processo_synthesis(
             prob_exito_result = {
                 "raw_response": "{}",
                 "prompt": "(prob_exito raised — degradado pra vazio)",
-                "usage": {"input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0},
+                "usage": {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "cost_usd": 0.0},
             }
             n_calls = 1
 
@@ -463,6 +463,7 @@ def _usage_from(response: LLMResponse) -> dict:
     return {
         "input_tokens": response.input_tokens or 0,
         "output_tokens": response.output_tokens or 0,
+        "cached_tokens": getattr(response, "cached_tokens", 0) or 0,
         "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
     }
 
@@ -479,6 +480,9 @@ def _merge_usage(
             usage_a["input_tokens"] + usage_b["input_tokens"]
             + usage_a["output_tokens"] + usage_b["output_tokens"]
         ),
+        # .get: os stubs degradados (exito-gate / call B que levantou) sao dicts
+        # literais — chave nova nao pode virar KeyError se um deles for esquecido.
+        "cached_tokens": usage_a.get("cached_tokens", 0) + usage_b.get("cached_tokens", 0),
         "cost_usd": usage_a["cost_usd"] + usage_b["cost_usd"],
         "model": model,
         "provider": provider,

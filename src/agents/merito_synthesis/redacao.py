@@ -201,6 +201,7 @@ async def _call_llm(provider, prompt: str, model: str) -> tuple[Optional[dict], 
     usage = {
         "input_tokens": response.input_tokens or 0,
         "output_tokens": response.output_tokens or 0,
+        "cached_tokens": getattr(response, "cached_tokens", 0) or 0,
         "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
     }
     try:
@@ -229,7 +230,7 @@ async def redact_merito_synthesis(
     llm_provider = create_provider(provider)
     prompt = build_redacao_prompt(request)
 
-    in_tok = out_tok = 0
+    in_tok = out_tok = cached_tok = 0
     cost = 0.0
     leak_cats: list[str] = []
     raw_response = ""
@@ -237,6 +238,7 @@ async def redact_merito_synthesis(
     # Attempt 1.
     card, raw_response, u = await _call_llm(llm_provider, prompt, model)
     in_tok += u["input_tokens"]; out_tok += u["output_tokens"]; cost += u["cost_usd"]
+    cached_tok += u["cached_tokens"]
 
     prose_source = "llm"
     # parse_fail e jargao-leak sao causas DISTINTAS de fallback — leak_cats so carrega
@@ -257,6 +259,7 @@ async def redact_merito_synthesis(
             retry_prompt = prompt + "\n\n" + _corrective_block(viols)
             retry_card, raw2, u2 = await _call_llm(llm_provider, retry_prompt, model)
             in_tok += u2["input_tokens"]; out_tok += u2["output_tokens"]; cost += u2["cost_usd"]
+            cached_tok += u2["cached_tokens"]
             if raw2:
                 raw_response = raw2
         if retry_card is not None and not _lint_card(retry_card):
@@ -278,6 +281,7 @@ async def redact_merito_synthesis(
         "input_tokens": in_tok,
         "output_tokens": out_tok,
         "total_tokens": in_tok + out_tok,
+        "cached_tokens": cached_tok,
         "cost_usd": cost,
         "model": model,
         "provider": provider,
