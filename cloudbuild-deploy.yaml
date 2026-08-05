@@ -156,5 +156,46 @@ steps:
       # `--set-secrets GOOGLE_API_KEY=GEMINI_API_KEY:latest` no lugar do clear.
       - '--clear-secrets'
 
+  # ------------------------------------------------------------------
+  # Sombra: staging passa a SEGUIR prod. Espelha o `deploy-staging-sombra` do
+  # frontend-api, que e por que o staging DELE nao deriva.
+  #
+  # POR QUE EXISTE (medido 2026-08-05): o reconcile diario tem um check de
+  # STAGING_FRESHNESS pro par (garantis-ai-agents, garantis-ai-agents-staging),
+  # mas nao havia MECANISMO nenhum que atualizasse o staging. Resultado: a
+  # ultima revisao do staging era de 2026-07-21 e o check acusava 223h de
+  # atraso (teto 48h) — vermelho todo dia, sem ninguem pra consertar, porque
+  # re-apontar a mao so reseta o relogio e volta a divergir no proximo deploy
+  # de prod. Check sem mecanismo e alarme sem conserto.
+  #
+  # SO A IMAGEM, de proposito. `services update --image` preserva env e
+  # secrets, entao staging mantem a config PROPRIA dele (que pode divergir de
+  # prod por decisao) e so o CODIGO segue. E exatamente o que o gate mede: ele
+  # compara digest de imagem e trata img_prod == img_stg como "em dia por
+  # definicao" (lint-services-yaml.py::freshness_drift). Copiar a lista de env
+  # como o fe-api faz seria duplicar config que ninguem pediu pra duplicar.
+  #
+  # NUNCA derruba o build: prod ja foi deployado no step anterior, entao falhar
+  # aqui pintaria de vermelho um deploy que deu certo — e build vermelho e
+  # alerta no Slack (`build-failures-alert`). O backstop de falha PERSISTENTE e
+  # o proprio reconcile diario, que volta a acusar STAGING_STALE em ate 48h.
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'deploy-staging-sombra'
+    waitFor: ['deploy']
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -uo pipefail
+        IMG='southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:${BUILD_ID}'
+        echo "sombra: mesma imagem de prod -> garantis-ai-agents-staging"
+        if gcloud run services update garantis-ai-agents-staging \
+             --image="$$IMG" --region=southamerica-east1 --quiet; then
+          echo "sombra OK"
+        else
+          echo "AVISO: sombra do staging falhou (prod ja esta no ar; o reconcile diario acusa se persistir)"
+        fi
+        exit 0
+
 options:
   logging: CLOUD_LOGGING_ONLY
