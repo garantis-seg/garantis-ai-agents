@@ -89,6 +89,20 @@ def test_reduce_union_cdas_citados():
     assert {p["cnj"] for p in out["processos_citados"]} == {"AAA", "BBB"}
 
 
+def test_reduce_union_admin_citados():
+    """O campo entrou no schema com o v1.3 (WS-D) e o reduce NAO acompanhou: toda
+    peca chunkada (>180k) perdia os admin_item em silencio. Medido em prod
+    2026-08-05: 0% das 10 peticoes giants tem admin_item, vs 46,1% das 466 nao-giants."""
+    cards = [
+        _card(cdas=[], processos_administrativos_citados=[{"numero": "10880.920405/2019-70"}]),
+        _card(cdas=[], processos_administrativos_citados=[
+            {"numero": "10880.920405/2019-70"}, {"numero": "10880.920409/2019-58"}]),
+    ]
+    out = reduce_peca_cards(cards)
+    assert {a["numero"] for a in out["processos_administrativos_citados"]} == {
+        "10880.920405/2019-70", "10880.920409/2019-58"}
+
+
 def test_reduce_ignora_resumo_ruido():
     cards = [_card(resumo_ato="lixo", relevancia_merito="ruido"),
              _card(resumo_ato="conteudo bom", relevancia_merito="media")]

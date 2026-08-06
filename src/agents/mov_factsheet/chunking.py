@@ -127,4 +127,13 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
     if any(("cdas" in c or "processos_citados" in c) for c in cards):  # ramo petição
         out["cdas"] = _union(cards, "cdas", "numero")
         out["processos_citados"] = _union(cards, "processos_citados", "cnj")
+        # processos_administrativos_citados NÃO estava aqui: o campo entrou no schema
+        # com o v1.3 (WS-D admin refs) e o reduce não acompanhou, então TODA peça
+        # chunkada (>180k) perdia os admin_item EM SILÊNCIO — card normal, custo
+        # normal, referência faltando. Medido em prod 2026-08-05: das 10 petições
+        # giants (>180k) com card ativo, 0% tem admin_item, contra 46,1% das 466
+        # não-giants; as CDAs sobrevivem (34%) justamente porque já estavam no union.
+        out["processos_administrativos_citados"] = _union(
+            cards, "processos_administrativos_citados", "numero",
+        )
     return out
