@@ -25,12 +25,17 @@ passou batido.
 from typing import get_args
 
 from garantis_shared.engine_v6.persistence.peticao_contract import (
+    ADMIN_TIPO_TO_NO,
     ENTE_TO_CDA,
     PAPEIS_ARESTA,
 )
 
 from src.agents.mov_factsheet.schemas import CDABlock          # v3.1 — ramo ainda vivo
-from src.agents.mov_factsheet.schemas_v4 import CdaPeticao, ProcessoCitado
+from src.agents.mov_factsheet.schemas_v4 import (
+    CdaPeticao,
+    ProcessoAdminCitado,
+    ProcessoCitado,
+)
 
 
 def _enum_values(model, field: str) -> set[str]:
@@ -79,6 +84,39 @@ def test_as_3_colunas_do_no_sao_do_dominio_certo():
         # Divergir aqui recria o id-split, so na direcao bridge-depois-de-peticao.
         esperado = "PGFN" if tipo == "inscricao_pgfn" else None
         assert origem == esperado, f"{ente}: origem_fazenda={origem!r}, esperado {esperado!r}"
+
+
+def test_tipo_do_admin_cobertura_total_nos_dois_sentidos():
+    """O TERCEIRO enum, que ate 2026-08-07 nao tinha contrato nenhum.
+
+    O sink coercia com `if tipo not in ("paf","tit_sp"): tipo = "paf"` — literal
+    duplicado do enum, escrito a mao, exatamente o anti-padrao que o `ente` provou ser
+    caro. Valor novo aqui sem entrada no mapa nao "quebra": grava esfera FEDERAL num PA
+    estadual, em silencio, e o card da tela diz "ADM. FED.".
+    """
+    enum = _enum_values(ProcessoAdminCitado, "tipo")
+    mapa = set(ADMIN_TIPO_TO_NO)
+
+    assert not (enum - mapa), (
+        f"valor novo no miner sem entrada no sink: {sorted(enum - mapa)}. Todo admin com "
+        "esse tipo e gravado como 'paf'/federal EM SILENCIO. Adicione em ADMIN_TIPO_TO_NO."
+    )
+    assert not (mapa - enum), (
+        f"chave inalcancavel no sink: {sorted(mapa - enum)}. O miner nunca emite esse "
+        "valor — remova, ou o proximo leitor vai achar que ela cobre algo."
+    )
+
+
+def test_o_no_do_admin_e_do_dominio_certo():
+    """Gemeo do teste das 3 colunas da CDA: `tipo` vira coluna E chave do UNIQUE, e
+    esfera/uf sao afirmacoes sobre o mundo. UF fixa so onde o proprio enum a nomeia —
+    'PA estadual' e qualquer fisco estadual, cravar 'SP' inventaria UF pra um PA do RJ."""
+    for tipo, (esfera, uf) in ADMIN_TIPO_TO_NO.items():
+        assert esfera in ("federal", "estadual", "municipal"), f"{tipo}: {esfera!r}"
+        assert uf is None or (len(uf) == 2 and uf.isupper()), f"{tipo}: {uf!r}"
+        assert (uf is not None) == tipo.endswith("_sp"), (
+            f"{tipo}: uf={uf!r}. UF fixa so em tipo que NOMEIA a UF."
+        )
 
 
 def test_papel_da_aresta_e_exclusao_NOMEADA_nao_esquecimento():

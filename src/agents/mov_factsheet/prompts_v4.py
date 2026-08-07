@@ -384,12 +384,22 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
   NÃO converta números incompletos pra 20 dígitos: se o número no documento não está
   no formato CNJ completo (RE/AREsp/ADI/registros curtos), NÃO o estique — ignore.
-- processos_administrativos_citados[]: números de PROCESSO ADMINISTRATIVO citados na petição —
-  o processo administrativo fiscal FEDERAL (NUP/RFB, formato NNNNN.NNNNNN/AAAA-DD, tipo='paf')
-  ou o AIIM/auto de infração ESTADUAL de SP (N.NNN.NNN-D, tipo='tit_sp'), ESCRITOS no documento.
-  Número LITERAL. Do número NÃO dá pra afirmar CARF => federal genérico = 'paf'. NÃO são processo
-  administrativo: CDA/inscrição em dívida ativa (=> cdas[]), processo JUDICIAL/CNJ (=>
-  processos_citados[]), artigo de lei. Só o que ESTÁ escrito no documento.
+- processos_administrativos_citados[]: números de PROCESSO ADMINISTRATIVO citados na petição,
+  ESCRITOS no documento, com o número LITERAL. `tipo`:
+  · 'paf' — processo administrativo fiscal FEDERAL (NUP/RFB, NNNNN.NNNNNN/AAAA-DD). É o
+    DEFAULT: do número NÃO dá pra afirmar CARF, e na dúvida sobre o órgão use 'paf'.
+  · 'tit_sp' — o AIIM / auto de infração e imposição de multa ESTADUAL de SP (N.NNN.NNN-D).
+  · 'pa_estadual' — processo administrativo de fisco ESTADUAL: o texto nomeia o órgão
+    (Secretaria da Fazenda de um estado, SEFAZ, verificação fiscal estadual, defesa/recurso
+    administrativo estadual). É o PROCESSO, não o auto — se o número que você está extraindo
+    é o do AIIM, ele é 'tit_sp'.
+  ⚠️ PAR "Processo Administrativo nº X (AIIM nº Y)": emita os DOIS como itens SEPARADOS —
+  um com o número do PA, outro com o número do AIIM (tipo='tit_sp') — e em CADA um preencha
+  `par_numero` com o número LITERAL do outro. Nunca descarte o número do parêntese. Se o
+  número aparece sozinho, par_numero=null.
+  NÃO são processo administrativo: CDA/inscrição em dívida ativa (=> cdas[]), processo
+  JUDICIAL/CNJ (=> processos_citados[]), artigo de lei. Só o que ESTÁ escrito no documento.
+  Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
 - NÃO deduza direção do par (quem é mais novo/velho) — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores (texto limpo=alta; OCR
   ruidoso/citações ambíguas=baixa).
@@ -490,10 +500,15 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
   NÃO converta números incompletos pra 20 dígitos — se não está no formato CNJ
   completo, ignore.
-- processos_administrativos_citados[]: PROCESSO ADMINISTRATIVO citado (PAF/RFB federal
-  NNNNN.NNNNNN/AAAA-DD tipo='paf'; AIIM/TIT SP N.NNN.NNN-D tipo='tit_sp'), ESCRITO no doc.
-  Do número NÃO dá pra afirmar CARF => 'paf'. NÃO é admin: CDA (=> cdas[]), CNJ judicial
-  (=> processos_citados[]), artigo de lei.
+- processos_administrativos_citados[]: PROCESSO ADMINISTRATIVO citado, ESCRITO no doc,
+  número LITERAL. `tipo`: 'paf'=fiscal FEDERAL (NUP/RFB, NNNNN.NNNNNN/AAAA-DD) — DEFAULT,
+  do número NÃO dá pra afirmar CARF; 'tit_sp'=AIIM/auto de infração de SP (N.NNN.NNN-D);
+  'pa_estadual'=processo administrativo de fisco ESTADUAL quando o texto NOMEIA o órgão
+  (Secretaria da Fazenda estadual/SEFAZ, verificação fiscal) — é o PROCESSO, não o auto.
+  ⚠️ PAR "Processo Administrativo nº X (AIIM nº Y)": emita os DOIS como itens SEPARADOS,
+  cada um com `par_numero` = o número LITERAL do outro. Nunca descarte o do parêntese.
+  Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
+  NÃO é admin: CDA (=> cdas[]), CNJ judicial (=> processos_citados[]), artigo de lei.
 - NÃO deduza direção do par — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores. Documento de tipo incerto
   ou OCR ruidoso => comece de 0.7 pra baixo.

@@ -156,3 +156,44 @@ def test_doc_incerto_evidencia_grande_le_head_tail(processo, mov):
     prompt = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=[doc], classe="doc_incerto")
     assert "documento de EVIDÊNCIA tabular" in prompt
     assert "8" * 250_000 not in prompt
+
+
+# ── Enum do admin x prompt (2026-08-07, tasks 869efg29g/869efg29k) ───────────
+# O schema e constrained decoding: um valor no Literal que a prompt nunca explica
+# CONTINUA sendo emitivel pelo modelo, so que sem criterio nenhum — e a esfera do
+# no sai dai. O par PA/AIIM tem o problema simetrico: sem a instrucao, o numero do
+# parentese se perde e a aresta que ligaria os conexos nunca nasce (elo que faltou
+# no QA do Kelveng). Os DOIS ramos usam o MESMO schema superset, entao os dois
+# precisam da instrucao — ate 2026-08-07 o 1X ja era uma versao resumida do 1P.
+
+
+def _os_dois_ramos(processo, mov):
+    """(1P peticao, 1X doc incerto) — os 2 prompts que emitem PeticaoExtractCardV4."""
+    doc = DocAnexado(
+        doc_key="d1", tipo="Peticao inicial", titulo="Inicial",
+        text_content="Processo Administrativo n 017.00100686/2026-51 "
+                     "(AIIM n 5.059.644-5), instaurado perante a Secretaria da "
+                     "Fazenda e Planejamento do Estado de Sao Paulo." * 20,
+    )
+    return (
+        build_mov_factsheet_prompt_v4(processo, mov, [doc], classe="peticao"),
+        build_mov_factsheet_prompt_v4(processo, mov, [doc], classe="doc_incerto"),
+    )
+
+
+def test_todo_valor_do_enum_admin_e_explicado_nos_dois_ramos(processo, mov):
+    from typing import get_args
+
+    from src.agents.mov_factsheet.schemas_v4 import ProcessoAdminCitado
+
+    valores = get_args(ProcessoAdminCitado.model_fields["tipo"].annotation)
+    assert set(valores) == {"paf", "tit_sp", "pa_estadual"}, valores
+    for prompt in _os_dois_ramos(processo, mov):
+        for v in valores:
+            assert f"'{v}'" in prompt, f"{v} esta no schema mas nao na prompt"
+
+
+def test_par_pa_aiim_esta_instruido_nos_dois_ramos(processo, mov):
+    for prompt in _os_dois_ramos(processo, mov):
+        assert "par_numero" in prompt
+        assert "AIIM n" in prompt and "SEPARADOS" in prompt
