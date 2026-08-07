@@ -1,6 +1,6 @@
-# Core dependencies
+﻿# Core dependencies
 # >=1.46.0: floor pro http_options.client_args/async_client_args (custom httpx
-# transport + socket_options) ser HONRADO — <1.11 ignora o kwarg em silencio e o
+# transport + socket_options) ser HONRADO â€” <1.11 ignora o kwarg em silencio e o
 # keepalive fix (models/factory.py) viraria no-op. Deployed hoje = 2.10.0 (por
 # sorte do cache Kaniko, nao pelo pin antigo >=0.8.0). NAO baixar o floor.
 google-genai>=1.46.0
@@ -14,51 +14,51 @@ pydantic>=2.10.0
 pydantic-settings>=2.0.0
 python-dotenv>=1.0.0
 
-# Gate de OCR/Vision (L1 v7) — rmgarbage + página-imagem por área.
-# PyMuPDF tem wheels manylinux (sem apt extra); pypdf é puro-Python.
+# Gate de OCR/Vision (L1 v7) â€” rmgarbage + pÃ¡gina-imagem por Ã¡rea.
+# PyMuPDF tem wheels manylinux (sem apt extra); pypdf Ã© puro-Python.
 PyMuPDF>=1.24.0
 pypdf>=4.0.0
 
-# Optional LLM providers (uncomment as needed — extras [openai]/[groq]/[all] no pyproject
-# instalam sob demanda; comentados aqui pra não baixar 2 SDKs LLM pesados que o factory
-# nunca importa — só GeminiProvider é registrado). E14 limpeza-geral-2.
+# Optional LLM providers (uncomment as needed â€” extras [openai]/[groq]/[all] no pyproject
+# instalam sob demanda; comentados aqui pra nÃ£o baixar 2 SDKs LLM pesados que o factory
+# nunca importa â€” sÃ³ GeminiProvider Ã© registrado). E14 limpeza-geral-2.
 # openai>=1.0.0
 # groq>=0.4.0
 
-# Shared utilities (from Artifact Registry — URL set via PIP_EXTRA_INDEX_URL env)
-# Bumped 2026-05-31 (Architecture D PR2) — agents/processo_synthesis/prompts.py
+# Shared utilities (from Artifact Registry â€” URL set via PIP_EXTRA_INDEX_URL env)
+# Bumped 2026-05-31 (Architecture D PR2) â€” agents/processo_synthesis/prompts.py
 # importa engine_v6.matrices.daycoval (Matriz Daycoval extraida do hardcode).
 # 1.61.0 introduz garantis_shared/engine_v6/matrices/{__init__,daycoval}.py.
-# 1.62.0 — Architecture D PR3 + lazy __init__ hotfix:
-#   engine_v6/__init__.py virou lazy (PEP 562 __getattr__) — permite importar
+# 1.62.0 â€” Architecture D PR3 + lazy __init__ hotfix:
+#   engine_v6/__init__.py virou lazy (PEP 562 __getattr__) â€” permite importar
 #   matrices sem dragging psycopg2/DBOS deps. SEM esse hotfix, PR2 deploy
 #   ai-agents falha boot em ModuleNotFoundError: psycopg2.
-# 1.65.0 — Architecture D PR6: ai-agents NAO usa direto (mudancas locais em
+# 1.65.0 â€” Architecture D PR6: ai-agents NAO usa direto (mudancas locais em
 # agents/merito_synthesis sao independentes), mas pin alinhado garante que
 # worker rode mesma versao do shared que registra prompt_version no
 # engine_llm_calls (rastreabilidade dos buckets ab test).
-# 1.66.0 — Architecture D PR7.1: ai-agents nao usa direto (mudancas locais
+# 1.66.0 â€” Architecture D PR7.1: ai-agents nao usa direto (mudancas locais
 # em agents/merito_synthesis/prompts.py + schemas.py sao independentes), mas
 # pin alinhado garante coerencia com worker que faz PROMOTE matriz determ.
 # Pinned == (not >=) 2026-06-01: a >= floor meant a garantis-shared publish did
 # NOT change this file, so Kaniko's deps layer cache-hit and ai-agents kept the
-# OLD shared wheel baked in until the 168h cache TTL — diverging from frontend-api
+# OLD shared wheel baked in until the 168h cache TTL â€” diverging from frontend-api
 # (which pins ==). Exact pin keeps both consumers on the same shared version.
 # When bumping garantis-shared: publish it, then bump this pin (and fe-api's).
-# 1.203.0 (2026-06-22) — chunking shared framework: ai-agents passa a importar
+# 1.203.0 (2026-06-22) â€” chunking shared framework: ai-agents passa a importar
 # garantis_shared.llm_chunking (map_reduce_classify) no L1 (mov_factsheet) e L2
 # (processo_synthesis).
-# 2026-07-08 (E15 limpeza-2): bump 1.203.0 -> 1.284.0 (estava 81 versões atrás do
-# fe-api/AR — gap de processo, não decisão). Mantém == (o >= quebra o cache Kaniko,
-# ver acima). ⚠️ ENGINE-PATH: o próximo deploy DELIBERADO do ai-agents puxa 81
-# versões de shared (metodologia de risco recente, majoritariamente GATED) — smoke
-# de freeze (245 grades hash) OBRIGATÓRIO no deploy; se mudar grade, segurar.
+# 2026-07-08 (E15 limpeza-2): bump 1.203.0 -> 1.284.0 (estava 81 versÃµes atrÃ¡s do
+# fe-api/AR â€” gap de processo, nÃ£o decisÃ£o). MantÃ©m == (o >= quebra o cache Kaniko,
+# ver acima). âš ï¸ ENGINE-PATH: o prÃ³ximo deploy DELIBERADO do ai-agents puxa 81
+# versÃµes de shared (metodologia de risco recente, majoritariamente GATED) â€” smoke
+# de freeze (245 grades hash) OBRIGATÃ“RIO no deploy; se mudar grade, segurar.
 # 2026-07-24 (trem registro de modelos): bump p/ a versao que traz
 # garantis_shared.llm_models (providers/gemini.py GEMINI_PRICING agora LE o catalogo).
-# ⚠️ TREM — CONFERIR: este == DEVE ser a versao REAL publicada no AR pos-merge do
+# âš ï¸ TREM â€” CONFERIR: este == DEVE ser a versao REAL publicada no AR pos-merge do
 # shared PR (feat/llm-models-registry) + #213. Estimativa 1.333.0 (1.331 last + 2
-# merges); "corrida de pin" ja aconteceu 2x — validar antes do deploy deliberado.
-garantis-shared==1.411.0
+# merges); "corrida de pin" ja aconteceu 2x â€” validar antes do deploy deliberado.
+garantis-shared==1.421.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
