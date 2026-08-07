@@ -58,7 +58,13 @@ pypdf>=4.0.0
 # ⚠️ TREM — CONFERIR: este == DEVE ser a versao REAL publicada no AR pos-merge do
 # shared PR (feat/llm-models-registry) + #213. Estimativa 1.333.0 (1.331 last + 2
 # merges); "corrida de pin" ja aconteceu 2x — validar antes do deploy deliberado.
-garantis-shared==1.421.0
+# 2026-08-07 (P2 miner, tasks 869efg29g/869efg29k): bump p/ 1.423.0 — versao LIDA do
+# LOG do build `deploy-garantis-shared` (`[version] computed 1.423.0`), nao do
+# `versions list`. Traz `peticao_contract.ADMIN_TIPO_TO_NO`, sem o qual
+# `tests/test_enum_contrato_sink.py` nem importa. ⚠️ Bump ATOMICO com o enum novo
+# `pa_estadual` deste PR: e exatamente o caso que o teste de contrato existe pra pegar
+# (enum ⊆ dict), e ele so ve o lado do sink no PR que bumpa o pin.
+garantis-shared==1.423.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
