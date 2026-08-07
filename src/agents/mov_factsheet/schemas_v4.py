@@ -329,11 +329,22 @@ class MovFactSheetCardV4(BaseModel):
 # DETERMINISTICO no sink/formacao (papel = hint, nunca cria aresta sozinho).
 # v1.3 (2026-06-27, WS-D): + processos_administrativos_citados[] (PAF/RFB federal + AIIM/TIT SP)
 # como conector cross-type J->A do 1.B. Bump invalida o cache v1.2 -> re-extrai 1x com admin.
-PETICAO_PROMPT_VERSION = "peticao_extract.v1.3"
+# v1.4 (2026-08-07, tasks 869efg29g + 869efg29k): (a) o PAR "Processo Administrativo n X
+# (AIIM n Y)" vira DOIS itens, cada um com `par_numero` apontando pro outro — ate aqui o
+# AIIM do parentese se perdia, e com ele a aresta que ligaria os conexos (elo que faltou no
+# QA do Kelveng, MS Steel Rol); (b) tipo='pa_estadual' pro PA de fisco ESTADUAL, que o enum
+# binario forcava a `paf` => esfera federal (caso vivo: 017.00100686/2026-51 instaurado
+# perante a SEFAZ-SP aparecia como "ADM. FED." no conexo 1477176). Bump invalida o cache
+# v1.3 -> re-extrai 1x; o SWAP-POR-PN do sink troca as rows da versao velha DESTE pn, entao
+# o legado se re-tipa sozinho conforme cada peticao e re-lida.
+PETICAO_PROMPT_VERSION = "peticao_extract.v1.4"
 # Ramo 1X: doc de tipo NAO identificado (fallback L3 do identify) — mesmo
 # schema superset do 1P (tipo_doc classificado em vez de cravado). Versao por
 # ramo: bump do 1X nao invalida cache do 1P nem do mov, e vice-versa.
-DOC_INCERTO_PROMPT_VERSION = "doc_incerto_extract.v1.1"   # WS-D: + processos_administrativos_citados[]
+# v1.2 (2026-08-07): mesma mudanca do 1P v1.4 (par PA/AIIM + pa_estadual) — o ramo 1X usa
+# o MESMO schema superset, entao um enum novo sem a instrucao correspondente aqui daria
+# constrained decoding com valor que o prompt nunca explica.
+DOC_INCERTO_PROMPT_VERSION = "doc_incerto_extract.v1.2"   # WS-D: + processos_administrativos_citados[]
 
 
 class CdaPeticao(BaseModel):
@@ -376,19 +387,36 @@ class ProcessoCitado(BaseModel):
 
 class ProcessoAdminCitado(BaseModel):
     """Processo ADMINISTRATIVO citado na petição (PAF/RFB federal ou AIIM/TIT estadual SP).
-    Conector cross-type J->A da formação de conexos — taxpayer-specific. (WS-D 2026-06-27.)"""
+    Conector cross-type J->A da formação de conexos — taxpayer-specific. (WS-D 2026-06-27.)
+
+    ⚠️ `tipo` é CONTRATO cross-repo: ele vira a coluna `leads.admin_items.tipo` (metade do
+    UNIQUE (tipo, numero_normalizado)) E a esfera/UF do nó, via
+    `garantis_shared...peticao_contract.ADMIN_TIPO_TO_NO`. Valor novo aqui sem entrada lá
+    cai em `paf`/federal. `tests/test_enum_contrato_sink.py` cruza os dois lados.
+    """
 
     numero: str = Field(description="Número LITERAL do processo administrativo como aparece no texto.")
-    tipo: Literal["paf", "tit_sp"] = Field(
+    tipo: Literal["paf", "tit_sp", "pa_estadual"] = Field(
         default="paf",
         description=(
             "'paf'=processo administrativo fiscal FEDERAL (NUP/RFB, NNNNN.NNNNNN/AAAA-DD) — "
             "default; do número NÃO dá pra afirmar CARF. 'tit_sp'=AIIM/auto de infração "
-            "ESTADUAL de SP (N.NNN.NNN-D)."
+            "ESTADUAL de SP (N.NNN.NNN-D). 'pa_estadual'=processo administrativo de fisco "
+            "ESTADUAL (Secretaria da Fazenda de um estado; verificação fiscal, defesa/"
+            "recurso administrativo) — o PROCESSO, não o auto: se o número é do AIIM use "
+            "'tit_sp'. Só marque quando o texto disser o ÓRGÃO estadual; na dúvida 'paf'."
         ),
     )
     contexto: Optional[str] = Field(
         default=None, description="Snippet ~120 chars ao redor da citação (auditoria).",
+    )
+    par_numero: Optional[str] = Field(
+        default=None,
+        description=(
+            "Quando o texto apresenta o PAR 'Processo Administrativo nº X (AIIM nº Y)', o "
+            "número LITERAL do OUTRO item do par. Emita os DOIS como itens separados, cada "
+            "um com par_numero apontando pro outro. null quando o número aparece sozinho."
+        ),
     )
 
 
