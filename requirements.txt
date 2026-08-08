@@ -64,7 +64,14 @@ pypdf>=4.0.0
 # `tests/test_enum_contrato_sink.py` nem importa. ⚠️ Bump ATOMICO com o enum novo
 # `pa_estadual` deste PR: e exatamente o caso que o teste de contrato existe pra pegar
 # (enum ⊆ dict), e ele so ve o lado do sink no PR que bumpa o pin.
-garantis-shared==1.423.0
+# 2026-08-08 (task 869efk96p): bump p/ 1.426.0 — versao LIDA do LOG do build
+# `deploy-garantis-shared` (`[version] computed 1.426.0`), nao do `versions list`.
+# Traz `layer1_policy_factsheet.gatekeeper_contract`, sem o qual o
+# `test_evento_garantia_e_exclusao_NOMEADA_nao_esquecimento` nem importa.
+# ⚠️ O auto-bump NAO propoe este: rodaram o `imports_de`/`fecho` do
+# scripts/bump_consumers.py e os modulos do garantis-shared#310 ficam FORA do fecho
+# que ele calcula => `superficie_mudou` devolve False. Por isso, A MAO.
+garantis-shared==1.426.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
