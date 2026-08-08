@@ -24,6 +24,9 @@ passou batido.
 """
 from typing import get_args
 
+from garantis_shared.engine_v6.layer1_policy_factsheet.gatekeeper_contract import (
+    GATEKEEPER_EVENTO_TIPOS,
+)
 from garantis_shared.engine_v6.persistence.peticao_contract import (
     ADMIN_TIPO_TO_NO,
     ENTE_TO_CDA,
@@ -33,6 +36,7 @@ from garantis_shared.engine_v6.persistence.peticao_contract import (
 from src.agents.mov_factsheet.schemas import CDABlock          # v3.1 — ramo ainda vivo
 from src.agents.mov_factsheet.schemas_v4 import (
     CdaPeticao,
+    EventoGarantiaV4,
     ProcessoAdminCitado,
     ProcessoCitado,
 )
@@ -130,4 +134,34 @@ def test_papel_da_aresta_e_exclusao_NOMEADA_nao_esquecimento():
     assert enum - PAPEIS_ARESTA == fora_por_design, (
         f"papel novo no miner: {sorted(enum - PAPEIS_ARESTA - fora_por_design)}. Decida "
         "explicitamente se ele vira aresta (PAPEIS_ARESTA) ou entra nesta lista."
+    )
+
+
+def test_evento_da_garantia_e_exclusao_NOMEADA_nao_esquecimento():
+    """O QUARTO enum — e a 2a vez que a MESMA classe de bug mordeu neste sink.
+
+    `_GATEKEEPER_EVENTO_TIPOS` foi escrito em 2026-05-26 contra o enum v3 (7 valores);
+    `acionamento` entrou no v4 em 2026-06-10; ninguem cruzou os dois lados por ~2 meses.
+    Ficou de fora justamente o sinal MAIS forte de que ha apolice em jogo (ordem de
+    EXECUTAR a garantia): 260 cards / 55 PNs em prod. Fechado no garantis-shared#310.
+
+    Custou US$0,00 por ACIDENTE, nao por contrato: 253 dos 260 cards ja entravam pelo
+    braco do `subtipo` (`_row_to_card` faz `tipo_garantia = evento_garantia_subtipo`).
+    Esse resgate NAO existe na perna JSONB do `_load_mov_cards_by_doc`, e a poda e
+    PERMANENTE na outra direcao (`_persist_gatekept` grava no_policies e
+    `_already_extracted` nunca reabre). Ou seja: o proximo esquecimento paga.
+    """
+    fora_por_design = {"nenhum"}
+    enum = _enum_values(EventoGarantiaV4, "tipo")
+
+    assert enum - GATEKEEPER_EVENTO_TIPOS == fora_por_design, (
+        f"tipo novo no miner sem entrada no gatekeeper: "
+        f"{sorted(enum - GATEKEEPER_EVENTO_TIPOS - fora_por_design)}. Doc com esse evento "
+        "so extrai se o SUBTIPO ou a keyword salvarem, e a poda e PERMANENTE. Decida "
+        "explicitamente: entra em GATEKEEPER_EVENTO_TIPOS ou nesta lista."
+    )
+    assert GATEKEEPER_EVENTO_TIPOS <= enum, (
+        f"chave morta no gatekeeper: {sorted(GATEKEEPER_EVENTO_TIPOS - enum)}. O miner "
+        "nunca emite esse valor — foi assim que o `reforco` ACENTUADO viveu ali desde "
+        "2026-05 com 0 rows em prod."
     )
