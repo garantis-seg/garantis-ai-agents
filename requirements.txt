@@ -71,7 +71,7 @@ pypdf>=4.0.0
 # ⚠️ O auto-bump NAO propoe este: rodaram o `imports_de`/`fecho` do
 # scripts/bump_consumers.py e os modulos do garantis-shared#310 ficam FORA do fecho
 # que ele calcula => `superficie_mudou` devolve False. Por isso, A MAO.
-garantis-shared==1.426.0
+garantis-shared==1.432.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
