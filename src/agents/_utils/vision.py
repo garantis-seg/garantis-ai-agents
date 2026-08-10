@@ -327,7 +327,7 @@ async def call_l1_with_vision_fallback(
     if gcs_urls and flag_enabled(vision_flag_name):
         if docs_text:
             # GATE por documento: baixa e filtra só os que o gate aprova.
-            from .ocr_gate import precisa_vision, texto_lixo
+            from .ocr_gate import precisa_vision, texto_decide_sozinho
             for text_content, gcs_url in docs_text:
                 if not gcs_url:
                     continue
@@ -336,7 +336,12 @@ async def call_l1_with_vision_fallback(
                 # o text-layer (born-digital). Só doc-imagem/texto-lixo (vazio ou
                 # garbage) baixa + passa pelo gate. Assim o custo do Vision ON é ∝ nº de
                 # docs-imagem (~5%), não ao total de docs (antes baixava TODOS pra gate).
-                if not texto_lixo(text_content):
+                # ⚠️ O teste era `not texto_lixo(...)`, e isso deixava o Sinal 1 (área de
+                # imagem) INALCANÇÁVEL justamente pro caso que ele foi escrito pra pegar:
+                # scan cujo único texto é o carimbo do PJe / rodapé do ESAJ — limpo pro
+                # rmgarbage, e com a peça presa na imagem. 8.597 docs assim em prod
+                # (2026-08-10). `texto_decide_sozinho` soma o piso de TEOR.
+                if texto_decide_sozinho(text_content):
                     continue
                 try:
                     raw = await fetch_pdfs_from_gcs([gcs_url])
