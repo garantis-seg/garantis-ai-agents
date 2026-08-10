@@ -13,7 +13,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from garantis_shared.logging_setup import setup_logging
 
 from .middleware import GeminiCallTimeoutMiddleware
-from .routes import apolice_lifecycle, celula_base_classifier, court_state_classifier, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, summarization, text
+# (court_state_classifier REMOVIDO 2026-08-10 por decisao do Elton: a flag
+#  USE_LLM_COURT_STATE_CLASSIFIER do frontend-api nasceu "false" e nunca foi "true"
+#  em nenhum ambiente — 0 requests nesta rota. O classificador de estado de
+#  court_presentation e o REGEX em
+#  execucao-fiscal/frontend-api/services/court_presentation_inference_service.py.
+#  Posicao mais ampla do Elton na mesma decisao: caminho de LLM para derivar FATO
+#  ESTRUTURAL do processo (tribunal, estado) e para ser EVITADO — o fato deve vir do
+#  provider ou de derivacao deterministica.)
+from .routes import apolice_lifecycle, celula_base_classifier, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, summarization, text
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -64,7 +72,6 @@ app.include_router(summarization.router)
 app.include_router(text.router)
 app.include_router(pdf.router)
 app.include_router(apolice_lifecycle.router)
-app.include_router(court_state_classifier.router)
 app.include_router(mov_summarizer.router)
 app.include_router(mov_factsheet.router)
 app.include_router(processo_synthesis.router)
