@@ -22,6 +22,9 @@ COBERTURA_IMG_MIN = 0.50
 AREA_TEXTO_MAX = 0.15
 # Sinal 2 (rmgarbage)
 GARBAGE_RATIO_MAX = 0.30
+# Piso de TEOR: abaixo disto o texto não decide sozinho (ver texto_decide_sozinho).
+# 400 chars ≈ um parágrafo — carimbo do PJe e rodapé do ESAJ ficam em 285-399.
+TEOR_MIN_CHARS = 400
 # Controle de páginas
 TETO_PAGINAS = 100
 AMOSTRA_PONTAS = 30
@@ -68,6 +71,30 @@ def texto_lixo(txt: Optional[str]) -> bool:
     if not txt or not txt.strip():
         return True
     return garbage_ratio(txt) > GARBAGE_RATIO_MAX
+
+
+def texto_decide_sozinho(txt: Optional[str]) -> bool:
+    """True = dá pra confiar SÓ no texto e nem baixar o PDF pro Sinal 1.
+
+    ⚠️ `not texto_lixo(txt)` NÃO basta, e era exatamente esse o curto-circuito do
+    caller. rmgarbage (Sinal 2) mede CORRUPÇÃO DE CARACTERE — é cego pra texto
+    limpo e vazio de conteúdo, que é a forma mais comum de scan no acervo:
+
+      - "Para conferir o original, acesse o site https://esaj.tjsp.jus.br…" (5.339
+        docs em prod) — só o rodapé de autenticação do ESAJ;
+      - "Num. 123456789 - Pág. 1\\nAssinado eletronicamente por: TRIBUNAL…" (3.258)
+        — só o carimbo de assinatura do PJe.
+
+    Nos dois casos o texto é português impecável, `garbage_ratio` ≈ 0, e a PEÇA
+    está presa na imagem. O Sinal 1 (área de imagem por página) foi escrito
+    literalmente pra "scan com carimbo/rodapé" — e nunca rodava neles, porque o
+    caller desistia antes de baixar o PDF. Medido 2026-08-10.
+
+    Abaixo de TEOR_MIN_CHARS, então, quem decide é o PDF: baixa e deixa o Sinal 1
+    olhar a área. Doc curto e legítimo (despacho de 1 linha) custa 1 fetch do GCS
+    e continua no texto — o Sinal 1 vê página com texto nativo e diz não.
+    """
+    return not texto_lixo(txt) and len((txt or "").strip()) >= TEOR_MIN_CHARS
 
 
 # ── SINAL 1 — página-imagem (PyMuPDF, sobre bytes) ────────────────────────────
@@ -160,6 +187,7 @@ def precisa_vision(text_content: Optional[str], pdf_bytes: Optional[bytes]) -> t
 
 
 __all__ = [
-    "texto_lixo", "garbage_ratio", "analisar_pdf_bytes", "precisa_vision",
-    "COBERTURA_IMG_MIN", "AREA_TEXTO_MAX", "GARBAGE_RATIO_MAX", "TETO_PAGINAS", "AMOSTRA_PONTAS",
+    "texto_lixo", "texto_decide_sozinho", "garbage_ratio", "analisar_pdf_bytes",
+    "precisa_vision", "COBERTURA_IMG_MIN", "AREA_TEXTO_MAX", "GARBAGE_RATIO_MAX",
+    "TEOR_MIN_CHARS", "TETO_PAGINAS", "AMOSTRA_PONTAS",
 ]
