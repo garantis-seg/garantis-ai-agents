@@ -14,8 +14,12 @@ from garantis_shared.logging_setup import setup_logging
 
 from .middleware import GeminiCallTimeoutMiddleware
 # (court_state_classifier REMOVIDO 2026-08-10 por decisao do Elton: a flag
-#  USE_LLM_COURT_STATE_CLASSIFIER do frontend-api nasceu "false" e nunca foi "true"
-#  em nenhum ambiente — 0 requests nesta rota. O classificador de estado de
+#  USE_LLM_COURT_STATE_CLASSIFIER do frontend-api nasceu "false" e nao ha registro
+#  de "true" em ambiente nenhum. Medido 2026-08-10: 0 requests a /court-state-
+#  classifier/ nos logs DESTE servico, em prod e em staging, na janela inteira
+#  disponivel (entrada mais antiga 2026-07-12; controle positivo: /mov-factsheet/
+#  classify aparece no mesmo filtro). ⚠️ A retencao de log de app no neqsti e 30
+#  dias — "0 em 30d" e o TETO do que o log prova, nao "nunca". O classificador de estado de
 #  court_presentation e o REGEX em
 #  execucao-fiscal/frontend-api/services/court_presentation_inference_service.py.
 #  Posicao mais ampla do Elton na mesma decisao: caminho de LLM para derivar FATO
