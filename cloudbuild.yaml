@@ -9,7 +9,7 @@ steps:
       - '--destination=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api:latest'
       - '--cache=true'
       - '--cache-ttl=168h'
-      - '--cache-repo=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-ai-agents/api-cache'
+      - '--cache-repo=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-build-cache/garantis-ai-agents-cache'
       - '--snapshot-mode=redo'
     timeout: '600s'
 

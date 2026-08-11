@@ -13,7 +13,7 @@ steps:
       - '--destination=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api:staging-latest'
       - '--cache=true'
       - '--cache-ttl=168h'
-      - '--cache-repo=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api-cache'
+      - '--cache-repo=southamerica-east1-docker.pkg.dev/neqsti/garantis-build-cache/garantis-ai-agents-cache'
     timeout: '900s'
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
     entrypoint: gcloud
