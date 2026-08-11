@@ -10,12 +10,21 @@ routers/licitacao_summary.py` (ef#1340) e `whatsapp-bot services/edital_analyzer
 o proprio arquivo cita "summarization" na lista de imports vizinha, entao um
 `assert "summarization" not in texto` seria fragil pelo motivo errado.
 
-⚠️⚠️ O CONTRA-EXEMPLO NAO E DECORACAO: sem ele, um `app` que falhasse ao montar
-qualquer rota satisfaria a assercao de ausencia e o teste passaria verde. Aqui ele
-carrega uma 2a funcao — os agentes do ENGINE (mov_factsheet / processo_synthesis /
-merito_synthesis) moram no mesmo `main.py` e no mesmo `include_router`; se alguem
-"terminar o servico" cortando por proximidade, e por aqui que se ve.
+⚠️⚠️ O CONTRA-EXEMPLO NAO OLHA ROTA, E ISSO E DELIBERADO — a 1a versao deste arquivo
+olhava, e QUEBROU O DEPLOY. Ela exigia `/mov-factsheet`, `/processo-synthesis` e
+`/merito-synthesis` montados; passou local (270 passed) e falhou no container do
+cloudbuild com *"as rotas de /mov-factsheet sumiram"*, com os 3 prefixos hardcoded e
+corretos nos 3 routers. Ou seja: o inventario de `app.routes` NAO e o mesmo nas duas
+maquinas, e um contra-exemplo que depende de como o `app` e construido testa o
+ambiente junto com o codigo. O risco que ele existe pra cobrir — *alguem corta os
+agentes do ENGINE por proximidade, porque moram no mesmo `main.py`* — se testa melhor
+no IMPORT, que nao depende de app, middleware, env nem da ordem dos outros testes.
+
+⚠️ E a assercao de AUSENCIA nao passa vacuosamente num app quebrado: se
+`src.api.main` nao importar, a fixture LEVANTA (o teste da error, nao green).
 """
+
+import importlib
 
 import pytest
 
@@ -36,12 +45,19 @@ def test_o_pacote_do_agente_nao_existe_mais():
     """O import e a prova real: a rota podia sair e o agente ficar, virando 990 linhas
     de codigo inalcancavel — que era exatamente o estado que este PR encontrou."""
     with pytest.raises(ModuleNotFoundError):
-        __import__("src.agents.edital_summarizer")
+        importlib.import_module("src.agents.edital_summarizer")
 
 
-def test_contra_exemplo_os_agentes_do_engine_continuam_montados(rotas_montadas):
-    """Sem isto o teste acima passa verde num `app` que nao montou nada."""
-    for prefixo in ("/mov-factsheet", "/processo-synthesis", "/merito-synthesis"):
-        assert any(p.startswith(prefixo) for p in rotas_montadas), (
-            f"as rotas de {prefixo} sumiram — elas sao do ENGINE, nao do produto Licitacao"
-        )
+@pytest.mark.parametrize(
+    "modulo",
+    ["src.agents.mov_factsheet", "src.agents.processo_synthesis", "src.agents.merito_synthesis"],
+)
+def test_contra_exemplo_os_agentes_do_engine_continuam_existindo(modulo):
+    """Espelho exato do teste acima, na direcao oposta.
+
+    Os 3 sao do ENGINE e moram ao lado do que saiu — no mesmo `src/agents/` e no mesmo
+    `include_router` de `main.py`. Se um teardown futuro cortar por proximidade, este
+    e o teste que fica vermelho. `ModuleNotFoundError` aqui = alguem levou o engine
+    junto.
+    """
+    assert importlib.import_module(modulo) is not None
