@@ -25,7 +25,7 @@ from .middleware import GeminiCallTimeoutMiddleware
 #  Posicao mais ampla do Elton na mesma decisao: caminho de LLM para derivar FATO
 #  ESTRUTURAL do processo (tribunal, estado) e para ser EVITADO — o fato deve vir do
 #  provider ou de derivacao deterministica.)
-from .routes import apolice_lifecycle, celula_base_classifier, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, summarization, text
+from .routes import apolice_lifecycle, celula_base_classifier, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, text
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -72,7 +72,6 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(prompts.router)
 app.include_router(providers.router)
-app.include_router(summarization.router)
 app.include_router(text.router)
 app.include_router(pdf.router)
 app.include_router(apolice_lifecycle.router)
@@ -92,7 +91,6 @@ async def root():
         "version": "0.5.0",
         "docs": "/docs",
         "endpoints": {
-            "summarization": "/summarization",
             "text": "/text",
             "pdf": "/pdf",
             "prompts": "/prompts",
