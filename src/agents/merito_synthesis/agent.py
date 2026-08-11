@@ -168,7 +168,7 @@ async def classify_merito_synthesis(
         # GIGANTES (ex Petrobras 680195, 25 processos) geravam >16k tokens de output
         # -> JSON truncado -> JSONDecodeError -> retryable_500 5x -> indeterminado.
         # 65535 cabe folgado (so paga o output REAL gerado, nao o limite). Raiz, sem
-        # fallback. (edital_summarizer tem retry-aware p/ casos > teto — YAGNI aqui.)
+        # fallback. (o retry-aware do edital_summarizer saiu em 2026-08-11 — YAGNI aqui.)
         max_tokens=65535,
     )
 

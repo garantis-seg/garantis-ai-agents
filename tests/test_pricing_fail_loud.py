@@ -21,7 +21,7 @@ import pytest
 from src.providers.gemini import GEMINI_PRICING, GeminiProvider
 
 _HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_EDITAL_AGENT = os.path.join(_HERE, "src", "agents", "edital_summarizer", "agent.py")
+
 
 
 def _provider() -> GeminiProvider:
@@ -88,18 +88,11 @@ def test_todo_modelo_que_este_repo_pode_servir_tem_preco():
     assert faltando == [], f"modelos servidos sem preco no catalogo: {faltando}"
 
 
-def test_edital_summarizer_nao_tem_preco_hardcoded():
-    """Era a 4a copia do preco (0.15/0.60), fora do catalogo e ERRADA — corrigir o
-    catalogo nao corrigia essa linha. Pega a FORMA: nenhum literal de preco por
-    1M no arquivo, so leitura do provider."""
-    src = open(_EDITAL_AGENT, encoding="utf-8").read()
-    hardcoded = [
-        ln for ln in src.splitlines()
-        if re.search(r"cost_per_1m|per_1m\s*=\s*0\.\d", ln) and not ln.lstrip().startswith("#")
-    ]
-    assert hardcoded == [], f"preco hardcoded de volta: {hardcoded}"
-    assert "llm.get_model_pricing(model)" in src
-
+# O test_edital_summarizer_nao_tem_preco_hardcoded saiu em 2026-08-11 junto com o
+# agente (teardown do produto Licitacao, card 869egwv81). Ele guardava a FORMA de UM
+# arquivo -- a 4a copia do preco 0.15/0.60 -- e o arquivo nao existe mais. O
+# mecanismo que ele exemplificava segue guardado pelos testes acima, que sao sobre
+# o CATALOGO e valem pra todo modelo servido.
 
 @pytest.mark.parametrize("bad", ["gemini-2.5-flash-preview", "models/gemini-2.5-flash",
                                  "gemini-2.5-flash-002"])
