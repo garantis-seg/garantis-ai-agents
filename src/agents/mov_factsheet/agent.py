@@ -22,6 +22,7 @@ from .prompts import build_mov_factsheet_prompt
 from .fundacao import derivar_categoria, derivar_status_garantia
 from .schemas import (
     DocAnexado,
+    DocGate,
     FallbackContext,
     MovFactSheetCard,
     MovInput,
@@ -182,6 +183,7 @@ async def classify_mov_factsheet(
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
     classe: Optional[str] = None,
+    documentos_gate: list[DocGate | dict] | None = None,
     _no_chunk: bool = False,
 ) -> dict:
     """Extract a 13-field FactSheet from a single mov.
@@ -190,6 +192,10 @@ async def classify_mov_factsheet(
         processo: contexto minimo (CNJ, classe, polos)
         mov: id + data + tipo + texto da publicacao (snippet DJe)
         documentos_anexados: docs vinculados a essa mov (rota com doc text)
+        documentos_gate: pares (text_content, gcs_url) POR DOCUMENTO pro gate de
+            OCR/Vision, quando `documentos_anexados` traz o conjunto CONCATENADO
+            num entry só (é o caso da petição). Ausente = o gate usa
+            `documentos_anexados`, como sempre.
         fallback_context: passado SOMENTE quando documentos_anexados vazio
         model: override Gemini model
         provider: 'gemini' (default)
@@ -198,7 +204,8 @@ async def classify_mov_factsheet(
         {"card": MovFactSheetCard.model_dump() | error_dict,
          "raw_response": str,
          "llm_raw_prompt": str,
-         "usage": dict}
+         "usage": dict,
+         "vision_gate": dict}
     """
     if isinstance(processo, dict):
         processo = ProcessoContext(**processo)
@@ -208,6 +215,26 @@ async def classify_mov_factsheet(
     docs_typed: list[DocAnexado] = []
     for d in documentos_anexados or []:
         docs_typed.append(d if isinstance(d, DocAnexado) else DocAnexado(**d))
+
+    # Pares do GATE. Por default são os próprios docs anexados (path do mov: 1
+    # entry por doc). A petição manda o conjunto CONCATENADO num entry só — pro
+    # PROMPT não mudar — e o par real vem aqui: sem isto o gate julgaria o texto
+    # de N documentos somado contra o gcs_url de UM (o primário), que no caso
+    # Steel é o AGRAVO, não a petição. Ver `documentos_gate`.
+    gate_typed: list[DocGate] = [
+        g if isinstance(g, DocGate) else DocGate(**g) for g in documentos_gate or []
+    ]
+    gate_pairs: list[tuple[Optional[str], Optional[str]]] = (
+        [(g.text_content, g.gcs_url) for g in gate_typed if g.gcs_url]
+        if gate_typed
+        else [(d.text_content, d.gcs_url) for d in docs_typed if d.gcs_url]
+    )
+    gate_urls: list[str] = (
+        [g.gcs_url for g in gate_typed if g.gcs_url]
+        if gate_typed
+        else [d.gcs_url for d in docs_typed if d.gcs_url]
+    )
+    vision_gate: dict = {}
 
     fb_typed: FallbackContext | None = None
     if fallback_context is not None:
@@ -282,10 +309,11 @@ async def classify_mov_factsheet(
         llm_provider,
         model=model,
         prompt=prompt,
-        gcs_urls=[d.gcs_url for d in docs_typed if d.gcs_url],
+        gcs_urls=gate_urls,
         # GATE DE OCR (L1 v7): pares (text_content, gcs_url) por doc — o gate decide
         # por documento se manda pro Vision (texto-lixo OU pagina-imagem). Ver ocr_gate.
-        docs_text=[(d.text_content, d.gcs_url) for d in docs_typed if d.gcs_url],
+        docs_text=gate_pairs,
+        gate_out=vision_gate,
         response_schema=response_schema,
         log_label=f"mov_id={mov.mov_id}",
         thinking_budget=0,
@@ -388,6 +416,11 @@ async def classify_mov_factsheet(
         "llm_raw_prompt": prompt,
         "prompt_version": prompt_version,
         "usage": usage,
+        # Veredito do gate pro caller PERSISTIR (sentinela write-time). Sem ele,
+        # "nenhum doc precisava de Vision" e "o gate nem foi consultado" ficam
+        # indistinguíveis no banco — que é como o ramo de petição passou meses
+        # com vision=0 sem ninguém notar.
+        "vision_gate": vision_gate,
     }
 
 

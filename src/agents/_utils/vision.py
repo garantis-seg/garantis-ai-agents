@@ -303,6 +303,7 @@ async def call_l1_with_vision_fallback(
     thinking_budget: int = 0,
     docs_text: Optional[list[tuple[Optional[str], Optional[str]]]] = None,
     max_tokens: int | None = None,
+    gate_out: Optional[dict] = None,
 ) -> Any:
     """High-level helper pros agents L1 (mov/day).
 
@@ -320,10 +321,21 @@ async def call_l1_with_vision_fallback(
     os gcs_urls fetchados vão pro Vision). Fallback seguro em qualquer falha do gate.
 
     `log_label` é appended em warnings de fallback (ex: "mov_id=X").
+
+    `gate_out` (dict mutável, opcional) recebe o VEREDITO do gate pro caller
+    persistir: {n_docs, n_inalcancaveis, n_enviados, motivo}. É a metade write-time
+    da sentinela — sem ela, "o gate não mandou nada" e "o gate nem rodou" produzem
+    exatamente o mesmo silêncio no banco. `n_enviados` conta o que o Gemini
+    REALMENTE recebeu: se a Vision call falhar e cair no texto, ele volta a 0 (o
+    card é cego, e é isso que a métrica tem que dizer).
     """
     from .feature_flags import flag_enabled
 
+    if gate_out is not None:
+        gate_out.update({"n_docs": 0, "n_inalcancaveis": 0, "n_enviados": 0,
+                         "motivo": None})
     pdf_bytes_list: list[bytes] = []
+    motivos: list[str] = []
     if gcs_urls and flag_enabled(vision_flag_name):
         if docs_text:
             # GATE por documento: baixa e filtra só os que o gate aprova.
@@ -331,6 +343,17 @@ async def call_l1_with_vision_fallback(
             for text_content, gcs_url in docs_text:
                 if not gcs_url:
                     continue
+                if gate_out is not None:
+                    gate_out["n_docs"] += 1
+                if len(pdf_bytes_list) >= _MAX_PDFS_PER_CALL:
+                    # O cap de `fetch_pdfs_from_gcs` NÃO alcança este ramo: aqui o
+                    # fetch é 1 URL por vez, então a lista cresceria sem teto (o
+                    # conjunto multi-doc da petição vai até 25). Corta aqui.
+                    logger.info(
+                        f"[VisionL1] {log_label}: cap={_MAX_PDFS_PER_CALL} PDFs atingido"
+                        " no gate per-doc; docs restantes ficam no texto",
+                    )
+                    break
                 # route-by-has_text (núcleo OCR per-doc 2026-06-13): doc com texto
                 # USÁVEL fica no texto do prompt SEM baixar o PDF — o ingest já extraiu
                 # o text-layer (born-digital). Só doc-imagem/texto-lixo (vazio ou
@@ -351,12 +374,18 @@ async def call_l1_with_vision_fallback(
                 manda, info = precisa_vision(text_content, pdf_bytes)
                 if manda:
                     pdf_bytes_list.append(info.get("_pdf_bytes") or pdf_bytes)
+                    if gate_out is not None:
+                        gate_out["n_inalcancaveis"] += 1
+                    motivos.extend((info.get("_nota") or {}).get("motivos") or {})
         else:
             pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
 
+    if gate_out is not None and motivos:
+        gate_out["motivo"] = ",".join(sorted(set(motivos)))
+
     if pdf_bytes_list:
         try:
-            return await call_vision_l1(
+            resposta = await call_vision_l1(
                 provider,
                 model=model,
                 prompt=prompt,
@@ -366,6 +395,9 @@ async def call_l1_with_vision_fallback(
                 thinking_budget=thinking_budget,
                 max_tokens=max_tokens,
             )
+            if gate_out is not None:
+                gate_out["n_enviados"] = len(pdf_bytes_list)
+            return resposta
         except Exception as exc:
             # Guard: Gemini 400 (ex: "document has no pages" em PDF corrompido) ou
             # qualquer falha da Vision call NÃO pode derrubar a cascade — cai no

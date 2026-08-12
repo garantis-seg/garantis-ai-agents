@@ -382,6 +382,24 @@ class FallbackContext(BaseModel):
     )
 
 
+class DocGate(BaseModel):
+    """1 documento do conjunto, SÓ pro gate de OCR/Vision decidir por documento.
+
+    Existe porque o ramo de petição manda os N documentos da peça CONCATENADOS num
+    único `DocAnexado` (a fronteira vai marcada no texto, e o prompt do LLM depende
+    desse formato). O gate, porém, decide por PAR (texto do doc i, PDF do doc i):
+    com o entry único ele julgaria o texto somado de N docs contra o `gcs_url` de
+    UM — no caso que motivou isto (Steel, 2026-08-12), o do AGRAVO, que não contém
+    o AIIM procurado. Campo ADITIVO: caller que não manda mantém o comportamento
+    antigo (o gate cai nos `documentos_anexados`)."""
+
+    doc_key: Optional[str] = None
+    text_content: Optional[str] = None
+    gcs_url: Optional[str] = Field(
+        default=None, description="gs://bucket/path do PDF deste doc específico",
+    )
+
+
 class MovFactSheetRequest(BaseModel):
     processo: ProcessoContext
     mov: MovInput
@@ -396,6 +414,14 @@ class MovFactSheetRequest(BaseModel):
     documentos_anexados: list[DocAnexado] = Field(
         default_factory=list,
         description="Docs vinculados a esta mov via document_movement_links. Vazio = sem doc.",
+    )
+    documentos_gate: list[DocGate] = Field(
+        default_factory=list,
+        description=(
+            "Pares (text_content, gcs_url) POR documento, só pro gate de OCR/Vision. "
+            "Mandar quando documentos_anexados vem concatenado (petição). Vazio = "
+            "o gate usa documentos_anexados."
+        ),
     )
     fallback_context: Optional[FallbackContext] = Field(
         default=None,
@@ -415,3 +441,11 @@ class MovFactSheetResponse(BaseModel):
     llm_raw_prompt: Optional[str] = None
     prompt_version: Optional[str] = None
     usage: Optional[dict[str, Any]] = None
+    vision_gate: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Veredito do gate de OCR/Vision: {n_docs, n_inalcancaveis, n_enviados, "
+            "motivo}. O caller persiste — zero bloqueado + zero enviado é gate MUDO, "
+            "não gate ocioso."
+        ),
+    )
