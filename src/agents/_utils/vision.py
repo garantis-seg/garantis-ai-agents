@@ -349,9 +349,15 @@ async def call_l1_with_vision_fallback(
                     # O cap de `fetch_pdfs_from_gcs` NÃO alcança este ramo: aqui o
                     # fetch é 1 URL por vez, então a lista cresceria sem teto (o
                     # conjunto multi-doc da petição vai até 25). Corta aqui.
-                    logger.info(
+                    # WARNING, não info: no ramo de petição os documentos chegam
+                    # com a PETIÇÃO NA FRENTE (o materializer ordena assim de
+                    # propósito), então bater este cap significa que sobrou parte de
+                    # peça sem ser lida — e corte silencioso do documento mais
+                    # importante do produto é o pior modo de falha aqui.
+                    logger.warning(
                         f"[VisionL1] {log_label}: cap={_MAX_PDFS_PER_CALL} PDFs atingido"
-                        " no gate per-doc; docs restantes ficam no texto",
+                        f" no gate per-doc ({len(docs_text)} docs no conjunto); os"
+                        " restantes ficam no texto",
                     )
                     break
                 # route-by-has_text (núcleo OCR per-doc 2026-06-13): doc com texto
