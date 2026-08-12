@@ -261,6 +261,7 @@ async def classify_mov_factsheet(
         if variants:
             return await _classify_chunked(
                 processo, mov, variants, fb_typed, model, provider, classe,
+                gate_typed,
             )
 
     if use_v4:
@@ -426,15 +427,28 @@ async def classify_mov_factsheet(
 
 async def _classify_chunked(
     processo, mov, variants, fb_typed, model, provider, classe,
+    documentos_gate=None,
 ) -> dict:
     """Map-reduce de peça grande via framework compartilhado: N variantes (chunks) →
     classify em PARALELO (cada uma com _no_chunk=True → 1 call normal) → reduz os cards +
     RE-DERIVA (categoria/status/... consistentes com a base reduzida). Custo somado.
-    Orquestração genérica em garantis_shared.llm_chunking; reduce por-layer em chunking.py."""
+    Orquestração genérica em garantis_shared.llm_chunking; reduce por-layer em chunking.py.
+
+    🚨 `documentos_gate` TEM que atravessar. Ele não atravessava, e o buraco era mudo:
+    `documentos_anexados` não carrega `gcs_url` no ramo de petição, então perder o campo
+    aqui deixa o gate com lista VAZIA — zero Vision, cascade SUCCESS, card gravado, custo
+    normal. Medido: **1.050 de 7.230 pns (14,5%)** com petição acima do CHUNK_SIZE de
+    180k caem neste caminho, e há um cron dedicado a eles (`backfill-peticao-giants`)."""
     return await map_reduce_classify(
         variants=variants,
         classify_one=lambda v: classify_mov_factsheet(
-            processo, mov, v, fb_typed, model, provider, classe, _no_chunk=True,
+            processo, mov, v, fb_typed, model, provider, classe,
+            # SÓ na 1ª variante: basta UMA chamada ver o conteúdo inalcançável, e o
+            # reduce funde os cards. Passar em todas multiplicaria o custo do Vision
+            # pelo nº de chunks sem acrescentar informação. `is variants[0]` é
+            # identidade de objeto — determinística mesmo com as variantes em paralelo.
+            documentos_gate=(documentos_gate if v is variants[0] else None),
+            _no_chunk=True,
         ),
         reduce_cards=_reduce_peca_and_rederive,
         label="chunked",
