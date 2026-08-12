@@ -149,6 +149,35 @@ def test_bytes_que_nao_sao_pdf_ficam_no_texto_sem_vazar_excecao(corpo):
     assert nota["fonte"] == "texto"
 
 
+
+
+def test_a_GUARDA_PRIMARIA_area_texto_salva_pagina_com_imagem_de_fundo():
+    """⛔ MUTANTE: remover o early-return `area_texto >= AREA_TEXTO_MAX` do
+    `_pagina_motivo` sobrevivia a toda a suíte — as fixtures de tabela acima são
+    salvas pelo TETO DE CHARS, não pela área.
+
+    O que ficava exposto é o ramo de IMAGEM: página com texto nativo POR CIMA de um
+    fundo escaneado (`cobertura_img >= 0,50`) viraria falso-positivo e iria pro
+    Vision pago. É custo, não silêncio — e é o cohort de scan com OCR embutido, que
+    não é raro. O comentário do código diz que a área "é quem carrega a decisão";
+    este teste é o que torna a frase verificável."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    # imagem cobrindo a página inteira (o discriminador do ramo raster)
+    pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 60, 80))
+    pix.set_rect(pix.irect, (220, 220, 220))
+    page.insert_image(page.rect, pixmap=pix)
+    # ...com texto nativo de verdade por cima (o que o OCR embutido produz)
+    page.insert_textbox(pymupdf.Rect(30, 40, 560, 780),
+                        "SENTENCA. Vistos e examinados os autos. " * 60,
+                        fontsize=12, fontname="helv")
+    p = pymupdf.open(stream=doc.tobytes(), filetype="pdf")[0]
+    from src.agents._utils.ocr_gate import AREA_TEXTO_MAX, _area_texto, _cobertura_img
+    assert _cobertura_img(p) >= 0.50, "premissa: imagem cobre a pagina"
+    assert _area_texto(p, pymupdf) >= AREA_TEXTO_MAX, "premissa: texto ocupa a pagina"
+    assert _pagina_motivo(p, pymupdf) is None
+
+
 if __name__ == "__main__":  # smoke sem pytest
     test_pagina_vetor_so_com_carimbo_e_inalcancavel()
     test_born_digital_sem_paths_nunca_vai_pro_vision()

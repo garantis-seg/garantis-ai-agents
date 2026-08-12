@@ -174,3 +174,109 @@ def test_sem_gate_out_o_comportamento_e_o_de_antes():
             docs_text=[(CARIMBO_6_PAGINAS, "gs://b/p.pdf")],
         ))
     assert out == "OK" and len(enviados) == 1
+
+
+# ── 3. A FIAÇÃO: o agent tem que USAR o `documentos_gate`, não os anexados ────
+# ⛔ Este bloco existe porque uma bateria de mutantes o pediu: fazer `gate_pairs`/
+# `gate_urls` ignorarem o campo novo **sobrevivia a toda a suíte**. Os testes acima
+# chamam `call_l1_with_vision_fallback` DIRETO, então a fiação de `agent.py` era
+# território virgem — e é ela que decide se o gate vê o par certo.
+
+def _classify(monkeypatch, *, documentos_anexados, documentos_gate, chunk=False):
+    """Roda `classify_mov_factsheet` capturando o que chegou ao gate."""
+    from src.agents.mov_factsheet import agent as A
+
+    visto: dict = {}
+
+    async def _fake_fallback(provider, **kw):
+        visto.update(kw)
+        if kw.get("gate_out") is not None:
+            kw["gate_out"].update({"n_docs": 0, "n_inalcancaveis": 0,
+                                   "n_enviados": 0, "motivo": None})
+
+        class _R:
+            text = '{"tipo_doc":"peticao_inicial","resumo_ato":"x"}'
+            input_tokens = output_tokens = 1
+            metadata = {"model_variant": "text"}
+        return _R()
+
+    monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
+    monkeypatch.setattr(A, "create_provider", lambda p: object())
+    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
+    asyncio.run(A.classify_mov_factsheet(
+        processo={"cnj": "10121509520268260224"},
+        mov={"mov_id": "peticao-10121509520268260224", "texto": ""},
+        documentos_anexados=documentos_anexados,
+        documentos_gate=documentos_gate,
+        classe="peticao",
+    ))
+    return visto
+
+
+# O payload REAL da petição: 1 entry concatenado, e o `gcs_url` dele é o do PRIMÁRIO
+# (o AGRAVO). Se o agent usar ESTE, o gate julga o texto somado contra o PDF errado.
+_ANEXADO_CONCATENADO = [{
+    "doc_key": "jb-867158", "tipo": "1",
+    "text_content": "AGRAVO DE INSTRUMENTO. Razoes recursais. " * 60,
+    "gcs_url": "gs://b/agravo.pdf",
+}]
+_GATE_POR_DOC = [
+    {"doc_key": "jb-867158", "text_content": "AGRAVO DE INSTRUMENTO. " * 60,
+     "gcs_url": "gs://b/agravo.pdf"},
+    {"doc_key": "jb-867195", "text_content": CARIMBO_6_PAGINAS,
+     "gcs_url": "gs://b/peticao.pdf"},
+]
+
+
+def test_o_agent_roteia_o_gate_pelo_documentos_gate(monkeypatch):
+    """⛔ MUTANTE: ignorar `gate_typed` reprova aqui — e o modo de falha real é mudo
+    (cascade SUCCESS, card gravado, custo normal, PDF certo nunca enviado)."""
+    visto = _classify(monkeypatch, documentos_anexados=_ANEXADO_CONCATENADO,
+                      documentos_gate=_GATE_POR_DOC)
+    assert visto["gcs_urls"] == ["gs://b/agravo.pdf", "gs://b/peticao.pdf"]
+    assert [t for t, _u in visto["docs_text"]] == [
+        _GATE_POR_DOC[0]["text_content"], CARIMBO_6_PAGINAS,
+    ]
+
+
+def test_sem_documentos_gate_o_agent_cai_nos_anexados(monkeypatch):
+    """Compatibilidade: o path de MOV não manda o campo e não pode mudar de rota."""
+    visto = _classify(monkeypatch, documentos_anexados=_ANEXADO_CONCATENADO,
+                      documentos_gate=None)
+    assert visto["gcs_urls"] == ["gs://b/agravo.pdf"]
+    assert len(visto["docs_text"]) == 1
+
+
+def test_o_CHUNKING_nao_pode_engolir_o_documentos_gate(monkeypatch):
+    """🚨 Medido: 1.050 de 7.230 pns (14,5%) têm petição acima do CHUNK_SIZE de 180k
+    e caem no caminho map-reduce — e há um cron dedicado a eles
+    (`backfill-peticao-giants`). Ali o `documentos_anexados` NÃO carrega `gcs_url`
+    no ramo de petição, então perder o campo deixa o gate com lista VAZIA: zero
+    Vision, em silêncio. Só a 1ª variante leva os PDFs (basta uma call ver)."""
+    from src.agents.mov_factsheet import agent as A
+
+    gigante = [{"doc_key": "jb-1", "tipo": "1", "titulo": "PETICAO INICIAL",
+                "text_content": "corpo da inicial. " * 12_000,   # > CHUNK_SIZE
+                "gcs_url": None}]
+    recebidos: list = []
+
+    async def _fake_fallback(provider, **kw):
+        recebidos.append(kw["gcs_urls"])
+
+        class _R:
+            text = '{"tipo_doc":"peticao_inicial","resumo_ato":"x"}'
+            input_tokens = output_tokens = 1
+            metadata = {"model_variant": "text"}
+        return _R()
+
+    monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
+    monkeypatch.setattr(A, "create_provider", lambda p: object())
+    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
+    asyncio.run(A.classify_mov_factsheet(
+        processo={"cnj": "10121509520268260224"},
+        mov={"mov_id": "peticao-x", "texto": ""},
+        documentos_anexados=gigante, documentos_gate=_GATE_POR_DOC, classe="peticao",
+    ))
+    assert len(recebidos) > 1, "premissa: a peça gigante foi chunkada"
+    assert recebidos[0] == ["gs://b/agravo.pdf", "gs://b/peticao.pdf"]
+    assert all(r == [] for r in recebidos[1:]), "só a 1ª variante paga o Vision"
