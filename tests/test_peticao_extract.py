@@ -104,3 +104,21 @@ def test_ramos_existentes_inalterados(processo):
     p_doc = build_mov_factsheet_prompt_v4(processo, mov, documentos_anexados=[doc], classe="1D")
     assert "É a PETIÇÃO INICIAL" not in p_doc
     assert "DOCUMENTO AVULSO" in p_doc
+
+
+def test_versoes_de_prompt_vem_do_CONTRATO_compartilhado_nao_de_literal_local():
+    """🚨 As 2 versões são lidas por TRÊS processos (agent carimba, materializer
+    persiste, `_CURRENT_PETICAO_VERSIONS` do fe-api decide quem é stale) e o fe-api
+    NÃO importa este repo. Enquanto foram literal duplicado, o bump de 2026-08-07
+    não chegou no terceiro e INVERTEU o filtro de stale: 896 cards já atuais
+    re-extraídos e 1.039 velhos nunca refrescados (medido em prod 2026-08-12).
+
+    ⛔ Não compare com literal re-digitado aqui — seria a mesma duplicação que o
+    teste existe pra impedir, com nome de teste. A asserção é de IDENTIDADE de
+    origem: o símbolo TEM que vir do contrato no garantis-shared."""
+    from garantis_shared.engine_v6.persistence import peticao_contract as contrato
+
+    from src.agents.mov_factsheet import schemas_v4
+
+    assert schemas_v4.PETICAO_PROMPT_VERSION is contrato.PETICAO_PROMPT_VERSION
+    assert schemas_v4.DOC_INCERTO_PROMPT_VERSION is contrato.DOC_INCERTO_PROMPT_VERSION

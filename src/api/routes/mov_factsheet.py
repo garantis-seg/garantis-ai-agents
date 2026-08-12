@@ -36,6 +36,7 @@ async def classify_mov_factsheet_endpoint(request: MovFactSheetRequest):
             model=request.model,
             provider=request.provider or "gemini",
             classe=request.classe,
+            documentos_gate=request.documentos_gate,
         )
         card_data = result.get("card", {})
         if isinstance(card_data, dict) and "error" in card_data:
@@ -53,6 +54,7 @@ async def classify_mov_factsheet_endpoint(request: MovFactSheetRequest):
             llm_raw_prompt=result.get("llm_raw_prompt"),
             prompt_version=result.get("prompt_version"),
             usage=result.get("usage", {}),
+            vision_gate=result.get("vision_gate"),
         )
     except HTTPException:
         raise

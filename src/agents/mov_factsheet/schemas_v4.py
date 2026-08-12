@@ -30,6 +30,10 @@ from __future__ import annotations
 
 from typing import Literal, Optional, get_args
 
+from garantis_shared.engine_v6.persistence.peticao_contract import (
+    DOC_INCERTO_PROMPT_VERSION,
+    PETICAO_PROMPT_VERSION,
+)
 from pydantic import BaseModel, Field, field_validator
 
 # v4.1 (2026-06-11, prompt-review Lote 1 — itens 1.1/1.2 do kickoff):
@@ -337,14 +341,18 @@ class MovFactSheetCardV4(BaseModel):
 # perante a SEFAZ-SP aparecia como "ADM. FED." no conexo 1477176). Bump invalida o cache
 # v1.3 -> re-extrai 1x; o SWAP-POR-PN do sink troca as rows da versao velha DESTE pn, entao
 # o legado se re-tipa sozinho conforme cada peticao e re-lida.
-PETICAO_PROMPT_VERSION = "peticao_extract.v1.4"
+# ⚠️ Os 2 VALORES (`PETICAO_PROMPT_VERSION` = peticao_extract.v1.4 e
+# `DOC_INCERTO_PROMPT_VERSION` = doc_incerto_extract.v1.2) moram no garantis-shared
+# (`engine_v6.persistence.peticao_contract`) e sao IMPORTADOS no topo deste arquivo —
+# sao lidos por TRES processos e o fe-api nao importa este repo, entao literal aqui
+# vira drift la (ja custou 896 cards re-pagos + 1.039 nunca refrescados). Bump =
+# editar LA, re-publicar o wheel, e escrever o changelog AQUI, junto da prompt.
 # Ramo 1X: doc de tipo NAO identificado (fallback L3 do identify) — mesmo
 # schema superset do 1P (tipo_doc classificado em vez de cravado). Versao por
 # ramo: bump do 1X nao invalida cache do 1P nem do mov, e vice-versa.
 # v1.2 (2026-08-07): mesma mudanca do 1P v1.4 (par PA/AIIM + pa_estadual) — o ramo 1X usa
 # o MESMO schema superset, entao um enum novo sem a instrucao correspondente aqui daria
 # constrained decoding com valor que o prompt nunca explica.
-DOC_INCERTO_PROMPT_VERSION = "doc_incerto_extract.v1.2"   # WS-D: + processos_administrativos_citados[]
 
 
 class CdaPeticao(BaseModel):
