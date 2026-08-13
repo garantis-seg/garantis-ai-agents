@@ -16,93 +16,13 @@ prompt. Ver as docstrings de `_neutralizar` e `_build_dossie_block`.
 """
 
 import json
-import re
-import secrets
 
+from .._utils.prompt_fence import gerar_fence_token
+from .._utils.prompt_fence import json_sanitizado as _json_dossie_sanitizado
+from .._utils.prompt_fence import neutralizar as _neutralizar
 from .schemas import CampoSpec, FichaWriteFieldsRequest
 
 PROMPT_VERSION = "ficha_writer_v3"
-
-
-# ── Camada 1: boundary aleatorio por request ───────────────────────────────
-
-#: Bytes de entropia do token de fence. 8 bytes = 16 hex chars: imprevisivel o
-#: bastante para que um atacante nao consiga escrever a tag de fechamento no
-#: dado que ele controla (ele nao ve o token).
-_FENCE_TOKEN_BYTES = 8
-
-
-def gerar_fence_token() -> str:
-    """Token hex NOVO a cada request — o boundary do fence do dossie.
-
-    Aleatorio por request de proposito: o conteudo do dossie e escrito por
-    terceiros (andamentos de tribunal, raw_json de fontes externas) e chega ao
-    prompt ANTES de o atacante poder observar o token. Sem conhecer o token ele
-    nao consegue emitir `</dossie-{token}>` e portanto nao consegue fechar o
-    fence — que e exatamente o furo que o fence fixo `</dossie>` tinha.
-    """
-    return secrets.token_hex(_FENCE_TOKEN_BYTES)
-
-
-# ── Camada 2: neutralizacao das sequencias de fence ────────────────────────
-
-#: Qualquer `<` que abra uma tag (`<algo` ou `</algo`) — inclusive as tags de
-#: fence deste prompt (`dossie`, `dossie-<token>`, `regras_de_redacao`).
-#: Cinto-e-suspensorio da camada 1: mesmo que o token vazasse, o dado de
-#: terceiro ja chega sem nenhum `<` capaz de abrir/fechar tag.
-_ABERTURA_DE_TAG = re.compile(r"<(?=/?[A-Za-z_])")
-
-
-def _neutralizar(texto: str) -> str:
-    """Neutraliza aberturas de tag em texto de terceiro, virando `&lt;`.
-
-    Escopo DELIBERADAMENTE estreito: so o `<` que inicia uma tag (`<x` ou
-    `</x`) vira `&lt;`. Um `<` solto de comparacao ("valor < 100", "a<b" com
-    digito depois) fica INTACTO, porque nao consegue formar tag.
-
-    Onde se aplica: valores STRING do dossie (ver `_json_dossie_sanitizado`) e
-    os textos de terceiro/caller interpolados nos outros blocos (guidance,
-    exemplos, nome, erro, valor_anterior).
-
-    Por que `&lt;` e nao remocao: preserva o texto de forma legivel e
-    reversivel para o modelo (ele le "&lt;/dossie&gt;" e entende que o dado
-    continha aquela sequencia), sem que a sequencia seja um delimitador real.
-
-    NAO quebra JSON: `&lt;` nao contem aspas nem barra invertida, e `<` nunca e
-    pontuacao estrutural de JSON. Trocamos o CONTEUDO do dado, jamais a
-    pontuacao — o dossie serializado continua JSON valido (ha teste que faz
-    `json.loads` no corpo do fence).
-    """
-    return _ABERTURA_DE_TAG.sub("&lt;", texto)
-
-
-def _sanitizar_valores(obj):
-    """Aplica `_neutralizar` recursivamente em TODA string do dossie — valores
-    e CHAVES (uma chave tambem e texto de terceiro e tambem e interpolada).
-
-    Estrutura (dicts, listas, numeros, bool, None) preservada intacta: o
-    dossie continua o mesmo objeto, so o texto fica inerte.
-    """
-    if isinstance(obj, str):
-        return _neutralizar(obj)
-    if isinstance(obj, dict):
-        return {_neutralizar(str(k)): _sanitizar_valores(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_sanitizar_valores(v) for v in obj]
-    return obj
-
-
-def _json_dossie_sanitizado(dossie: dict) -> str:
-    """Serializa o dossie com todo texto ja neutralizado.
-
-    `default=str` (datas, Decimal, objetos exoticos) roda DENTRO do dumps, ou
-    seja, depois da sanitizacao recursiva — por isso passamos o resultado por
-    uma neutralizacao final restrita ao mesmo padrao de abertura de tag, agora
-    sobre o JSON pronto. Isso e seguro para a estrutura porque `json.dumps`
-    nunca emite `<` como pontuacao: todo `<` no texto serializado veio de dado.
-    """
-    body = json.dumps(_sanitizar_valores(dossie), ensure_ascii=False, indent=2, default=str)
-    return _neutralizar(body)
 
 
 # ── Persona + regras de redacao (VERBATIM) ─────────────────────────────────

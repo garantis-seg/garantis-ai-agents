@@ -19,6 +19,7 @@ transforma isso em rejeicao de rodada e itera com contexto.
 """
 
 import logging
+import math
 import os
 from typing import Any, Optional
 
@@ -215,7 +216,7 @@ def _float_ou_none(v: Any) -> Optional[float]:
         f = float(v)
     except (TypeError, ValueError):
         return None
-    return f if f == f and f not in (float("inf"), float("-inf")) else None
+    return f if math.isfinite(f) else None
 
 
 __all__ = ["montar_grafo"]

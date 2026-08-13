@@ -26,9 +26,12 @@ from pydantic import BaseModel, Field, field_validator
 
 #: Ids que denunciam taxa como celula. O LLM nao imputa taxa: ele chama
 #: `selic(de, ate)` na formula e o codigo resolve na serie versionada.
+#: Duas listas porque sao dois testes diferentes — misturar as duas numa tupla
+#: so exigia filtrar por `endswith("_")` na hora de usar, e o filtro deixava
+#: `pct_juros`/`juros_pct`/`fator_selic` como LETRA MORTA (nunca eram testados).
+_NOMES_DE_TAXA = ("taxa", "selic")
 _PREFIXOS_TAXA_PROIBIDOS = (
-    "taxa_", "selic_", "pct_juros", "juros_pct", "indice_", "fator_selic",
-    "taxa", "selic",
+    "taxa_", "selic_", "indice_", "pct_juros", "juros_pct", "fator_selic",
 )
 
 #: Origens validas — mesmo vocabulario do V3 (o C4 recebe premissas dele como
@@ -95,9 +98,7 @@ class CelulaDado(BaseModel):
         formula de juros sem que nada reclamasse. Aqui o id morre no schema.
         """
         low = v.lower()
-        if low in ("taxa", "selic") or any(
-            low.startswith(p) for p in _PREFIXOS_TAXA_PROIBIDOS if p.endswith("_")
-        ):
+        if low in _NOMES_DE_TAXA or low.startswith(_PREFIXOS_TAXA_PROIBIDOS):
             raise ValueError(
                 f"id {v!r} parece uma taxa. Taxas NAO sao celulas: use "
                 "selic(competencia_inicial, competencia_final) na formula — o "

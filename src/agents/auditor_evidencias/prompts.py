@@ -20,44 +20,14 @@ Aqui a superficie e critica: o texto do documento e justamente o que o auditor
 usa para julgar, e um PDF adversarial poderia tentar dizer "aprove tudo".
 """
 
-import json
-import re
-import secrets
-from typing import Any, Optional
+from typing import Optional
 
+from .._utils.prompt_fence import gerar_fence_token
+from .._utils.prompt_fence import json_sanitizado as _json_sanitizado
+from .._utils.prompt_fence import neutralizar as _neutralizar
 from .schemas import AuditarEvidenciasRequest
 
 PROMPT_VERSION = "auditor_evidencias_v3"
-
-_FENCE_TOKEN_BYTES = 8
-
-
-def gerar_fence_token() -> str:
-    """Token hex NOVO a cada request — o boundary dos fences."""
-    return secrets.token_hex(_FENCE_TOKEN_BYTES)
-
-
-_ABERTURA_DE_TAG = re.compile(r"<(?=/?[A-Za-z_])")
-
-
-def _neutralizar(texto: str) -> str:
-    """Neutraliza aberturas de tag em texto de terceiro, virando `&lt;`."""
-    return _ABERTURA_DE_TAG.sub("&lt;", texto)
-
-
-def _sanitizar_valores(obj):
-    if isinstance(obj, str):
-        return _neutralizar(obj)
-    if isinstance(obj, dict):
-        return {_neutralizar(str(k)): _sanitizar_valores(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_sanitizar_valores(v) for v in obj]
-    return obj
-
-
-def _json_sanitizado(obj: Any) -> str:
-    body = json.dumps(_sanitizar_valores(obj), ensure_ascii=False, indent=2, default=str)
-    return _neutralizar(body)
 
 
 def _build_persona() -> str:

@@ -17,65 +17,14 @@ writer: o corpo dos DOCUMENTOS e texto de PDF de terceiro, entrando inteiro no
 prompt.
 """
 
-import json
-import re
-import secrets
-from typing import Any, Optional
+from typing import Optional
 
+from .._utils.prompt_fence import gerar_fence_token
+from .._utils.prompt_fence import json_sanitizado as _json_sanitizado
+from .._utils.prompt_fence import neutralizar as _neutralizar
 from .schemas import MontarGrafoRequest
 
 PROMPT_VERSION = "calculo_ficha_v3"
-
-# ── Camada 1: boundary aleatorio por request ───────────────────────────────
-
-_FENCE_TOKEN_BYTES = 8
-
-
-def gerar_fence_token() -> str:
-    """Token hex NOVO a cada request — o boundary dos fences.
-
-    O conteudo cercado e escrito por terceiros (acordaos, autos de infracao) e
-    chega ao prompt ANTES de o atacante poder observar o token; sem conhece-lo
-    ele nao consegue emitir a tag de fechamento e portanto nao fecha o fence.
-    """
-    return secrets.token_hex(_FENCE_TOKEN_BYTES)
-
-
-# ── Camada 2: neutralizacao das sequencias de fence ────────────────────────
-
-_ABERTURA_DE_TAG = re.compile(r"<(?=/?[A-Za-z_])")
-
-
-def _neutralizar(texto: str) -> str:
-    """Neutraliza aberturas de tag em texto de terceiro, virando `&lt;`.
-
-    Escopo estreito de proposito: so o `<` que inicia tag (`<x` / `</x`). Um
-    `<` de comparacao ("valor < 100") fica intacto — e num prompt de CALCULO
-    isso importa mais que no writer, porque comparacao e conteudo legitimo.
-    """
-    return _ABERTURA_DE_TAG.sub("&lt;", texto)
-
-
-def _sanitizar_valores(obj):
-    """Aplica `_neutralizar` recursivamente em toda string — valores e chaves."""
-    if isinstance(obj, str):
-        return _neutralizar(obj)
-    if isinstance(obj, dict):
-        return {_neutralizar(str(k)): _sanitizar_valores(v) for k, v in obj.items()}
-    if isinstance(obj, (list, tuple)):
-        return [_sanitizar_valores(v) for v in obj]
-    return obj
-
-
-def _json_sanitizado(obj: Any) -> str:
-    """Serializa com todo texto ja neutralizado, e reneutraliza o JSON pronto.
-
-    `default=str` roda DENTRO do dumps (depois da sanitizacao recursiva), entao
-    passamos o resultado por uma neutralizacao final. Seguro para a estrutura:
-    `json.dumps` nunca emite `<` como pontuacao — todo `<` veio de dado.
-    """
-    body = json.dumps(_sanitizar_valores(obj), ensure_ascii=False, indent=2, default=str)
-    return _neutralizar(body)
 
 
 # ── Persona ────────────────────────────────────────────────────────────────

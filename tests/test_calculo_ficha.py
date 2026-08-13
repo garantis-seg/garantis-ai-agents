@@ -253,6 +253,9 @@ def test_indices_declaram_a_versao_da_serie():
 @pytest.mark.parametrize("cid", [
     "taxa_juros_media", "taxa_selic", "selic_acumulada", "indice_correcao",
     "taxa", "selic",
+    # Os tres abaixo estavam na lista de proibidos mas NUNCA eram testados: o
+    # `if p.endswith("_")` na hora de usar filtrava justamente eles. Passavam.
+    "pct_juros_medio", "juros_pct_aplicado", "fator_selic_2019",
 ])
 def test_schema_rejeita_id_de_taxa_como_celula(cid):
     """O furo do V3: um `taxa_juros_media` assumido podia substituir selic()."""
