@@ -166,7 +166,20 @@ steps:
       # (mesmo mecanismo dos US$ 97,61 em 39.309 calls). 3.5-flash esta no catalogo
       # (1.50/9.00, preco de fatura) e nao e preview. A proposta formal de ROLES pra fichas
       # e o PR #345 do garantis-shared — este aqui e so o fix do bug.
-      - 'DEFAULT_MODEL=gemini-3.1-flash-lite,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
+      # FICHA_WRITER_MODEL + FICHA_AUDITORIA_TEXTO_MODEL (2026-08-13, S6 auditor de
+      # ficha): a MESMA doutrina do A-1 aplicada ao par redator(S4) x auditor(S6).
+      # O redator lia `FICHA_WRITER_MODEL or DEFAULT_MODEL or <default>` e, sem a
+      # env, resolvia pro DEFAULT_MODEL; se o auditor tambem herdasse, os dois
+      # rodariam em gemini-3.1-flash-lite e o S6 seria o redator revisando a
+      # propria prosa — reprovacao nenhuma, gate ligado, ficha aprovada em
+      # silencio. Por isso DUAS defesas: `resolver_modelo()` do auditor NAO le
+      # DEFAULT_MODEL (so a env propria -> ROLES -> literal), e as duas envs estao
+      # EXPLICITAS aqui com valores DIFERENTES. Guard: o teste
+      # test_cloudbuild_seta_o_modelo_do_auditor_de_ficha parseia ESTE arquivo.
+      # Trocar por PROVIDER diferente (nao so versao) segue em aberto — do Alfredo.
+      # (resolução 155×156: S6 em 3.5-flash — o 2.5-flash do PR aposenta 2026-10-16;
+      #  writer segue 3.1-flash-lite = no-op; par redator×auditor continua distinto.)
+      - 'DEFAULT_MODEL=gemini-3.1-flash-lite,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,FICHA_WRITER_MODEL=gemini-3.1-flash-lite,FICHA_AUDITORIA_TEXTO_MODEL=gemini-3.5-flash,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
       # Fase 3 vertex-sem-key (2026-07-21, OK Elton): GOOGLE_API_KEY=GEMINI_API_KEY:latest
       # REMOVIDO — auth e ADC do service account (GEMINI_BACKEND=vertex; provado em staging
       # 2026-07-21 rodando sem key nenhuma). --clear-secrets (e nao so tirar a flag) porque

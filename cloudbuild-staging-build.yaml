@@ -33,7 +33,11 @@ steps:
       # ⚠️ CALCULO_FICHA_MODEL 3.1-pro-preview -> 3.5-flash (2026-08-13, decisao do dono):
       # o preview dava 404 no Vertex e, fora do catalogo MODELS, zerava o custo no ledger.
       # Espelha prod (cloudbuild-deploy.yaml). Detalhe do bug la e em calculo_ficha/agent.py.
-      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash'
+      # FICHA_AUDITORIA_TEXTO_MODEL (2026-08-13, S6): doutrina do A-1 para o par
+      # redator(S4) x auditor(S6) — o auditor NAO herda DEFAULT_MODEL no codigo; a env
+      # explicita garante que staging ensaie o par real. Precisa ser != FICHA_WRITER_MODEL.
+      # (resolucao 155x156: S6 em 3.5-flash — o 2.5-flash aposenta 2026-10-16.)
+      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,FICHA_WRITER_MODEL=gemini-3.1-flash-lite,FICHA_AUDITORIA_TEXTO_MODEL=gemini-3.5-flash'
       - '--region=southamerica-east1'
       - '--project=neqsti'
 timeout: '1500s'
