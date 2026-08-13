@@ -171,8 +171,71 @@ class MontarGrafoRequest(BaseModel):
         default="garantia_total",
         description="Id EXIGIDO da celula de garantia final.",
     )
+    # ── modo INVESTIGADOR (onda 8) — presentes ⇒ tool-use em 2 fases ─────────
+    documentos_indexados: Optional[dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "doc_id -> DocumentoIndexado.to_dict() (shared, onda 1). Presente e "
+            "nao-vazio ⇒ o agente roda como INVESTIGADOR: decide ferramentas num "
+            "turno SEM schema e emite o grafo num turno COM schema (§6). O "
+            "Investigador NUNCA recebe texto integral no prompt — so o indice."
+        ),
+    )
+    perguntas_abertas: Optional[list[dict[str, Any]]] = Field(
+        default=None,
+        description="As celulas rejeitadas da rodada anterior, com endereco (loop onda 6).",
+    )
+    celulas_congeladas: Optional[list[dict[str, Any]]] = Field(
+        default=None,
+        description="Celulas aprovadas em rodada anterior — FATO read-only, nao reabrivel.",
+    )
+    contrato_loop: Optional[str] = None
     provider: Optional[str] = None
     model: Optional[str] = None
+
+    model_config = {"extra": "ignore"}
+
+
+class EvidenciaAncorada(BaseModel):
+    """Evidencia da FASE B do investigador (§6.2): ref por ID, zero aninhamento.
+
+    O modelo devolve SO `ancora_sid`/`ancora_pid`; a `Ancora` completa
+    (doc_hash, extractor_version, offset, bbox, sha_texto) e preenchida pelo
+    CODIGO via `DocumentoIndexado.ancora_de(sid)` — mata a classe inteira
+    "o modelo inventou o hash". Os campos compat mantem o fallback fuzzy vivo.
+    """
+
+    celula_id: str
+    ancora_sid: Optional[str] = Field(
+        default=None, description='Id da sentenca citada, ex. "fl5-s12".'
+    )
+    ancora_pid: Optional[str] = Field(
+        default=None, description='Id do paragrafo citado, ex. "fl5-p3".'
+    )
+    documento: str
+    pagina: int = Field(ge=1)
+    trecho_literal: str = Field(min_length=20)
+    localizador: str = ""
+    politica: Literal["span", "paragrafo"] = "span"
+
+    model_config = {"extra": "ignore"}
+
+
+class GrafoAchatado(BaseModel):
+    """Schema de EMISSAO da FASE B (§6.2): profundidade maxima 2, refs por id.
+
+    Lista PLANA de celulas (`depende_de` e lista de ids, nunca objetos
+    aninhados) + lista PLANA de evidencias (ref por `celula_id`). Ferramentas
+    FSM-based degradam com recursao — e travamos isso por teste
+    (`test_schema_profundidade`).
+    """
+
+    celulas: list[CelulaDado | CelulaFormula]
+    evidencias: list[EvidenciaAncorada] = Field(default_factory=list)
+    grau_sugerido: Optional[Literal["exato", "teto", "piso"]] = None
+    piso: Optional[float] = None
+    teto: Optional[float] = None
+    observacao: str = ""
 
     model_config = {"extra": "ignore"}
 
@@ -205,6 +268,8 @@ __all__ = [
     "CelulaDado",
     "CelulaFormula",
     "Evidencia",
+    "EvidenciaAncorada",
+    "GrafoAchatado",
     "MontarGrafoRequest",
     "MontarGrafoResponse",
     "Origem",

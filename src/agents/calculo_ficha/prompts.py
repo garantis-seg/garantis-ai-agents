@@ -307,3 +307,125 @@ def build_montar_grafo_prompt(
 
 
 __all__ = ["build_montar_grafo_prompt", "gerar_fence_token", "PROMPT_VERSION"]
+
+
+# ── prompts do modo INVESTIGADOR (onda 8) ───────────────────────────────────
+
+def build_decisao_prompt(
+    dossie: dict,
+    indice: list[dict],
+    achados: list[dict],
+    perguntas_abertas: list[dict],
+    celulas_congeladas: list[dict],
+    menu: list[dict],
+    budget_restante: int,
+    contrato_loop: str = "",
+) -> str:
+    """Turno de DECISAO (Fase A, §6.1): SEM response_schema, SEM mime type.
+
+    O Investigador ve o INDICE dos documentos (nunca o texto integral), os
+    achados das ferramentas ja chamadas, as perguntas abertas do grafo e as
+    celulas congeladas. Ele responde UMA chamada de ferramenta em JSON — ou
+    `{"fim": true}` quando tem material para emitir o grafo.
+    """
+    import json as _json
+
+    partes = [
+        "Voce e o INVESTIGADOR do calculo de garantia (C4). Voce NAO le documentos "
+        "inteiros: voce comanda LEITORES por ferramenta e monta o grafo com o que "
+        "eles citam. Toda afirmacao util vem com [sid] (id de sentenca).",
+        "",
+        "## Ferramentas disponiveis (responda APENAS o JSON da chamada, nada mais)",
+        '{"tool": "resumir_com_missao", "args": {"doc_id": "...", "missao": "..."}}',
+        '{"tool": "perguntar_ao_documento", "args": {"doc_id": "...", "pergunta": "..."}}',
+        '{"tool": "pedir_pagina", "args": {"doc_id": "...", "pagina": 3}}  (escape hatch, max 3 por doc)',
+        '{"tool": "submeter_celulas", "args": {"celulas": [...], "evidencias": [...]}}  (gates na hora)',
+        '{"fim": true}  (quando tiver material para emitir o grafo final)',
+        "",
+        f"Menu efetivo desta rodada (circuitos abertos ja removidos): {_json.dumps(menu, ensure_ascii=False)}",
+        f"Budget restante: {budget_restante} chamadas. Use resumir antes de perguntar; "
+        "perguntar e mais barato que pedir_pagina; menos chamadas com missao clara "
+        "vencem muitas chamadas vagas.",
+        "",
+        "## Dossie (fatos do caso)",
+        _json.dumps(dossie, ensure_ascii=False, default=str)[:4000],
+        "",
+        "## Indice dos documentos (resumo estrutural — o texto vive nos Leitores)",
+        _json.dumps(indice, ensure_ascii=False)[:4000],
+    ]
+    if celulas_congeladas:
+        partes += [
+            "",
+            "## Celulas CONGELADAS (fato, read-only — NAO proponha valor novo)",
+            _json.dumps(celulas_congeladas, ensure_ascii=False)[:3000],
+        ]
+    if perguntas_abertas:
+        partes += [
+            "",
+            "## Perguntas ABERTAS (seu unico trabalho e fecha-las, com evidencia NOVA ou MELHOR)",
+            _json.dumps(perguntas_abertas, ensure_ascii=False)[:3000],
+        ]
+    if contrato_loop:
+        partes += ["", contrato_loop]
+    if achados:
+        partes += [
+            "",
+            "## Achados das suas chamadas anteriores (nesta rodada)",
+            _json.dumps(achados[-12:], ensure_ascii=False, default=str)[:8000],
+        ]
+    partes += [
+        "",
+        "Responda AGORA com exatamente UM JSON: a proxima chamada de ferramenta, "
+        'ou {"fim": true}.',
+    ]
+    return "\n".join(partes)
+
+
+def build_formatacao_prompt(
+    dossie: dict,
+    achados: list[dict],
+    perguntas_abertas: list[dict],
+    celulas_congeladas: list[dict],
+    celula_resultado: str,
+    submissoes_aceitas: list[dict],
+) -> str:
+    """Turno de FORMATACAO (Fase B, §6.1): COM response_mime_type JSON.
+
+    Este turno NAO decide nada — so emite o GrafoAchatado a partir dos achados
+    ja coletados. Refs por id, lista plana, `ancora_sid` por evidencia (a
+    Ancora completa e preenchida pelo CODIGO).
+    """
+    import json as _json
+
+    return "\n".join([
+        "Emita o GRAFO DE CELULAS final do calculo de garantia, em JSON, a partir "
+        "EXCLUSIVAMENTE dos achados abaixo (nao invente valor que nenhum Leitor citou).",
+        "",
+        "Forma: {\"celulas\": [...], \"evidencias\": [...], \"grau_sugerido\": ..., "
+        "\"piso\": ..., \"teto\": ..., \"observacao\": \"...\"}.",
+        "- celulas: lista PLANA de {id, tipo: 'dado'|'formula', valor|expressao, "
+        "origem, depende_de, confianca, nota, ressalvas}. Refs por id, zero aninhamento.",
+        f"- a celula de resultado OBRIGATORIA chama-se {celula_resultado!r}.",
+        "- evidencias: uma por dado 'extraida', com {celula_id, ancora_sid ('fl5-s12'), "
+        "documento, pagina, trecho_literal (>=20 chars, COPIADO), localizador, politica}. "
+        "O ancora_sid vem das citacoes dos Leitores — NUNCA invente um sid.",
+        "- celulas congeladas abaixo devem reaparecer IDENTICAS.",
+        "- taxa nao e celula: use selic(de, ate) na formula.",
+        "",
+        "## Dossie",
+        _json.dumps(dossie, ensure_ascii=False, default=str)[:3000],
+        "",
+        "## Celulas congeladas (copie identicas)",
+        _json.dumps(celulas_congeladas, ensure_ascii=False)[:3000],
+        "",
+        "## Perguntas abertas que voce investigou",
+        _json.dumps(perguntas_abertas, ensure_ascii=False)[:2000],
+        "",
+        "## Submissoes ja ACEITAS pelos gates nesta rodada",
+        _json.dumps(submissoes_aceitas, ensure_ascii=False)[:3000],
+        "",
+        "## Achados dos Leitores (a UNICA fonte dos seus dados)",
+        _json.dumps(achados, ensure_ascii=False, default=str)[:16000],
+        "",
+        "Responda APENAS o JSON do grafo.",
+    ])
