@@ -24,7 +24,13 @@ steps:
       - 'garantis-ai-agents-staging'
       - '--image=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api:staging-latest'
       # GEMINI_BACKEND=vertex (2026-07-20): espelha prod (cloudbuild-deploy.yaml:84) — flip do spending cap AI Studio.
-      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
+      # CALCULO_FICHA_MODEL + AUDITOR_EVIDENCIAS_MODEL (2026-08-13, QA B1 achado A-1):
+      # espelha prod. Aqui e ainda mais necessario que la: o --update-env-vars e ADITIVO,
+      # entao o DEFAULT_MODEL que ja mora no clone SOBREVIVE a cada deploy — e sem estas
+      # duas os agentes do C4 colapsam no mesmo modelo, com o staging ensaiando um
+      # comportamento que prod nao tem. Valores = defaults do codigo (calculador pro,
+      # auditor flash); modelos DISTINTOS e o ponto, nao a escolha especifica.
+      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex,CALCULO_FICHA_MODEL=gemini-3.1-pro-preview,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash'
       - '--region=southamerica-east1'
       - '--project=neqsti'
 timeout: '1500s'
