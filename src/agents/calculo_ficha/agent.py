@@ -162,6 +162,14 @@ async def montar_grafo(
     if isinstance(request, dict):
         request = MontarGrafoRequest(**request)
 
+    # Onda 8: payload com documentos INDEXADOS ⇒ modo INVESTIGADOR (tool-use
+    # em 2 fases, §6). Sem eles, o caminho one-shot segue byte a byte — mesma
+    # rota, mesmo contrato de resposta.
+    if request.documentos_indexados:
+        from .investigador import investigar
+
+        return await investigar(request, provider=provider, model=model)
+
     provider = provider or request.provider or DEFAULT_PROVIDER
     model = model or request.model or DEFAULT_MODEL
 
