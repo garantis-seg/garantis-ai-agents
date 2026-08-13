@@ -304,6 +304,7 @@ async def call_l1_with_vision_fallback(
     docs_text: Optional[list[tuple[Optional[str], Optional[str]]]] = None,
     max_tokens: int | None = None,
     gate_out: Optional[dict] = None,
+    prompt_vision: Optional[str] = None,
 ) -> Any:
     """High-level helper pros agents L1 (mov/day).
 
@@ -328,6 +329,15 @@ async def call_l1_with_vision_fallback(
     exatamente o mesmo silêncio no banco. `n_enviados` conta o que o Gemini
     REALMENTE recebeu: se a Vision call falhar e cair no texto, ele volta a 0 (o
     card é cego, e é isso que a métrica tem que dizer).
+
+    `prompt_vision` (opcional) é o prompt alternativo pro ramo VISION — o caller o
+    monta sabendo que PODE haver anexo, e este helper decide se ele vale. Existe
+    porque o gate só sabe se há PDF DEPOIS de baixar e julgar, e o prompt é montado
+    ANTES: sem isto, ou o steering dos anexos entraria em toda chamada (mentindo no
+    caminho texto, 99,7% do volume) ou o helper teria que remontar prompt, o que é
+    conhecimento do agent. Ausente ⇒ `prompt` nos dois ramos, como sempre.
+    ⚠️ O fallback text-only usa SEMPRE `prompt`: se a Vision call falhar, não há
+    anexo nenhum na chamada e o steering viraria instrução sobre PDF inexistente.
     """
     from .feature_flags import flag_enabled
 
@@ -394,7 +404,7 @@ async def call_l1_with_vision_fallback(
             resposta = await call_vision_l1(
                 provider,
                 model=model,
-                prompt=prompt,
+                prompt=prompt_vision or prompt,
                 pdf_bytes_list=pdf_bytes_list,
                 response_schema=response_schema,
                 temperature=0.0,
