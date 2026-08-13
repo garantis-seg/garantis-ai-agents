@@ -25,7 +25,7 @@ from .middleware import GeminiCallTimeoutMiddleware
 #  Posicao mais ampla do Elton na mesma decisao: caminho de LLM para derivar FATO
 #  ESTRUTURAL do processo (tribunal, estado) e para ser EVITADO — o fato deve vir do
 #  provider ou de derivacao deterministica.)
-from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, celula_base_classifier, doc_indexer, ficha_writer, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, text
+from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, celula_base_classifier, doc_indexer, ficha_writer, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, text, verificador
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -87,6 +87,11 @@ app.include_router(ficha_writer.router)
 # leitura, os paths nao colidem (`/write-fields` x `/auditar`).
 app.include_router(auditor_ficha.router)
 app.include_router(calculo_ficha.router)
+# Onda 9 do Agente Investigador: o VERIFICADOR CEGO (`/verificar-par`). Mesmo
+# prefixo `/calculo-ficha` do auditor, em ROUTER separado — os dois modos
+# convivem (o cego e aditivo; o `/auditar-evidencias` serve o harness de hoje e
+# so morre na onda 6) e nenhum dos dois PRs precisa tocar no arquivo do outro.
+app.include_router(verificador.router)
 # Camada P do Agente Investigador: PDF -> DocumentoIndexado. Prefixo PROPRIO
 # (`/doc-indexer`), separado do `/calculo-ficha`, porque nao e um agente do C4 —
 # e o pre-processamento deterministico que alimenta os tres papeis. Atras da

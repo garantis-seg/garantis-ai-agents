@@ -88,7 +88,18 @@ pypdf>=4.0.0
 # pdf_text.py (familia que aposenta 16/10/2026).
 # ⚠️ Bump ATOMICO com o codigo deste PR, pelo mesmo motivo do bump 1.423.0
 # acima: sem a wheel nova os testes nem importam.
-garantis-shared==1.463.0
+# 1.469.0 (2026-08-13, onda 9 do Agente Investigador — VERIFICADOR CEGO): traz
+# `garantis_shared.calculo_fichas.confianca` (DINCO puro: `gerar_distractors`,
+# `normalizar_dinco`, `validar_envelope`, `SELF_CONSISTENCY_N`,
+# `LIMIAR_CONFIANCA_CELULA`) e `.loop`/`.journal`. O
+# `src/agents/auditor_evidencias/verificador.py` deste PR NAO importa sem elas:
+# a lib de confianca e PURA e vive no shared de proposito (sem LLM, sem I/O,
+# testavel sem rede) — aqui fica so quem CHAMA o modelo N vezes.
+# Wheel verificada por CONTEUDO no AR (nao pelo `versions list`): o arquivo
+# `calculo_fichas/confianca.py` existe nela.
+# ⚠️ Bump ATOMICO, mesma razao dos anteriores: sem a wheel nova o
+# `tests/test_verificador_cego.py` nem coleta.
+garantis-shared==1.469.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
