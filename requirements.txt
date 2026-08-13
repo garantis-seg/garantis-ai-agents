@@ -88,7 +88,7 @@ pypdf>=4.0.0
 # pdf_text.py (familia que aposenta 16/10/2026).
 # ⚠️ Bump ATOMICO com o codigo deste PR, pelo mesmo motivo do bump 1.423.0
 # acima: sem a wheel nova os testes nem importam.
-garantis-shared==1.463.0
+garantis-shared==1.469.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
