@@ -27,6 +27,7 @@ import os
 import re
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 import yaml
@@ -421,6 +422,22 @@ def _envs_do_cloudbuild(path: Path) -> dict[str, str]:
     return envs
 
 
+def _default_do_modulo(mod) -> str:
+    """`DEFAULT_MODEL` do modulo com as tres envs FORA do ambiente.
+
+    Le o default do codigo em vez de repeti-lo como literal no teste: um
+    literal duplicado envelhece calado — foi o que deixou o teste afirmando
+    `gemini-3.1-pro-preview` depois que o codigo ja tinha trocado de modelo.
+    """
+    limpo = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("DEFAULT_MODEL", "CALCULO_FICHA_MODEL", "AUDITOR_EVIDENCIAS_MODEL")
+    }
+    with mock.patch.dict(os.environ, limpo, clear=True):
+        return importlib.reload(mod).DEFAULT_MODEL
+
+
 @pytest.mark.parametrize("alvo", list(_CLOUDBUILDS))
 def test_cloudbuild_seta_as_duas_especificas_com_modelos_diferentes(alvo):
     """O deploy tem que setar CALCULO_FICHA_MODEL e AUDITOR_EVIDENCIAS_MODEL.
@@ -465,9 +482,11 @@ def test_calculador_e_auditor_usam_modelos_diferentes_por_default(monkeypatch):
         else:
             monkeypatch.delenv(var, raising=False)
 
-    # Re-resolve como o agente resolve no import, agora com o env de prod.
-    calc = os.getenv("CALCULO_FICHA_MODEL") or os.getenv("DEFAULT_MODEL") or "gemini-3.1-pro-preview"
-    aud = os.getenv("AUDITOR_EVIDENCIAS_MODEL") or os.getenv("DEFAULT_MODEL") or "gemini-2.5-flash"
+    # Re-resolve como o agente resolve no import, agora com o env de prod. O
+    # ultimo fallback vem do MODULO (nao repetido como literal aqui): copiar o
+    # default a mao fazia o teste continuar verde depois que o codigo mudasse.
+    calc = os.getenv("CALCULO_FICHA_MODEL") or os.getenv("DEFAULT_MODEL") or _default_do_modulo(calc_mod)
+    aud = os.getenv("AUDITOR_EVIDENCIAS_MODEL") or os.getenv("DEFAULT_MODEL") or _default_do_modulo(auditor_mod)
     assert calc != aud, f"prod colapsa calculador e auditor em {calc}"
 
     # E o default do codigo (sem env nenhuma) tambem tem que ser distinto.
@@ -484,6 +503,34 @@ def test_calculador_e_auditor_usam_modelos_diferentes_por_default(monkeypatch):
         monkeypatch.undo()
         importlib.reload(calc_mod)
         importlib.reload(auditor_mod)
+
+
+@pytest.mark.parametrize("alvo", list(_CLOUDBUILDS))
+def test_modelos_do_c4_existem_no_catalogo(alvo):
+    """Modelo fora de `llm_models.MODELS` = preco 0/0 = gasto INVISIVEL.
+
+    Regressao do bug de 2026-08-13: `CALCULO_FICHA_MODEL=gemini-3.1-pro-preview`
+    nao existia no catalogo, entao `get_model_pricing()` devolvia (0, 0) e toda
+    chamada do calculador entrava no ledger com cost_usd=0 — o mesmo mecanismo
+    que ja escondeu US$ 97,61 em 39.309 calls e reincidiu duas vezes. O 404 do
+    Vertex ao menos gritava; o custo zerado e silencioso, e por isso e ele que
+    merece o teste. Cobre o default DO CODIGO e o valor DO CLOUDBUILD.
+    """
+    from garantis_shared.llm_models import MODELS
+
+    envs = _envs_do_cloudbuild(_CLOUDBUILDS[alvo][0])
+    candidatos = {
+        f"{alvo}:CALCULO_FICHA_MODEL": envs.get("CALCULO_FICHA_MODEL"),
+        f"{alvo}:AUDITOR_EVIDENCIAS_MODEL": envs.get("AUDITOR_EVIDENCIAS_MODEL"),
+        "codigo:calculo_ficha.DEFAULT_MODEL": _default_do_modulo(calc_mod),
+        "codigo:auditor_evidencias.DEFAULT_MODEL": _default_do_modulo(auditor_mod),
+    }
+    for origem, modelo in candidatos.items():
+        assert modelo, f"{origem}: ausente"
+        assert modelo in MODELS, (
+            f"{origem}={modelo} nao esta em llm_models.MODELS — "
+            f"get_model_pricing() devolve 0/0 e o custo sai zerado do ledger"
+        )
 
 
 # ══ 4. Prompt do auditor ════════════════════════════════════════════════════

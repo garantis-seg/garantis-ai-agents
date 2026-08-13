@@ -28,9 +28,12 @@ steps:
       # espelha prod. Aqui e ainda mais necessario que la: o --update-env-vars e ADITIVO,
       # entao o DEFAULT_MODEL que ja mora no clone SOBREVIVE a cada deploy — e sem estas
       # duas os agentes do C4 colapsam no mesmo modelo, com o staging ensaiando um
-      # comportamento que prod nao tem. Valores = defaults do codigo (calculador pro,
-      # auditor flash); modelos DISTINTOS e o ponto, nao a escolha especifica.
-      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex,CALCULO_FICHA_MODEL=gemini-3.1-pro-preview,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash'
+      # comportamento que prod nao tem. Valores = defaults do codigo; modelos DISTINTOS
+      # e o ponto, nao a escolha especifica.
+      # ⚠️ CALCULO_FICHA_MODEL 3.1-pro-preview -> 3.5-flash (2026-08-13, decisao do dono):
+      # o preview dava 404 no Vertex e, fora do catalogo MODELS, zerava o custo no ledger.
+      # Espelha prod (cloudbuild-deploy.yaml). Detalhe do bug la e em calculo_ficha/agent.py.
+      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash'
       - '--region=southamerica-east1'
       - '--project=neqsti'
 timeout: '1500s'
