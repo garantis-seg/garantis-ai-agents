@@ -21,11 +21,15 @@ O que cada bloco trava:
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
+import os
 import re
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -378,9 +382,105 @@ def test_calculador_propaga_custo_mesmo_em_falha(monkeypatch):
     assert r.model == "gemini-3.1-pro"
 
 
-def test_calculador_e_auditor_usam_modelos_diferentes_por_default():
-    """Auditar com o mesmo modelo que calculou e revisar o proprio trabalho."""
-    assert calc_mod.DEFAULT_MODEL != auditor_mod.DEFAULT_MODEL
+#: Envs de deploy que precisam carregar as duas especificas. O de prod usa
+#: `--set-env-vars` (clobbera tudo); o de staging usa `--update-env-vars`
+#: (aditivo, entao o DEFAULT_MODEL do clone SOBREVIVE) — nos dois a ausencia
+#: das especificas colapsa os agentes no mesmo modelo.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+_CLOUDBUILDS = {
+    "prod": (_REPO_ROOT / "cloudbuild-deploy.yaml", "--set-env-vars"),
+    "staging": (_REPO_ROOT / "cloudbuild-staging-build.yaml", "--update-env-vars"),
+}
+
+
+def _envs_do_cloudbuild(path: Path) -> dict[str, str]:
+    """Extrai o mapa de env do cloudbuild lendo o YAML de verdade.
+
+    Varre os args de TODO step atras da lista de envs (a do `--set-env-vars`,
+    que vem no arg seguinte, e a do `--update-env-vars=...`, que vem colada).
+    Le o YAML em vez de regex no texto pra nao casar com env citada em
+    COMENTARIO — comentario nao deploya nada.
+    """
+    steps = yaml.safe_load(path.read_text(encoding="utf-8"))["steps"]
+    envs: dict[str, str] = {}
+    for step in steps:
+        args = [str(a) for a in (step.get("args") or [])]
+        for i, arg in enumerate(args):
+            crus = ""
+            if arg in ("--set-env-vars", "--update-env-vars") and i + 1 < len(args):
+                crus = args[i + 1]
+            elif arg.startswith(("--set-env-vars=", "--update-env-vars=")):
+                crus = arg.split("=", 1)[1]
+            for kv in crus.split(","):
+                if "=" in kv:
+                    k, v = kv.split("=", 1)
+                    envs[k.strip()] = v.strip()
+    return envs
+
+
+@pytest.mark.parametrize("alvo", list(_CLOUDBUILDS))
+def test_cloudbuild_seta_as_duas_especificas_com_modelos_diferentes(alvo):
+    """O deploy tem que setar CALCULO_FICHA_MODEL e AUDITOR_EVIDENCIAS_MODEL.
+
+    Regressao do achado A-1 (QA B1, 2026-08-13): o cloudbuild setava
+    `DEFAULT_MODEL` e NENHUMA das duas especificas, entao em prod os dois
+    agentes resolviam pro MESMO modelo e a premissa do desenho (auditor !=
+    calculador) caia em silencio. Herdar do DEFAULT_MODEL nao vale: as duas
+    precisam estar EXPLICITAS e com valores DIFERENTES.
+    """
+    path, flag = _CLOUDBUILDS[alvo]
+    envs = _envs_do_cloudbuild(path)
+
+    # Guarda de FORMA: se o parse virar no-op, o silencio e indistinguivel de
+    # "esta tudo certo" — exatamente o modo de falha que este teste existe pra
+    # evitar (o guard antigo passava por ausencia de env, nao por acerto).
+    assert flag in path.read_text(encoding="utf-8"), f"{path.name}: {flag} sumiu"
+    assert len(envs) >= 2, f"{path.name}: parse achou {len(envs)} envs — check virou no-op"
+
+    calc = envs.get("CALCULO_FICHA_MODEL")
+    aud = envs.get("AUDITOR_EVIDENCIAS_MODEL")
+    assert calc, f"{path.name}: CALCULO_FICHA_MODEL ausente — colapsa no DEFAULT_MODEL"
+    assert aud, f"{path.name}: AUDITOR_EVIDENCIAS_MODEL ausente — colapsa no DEFAULT_MODEL"
+    assert calc != aud, f"{path.name}: calculador e auditor no MESMO modelo ({calc})"
+
+
+def test_calculador_e_auditor_usam_modelos_diferentes_por_default(monkeypatch):
+    """Auditar com o mesmo modelo que calculou e revisar o proprio trabalho.
+
+    Roda sob o AMBIENTE DE PROD (DEFAULT_MODEL setado + as especificas do
+    cloudbuild), nao sob o ambiente do processo de teste. A versao anterior
+    comparava os dois `DEFAULT_MODEL` ja resolvidos no import e passava no CI
+    so porque la nenhuma das tres envs existe — no ambiente que vai rodar, ela
+    falharia. Vacuidade e o bug: o teste tem que reprovar se as especificas
+    sumirem do cloudbuild.
+    """
+    envs = _envs_do_cloudbuild(_CLOUDBUILDS["prod"][0])
+    monkeypatch.setenv("DEFAULT_MODEL", envs["DEFAULT_MODEL"])
+    for var in ("CALCULO_FICHA_MODEL", "AUDITOR_EVIDENCIAS_MODEL"):
+        if var in envs:
+            monkeypatch.setenv(var, envs[var])
+        else:
+            monkeypatch.delenv(var, raising=False)
+
+    # Re-resolve como o agente resolve no import, agora com o env de prod.
+    calc = os.getenv("CALCULO_FICHA_MODEL") or os.getenv("DEFAULT_MODEL") or "gemini-3.1-pro-preview"
+    aud = os.getenv("AUDITOR_EVIDENCIAS_MODEL") or os.getenv("DEFAULT_MODEL") or "gemini-2.5-flash"
+    assert calc != aud, f"prod colapsa calculador e auditor em {calc}"
+
+    # E o default do codigo (sem env nenhuma) tambem tem que ser distinto.
+    for var in ("DEFAULT_MODEL", "CALCULO_FICHA_MODEL", "AUDITOR_EVIDENCIAS_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+    try:
+        assert (
+            importlib.reload(calc_mod).DEFAULT_MODEL
+            != importlib.reload(auditor_mod).DEFAULT_MODEL
+        )
+    finally:
+        # O reload REBINDA os modulos que os outros testes monkeypatcham; sem
+        # restaurar sob o env original, a ordem dos testes vira dependencia.
+        monkeypatch.undo()
+        importlib.reload(calc_mod)
+        importlib.reload(auditor_mod)
 
 
 # ══ 4. Prompt do auditor ════════════════════════════════════════════════════

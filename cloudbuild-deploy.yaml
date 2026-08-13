@@ -147,7 +147,20 @@ steps:
       # transito-julgado nao reproduz). A ponte "flash FULL por 503 do 2.5-lite" (2026-06-27,
       # acima) fica HISTORICA — sob Vertex o 3.1-flash-lite nao tem aquela quota compartilhada.
       # NUNCA usar gemini-3.1-flash NAO-lite: nao existe no Vertex (404).
-      - 'DEFAULT_MODEL=gemini-3.1-flash-lite,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
+      # CALCULO_FICHA_MODEL + AUDITOR_EVIDENCIAS_MODEL (2026-08-13, QA B1 achado A-1):
+      # os DOIS precisam estar aqui, EXPLICITOS. Os agentes do C4 leem
+      # `CALCULO_FICHA_MODEL or DEFAULT_MODEL or <default>` (calculo_ficha/agent.py) e
+      # `AUDITOR_EVIDENCIAS_MODEL or DEFAULT_MODEL or <default>` (auditor_evidencias/agent.py):
+      # com DEFAULT_MODEL setado e as especificas AUSENTES, os dois colapsam no MESMO
+      # modelo (medido: ambos gemini-3.1-flash-lite) e a premissa central do desenho cai
+      # EM SILENCIO — auditar com o mesmo modelo que calculou e pedir a alguem que revise
+      # o proprio trabalho; dois erros correlacionados se confirmam mutuamente e o auditor
+      # nao tem como sinalizar. Os valores abaixo replicam os defaults DO CODIGO (nao sao
+      # escolha nova): calculador no pro (calculo que vira garantia bilionaria nao roda em
+      # flash-lite — foi o erro de 3x do V3), auditor no flash. Cruzar PROVIDER (nao so
+      # versao) e a decisao em aberto — do Alfredo, nao deste fix. Guard: o teste
+      # test_calculador_e_auditor_usam_modelos_diferentes_por_default parseia ESTE arquivo.
+      - 'DEFAULT_MODEL=gemini-3.1-flash-lite,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,CALCULO_FICHA_MODEL=gemini-3.1-pro-preview,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,DEFAULT_PROMPT_VERSION=v3,TEMPLATES_POLETTO_ENABLED=true,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
       # Fase 3 vertex-sem-key (2026-07-21, OK Elton): GOOGLE_API_KEY=GEMINI_API_KEY:latest
       # REMOVIDO — auth e ADC do service account (GEMINI_BACKEND=vertex; provado em staging
       # 2026-07-21 rodando sem key nenhuma). --clear-secrets (e nao so tirar a flag) porque
