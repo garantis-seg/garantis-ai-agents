@@ -77,7 +77,18 @@ pypdf>=4.0.0
 # evidencias) que o harness do shared chama por HTTP em /calculo-ficha/*.
 # Manter os 3 consumidores na MESMA versao: o contrato de wire do C4 (schemas
 # do grafo e das evidencias) atravessa os dois lados.
-garantis-shared==1.459.0
+# 1.463.0 (2026-08-13, onda 2 do Agente Investigador): traz
+# `garantis_shared.calculo_fichas.documento` (DocumentoIndexado/Sentenca/
+# Paragrafo/Ancora) e `.segmentacao` (segmentar_paginas, sid_de/pid_de) — as
+# ondas 1/1b, ja mergeadas no master do shared. O `src/agents/doc_indexer/`
+# deste PR NAO importa sem elas: o indexador produz exatamente essas estruturas
+# e a segmentacao determinística vive la de proposito (pura, testada por AST,
+# roda sem rede). Traz tambem o papel `vision_fallback` no ROLES, que o
+# `doc_indexer/ocr.py` usa em vez do `gemini-2.5-flash-lite` hard-coded do
+# pdf_text.py (familia que aposenta 16/10/2026).
+# ⚠️ Bump ATOMICO com o codigo deste PR, pelo mesmo motivo do bump 1.423.0
+# acima: sem a wheel nova os testes nem importam.
+garantis-shared==1.463.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
