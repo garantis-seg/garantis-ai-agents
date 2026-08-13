@@ -182,7 +182,8 @@ def test_sem_gate_out_o_comportamento_e_o_de_antes():
 # chamam `call_l1_with_vision_fallback` DIRETO, então a fiação de `agent.py` era
 # território virgem — e é ela que decide se o gate vê o par certo.
 
-def _classify(monkeypatch, *, documentos_anexados, documentos_gate, chunk=False):
+def _classify(monkeypatch, *, documentos_anexados, documentos_gate, chunk=False,
+              classe="peticao"):
     """Roda `classify_mov_factsheet` capturando o que chegou ao gate."""
     from src.agents.mov_factsheet import agent as A
 
@@ -208,7 +209,7 @@ def _classify(monkeypatch, *, documentos_anexados, documentos_gate, chunk=False)
         mov={"mov_id": "peticao-10121509520268260224", "texto": ""},
         documentos_anexados=documentos_anexados,
         documentos_gate=documentos_gate,
-        classe="peticao",
+        classe=classe,
     ))
     return visto
 
@@ -280,3 +281,37 @@ def test_o_CHUNKING_nao_pode_engolir_o_documentos_gate(monkeypatch):
     assert len(recebidos) > 1, "premissa: a peça gigante foi chunkada"
     assert recebidos[0] == ["gs://b/agravo.pdf", "gs://b/peticao.pdf"]
     assert all(r == [] for r in recebidos[1:]), "só a 1ª variante paga o Vision"
+
+
+# ── 4. O STEERING dos anexos (v1.5) chega ao helper — e só onde deve ──────────
+# O bloco existe pelo mesmo motivo do bloco 3: `call_l1_with_vision_fallback` é
+# testado direto no `test_peticao_steering_anexos.py`, então a FIAÇÃO de `agent.py`
+# ficaria descoberta — e é ela que decide se o fix chega a existir em prod.
+
+def test_o_agent_monta_o_prompt_com_steering_quando_ha_candidato(monkeypatch):
+    """⛔ MUTANTE: não passar `prompt_vision` reprova aqui. Sem ele o ramo Vision
+    manda o prompt de texto, a chamada sai igual, custa igual, e o fix é inerte."""
+    visto = _classify(monkeypatch, documentos_anexados=_ANEXADO_CONCATENADO,
+                      documentos_gate=_GATE_POR_DOC)
+    assert "PDF ANEXADOS" in (visto["prompt_vision"] or "")
+    assert "PDF ANEXADOS" not in visto["prompt"], (
+        "o prompt do caminho TEXTO não pode declarar anexo")
+
+
+def test_sem_candidato_de_pdf_nao_ha_prompt_de_vision(monkeypatch):
+    """Nenhum doc com `gcs_url` ⇒ o ramo Vision é inalcançável. Montar a 2ª versão
+    ali seria trabalho morto — e, pior, um segundo prompt em `llm_raw_prompt` que
+    nunca foi enviado."""
+    sem_pdf = [{"doc_key": "jb-1", "text_content": "corpo da inicial. " * 50,
+                "gcs_url": None}]
+    visto = _classify(monkeypatch, documentos_anexados=sem_pdf, documentos_gate=sem_pdf)
+    assert visto["prompt_vision"] is None
+
+
+def test_a_lane_MOV_nao_recebe_prompt_de_vision(monkeypatch):
+    """O steering fala de "partes da PETIÇÃO INICIAL" e a lane mov manda 1 doc por
+    entry — lá o texto do prompt JÁ é o do doc cujo PDF subiu. Vazar pra ela seria
+    mudar 1,46% das chamadas de mov sem eval que as cubra."""
+    visto = _classify(monkeypatch, documentos_anexados=_ANEXADO_CONCATENADO,
+                      documentos_gate=_GATE_POR_DOC, classe=None)
+    assert visto["prompt_vision"] is None

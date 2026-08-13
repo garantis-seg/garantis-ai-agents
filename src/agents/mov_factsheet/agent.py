@@ -15,7 +15,11 @@ from garantis_shared.llm_chunking import map_reduce_classify
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
-from .._utils import MODEL_VARIANT_TEXT, call_l1_with_vision_fallback
+from .._utils import (
+    MODEL_VARIANT_TEXT,
+    MODEL_VARIANT_VISION,
+    call_l1_with_vision_fallback,
+)
 from .._utils.feature_flags import flag_enabled
 from .chunking import reduce_peca_cards, split_large_peca_variants
 from .prompts import build_mov_factsheet_prompt
@@ -235,6 +239,7 @@ async def classify_mov_factsheet(
         else [d.gcs_url for d in docs_typed if d.gcs_url]
     )
     vision_gate: dict = {}
+    prompt_vision: Optional[str] = None
 
     fb_typed: FallbackContext | None = None
     if fallback_context is not None:
@@ -285,6 +290,20 @@ async def classify_mov_factsheet(
             classe=classe,
         )
         response_schema = MovFactSheetCardV4
+        if classe in ("peticao", "doc_incerto") and gate_urls:
+            # STEERING DOS ANEXOS (v1.5): 2ª versão do MESMO prompt, com o parágrafo que
+            # declara os PDFs. Quem escolhe é o helper — só o ramo Vision a usa, e só
+            # depois que o gate de fato mandou PDF. Aqui só se sabe que há CANDIDATO
+            # (`gate_urls`), e candidato não é anexo: o gate ainda pode dizer que todo
+            # doc é alcançável por texto. Montar as duas é 1 concat de string; deixar o
+            # helper remontar prompt seria dar conhecimento de agent pra ele.
+            prompt_vision = build_mov_factsheet_prompt_v4(
+                processo, mov,
+                documentos_anexados=docs_typed,
+                fallback_context=fb_typed,
+                classe=classe,
+                pdfs_anexados=True,
+            )
         if classe == "peticao":
             # Ramo PETICAO (peticao_extract.v1, FASE 4): schema SUPERSET (card v4 +
             # cdas/processos_citados) e versao POR RAMO — bump da peticao nao invalida
@@ -315,6 +334,7 @@ async def classify_mov_factsheet(
         # por documento se manda pro Vision (texto-lixo OU pagina-imagem). Ver ocr_gate.
         docs_text=gate_pairs,
         gate_out=vision_gate,
+        prompt_vision=prompt_vision,
         response_schema=response_schema,
         log_label=f"mov_id={mov.mov_id}",
         thinking_budget=0,
@@ -414,7 +434,15 @@ async def classify_mov_factsheet(
     return {
         "card": card_data,
         "raw_response": raw_response,
-        "llm_raw_prompt": prompt,
+        # O prompt REALMENTE enviado. Com o steering dos anexos são 2 versões e só o
+        # helper sabe qual saiu (o gate decide depois do prompt montado); registrar a
+        # outra faria o card mentir sobre o que o modelo leu — nesta lane, discrepância
+        # invisível entre payload e registro é o modo de falha da casa.
+        "llm_raw_prompt": (
+            prompt_vision
+            if (prompt_vision and usage["model_variant"] == MODEL_VARIANT_VISION)
+            else prompt
+        ),
         "prompt_version": prompt_version,
         "usage": usage,
         # Veredito do gate pro caller PERSISTIR (sentinela write-time). Sem ele,

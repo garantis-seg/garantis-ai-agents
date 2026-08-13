@@ -114,13 +114,43 @@ def test_tipo_do_admin_cobertura_total_nos_dois_sentidos():
 def test_o_no_do_admin_e_do_dominio_certo():
     """Gemeo do teste das 3 colunas da CDA: `tipo` vira coluna E chave do UNIQUE, e
     esfera/uf sao afirmacoes sobre o mundo. UF fixa so onde o proprio enum a nomeia —
-    'PA estadual' e qualquer fisco estadual, cravar 'SP' inventaria UF pra um PA do RJ."""
+    'PA estadual' e qualquer fisco estadual, cravar 'SP' inventaria UF pra um PA do RJ.
+
+    ⚠️ `pa` (v1.5) e a UNICA entrada com esfera NULL, e isso e o CONTRATO, nao buraco:
+    ele e o default do miner e significa 'o documento nao disse a esfera'. A lista
+    abaixo e NOMEADA de proposito — tipo novo com esfera NULL tem que ser uma decisao,
+    nao um esquecimento, senao volta a virar afirmacao por omissao (que e exatamente o
+    que o default `paf` fazia ate 2026-08-13)."""
+    sem_esfera_por_design = {"pa"}
+    assert sem_esfera_por_design <= set(ADMIN_TIPO_TO_NO), (
+        "o generico sumiu do mapa: sem ele o sink volta a ter que ESCOLHER uma esfera "
+        "pro caso 'nao sei', e a unica escolha disponivel afirma federal."
+    )
     for tipo, (esfera, uf) in ADMIN_TIPO_TO_NO.items():
+        if tipo in sem_esfera_por_design:
+            assert (esfera, uf) == (None, None), (
+                f"{tipo}: {esfera!r}/{uf!r}. O generico nao afirma esfera NEM uf."
+            )
+            continue
         assert esfera in ("federal", "estadual", "municipal"), f"{tipo}: {esfera!r}"
         assert uf is None or (len(uf) == 2 and uf.isupper()), f"{tipo}: {uf!r}"
         assert (uf is not None) == tipo.endswith("_sp"), (
             f"{tipo}: uf={uf!r}. UF fixa so em tipo que NOMEIA a UF."
         )
+
+
+def test_o_DEFAULT_do_miner_nao_afirma_esfera():
+    """⛔ MUTANTE: voltar `default="paf"` reprova AQUI, sem precisar de LLM.
+
+    Ate a v1.4 omissao e afirmacao gravavam o MESMO byte (`paf`), entao nenhuma consulta
+    conseguia separar 'o modelo disse federal' de 'o modelo nao disse nada' — e a tela
+    dizia "Adm. Fed." pros dois. Medido: 8 badges errados em 6 conexos. O invariante que
+    fica: o DEFAULT tem que ser um valor que NAO afirma esfera."""
+    padrao = ProcessoAdminCitado(numero="017.00100686/2026-51").tipo
+    assert ADMIN_TIPO_TO_NO[padrao] == (None, None), (
+        f"o default do miner e {padrao!r}, que afirma "
+        f"esfera={ADMIN_TIPO_TO_NO[padrao][0]!r} sem o texto ter dito nada."
+    )
 
 
 def test_papel_da_aresta_e_exclusao_NOMEADA_nao_esquecimento():

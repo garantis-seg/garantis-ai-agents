@@ -341,8 +341,18 @@ class MovFactSheetCardV4(BaseModel):
 # perante a SEFAZ-SP aparecia como "ADM. FED." no conexo 1477176). Bump invalida o cache
 # v1.3 -> re-extrai 1x; o SWAP-POR-PN do sink troca as rows da versao velha DESTE pn, entao
 # o legado se re-tipa sozinho conforme cada peticao e re-lida.
-# ⚠️ Os 2 VALORES (`PETICAO_PROMPT_VERSION` = peticao_extract.v1.4 e
-# `DOC_INCERTO_PROMPT_VERSION` = doc_incerto_extract.v1.2) moram no garantis-shared
+# v1.5 (2026-08-13, card 869ehp0y9, decisao Elton "nao afirmar o que nao sabe"): (a) enum
+# ganha `pa` (PA de esfera INDETERMINADA) e ele vira o DEFAULT — `paf`/`tit_sp`/`pa_estadual`
+# passam a ser AFIRMACOES, so com sinal no texto (orgao nomeado ou mascara). Ate a v1.4 o
+# default era `paf`, entao "o modelo nao soube" e "o modelo afirmou federal" gravavam o MESMO
+# byte e a tela dizia "Adm. Fed." pra PA estadual sem orgao nomeado (residual medido: pn
+# 50019905320258130251 / MULTILASER, PTA de MG, obedeceu a regra e gravou paf). `pa` mapeia em
+# (esfera NULL, uf NULL) no ADMIN_TIPO_TO_NO e em `processo_administrativo_outro` no
+# conexos_engine => badge "A classificar", nao "Adm. Fed."; (b) STEERING dos anexos no prompt
+# (ver `_STEER_PDF_ANEXADOS` em prompts_v4) — SO quando o gate manda >=1 PDF. Bump invalida o
+# cache v1.4 -> re-extrai 1x pela onda (a onda e decisao a parte).
+# ⚠️ Os 2 VALORES (`PETICAO_PROMPT_VERSION` = peticao_extract.v1.5 e
+# `DOC_INCERTO_PROMPT_VERSION` = doc_incerto_extract.v1.3) moram no garantis-shared
 # (`engine_v6.persistence.peticao_contract`) e sao IMPORTADOS no topo deste arquivo —
 # sao lidos por TRES processos e o fe-api nao importa este repo, entao literal aqui
 # vira drift la (ja custou 896 cards re-pagos + 1.039 nunca refrescados). Bump =
@@ -353,6 +363,9 @@ class MovFactSheetCardV4(BaseModel):
 # v1.2 (2026-08-07): mesma mudanca do 1P v1.4 (par PA/AIIM + pa_estadual) — o ramo 1X usa
 # o MESMO schema superset, entao um enum novo sem a instrucao correspondente aqui daria
 # constrained decoding com valor que o prompt nunca explica.
+# v1.3 (2026-08-13): mesma mudanca do 1P v1.5 (`pa` default + steering dos anexos), pelo
+# mesmo motivo — schema COMPARTILHADO: o enum novo chega no 1X querendo ou nao, entao a
+# instrucao tem que chegar junto.
 
 
 class CdaPeticao(BaseModel):
@@ -404,15 +417,19 @@ class ProcessoAdminCitado(BaseModel):
     """
 
     numero: str = Field(description="Número LITERAL do processo administrativo como aparece no texto.")
-    tipo: Literal["paf", "tit_sp", "pa_estadual"] = Field(
-        default="paf",
+    tipo: Literal["pa", "paf", "tit_sp", "pa_estadual"] = Field(
+        default="pa",
         description=(
-            "'paf'=processo administrativo fiscal FEDERAL (NUP/RFB, NNNNN.NNNNNN/AAAA-DD) — "
-            "default; do número NÃO dá pra afirmar CARF. 'tit_sp'=AIIM/auto de infração "
-            "ESTADUAL de SP (N.NNN.NNN-D). 'pa_estadual'=processo administrativo de fisco "
-            "ESTADUAL (Secretaria da Fazenda de um estado; verificação fiscal, defesa/"
-            "recurso administrativo) — o PROCESSO, não o auto: se o número é do AIIM use "
-            "'tit_sp'. Só marque quando o texto disser o ÓRGÃO estadual; na dúvida 'paf'."
+            "'pa'=processo administrativo cuja ESFERA o documento não deixa clara — é o "
+            "DEFAULT; na dúvida sobre o órgão use 'pa' e NÃO afirme federal só porque o "
+            "número parece um NUP. 'paf'=fiscal FEDERAL AFIRMADO: o texto nomeia órgão "
+            "federal (Receita Federal/RFB, CARF, DRJ, PGFN) OU o número está na máscara NUP "
+            "NNNNN.NNNNNN/AAAA-DD (5+6 dígitos antes da barra); do número NÃO dá pra afirmar "
+            "CARF. 'tit_sp'=AIIM/auto de infração ESTADUAL de SP (N.NNN.NNN-D). "
+            "'pa_estadual'=processo administrativo de fisco ESTADUAL (Secretaria da Fazenda "
+            "de um estado; verificação fiscal, defesa/recurso administrativo) — o PROCESSO, "
+            "não o auto: se o número é do AIIM use 'tit_sp'. Só marque quando o texto disser "
+            "o ÓRGÃO estadual."
         ),
     )
     contexto: Optional[str] = Field(

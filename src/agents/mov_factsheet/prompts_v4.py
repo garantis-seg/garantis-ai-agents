@@ -306,11 +306,42 @@ o resto null."""
 # pela janela do flash-lite (1M tokens ≈ 4M chars; 200k chars ≈ 50k tokens, cobre p99).
 _PETICAO_TEXT_CAP_CHARS = 200_000
 
+# ⭐ STEERING DOS ANEXOS (v1.5, 2026-08-13) — o fix RAIZ do AIIM-miss, provado por repro.
+#
+# O prompt NUNCA dizia que há PDFs anexados à chamada: ele apresenta o texto concatenado
+# como sendo A peça inteira e fecha com "Preencha SÓ o que o TEXTO sustenta". Com isso o
+# modelo ANCORA no texto e trata os PDFs como redundância — não é cegueira: a repro
+# offline (8 chamadas Gemini reais, mesmos bytes, mesmo endpoint Vertex, temp 0) mostrou
+# a chamada fiel reproduzindo o miss 2x DETERMINISTICAMENTE, enquanto a MESMA carga com
+# este parágrafo extrai o par PA+AIIM completo (com `par_numero` cruzado e âncora que o
+# guard do sink aceita), também 2x. Caso: MS 1012150-95.2026.8.26.0224, cujas 6 partes da
+# inicial estão em VETOR e cujo AIIM 5.059.644-5 só existe dentro do PDF.
+#
+# ⛔ CONDICIONAL POR CONSTRUÇÃO: só entra quando o gate REALMENTE mandou ≥1 PDF (o caller
+# passa `pdfs_anexados=True` no ramo Vision). Sem anexo o prompt fica BYTE-IDÊNTICO ao
+# v1.4 fora o vocabulário — e o caminho texto é 99,7% do volume.
+_STEER_PDF_ANEXADOS = (
+    "ATENÇÃO — DOCUMENTOS PDF ANEXADOS A ESTA CHAMADA: além do texto acima, estão"
+    " anexados PDFs que são PARTES {da_peca} cujo texto NÃO pôde ser extraído (páginas em"
+    " imagem/vetor). O texto acima NÃO os contém. LEIA os PDFs anexados página a página:"
+    " as CDAs, os processos citados e os processos administrativos (inclusive pares"
+    " 'Processo Administrativo nº X (AIIM nº Y)') podem estar SOMENTE neles. Texto e PDFs"
+    " são complementares, não redundantes."
+)
+
+
+def _steer_block(pdfs_anexados: bool, da_peca: str) -> str:
+    """O bloco de steering, ou string VAZIA. Vazio ⇒ prompt byte-idêntico ao sem-anexo."""
+    if not pdfs_anexados:
+        return ""
+    return "\n\n" + _STEER_PDF_ANEXADOS.format(da_peca=da_peca)
+
 
 def _build_peticao_prompt_v4(
     processo: ProcessoContext,
     mov: MovInput,
     documentos_anexados: list[DocAnexado],
+    pdfs_anexados: bool = False,
 ) -> str:
     """Prompt do ramo PETIÇÃO INICIAL (peticao_extract.v1) — FASE 4 conexos.
 
@@ -385,18 +416,25 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
   NÃO converta números incompletos pra 20 dígitos: se o número no documento não está
   no formato CNJ completo (RE/AREsp/ADI/registros curtos), NÃO o estique — ignore.
 - processos_administrativos_citados[]: números de PROCESSO ADMINISTRATIVO citados na petição,
-  ESCRITOS no documento, com o número LITERAL. `tipo`:
-  · 'paf' — processo administrativo fiscal FEDERAL (NUP/RFB, NNNNN.NNNNNN/AAAA-DD). É o
-    DEFAULT: do número NÃO dá pra afirmar CARF, e na dúvida sobre o órgão use 'paf'.
+  ESCRITOS no documento, com o número LITERAL.
+  ⚠️ PAR "Processo Administrativo nº X (AIIM nº Y)": emita os DOIS como itens SEPARADOS —
+  um com o número do PA, outro com o número do AIIM (tipo='tit_sp') — e em CADA um preencha
+  `par_numero` com o número LITERAL do outro. Nunca descarte o número do parêntese. Se o
+  número aparece sozinho, par_numero=null.
+  `tipo` — 'pa' é o DEFAULT; os outros três são AFIRMAÇÕES sobre a ESFERA e só valem com
+  sinal no texto:
+  · 'pa' — processo administrativo cuja esfera o documento NÃO deixa clara. É o DEFAULT:
+    na dúvida sobre o órgão, use 'pa'. ⛔ NÃO afirme federal só porque o número "parece" um
+    NUP: PA estadual também usa número comprido com barra e ano.
+  · 'paf' — fiscal FEDERAL, AFIRMADO por um dos dois sinais: (i) o texto nomeia órgão
+    federal (Receita Federal / RFB / CARF / DRJ / Delegacia da Receita / PGFN), ou (ii) o
+    número está na máscara NUP federal NNNNN.NNNNNN/AAAA-DD (5+6 dígitos antes da barra).
+    Do número NÃO dá pra afirmar CARF.
   · 'tit_sp' — o AIIM / auto de infração e imposição de multa ESTADUAL de SP (N.NNN.NNN-D).
   · 'pa_estadual' — processo administrativo de fisco ESTADUAL: o texto nomeia o órgão
     (Secretaria da Fazenda de um estado, SEFAZ, verificação fiscal estadual, defesa/recurso
     administrativo estadual). É o PROCESSO, não o auto — se o número que você está extraindo
     é o do AIIM, ele é 'tit_sp'.
-  ⚠️ PAR "Processo Administrativo nº X (AIIM nº Y)": emita os DOIS como itens SEPARADOS —
-  um com o número do PA, outro com o número do AIIM (tipo='tit_sp') — e em CADA um preencha
-  `par_numero` com o número LITERAL do outro. Nunca descarte o número do parêntese. Se o
-  número aparece sozinho, par_numero=null.
   NÃO são processo administrativo: CDA/inscrição em dívida ativa (=> cdas[]), processo
   JUDICIAL/CNJ (=> processos_citados[]), artigo de lei. Só o que ESTÁ escrito no documento.
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
@@ -409,7 +447,7 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
 {VOCAB_FAMILIA[fam]}
 
 === PETIÇÃO INICIAL (id {mov.mov_id}) ==={meta_line}
-{txt[:_PETICAO_TEXT_CAP_CHARS]}
+{txt[:_PETICAO_TEXT_CAP_CHARS]}{_steer_block(pdfs_anexados, "DA PETIÇÃO INICIAL")}
 
 Extraia no schema PeticaoExtractCardV4. Preencha SÓ o que o texto sustenta; o resto null."""
 
@@ -418,6 +456,7 @@ def _build_doc_incerto_prompt_v4(
     processo: ProcessoContext,
     mov: MovInput,
     documentos_anexados: list[DocAnexado],
+    pdfs_anexados: bool = False,
 ) -> str:
     """Prompt do ramo 1X (doc_incerto_extract.v1) — doc de tipo NÃO identificado.
 
@@ -501,10 +540,13 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
   NÃO converta números incompletos pra 20 dígitos — se não está no formato CNJ
   completo, ignore.
 - processos_administrativos_citados[]: PROCESSO ADMINISTRATIVO citado, ESCRITO no doc,
-  número LITERAL. `tipo`: 'paf'=fiscal FEDERAL (NUP/RFB, NNNNN.NNNNNN/AAAA-DD) — DEFAULT,
-  do número NÃO dá pra afirmar CARF; 'tit_sp'=AIIM/auto de infração de SP (N.NNN.NNN-D);
-  'pa_estadual'=processo administrativo de fisco ESTADUAL quando o texto NOMEIA o órgão
-  (Secretaria da Fazenda estadual/SEFAZ, verificação fiscal) — é o PROCESSO, não o auto.
+  número LITERAL. `tipo` — 'pa' é o DEFAULT e os outros são AFIRMAÇÕES de esfera:
+  'pa'=esfera que o documento NÃO deixa clara (na dúvida é este; ⛔ não afirme federal só
+  porque o número parece NUP); 'paf'=fiscal FEDERAL afirmado — o texto nomeia órgão federal
+  (Receita Federal/RFB, CARF, DRJ, PGFN) OU o número está na máscara NUP NNNNN.NNNNNN/AAAA-DD;
+  'tit_sp'=AIIM/auto de infração de SP (N.NNN.NNN-D); 'pa_estadual'=processo administrativo
+  de fisco ESTADUAL quando o texto NOMEIA o órgão (Secretaria da Fazenda estadual/SEFAZ,
+  verificação fiscal) — é o PROCESSO, não o auto.
   ⚠️ PAR "Processo Administrativo nº X (AIIM nº Y)": emita os DOIS como itens SEPARADOS,
   cada um com `par_numero` = o número LITERAL do outro. Nunca descarte o do parêntese.
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
@@ -522,7 +564,7 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
 {_REGRAS_CRUS}
 
 === DOCUMENTO DE TIPO NÃO IDENTIFICADO (id {mov.mov_id}) ==={meta_line}
-{_render_doc_body(doc, txt, _PETICAO_TEXT_CAP_CHARS)}
+{_render_doc_body(doc, txt, _PETICAO_TEXT_CAP_CHARS)}{_steer_block(pdfs_anexados, "DESTE DOCUMENTO")}
 
 Extraia no schema PeticaoExtractCardV4. Preencha SÓ o que o texto sustenta; o resto null."""
 
@@ -533,20 +575,27 @@ def build_mov_factsheet_prompt_v4(
     documentos_anexados: list[DocAnexado] | None = None,
     fallback_context: FallbackContext | None = None,
     classe: str | None = None,
+    pdfs_anexados: bool = False,
 ) -> str:
     """Prompt v4 (fatos neutros) pra extrair o FactSheet de UMA movimentação.
 
     Drop-in da assinatura de `build_mov_factsheet_prompt` (v3.1) — o agente troca a função
     sob flag. classe '1D' = ramo DOCUMENTO (doc avulso); classe 'peticao' = ramo PETIÇÃO
     INICIAL (peticao_extract.v1, opt-in do caller — prod nunca envia hoje).
+
+    `pdfs_anexados=True` acrescenta o STEERING dos anexos (v1.5) — só os ramos petição/
+    doc_incerto o usam, e só quando o gate de Vision de fato mandou PDF. Os demais ramos
+    ignoram: o caminho do mov manda 1 doc por entry, então o texto do prompt JÁ é o do
+    documento cujo PDF foi anexado — não existe a discrepância que o steering corrige.
     """
     documentos_anexados = documentos_anexados or []
 
     if classe == "peticao":
-        return _build_peticao_prompt_v4(processo, mov, documentos_anexados)
+        return _build_peticao_prompt_v4(processo, mov, documentos_anexados, pdfs_anexados)
 
     if classe == "doc_incerto":
-        return _build_doc_incerto_prompt_v4(processo, mov, documentos_anexados)
+        return _build_doc_incerto_prompt_v4(
+            processo, mov, documentos_anexados, pdfs_anexados)
 
     if classe == "1D":
         return _build_orfao_prompt_v4(processo, mov, documentos_anexados)
