@@ -66,6 +66,15 @@ def test_peca_de_verdade_continua_decidindo_sozinha_e_NAO_baixa_pdf():
 
 
 # ── 2. O par por documento + o veredito ──────────────────────────────────────
+class _RespostaVision:
+    """O que `call_vision_l1` devolve, na parte que o veredito lê: quantos PDFs o
+    Gemini REALMENTE recebeu. `n_enviados` sai daqui (fonte única) em vez de ser
+    recalculado por subtração no chamador."""
+
+    def __init__(self, pdfs_processed: int) -> None:
+        self.metadata = {"pdfs_processed": pdfs_processed}
+
+
 def _roda(pares, *, fetched):
     """call_l1_with_vision_fallback com GCS e LLM fakes. Devolve (gate, pdfs_enviados)."""
     enviados: list[bytes] = []
@@ -75,7 +84,10 @@ def _roda(pares, *, fetched):
 
     async def _fake_vision(provider, *, pdf_bytes_list, **kw):
         enviados.extend(pdf_bytes_list)
-        return "RESPOSTA_VISION"
+        # o dublê CARREGA `metadata.pdfs_processed` porque é dali que o veredito
+        # lê `n_enviados` — dublê que devolve string crua mente sobre o contrato
+        # de `call_vision_l1` e faria o gate reportar 0 leitura em todo teste.
+        return _RespostaVision(len(pdf_bytes_list))
 
     class _P:
         async def agenerate(self, **kw):

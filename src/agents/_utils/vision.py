@@ -113,8 +113,9 @@ def _pdf_is_unreadable(pdf_bytes: bytes) -> bool:
 async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
     """Baixa N PDFs do GCS em paralelo. Aplica sanity cap por PDF (100MB —
     defende contra bug de GCS read absurdo) e dropa PDFs ilegíveis/stub
-    (`_pdf_is_unreadable`). Resto vai pra `call_vision_l1` que decide inline
-    vs Files API.
+    (`_pdf_is_unreadable`). Resto vai pra `call_vision_l1`, que dropa e conta o
+    que não cabe nos caps inline (não há mais ramo Files API — ver o docstring
+    do módulo).
     """
     if not gcs_urls:
         return []
@@ -336,10 +337,11 @@ async def call_l1_with_vision_fallback(
     gate nem rodou" produzem exatamente o mesmo silêncio no banco. `n_enviados`
     conta o que o Gemini REALMENTE recebeu: se a Vision call falhar e cair no
     texto, ele volta a 0 (o card é cego, e é isso que a métrica tem que dizer).
-    `n_nao_enviados_cap` DISCRIMINA a causa do card cego: >0 significa "não
-    coube" (decidido aqui, sem chamada), 0 com `n_enviados=0` significa que o
-    Gemini recusou — hoje `n_enviados=0` sozinho mistura os dois, e o modo
-    dominante das falhas de Vision é o 400 do modelo, não o cap.
+    `n_nao_enviados_cap` ESTREITA a causa do card cego: 0 com `n_enviados=0`
+    significa que o Gemini recusou, porque nada foi cortado aqui. ⚠️ Mas >0 diz
+    só que ALGO não coube — combinado com `n_enviados=0` NÃO distingue "nada
+    coube" de "o resto que coube tomou 400". Pra separar os dois é preciso o
+    log, e o modo dominante das falhas de Vision é o 400 do modelo, não o cap.
 
     `prompt_vision` (opcional) é o prompt alternativo pro ramo VISION — o caller o
     monta sabendo que PODE haver anexo, e este helper decide se ele vale. Existe
@@ -426,9 +428,15 @@ async def call_l1_with_vision_fallback(
             if gate_out is not None:
                 # o cap pode ter dropado parte: `n_enviados` é o que subiu, não o
                 # que o gate aprovou — senão a sentinela lê leitura que não houve.
+                # ⛔ LIDO da resposta, nunca recalculado por subtração aqui: quem
+                # sabe quantos PDFs subiram é `_build_pdf_parts`, e ele já publica
+                # isso em `pdfs_processed`. Subtrair só coincide enquanto o cap for
+                # o ÚNICO motivo de drop — no dia do segundo motivo (encolher por
+                # páginas está no docstring do módulo como o passo seguinte) os
+                # dois números divergiriam DENTRO da mesma resposta.
                 gate_out["n_enviados"] = (
-                    len(pdf_bytes_list) - gate_out.get("n_nao_enviados_cap", 0)
-                )
+                    getattr(resposta, "metadata", None) or {}
+                ).get("pdfs_processed", 0)
             return resposta
         except Exception as exc:
             # Guard: Gemini 400 (ex: "document has no pages" em PDF corrompido) ou
