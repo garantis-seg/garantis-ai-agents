@@ -113,14 +113,31 @@ def test_tipo_do_admin_cobertura_total_nos_dois_sentidos():
 
 def test_o_no_do_admin_e_do_dominio_certo():
     """Gemeo do teste das 3 colunas da CDA: `tipo` vira coluna E chave do UNIQUE, e
-    esfera/uf sao afirmacoes sobre o mundo. UF fixa so onde o proprio enum a nomeia —
+    esfera/uf sao afirmacoes sobre o mundo. UF gravada so onde o proprio enum a nomeia —
     'PA estadual' e qualquer fisco estadual, cravar 'SP' inventaria UF pra um PA do RJ.
 
     ⚠️ `pa` (v1.5) e a UNICA entrada com esfera NULL, e isso e o CONTRATO, nao buraco:
     ele e o default do miner e significa 'o documento nao disse a esfera'. A lista
     abaixo e NOMEADA de proposito — tipo novo com esfera NULL tem que ser uma decisao,
     nao um esquecimento, senao volta a virar afirmacao por omissao (que e exatamente o
-    que o default `paf` fazia ate 2026-08-13)."""
+    que o default `paf` fazia ate 2026-08-13).
+
+    ⚠️ **A implicacao CAIU PRA UM LADO SO em 2026-08-14** (garantis-shared#362). Ate
+    aqui a assercao de UF era `(uf is not None) == tipo.endswith('_sp')` — BI-direcional,
+    e por isso ela afirmava DUAS coisas:
+      (a) tipo COM uf tem de NOMEAR a uf   -> continua valendo, e e a metade que pega o
+          mutante que este teste existe pra pegar (`pa_estadual` ganhar `fixed_uf='SP'`);
+      (b) tipo que nomeia `_sp` tem de TER uf -> **caiu**. `tit_sp` era o unico rotulo do
+          sistema que gravava UF, e a gravava a partir do NOME do enum, nao de evidencia:
+          `ProcessoAdminCitado` (abaixo) tem `numero`, `tipo`, `contexto`, `par_numero` e
+          NENHUM campo de UF. Medido em prod sobre as 266 refs de nos `tit_sp`: 139
+          (52,3%) estao fora do TJ-SP, 98 delas no tribunal ESTADUAL de OUTRO estado.
+
+    ⛔ A forma abaixo e ORDER-FREE de proposito, e isso e load-bearing: este repo roda o
+    teste contra o WHEEL PINADO (`requirements.txt`), entao ele precisa passar sob o pin
+    velho (`tit_sp` -> ('estadual','SP')) E sob o wheel novo (-> ('estadual', None)). A
+    forma estrita `assert uf is None` so pode entrar no MESMO PR que bumpa o pin — antes
+    disso ela deixaria o gate fail-closed do `cloudbuild-deploy` vermelho em master."""
     sem_esfera_por_design = {"pa"}
     assert sem_esfera_por_design <= set(ADMIN_TIPO_TO_NO), (
         "o generico sumiu do mapa: sem ele o sink volta a ter que ESCOLHER uma esfera "
@@ -134,8 +151,9 @@ def test_o_no_do_admin_e_do_dominio_certo():
             continue
         assert esfera in ("federal", "estadual", "municipal"), f"{tipo}: {esfera!r}"
         assert uf is None or (len(uf) == 2 and uf.isupper()), f"{tipo}: {uf!r}"
-        assert (uf is not None) == tipo.endswith("_sp"), (
-            f"{tipo}: uf={uf!r}. UF fixa so em tipo que NOMEIA a UF."
+        assert uf is None or tipo.endswith("_sp"), (
+            f"{tipo}: uf={uf!r}. UF gravada so em tipo que NOMEIA a UF — este e o lado "
+            "que FICA (o outro, 'quem nomeia tem de ter', caiu em 2026-08-14)."
         )
 
 
