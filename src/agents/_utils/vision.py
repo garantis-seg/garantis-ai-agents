@@ -2,23 +2,28 @@
 mov_factsheet (day_factsheet usava tambem, ate o teardown 2026-06-13).
 
 Acionado quando flag VISION_L1_ENABLED=true E o caller fornece pelo menos 1
-gcs_url no input. Roteamento inline vs Files API decidido per-call por
-tamanho de payload:
+gcs_url no input. Todo payload sobe INLINE (`types.Blob`), sob dois caps
+(15MB total / 5MB por PDF) que deixam margem pro envelope da request —
+o limite do Gemini é ~20MB por request inline.
 
-  - Total ≤15MB E maior PDF ≤5MB → inline (`types.Blob` direto, latência baixa)
-  - Senão → Files API (`client.aio.files.upload` + `Part.from_uri`,
-    suporta até 2GB per file, ~200-500ms overhead por upload)
-
-Sem essa lógica, PDFs grandes seriam dropados silenciosamente (Gemini inline
-blob limit ~20MB total por request). Files API absorve qualquer tamanho até
-o sanity cap (100MB per PDF).
+⚠️ Até 2026-08-14 o que não cabia nesses caps ia pela Files API
+(`client.aio.files.upload`). Esse ramo está MORTO em prod desde o flip pro
+Vertex (2026-07-18): o SDK levanta `ValueError('This method is only supported
+in the Gemini Developer client.')` quando `vertexai=True`, e a
+`GEMINI_API_KEY` foi removida em 07/26 — não há configuração deployável hoje
+em que ele funcione. O ValueError acontecia ANTES do `generate_content`, o
+`except` de `call_l1_with_vision_fallback` engolia, e o payload INTEIRO
+degradava pra text-only sem deixar rastro no card: 355 eventos em 30d.
+Agora o excedente é DROPADO e CONTADO (`n_nao_enviados_cap` + log
+`VISION_INLINE_CAP_DROP`). Quem quiser ler o que não cabe precisa de
+`Part.from_uri(gs://)` (bloqueado por IAM/região não resolvidos) ou de
+encolher o PDF por páginas (muda o que o modelo lê) — as duas coisas são
+decisão, não este helper.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import tempfile
 from typing import Any, Literal, Optional
 
 logger = logging.getLogger(__name__)
@@ -34,19 +39,16 @@ _GCS_FETCH_SEMAPHORE_LIMIT = 5
 # Cap de PDFs por chamada Gemini Vision — evita estouro de context window.
 _MAX_PDFS_PER_CALL = 20
 
-# Decisão inline vs Files API:
-#   inline → faster (~0 overhead), bom pra caso comum.
-#   Files API → suporta PDFs grandes, ~200-500ms overhead por upload.
-# Caps inline conservadores deixam margem pro buffer da request envelope.
+# Caps do payload inline — deixam margem pro buffer da request envelope.
+# ⚠️ Desde a remoção do ramo Files API eles são o ÚNICO teto: o que passa deles
+# não é lido, é contado. Afrouxá-los é a alavanca mais barata pra recuperar
+# leitura, mas mexe no que vai pro modelo e precisa de medição própria.
 _INLINE_TOTAL_BYTES_CAP = 15 * 1024 * 1024   # 15MB
 _INLINE_PER_PDF_BYTES_CAP = 5 * 1024 * 1024  # 5MB
 
 # Sanity guard absoluto. PDF >100MB sinaliza bug upstream (GCS read errado).
 # Dropa esse PDF específico mas NÃO bloqueia a Vision call dos restantes.
 _MAX_PDF_BYTES = 100 * 1024 * 1024
-
-# Concurrent uploads pra Files API (rate-limit defensivo).
-_FILES_API_UPLOAD_SEMAPHORE_LIMIT = 3
 
 _storage_client: Any = None
 
@@ -111,8 +113,9 @@ def _pdf_is_unreadable(pdf_bytes: bytes) -> bool:
 async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
     """Baixa N PDFs do GCS em paralelo. Aplica sanity cap por PDF (100MB —
     defende contra bug de GCS read absurdo) e dropa PDFs ilegíveis/stub
-    (`_pdf_is_unreadable`). Resto vai pra `call_vision_l1` que decide inline
-    vs Files API.
+    (`_pdf_is_unreadable`). Resto vai pra `call_vision_l1`, que dropa e conta o
+    que não cabe nos caps inline (não há mais ramo Files API — ver o docstring
+    do módulo).
     """
     if not gcs_urls:
         return []
@@ -154,57 +157,49 @@ async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
     return accepted
 
 
-async def _upload_pdf_to_gemini(client, types, pdf_bytes: bytes) -> Any:
-    """Upload PDF via Files API. SDK requer path-like — usa tempfile + cleanup."""
-    fd, path = tempfile.mkstemp(suffix=".pdf")
-    try:
-        os.write(fd, pdf_bytes)
-        os.close(fd)
-        return await client.aio.files.upload(
-            file=path,
-            config=types.UploadFileConfig(mime_type="application/pdf"),
-        )
-    finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+def _build_pdf_parts(
+    types, pdf_bytes_list: list[bytes], gate_out: Optional[dict] = None,
+) -> list[Any]:
+    """Constrói os parts inline. O que não cabe nos caps é DROPADO e CONTADO;
+    levanta ValueError só quando NADA cabe (aí não há chamada Vision a fazer).
 
-
-async def _build_pdf_parts(
-    client, types, pdf_bytes_list: list[bytes],
-) -> tuple[list[Any], str]:
-    """Constrói parts pra contents do Gemini. Retorna (parts, transport).
-
-    transport ∈ {'inline', 'files_api'} — usado pra logging/telemetria.
+    A seleção é greedy NA ORDEM RECEBIDA de propósito: no ramo de petição o
+    materializer põe a PETIÇÃO NA FRENTE, então ordem == prioridade e quem paga
+    o corte é o anexo periférico, não a peça.
     """
-    total_bytes = sum(len(b) for b in pdf_bytes_list)
-    largest = max(len(b) for b in pdf_bytes_list)
+    cabem: list[bytes] = []
+    total_bytes = 0
+    for b in pdf_bytes_list:
+        if (len(b) > _INLINE_PER_PDF_BYTES_CAP
+                or total_bytes + len(b) > _INLINE_TOTAL_BYTES_CAP):
+            continue
+        cabem.append(b)
+        total_bytes += len(b)
 
-    use_inline = (
-        total_bytes <= _INLINE_TOTAL_BYTES_CAP
-        and largest <= _INLINE_PER_PDF_BYTES_CAP
-    )
+    n_dropados = len(pdf_bytes_list) - len(cabem)
+    if gate_out is not None:
+        gate_out["n_nao_enviados_cap"] = n_dropados
+    if n_dropados:
+        # WARNING, não info: é conteúdo aprovado pelo gate (logo, inalcançável no
+        # texto) que o modelo NÃO vai ver. Sem esta linha o corte é indistinguível
+        # de "não havia nada pra ler".
+        logger.warning(
+            "VISION_INLINE_CAP_DROP n_dropados=%d de=%d maior=%dB enviados_bytes=%d "
+            "cap_por_pdf=%dB cap_total=%dB",
+            n_dropados, len(pdf_bytes_list), max(len(b) for b in pdf_bytes_list),
+            total_bytes, _INLINE_PER_PDF_BYTES_CAP, _INLINE_TOTAL_BYTES_CAP,
+        )
+    if not cabem:
+        raise ValueError(
+            f"VISION_INLINE_CAP_DROP: os {len(pdf_bytes_list)} PDFs excedem o cap "
+            f"inline (maior={max(len(b) for b in pdf_bytes_list)}B, "
+            f"cap_por_pdf={_INLINE_PER_PDF_BYTES_CAP}B)"
+        )
 
-    if use_inline:
-        parts = [
-            types.Part(inline_data=types.Blob(mime_type="application/pdf", data=b))
-            for b in pdf_bytes_list
-        ]
-        return parts, "inline"
-
-    upload_sem = asyncio.Semaphore(_FILES_API_UPLOAD_SEMAPHORE_LIMIT)
-
-    async def _upload_one(b: bytes) -> Any:
-        async with upload_sem:
-            return await _upload_pdf_to_gemini(client, types, b)
-
-    uploaded = await asyncio.gather(*[_upload_one(b) for b in pdf_bytes_list])
-    parts = [
-        types.Part.from_uri(file_uri=f.uri, mime_type="application/pdf")
-        for f in uploaded
+    return [
+        types.Part(inline_data=types.Blob(mime_type="application/pdf", data=b))
+        for b in cabem
     ]
-    return parts, "files_api"
 
 
 async def call_vision_l1(
@@ -217,12 +212,15 @@ async def call_vision_l1(
     temperature: float = 0.0,
     thinking_budget: int = 0,
     max_tokens: int | None = None,
+    gate_out: Optional[dict] = None,
 ) -> Any:
     """Chama Gemini Vision com PDFs + prompt text. Retorna LLMResponse.
 
-    Roteia inline vs Files API automaticamente por tamanho (ver
-    `_build_pdf_parts`). Caller é responsável por garantir `pdf_bytes_list`
-    não-vazio.
+    O payload é montado por `_build_pdf_parts`, que dropa e conta o que passa
+    dos caps inline. `gate_out` (dict mutável, opcional) recebe
+    `n_nao_enviados_cap` — inclusive quando NADA cabe e esta função levanta,
+    que é o caso em que o caller mais precisa do número. Caller é responsável
+    por garantir `pdf_bytes_list` não-vazio.
     """
     if not pdf_bytes_list:
         raise ValueError("call_vision_l1 requires at least 1 PDF")
@@ -230,7 +228,7 @@ async def call_vision_l1(
     client = provider._client
     types = provider._types
 
-    pdf_parts, transport = await _build_pdf_parts(client, types, pdf_bytes_list)
+    pdf_parts = _build_pdf_parts(types, pdf_bytes_list, gate_out)
     parts = pdf_parts + [types.Part.from_text(text=prompt)]
 
     config_kwargs: dict[str, Any] = {"temperature": temperature}
@@ -248,8 +246,9 @@ async def call_vision_l1(
     config = types.GenerateContentConfig(**config_kwargs)
 
     logger.info(
-        f"[VisionL1] Calling Gemini Vision via {transport}: {len(pdf_bytes_list)} PDFs, "
-        f"sum={sum(len(b) for b in pdf_bytes_list)} bytes, model={model}"
+        f"[VisionL1] Calling Gemini Vision inline: {len(pdf_parts)} de "
+        f"{len(pdf_bytes_list)} PDFs, sum_solicitado="
+        f"{sum(len(b) for b in pdf_bytes_list)} bytes, model={model}"
     )
 
     response = await client.aio.models.generate_content(
@@ -285,8 +284,8 @@ async def call_vision_l1(
         metadata={
             "cost_usd": round(cost, 6),
             "model_variant": MODEL_VARIANT_VISION,
-            "pdfs_processed": len(pdf_bytes_list),
-            "vision_transport": transport,
+            # o que o Gemini RECEBEU, não o que o caller pediu (o cap pode dropar).
+            "pdfs_processed": len(pdf_parts),
         },
     )
 
@@ -324,11 +323,13 @@ async def call_l1_with_vision_fallback(
     `log_label` é appended em warnings de fallback (ex: "mov_id=X").
 
     `gate_out` (dict mutável, opcional) recebe o VEREDITO do gate pro caller
-    persistir: {n_docs, n_inalcancaveis, n_enviados, motivo}. É a metade write-time
-    da sentinela — sem ela, "o gate não mandou nada" e "o gate nem rodou" produzem
-    exatamente o mesmo silêncio no banco. `n_enviados` conta o que o Gemini
-    REALMENTE recebeu: se a Vision call falhar e cair no texto, ele volta a 0 (o
-    card é cego, e é isso que a métrica tem que dizer).
+    persistir: {n_docs, n_inalcancaveis, n_enviados, n_nao_enviados_cap, motivo}.
+    É a metade write-time da sentinela — sem ela, "o gate não mandou nada" e "o
+    gate nem rodou" produzem exatamente o mesmo silêncio no banco. `n_enviados`
+    conta o que o Gemini REALMENTE recebeu: se a Vision call falhar e cair no
+    texto, ele volta a 0 (o card é cego, e é isso que a métrica tem que dizer).
+    `n_nao_enviados_cap` = quantos o cap dropou. ⚠️ >0 com `n_enviados=0` NÃO
+    distingue "nada coube" de "o que coube tomou 400" — pra isso, só o log.
 
     `prompt_vision` (opcional) é o prompt alternativo pro ramo VISION — o caller o
     monta sabendo que PODE haver anexo, e este helper decide se ele vale. Existe
@@ -343,7 +344,7 @@ async def call_l1_with_vision_fallback(
 
     if gate_out is not None:
         gate_out.update({"n_docs": 0, "n_inalcancaveis": 0, "n_enviados": 0,
-                         "motivo": None})
+                         "n_nao_enviados_cap": 0, "motivo": None})
     pdf_bytes_list: list[bytes] = []
     motivos: list[str] = []
     if gcs_urls and flag_enabled(vision_flag_name):
@@ -410,9 +411,18 @@ async def call_l1_with_vision_fallback(
                 temperature=0.0,
                 thinking_budget=thinking_budget,
                 max_tokens=max_tokens,
+                gate_out=gate_out,
             )
             if gate_out is not None:
-                gate_out["n_enviados"] = len(pdf_bytes_list)
+                # o cap pode ter dropado parte: `n_enviados` é o que subiu, não o
+                # que o gate aprovou — senão a sentinela lê leitura que não houve.
+                # ⛔ LIDO da resposta, nunca recalculado por subtração aqui: quem
+                # sabe quantos PDFs subiram é `_build_pdf_parts`, e ele já publica
+                # isso em `pdfs_processed`. Subtrair só coincide enquanto o cap for
+                # o ÚNICO motivo de drop — no dia do segundo motivo (encolher por
+                # páginas está no docstring do módulo como o passo seguinte) os
+                # dois números divergiriam DENTRO da mesma resposta.
+                gate_out["n_enviados"] = resposta.metadata["pdfs_processed"]
             return resposta
         except Exception as exc:
             # Guard: Gemini 400 (ex: "document has no pages" em PDF corrompido) ou
