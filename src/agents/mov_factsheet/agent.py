@@ -466,10 +466,18 @@ async def _classify_chunked(
     `documentos_anexados` não carrega `gcs_url` no ramo de petição, então perder o campo
     aqui deixa o gate com lista VAZIA — zero Vision, cascade SUCCESS, card gravado, custo
     normal. Medido: **1.050 de 7.230 pns (14,5%)** com petição acima do CHUNK_SIZE de
-    180k caem neste caminho, e há um cron dedicado a eles (`backfill-peticao-giants`)."""
-    return await map_reduce_classify(
-        variants=variants,
-        classify_one=lambda v: classify_mov_factsheet(
+    180k caem neste caminho, e há um cron dedicado a eles (`backfill-peticao-giants`).
+
+    🚨 E o VEREDITO tem que atravessar de volta: `map_reduce_classify` é genérico (não
+    conhece schema de agent nenhum) e o envelope dele não carrega `vision_gate`, então
+    o card chunkado chegava ao materializer SEM veredito — invisível à sentinela, com o
+    mesmo silêncio que ela existe pra quebrar. Capturado por CLOSURE, não de `ok[0]`: o
+    map-reduce filtra os resultados preservando ordem, então se o chunk 0 falhar o parse
+    `ok[0]` é OUTRO chunk — e só a variante 0 recebeu os PDFs."""
+    gate_v0: dict = {}
+
+    async def _classify_one(v) -> dict:
+        resultado = await classify_mov_factsheet(
             processo, mov, v, fb_typed, model, provider, classe,
             # SÓ na 1ª variante: basta UMA chamada ver o conteúdo inalcançável, e o
             # reduce funde os cards. Passar em todas multiplicaria o custo do Vision
@@ -477,7 +485,14 @@ async def _classify_chunked(
             # identidade de objeto — determinística mesmo com as variantes em paralelo.
             documentos_gate=(documentos_gate if v is variants[0] else None),
             _no_chunk=True,
-        ),
+        )
+        if v is variants[0] and isinstance(resultado.get("vision_gate"), dict):
+            gate_v0.update(resultado["vision_gate"])
+        return resultado
+
+    reduzido = await map_reduce_classify(
+        variants=variants,
+        classify_one=_classify_one,
         reduce_cards=_reduce_peca_and_rederive,
         label="chunked",
         on_all_fail={
@@ -485,6 +500,9 @@ async def _classify_chunked(
             "raw_response": "", "llm_raw_prompt": "", "prompt_version": None, "usage": {},
         },
     )
+    if gate_v0:
+        reduzido["vision_gate"] = gate_v0
+    return reduzido
 
 
 def _reduce_peca_and_rederive(cards: list[dict]) -> dict:

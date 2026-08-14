@@ -106,7 +106,8 @@ def test_manda_o_PDF_DO_DOC_CERTO_quando_o_conjunto_e_misto():
         pares, fetched={"gs://b/agravo.pdf": agravo, "gs://b/peticao.pdf": peticao})
     assert len(enviados) == 1
     assert enviados[0][:8] == peticao[:8], "subiu o PDF do documento errado"
-    assert gate == {"n_docs": 2, "n_inalcancaveis": 1, "n_enviados": 1, "motivo": "vetor"}
+    assert gate == {"n_docs": 2, "n_inalcancaveis": 1, "n_enviados": 1,
+                    "n_nao_enviados_cap": 0, "motivo": "vetor"}
 
 
 def test_veredito_registra_ZERO_ENVIADO_quando_a_call_vision_falha():
@@ -281,6 +282,58 @@ def test_o_CHUNKING_nao_pode_engolir_o_documentos_gate(monkeypatch):
     assert len(recebidos) > 1, "premissa: a peça gigante foi chunkada"
     assert recebidos[0] == ["gs://b/agravo.pdf", "gs://b/peticao.pdf"]
     assert all(r == [] for r in recebidos[1:]), "só a 1ª variante paga o Vision"
+
+
+def test_o_CHUNKING_devolve_o_VEREDITO_da_variante_0(monkeypatch):
+    """🚨 A VOLTA do mesmo buraco: o gate desce (teste acima) mas o veredito não
+    subia. `map_reduce_classify` é genérico — o envelope dele não tem `vision_gate` —
+    então TODO card chunkado chegava ao materializer sem veredito, invisível à
+    sentinela `l1_peticao_cards_cegos`, com exatamente o silêncio que ela existe pra
+    quebrar.
+
+    ⛔ MUTANTE: pegar o gate de qualquer variante (sem `v is variants[0]`) reprova
+    aqui — só a 1ª recebe os PDFs, e as outras carimbam o dict ZERADO por cima. E
+    o veredito tem que vir mesmo com o chunk 0 FALHANDO o parse: é justamente o
+    chunk que viu o PDF que tem mais chance de vir grande e degenerar."""
+    from src.agents.mov_factsheet import agent as A
+
+    gigante = [{"doc_key": "jb-1", "tipo": "1", "titulo": "PETICAO INICIAL",
+                "text_content": "corpo da inicial. " * 12_000,   # > CHUNK_SIZE
+                "gcs_url": None}]
+    _VEREDITO_V0 = {"n_docs": 2, "n_inalcancaveis": 1, "n_enviados": 0,
+                    "n_nao_enviados_cap": 1, "motivo": "vetor"}
+
+    async def _fake_fallback(provider, **kw):
+        viu_pdf = bool(kw["gcs_urls"])
+        if kw.get("gate_out") is not None:
+            # o helper SEMPRE inicializa o dict — inclusive nas variantes sem PDF,
+            # que é o que faz o mutante acima sobrescrever com zeros.
+            kw["gate_out"].update(_VEREDITO_V0 if viu_pdf else {
+                "n_docs": 0, "n_inalcancaveis": 0, "n_enviados": 0,
+                "n_nao_enviados_cap": 0, "motivo": None})
+
+        class _R:
+            # a variante que viu o PDF degenera o JSON: o card dela é descartado
+            # pelo reduce, e o veredito TEM que sobreviver a isso.
+            text = "NAO EH JSON" if viu_pdf else (
+                '{"tipo_doc":"peticao_inicial","resumo_ato":"x",'
+                '"relevancia_merito":"media"}'
+            )
+            input_tokens = output_tokens = 1
+            metadata = {"model_variant": "text"}
+        return _R()
+
+    monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
+    monkeypatch.setattr(A, "create_provider", lambda p: object())
+    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
+    out = asyncio.run(A.classify_mov_factsheet(
+        processo={"cnj": "10121509520268260224"},
+        mov={"mov_id": "peticao-x", "texto": ""},
+        documentos_anexados=gigante, documentos_gate=_GATE_POR_DOC, classe="peticao",
+    ))
+
+    assert out["card"].get("error") is None, "premissa: o reduce sobreviveu ao chunk ruim"
+    assert out["vision_gate"] == _VEREDITO_V0
 
 
 # ── 4. O STEERING dos anexos (v1.5) chega ao helper — e só onde deve ──────────
