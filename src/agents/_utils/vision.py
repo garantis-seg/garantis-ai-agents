@@ -213,6 +213,7 @@ async def call_vision_l1(
     thinking_budget: int = 0,
     max_tokens: int | None = None,
     gate_out: Optional[dict] = None,
+    seed: int | None = None,
 ) -> Any:
     """Chama Gemini Vision com PDFs + prompt text. Retorna LLMResponse.
 
@@ -221,6 +222,13 @@ async def call_vision_l1(
     `n_nao_enviados_cap` — inclusive quando NADA cabe e esta função levanta,
     que é o caso em que o caller mais precisa do número. Caller é responsável
     por garantir `pdf_bytes_list` não-vazio.
+
+    `seed` (opcional) fixa o seed do sampler. ⚠️ Esta função monta o
+    `GenerateContentConfig` À MÃO — ela NÃO passa por
+    `GeminiProvider._build_config_params`, então o seed (como a temperature e o
+    thinking_config acima) precisa ser fiado aqui explicitamente. `None` = no-op
+    (Gemini sorteia), que é o contrato do `_utils/llm_seed.py::seed_for` com a
+    flag OFF.
     """
     if not pdf_bytes_list:
         raise ValueError("call_vision_l1 requires at least 1 PDF")
@@ -242,6 +250,8 @@ async def call_vision_l1(
             config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
         except Exception:
             pass
+    if seed is not None:
+        config_kwargs["seed"] = seed
 
     config = types.GenerateContentConfig(**config_kwargs)
 
@@ -304,6 +314,7 @@ async def call_l1_with_vision_fallback(
     max_tokens: int | None = None,
     gate_out: Optional[dict] = None,
     prompt_vision: Optional[str] = None,
+    seed: int | None = None,
 ) -> Any:
     """High-level helper pros agents L1 (mov/day).
 
@@ -339,6 +350,10 @@ async def call_l1_with_vision_fallback(
     conhecimento do agent. Ausente ⇒ `prompt` nos dois ramos, como sempre.
     ⚠️ O fallback text-only usa SEMPRE `prompt`: se a Vision call falhar, não há
     anexo nenhum na chamada e o steering viraria instrução sobre PDF inexistente.
+
+    `seed` (opcional) vai pros DOIS ramos — o caller escolhe UM seed por leitura, e
+    qual ramo roda depende do gate, que ele não controla. Fiar só um ramo deixaria o
+    determinismo dependendo de uma decisão de rota. `None` = no-op (Gemini sorteia).
     """
     from .feature_flags import flag_enabled
 
@@ -412,6 +427,7 @@ async def call_l1_with_vision_fallback(
                 thinking_budget=thinking_budget,
                 max_tokens=max_tokens,
                 gate_out=gate_out,
+                seed=seed,
             )
             if gate_out is not None:
                 # o cap pode ter dropado parte: `n_enviados` é o que subiu, não o
@@ -443,4 +459,5 @@ async def call_l1_with_vision_fallback(
         response_schema=response_schema,
         thinking_budget=thinking_budget,
         max_tokens=max_tokens,
+        seed=seed,
     )
