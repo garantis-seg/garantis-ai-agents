@@ -159,19 +159,13 @@ async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
 
 def _build_pdf_parts(
     types, pdf_bytes_list: list[bytes], gate_out: Optional[dict] = None,
-) -> tuple[list[Any], str]:
-    """Constrói os parts inline pra contents do Gemini. Retorna (parts, transport).
-
-    O que não cabe nos caps é DROPADO e CONTADO — nunca sobe pela Files API (ramo
-    morto no Vertex; ver o docstring do módulo). Levanta ValueError só quando
-    NADA cabe, porque aí não há chamada Vision a fazer — mas com a razão e o
-    tamanho na mensagem, não com o ValueError opaco do SDK.
+) -> list[Any]:
+    """Constrói os parts inline. O que não cabe nos caps é DROPADO e CONTADO;
+    levanta ValueError só quando NADA cabe (aí não há chamada Vision a fazer).
 
     A seleção é greedy NA ORDEM RECEBIDA de propósito: no ramo de petição o
     materializer põe a PETIÇÃO NA FRENTE, então ordem == prioridade e quem paga
     o corte é o anexo periférico, não a peça.
-
-    transport ∈ {'inline', 'inline_capped'} — usado pra logging/telemetria.
     """
     cabem: list[bytes] = []
     total_bytes = 0
@@ -202,11 +196,10 @@ def _build_pdf_parts(
             f"cap_por_pdf={_INLINE_PER_PDF_BYTES_CAP}B)"
         )
 
-    parts = [
+    return [
         types.Part(inline_data=types.Blob(mime_type="application/pdf", data=b))
         for b in cabem
     ]
-    return parts, ("inline_capped" if n_dropados else "inline")
 
 
 async def call_vision_l1(
@@ -235,7 +228,7 @@ async def call_vision_l1(
     client = provider._client
     types = provider._types
 
-    pdf_parts, transport = _build_pdf_parts(types, pdf_bytes_list, gate_out)
+    pdf_parts = _build_pdf_parts(types, pdf_bytes_list, gate_out)
     parts = pdf_parts + [types.Part.from_text(text=prompt)]
 
     config_kwargs: dict[str, Any] = {"temperature": temperature}
@@ -253,7 +246,7 @@ async def call_vision_l1(
     config = types.GenerateContentConfig(**config_kwargs)
 
     logger.info(
-        f"[VisionL1] Calling Gemini Vision via {transport}: {len(pdf_parts)} de "
+        f"[VisionL1] Calling Gemini Vision inline: {len(pdf_parts)} de "
         f"{len(pdf_bytes_list)} PDFs, sum_solicitado="
         f"{sum(len(b) for b in pdf_bytes_list)} bytes, model={model}"
     )
@@ -291,10 +284,8 @@ async def call_vision_l1(
         metadata={
             "cost_usd": round(cost, 6),
             "model_variant": MODEL_VARIANT_VISION,
-            # o que o Gemini RECEBEU, não o que o caller pediu (o cap pode ter
-            # dropado): telemetria que conta o pedido faz o card parecer lido.
+            # o que o Gemini RECEBEU, não o que o caller pediu (o cap pode dropar).
             "pdfs_processed": len(pdf_parts),
-            "vision_transport": transport,
         },
     )
 
@@ -337,11 +328,8 @@ async def call_l1_with_vision_fallback(
     gate nem rodou" produzem exatamente o mesmo silêncio no banco. `n_enviados`
     conta o que o Gemini REALMENTE recebeu: se a Vision call falhar e cair no
     texto, ele volta a 0 (o card é cego, e é isso que a métrica tem que dizer).
-    `n_nao_enviados_cap` ESTREITA a causa do card cego: 0 com `n_enviados=0`
-    significa que o Gemini recusou, porque nada foi cortado aqui. ⚠️ Mas >0 diz
-    só que ALGO não coube — combinado com `n_enviados=0` NÃO distingue "nada
-    coube" de "o resto que coube tomou 400". Pra separar os dois é preciso o
-    log, e o modo dominante das falhas de Vision é o 400 do modelo, não o cap.
+    `n_nao_enviados_cap` = quantos o cap dropou. ⚠️ >0 com `n_enviados=0` NÃO
+    distingue "nada coube" de "o que coube tomou 400" — pra isso, só o log.
 
     `prompt_vision` (opcional) é o prompt alternativo pro ramo VISION — o caller o
     monta sabendo que PODE haver anexo, e este helper decide se ele vale. Existe
@@ -434,9 +422,7 @@ async def call_l1_with_vision_fallback(
                 # o ÚNICO motivo de drop — no dia do segundo motivo (encolher por
                 # páginas está no docstring do módulo como o passo seguinte) os
                 # dois números divergiriam DENTRO da mesma resposta.
-                gate_out["n_enviados"] = (
-                    getattr(resposta, "metadata", None) or {}
-                ).get("pdfs_processed", 0)
+                gate_out["n_enviados"] = resposta.metadata["pdfs_processed"]
             return resposta
         except Exception as exc:
             # Guard: Gemini 400 (ex: "document has no pages" em PDF corrompido) ou

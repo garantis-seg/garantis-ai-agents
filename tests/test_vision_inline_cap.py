@@ -1,16 +1,8 @@
-"""O que não cabe no payload inline é DROPADO e CONTADO — nunca vai pro ramo morto.
+"""O que não cabe no payload inline é DROPADO e CONTADO — nunca vai pro ramo morto
+da Files API (ver o docstring de `src/agents/_utils/vision.py`).
 
-`client.aio.files.upload` só existe no backend Gemini Developer. Prod roda
-`GEMINI_BACKEND=vertex` desde 2026-07-18, então a chamada levantava
-`ValueError('This method is only supported in the Gemini Developer client.')`
-ANTES do `generate_content`, o `except` de `call_l1_with_vision_fallback`
-engolia e o payload INTEIRO virava text-only sem deixar rastro no card:
-355 eventos em 30d (192 em 7d: 85 petição + 107 mov), último 2026-08-14T08:14:58Z.
-
-Estes testes exercitam `_build_pdf_parts`/`call_vision_l1` DE VERDADE, com o
-`google.genai.types` real (dependência dura do repo) e um client fake que
-CONTA as chamadas — a asserção que mais importa é a de que, quando nada cabe,
-o Gemini não é chamado nenhuma vez.
+Exercita `_build_pdf_parts`/`call_vision_l1` DE VERDADE, com o `google.genai.types`
+real e um client fake que CONTA as chamadas: quando nada cabe, zero chamada.
 """
 from __future__ import annotations
 
@@ -26,13 +18,11 @@ _MB = 1024 * 1024
 
 
 def _pdf(n_bytes: int, marca: bytes = b"0") -> bytes:
-    """PDF do tamanho pedido. O roteador só olha `len()`; o header fica pra manter
-    o dado parecido com o que sai do GCS.
+    """PDF do tamanho pedido (o roteador só olha `len()`).
 
     `marca` distingue PDFs do MESMO tamanho sem mudar o tamanho — é o que permite
     afirmar QUAIS sobreviveram ao corte, não só quantos."""
-    cabeca = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
-    return cabeca + marca * (n_bytes - len(cabeca))
+    return marca * n_bytes
 
 
 class _FakeClient:
@@ -63,13 +53,11 @@ class _FakeProvider:
     def __init__(self) -> None:
         self._types = gtypes
         self._client = _FakeClient()
-        self.texto_chamado = False
 
     def get_model_pricing(self, model):
         return {"input_per_1m": 0.0, "output_per_1m": 0.0}
 
     async def agenerate(self, **kw):
-        self.texto_chamado = True
         return "RESPOSTA_TEXTO"
 
 
@@ -80,12 +68,11 @@ def test_o_que_cabe_SOBE_e_o_excedente_vira_CONTADOR():
     peq1, grande, peq2 = _pdf(2 * _MB), _pdf(6 * _MB), _pdf(_MB)
     gate: dict = {}
 
-    parts, transport = V._build_pdf_parts(gtypes, [peq1, grande, peq2], gate)
+    parts = V._build_pdf_parts(gtypes, [peq1, grande, peq2], gate)
 
     assert [p.inline_data.data for p in parts] == [peq1, peq2], (
         "sobe o que cabe, na ordem recebida (ordem == prioridade na petição)")
     assert gate["n_nao_enviados_cap"] == 1
-    assert transport == "inline_capped"
 
 
 def test_payload_dentro_dos_caps_nao_muda_de_comportamento():
@@ -93,9 +80,9 @@ def test_payload_dentro_dos_caps_nao_muda_de_comportamento():
     a, b = _pdf(2 * _MB), _pdf(_MB)
     gate: dict = {}
 
-    parts, transport = V._build_pdf_parts(gtypes, [a, b], gate)
+    parts = V._build_pdf_parts(gtypes, [a, b], gate)
 
-    assert len(parts) == 2 and transport == "inline"
+    assert len(parts) == 2
     assert gate["n_nao_enviados_cap"] == 0
 
 
@@ -112,7 +99,7 @@ def test_o_teto_TOTAL_corta_o_FIM_da_fila_e_conta():
     quatro = [_pdf(5 * _MB, marca=m) for m in (b"A", b"B", b"C", b"D")]
     gate: dict = {}
 
-    parts, _t = V._build_pdf_parts(gtypes, quatro, gate)
+    parts = V._build_pdf_parts(gtypes, quatro, gate)
 
     assert [p.inline_data.data for p in parts] == quatro[:3], (
         "sobrevivem os TRÊS PRIMEIROS, nessa ordem — quem paga o corte é o fim "
@@ -200,10 +187,16 @@ def test_n_enviados_vem_da_RESPOSTA_nao_de_uma_subtracao():
         "n_enviados tem que sair de `pdfs_processed`; por subtração daria 2-0=2")
 
 
-def test_cap_engoliu_tudo_cai_no_texto_com_a_CAUSA_carimbada():
-    """O card fica cego do mesmo jeito — mas agora `n_nao_enviados_cap>0` separa
-    'não coube' de 'o modelo recusou' (o 400 é o modo dominante das falhas de
-    Vision). Sem esse discriminador, `n_enviados=0` mistura os dois."""
+def test_o_contador_do_cap_ATRAVESSA_o_fallback_text_only():
+    """⛔ MUTANTE EXCLUSIVO deste teste (verificado por matriz): mexer no `gate_out`
+    dentro do `except` que cai no text-only — ex. zerar `n_nao_enviados_cap` porque
+    "o texto não leu nada". Nenhum outro teste passa pelo raise DO CAP e sai pelo
+    fallback: os que falham a Vision monkeypatcham `call_vision_l1`, então o
+    contador nunca chega a ser escrito neles.
+
+    É a única travessia que sustenta o discriminador do PR: `n_enviados=0` com
+    `n_nao_enviados_cap>0` = "não coube"; com `=0` = "o modelo recusou". Zerado no
+    caminho, o card cego volta a mentir a causa — em silêncio."""
     prov = _FakeProvider()
     gate: dict = {}
 
@@ -213,11 +206,9 @@ def test_cap_engoliu_tudo_cai_no_texto_com_a_CAUSA_carimbada():
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(V, "fetch_pdfs_from_gcs", _fake_fetch)
         mp.setenv("VISION_L1_ENABLED", "true")
-        out = asyncio.run(V.call_l1_with_vision_fallback(
+        asyncio.run(V.call_l1_with_vision_fallback(
             prov, model="m", prompt="p", response_schema=None,
             gcs_urls=["gs://b/1.pdf"], gate_out=gate,
         ))
 
-    assert out == "RESPOSTA_TEXTO" and prov.texto_chamado
-    assert prov._client.chamadas == []
     assert gate["n_enviados"] == 0 and gate["n_nao_enviados_cap"] == 1

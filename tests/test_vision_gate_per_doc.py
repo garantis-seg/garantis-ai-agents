@@ -13,6 +13,7 @@ Dois furos fechados aqui, os dois medidos no MS 1012150-95.2026.8.26.0224:
 from __future__ import annotations
 
 import asyncio
+import types
 
 import pytest
 
@@ -66,15 +67,6 @@ def test_peca_de_verdade_continua_decidindo_sozinha_e_NAO_baixa_pdf():
 
 
 # ── 2. O par por documento + o veredito ──────────────────────────────────────
-class _RespostaVision:
-    """O que `call_vision_l1` devolve, na parte que o veredito lê: quantos PDFs o
-    Gemini REALMENTE recebeu. `n_enviados` sai daqui (fonte única) em vez de ser
-    recalculado por subtração no chamador."""
-
-    def __init__(self, pdfs_processed: int) -> None:
-        self.metadata = {"pdfs_processed": pdfs_processed}
-
-
 def _roda(pares, *, fetched):
     """call_l1_with_vision_fallback com GCS e LLM fakes. Devolve (gate, pdfs_enviados)."""
     enviados: list[bytes] = []
@@ -84,10 +76,8 @@ def _roda(pares, *, fetched):
 
     async def _fake_vision(provider, *, pdf_bytes_list, **kw):
         enviados.extend(pdf_bytes_list)
-        # o dublê CARREGA `metadata.pdfs_processed` porque é dali que o veredito
-        # lê `n_enviados` — dublê que devolve string crua mente sobre o contrato
-        # de `call_vision_l1` e faria o gate reportar 0 leitura em todo teste.
-        return _RespostaVision(len(pdf_bytes_list))
+        # carrega `metadata.pdfs_processed`: é dali que o veredito lê `n_enviados`.
+        return types.SimpleNamespace(metadata={"pdfs_processed": len(pdf_bytes_list)})
 
     class _P:
         async def agenerate(self, **kw):
@@ -297,13 +287,7 @@ def test_o_CHUNKING_nao_pode_engolir_o_documentos_gate(monkeypatch):
 
 
 def test_o_CHUNKING_devolve_o_VEREDITO_da_variante_0(monkeypatch):
-    """🚨 A VOLTA do mesmo buraco: o gate desce (teste acima) mas o veredito não
-    subia. `map_reduce_classify` é genérico — o envelope dele não tem `vision_gate` —
-    então TODO card chunkado chegava ao materializer sem veredito, invisível à
-    sentinela `l1_peticao_cards_cegos`, com exatamente o silêncio que ela existe pra
-    quebrar.
-
-    ⛔ MUTANTE: pegar o gate de qualquer variante (sem `v is variants[0]`) reprova
+    """⛔ MUTANTE: pegar o gate de qualquer variante (sem `v is variants[0]`) reprova
     aqui — só a 1ª recebe os PDFs, e as outras carimbam o dict ZERADO por cima. E
     o veredito tem que vir mesmo com o chunk 0 FALHANDO o parse: é justamente o
     chunk que viu o PDF que tem mais chance de vir grande e degenerar."""
