@@ -207,14 +207,23 @@ def test_o_MESMO_input_produz_o_MESMO_seed(monkeypatch):
 def test_inputs_DIFERENTES_produzem_seeds_DIFERENTES(monkeypatch):
     """⛔ MUTANTE que só este pega: `seed = 0` (ou qualquer constante). O teste de
     estabilidade acima passaria feliz — constante é o mais estável que existe —
-    e todo documento do acervo passaria a ser amostrado com o mesmo seed."""
+    e todo documento do acervo passaria a ser amostrado com o mesmo seed.
+
+    ⚠️ O que este teste NÃO pega: dropar o `mov_id` das parts do seed. O
+    `prompts_v4` embute o literal do mov_id DENTRO do prompt, então trocar o
+    mov_id troca o prompt e o segundo assert se satisfaz sozinho — verificado
+    executando o mutante: este teste fica VERDE. Quem pega aquele mutante é o
+    `test_o_seed_e_o_do_llm_seed_e_cabe_no_int32_do_gemini` (fonte única).
+    Por isso os asserts abaixo afirmam só o que OBSERVAM ("mudar X mudou o
+    seed"), nunca "X entra no seed" — que é conclusão sobre as parts, e essas
+    duas coisas divergem exatamente no caso do mov_id."""
     s_doc = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id=_MOV, flag="true")
     s_doc_outro = _seed_visto(monkeypatch, texto_doc=_DOC_B, mov_id=_MOV, flag="true")
     s_mov_outro = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id="peticao-outro",
                               flag="true")
 
-    assert s_doc != s_doc_outro, "o CONTEÚDO lido não entra no seed"
-    assert s_doc != s_mov_outro, "o mov_id não entra no seed"
+    assert s_doc != s_doc_outro, "mudar o CONTEUDO lido nao mudou o seed"
+    assert s_doc != s_mov_outro, "mudar o mov_id nao mudou o seed"
 
 
 def test_flag_OFF_nao_manda_seed(monkeypatch):
@@ -228,7 +237,14 @@ def test_o_seed_e_o_do_llm_seed_e_cabe_no_int32_do_gemini(monkeypatch):
     """Amarra o valor à fonte única (`_utils/llm_seed.py`) em vez de re-derivá-lo
     aqui — teste que reimplementa a regra testa a própria cópia. E confere a faixa:
     o Gemini rejeita seed fora de int32 positivo, e `deterministic_seed` mascara
-    justamente por isso."""
+    justamente por isso.
+
+    ⛔ NÃO É REDUNDANTE com o teste de inputs-diferentes — este é o ÚNICO guard do
+    mutante "dropar o `mov_id` das parts". Verificado executando o mutante: o de
+    inputs-diferentes fica VERDE (o mov_id já vive dentro do prompt, então trocá-lo
+    troca o prompt e o assert de lá se satisfaz sozinho); só este reprova, porque
+    compara contra a chave EXATA. Enxugar este teste por parecer redundante remove
+    a cobertura daquele mutante inteira."""
     from src.agents.mov_factsheet import agent as A
 
     visto: dict = {}

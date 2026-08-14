@@ -340,13 +340,20 @@ async def classify_mov_factsheet(
     # `leads.admin_items` (UNIQUE (tipo, numero_normalizado), write-once), essa
     # divergência não vira UPDATE: FORKA a entidade em dois nós permanentes.
     #
-    # As `parts` do seed: `mov.mov_id` + o `prompt` inteiro. O prompt basta pra
-    # identidade do input; o mov_id entra por simetria com o padrão de L2/L3 e é
-    # PROVADAMENTE grátis aqui — medido no cohort inteiro de discordâncias, os
-    # 52 de 52 pares (pn, número) discordantes vêm do MESMO mov_id E do MESMO doc_id
-    # (0 com card nulo, 0 cross-mov, 0 cross-doc), então nenhum caso vivo é perdido
-    # por incluí-lo. ⚠️ Se um dia o mesmo documento passar a ser lido sob mov_ids
-    # diferentes, esta parte vira o que SEPARA os seeds — re-meça antes.
+    # As `parts` do seed: `mov.mov_id` + o `prompt` inteiro. O `mov_id` é
+    # REDUNDANTE POR CONSTRUÇÃO, não só "provadamente grátis": o
+    # `build_mov_factsheet_prompt_v4` já embute o literal do mov_id DENTRO do
+    # prompt (verificado executando os dois — trocar o mov_id muda o prompt), então
+    # o prompt sozinho já discrimina E já estabiliza. Ele fica por simetria com o
+    # padrão de L2/L3. O cohort confirma que incluí-lo não perde caso vivo: os
+    # 52 de 52 pares (pn, número) discordantes vêm do MESMO mov_id E do MESMO
+    # doc_id (0 com card nulo, 0 cross-mov, 0 cross-doc).
+    # ⚠️ A redundância é CONDICIONAL ao prompt seguir embutindo o mov_id — e essa
+    # dependência mora em `prompts_v4.py`, não aqui. Se o prompt parar de embuti-lo,
+    # esta part deixa de ser decorativa e vira a ÚNICA coisa que separa leituras de
+    # mov_ids diferentes. (A versão anterior deste comentário dizia o inverso — que
+    # a part viraria o separador se o mesmo doc fosse lido sob mov_ids diferentes.
+    # Não vira: nesse cenário o prompt já difere, e o seed já difere sem ela.)
     #
     # ⛔ Isto NÃO conserta a raiz (o rótulo dentro da chave) nem toca o prompt: é
     # redução de TAXA enquanto o N3 não entra. E `seed` é best-effort no Gemini —
