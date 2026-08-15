@@ -99,12 +99,27 @@ steps:
       - '3'
       - '--max-instances'
       - '100'
+      # RISCO CONHECIDO (2026-08-14, NAO endereçado neste PR — decisão de custo
+      # é do dono): memória/CPU/concurrency continuam nos valores de hoje (2Gi /
+      # 1 CPU / concurrency default 80). Quando o `/doc-indexer/indexar` ligar de
+      # verdade (`FICHAS_DOC_INDEXER_ENABLED`), PyMuPDF abrindo PDF grande
+      # (centenas de páginas, OCR) com até 80 requests SIMULTÂNEAS na mesma
+      # instância pode estourar 2Gi => OOM kill (503 em TODAS as requests da
+      # instância, não só na pesada). Quem for ligar o indexador precisa decidir
+      # antes: subir memória, baixar `--concurrency`, ou os dois.
       - '--memory'
       - '2Gi'
       - '--cpu'
       - '1'
+      # 900s (2026-08-14): o timeout do Cloud Run é o TETO de todos os clientes,
+      # e estava ABAIXO deles — 300s aqui contra TIMEOUT_CALCULADOR_S=600 do
+      # `/calculo-ficha/montar-grafo` e TIMEOUT_INDEXADOR_S=900 do
+      # `/doc-indexer/indexar` (garantis_shared/.../c4_agentes.py). O efeito não
+      # era "demora": o Cloud Run cortava a request no meio (504) com o custo do
+      # LLM JÁ PAGO e sem resposta para o cliente. O teto passa a ser o maior
+      # timeout de cliente (900s = o do indexador, §8.3 do desenho).
       - '--timeout'
-      - '300'
+      - '900'
       - '--set-env-vars'
       # PR7.3 (2026-05-31): JURISPRUDENCIA_BLOCK_ENABLED + PARADIGMAS_BLOCK_ENABLED
       # dropados (zero callers Python pos-PR7.2 — blocos internos removidos).

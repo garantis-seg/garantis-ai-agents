@@ -7,8 +7,16 @@ desserializa do outro lado sem perda (contrato provado em teste, §9.3).
 
 Este endpoint **não é um agente**: é código determinístico com exatamente uma
 chamada de OCR, e só quando o gate por página acusa. O timeout de referência do
-desenho (§8.3) é 900s — um PDF de 300 páginas com OCR — e vive na configuração
-do Cloud Run, não aqui.
+desenho (§8.3) é 900s — um PDF de 300 páginas com OCR — e não vive aqui: o
+cliente o impõe (`TIMEOUT_INDEXADOR_S=900` em `garantis_shared.fichas.c4_agentes`)
+e o Cloud Run é o TETO, em `cloudbuild-deploy.yaml` (`--timeout`).
+
+Os dois têm de andar juntos, e até 2026-08-14 não andavam: o Cloud Run estava em
+300s contra 600s do calculador e 900s do indexador, ou seja, o servidor cortava a
+request antes de qualquer cliente desistir — 504 com o custo do LLM já pago. O
+`--timeout` do deploy subiu para 900s; quem mexer em um dos dois números tem de
+mexer no outro, e o do Cloud Run nunca pode ficar ABAIXO do maior timeout de
+cliente.
 
 Contrato de envelope como o resto do repo: `{success, …, model, cost_usd}`, e
 falha de leitura devolve `success=false` com **HTTP 200** — quem decide o que
