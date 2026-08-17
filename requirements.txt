@@ -99,7 +99,7 @@ pypdf>=4.0.0
 # `calculo_fichas/confianca.py` existe nela.
 # ⚠️ Bump ATOMICO, mesma razao dos anteriores: sem a wheel nova o
 # `tests/test_verificador_cego.py` nem coleta.
-garantis-shared==1.469.0
+garantis-shared==1.479.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
