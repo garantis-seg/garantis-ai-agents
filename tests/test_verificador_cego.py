@@ -11,6 +11,8 @@ O que cada bloco trava:
   2. Vocabulario fechado — 4 rotulos aceitos, qualquer outro REPROVA a resposta.
   3. `numeros_divergentes` em CODIGO — 723.910 x 723.810 e pego mesmo com o
      modelo dizendo `supported` (e o veredito e REBAIXADO).
+  3b. Mesma quantia, formas diferentes — `500000.0` (repr de float do shared) e
+     `R$ 500.000,00` sao o MESMO valor e nao podem virar divergencia.
   4. Envelope em campo — sem `objeto_da_confianca` => retry => erro tipado.
   5. DINCO — liga/desliga por env, N chamadas independentes, TODOS os votos
      gravados.
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -33,6 +36,7 @@ from src.agents.auditor_evidencias import auditar_evidencias, verificar_par
 from src.agents.auditor_evidencias.verificador import (
     _numeros_divergentes,
     _valor_da_afirmacao,
+    _valores_candidatos,
 )
 from src.agents.auditor_evidencias.verificador_prompts import (
     build_verificar_par_prompt,
@@ -320,6 +324,107 @@ def test_numeros_divergentes_reportados_mesmo_em_falha(monkeypatch):
     _mock_provider(monkeypatch, "nao e json")
     r = _rodar(verificar_par(_req(trecho=TRECHO_DIGITO_TROCADO)))
     assert not r.success and r.numeros_divergentes
+
+
+# ══ 3b. MESMA quantia, formas diferentes ════════════════════════════════════
+#
+# O bug que este bloco tranca: a canonizacao antiga tirava TODO nao-digito,
+# entao o `.0` do repr de float do shared (`f"vale {valor!r}"`) virava digito.
+# `500000.0` => "5000000" e `R$ 500.000,00` => "50000000" — nunca casavam, e
+# TODO valor monetario CORRETO era reprovado como `numero_diferente`. A
+# comparacao agora e por VALOR (Decimal), com a assinatura de digitos ainda na
+# frente para o ruido de OCR em letra.
+
+def test_float_do_shared_casa_com_moeda_brasileira():
+    """(a) `500000.0` x `R$ 500.000,00` — a mesma quantia, nao divergencia.
+
+    O caso EXATO que o motor produzia: o shared serializa o valor com `repr()`
+    e o documento traz a forma brasileira.
+    """
+    assert _numeros_divergentes(
+        "o valor da garantia e 500000.0",
+        "consta apolice no valor de R$ 500.000,00.",
+    ) == []
+
+
+def test_float_com_centavos_casa_com_moeda_brasileira():
+    """(b) `723810827.57` x `R$ 723.810.827,57` — milhar + decimal juntos."""
+    assert _numeros_divergentes(
+        "o IRPJ principal mantido e 723810827.57",
+        "manter o IRPJ principal no valor de R$ 723.810.827,57.",
+    ) == []
+
+
+def test_quantia_diferente_continua_divergencia():
+    """(c) `500000.0` x `R$ 600.000,00` — tolerar FORMA nao e tolerar VALOR.
+
+    Se a normalizacao passasse a casar isto, o fix teria trocado o falso
+    positivo por um falso NEGATIVO — e o falso negativo e o pior dos dois:
+    numero errado aprovado em silencio.
+    """
+    div = _numeros_divergentes(
+        "o valor da garantia e 500000.0",
+        "consta apolice no valor de R$ 600.000,00.",
+    )
+    assert len(div) == 1
+    assert div[0]["na_afirmacao"] == "500000.0"
+
+
+def test_percentual_casa_com_o_numero_cru():
+    """(d) `75` x `75%` — o `%` e unidade, nao digito."""
+    assert _numeros_divergentes(
+        "a multa de oficio aplicada foi de 75",
+        "com multa de oficio de 75%.",
+    ) == []
+
+
+def test_ocr_em_letra_no_meio_nao_piora_com_a_camada_de_valor():
+    """(e) `723.81O.827` (letra O) segue tolerado, e o veredito nao muda.
+
+    A camada de valor e ADITIVA: ela so pode REMOVER divergencia falsa, nunca
+    criar uma. Este e o teste do bloco 3 visto do outro lado — a garantia de
+    que o fix nao mexeu no gate G2.
+    """
+    assert _numeros_divergentes(AFIRMACAO, TRECHO_OCR_LETRA) == []
+    # e a mutacao de DIGITO continua pega, com o vizinho certo apontado
+    div = _numeros_divergentes(AFIRMACAO, TRECHO_DIGITO_TROCADO)
+    assert len(div) == 1 and div[0]["no_trecho"] == "723.910.827,57"
+
+
+def test_ocr_em_letra_tambem_casa_atraves_das_formas():
+    """OCR em letra E forma diferente ao mesmo tempo: `500000.0` x `R$ 5OO.OOO,OO`.
+
+    Canonizar o OCR ANTES de parsear o valor e o que faz os dois defeitos
+    somarem em vez de se cancelarem.
+    """
+    assert _numeros_divergentes(
+        "o valor da garantia e 500000.0",
+        "consta apolice no valor de R$ 5OO.OOO,OO.",
+    ) == []
+
+
+@pytest.mark.parametrize("literal,esperado", [
+    ("500000.0", "500000"),        # sufixo .0 do repr de float
+    ("500.000,00", "500000"),      # moeda brasileira
+    ("1.234.567,89", "1234567.89"),  # BR: milhar `.` + decimal `,`
+    ("1,234,567.89", "1234567.89"),  # US: milhar `,` + decimal `.`
+    ("1,5", "1.5"),                # separador unico, 1 casa => decimal
+    ("75", "75"),
+])
+def test_valores_candidatos_normaliza_as_formas(literal, esperado):
+    """A quantia certa esta SEMPRE entre os candidatos do literal."""
+    assert Decimal(esperado) in _valores_candidatos(literal)
+
+
+def test_separador_unico_ambiguo_rende_as_duas_leituras():
+    """`1.234` e mil-duzentos-e-trinta-e-quatro (BR) — 3 digitos e milhar.
+
+    Ja `1,5` nao pode ser milhar (grupo de milhar tem 3 digitos), entao so
+    rende a leitura decimal. Escolher UMA leitura para o caso ambiguo criaria
+    falso positivo na outra.
+    """
+    assert Decimal("1234") in _valores_candidatos("1.234")
+    assert _valores_candidatos("1,5") == {Decimal("1.5")}
 
 
 # ══ 4. Envelope em CAMPO ════════════════════════════════════════════════════

@@ -43,6 +43,7 @@ import asyncio
 import logging
 import os
 import re
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
 from garantis_shared.calculo_fichas.confianca import (
@@ -111,20 +112,24 @@ def _n_efetivo(pedido: Optional[int]) -> int:
 
 # ── numeros divergentes: CODIGO, nao modelo ─────────────────────────────────
 
+#: As confusoes de OCR que viram digito. Vive aqui (e nao so no fallback do
+#: import) porque a comparacao POR VALOR tambem precisa dela: `723.81O.827,57`
+#: so pode ser parseado como quantia depois que o `O` vira `0`.
+_OCR_PARA_DIGITO = str.maketrans({
+    "o": "0", "O": "0", "d": "0", "D": "0", "l": "1", "i": "1", "I": "1",
+    "L": "1", "|": "1", "z": "2", "Z": "2", "s": "5", "S": "5", "b": "8",
+    "B": "8", "g": "9", "G": "9", "q": "9", "Q": "9",
+})
+
 try:  # pragma: no cover - o fallback so roda se o shared mudar de superficie
     from garantis_shared.calculo_fichas.evidencias import _assinatura_numerica
 except ImportError:  # pragma: no cover
-    _OCR_DIGITO = str.maketrans({
-        "o": "0", "O": "0", "d": "0", "l": "1", "i": "1", "I": "1", "|": "1",
-        "z": "2", "Z": "2", "s": "5", "S": "5", "b": "8", "B": "8",
-        "g": "9", "q": "9",
-    })
     _TOKEN = re.compile(r"(?<![a-zà-ÿA-ZÀ-Ÿ])[\d.,OoIiLlSsBbZzGgQqDd|]*\d[\d.,OoIiLlSsBbZzGgQqDd|]*")
 
     def _assinatura_numerica(texto: str) -> tuple[str, ...]:
         out = []
         for tok in _TOKEN.findall(texto):
-            digitos = re.sub(r"[^0-9]", "", tok.translate(_OCR_DIGITO))
+            digitos = re.sub(r"[^0-9]", "", tok.translate(_OCR_PARA_DIGITO))
             if len(digitos) >= 2:
                 out.append(digitos)
         return tuple(out)
@@ -146,6 +151,98 @@ def _literais_por_assinatura(texto: str) -> dict[str, str]:
     return out
 
 
+# ── a mesma quantia escrita de duas formas ──────────────────────────────────
+#
+# A assinatura de DIGITOS sozinha nao basta para "e o mesmo valor?": ela apaga
+# a posicao do separador. O shared serializa o valor com `repr()` de float
+# (`f"vale {valor!r}"`), entao a afirmacao chega como `500000.0` e o documento
+# traz `R$ 500.000,00` — mesma quantia, assinaturas `5000000` x `50000000`, e
+# TODO valor monetario correto era reprovado como `numero_diferente`.
+#
+# Por isso a comparacao passa a ser por VALOR: cada token vira um conjunto de
+# Decimals candidatos, e dois numeros casam se compartilham algum candidato.
+# Candidatos no PLURAL porque `1.234` e genuinamente ambiguo (mil duzentos e
+# trinta e quatro em pt-BR, um virgula duzentos e trinta e quatro em en-US) e
+# escolher UMA leitura criaria falso positivo na outra. Divergencia real —
+# 500.000 x 600.000 — nao tem candidato em comum em leitura nenhuma.
+#
+# A camada de valor e ADITIVA: a assinatura de digitos continua sendo a
+# primeira prova (e a unica que tolera OCR em letra, `723.81O` == `723.810`).
+# So quando a assinatura NAO casa e que se pergunta se o valor casa.
+
+#: >= 3 digitos depois do separador nao e casa decimal: e grupo de milhar
+#: (`1.234.567`). Com 1 ou 2, e ambiguo e vira candidato.
+_MAX_CASAS_DECIMAIS = 2
+
+
+def _valores_candidatos(literal: str) -> set[Decimal]:
+    """As quantias que `literal` pode representar. Vazio = nao e quantia.
+
+    Um separador so, com 1-2 digitos a direita, e ambiguo (`1,5` decimal;
+    `1.234` milhar) e rende DOIS candidatos. Com 3 digitos a direita e milhar
+    puro. Com varios separadores, o ULTIMO manda: `1.234.567,89` (BR) e
+    `1,234,567.89` (US) sao a mesma quantia lida pela mesma regra.
+
+    Sufixo `.0` cai naturalmente: `500000.0` vira `Decimal("500000.0")`, que
+    `==` `Decimal("500000")` — Decimal compara por VALOR, nao por forma.
+    """
+    # Canoniza OCR em letra ANTES de olhar separadores: `723.81O.827,57` tem de
+    # produzir os mesmos candidatos de `723.810.827,57`.
+    txt = literal.translate(_OCR_PARA_DIGITO).strip(" .,")
+    if not txt or not re.fullmatch(r"[\d.,]+", txt):
+        return set()
+
+    seps = [c for c in txt if c in ".,"]
+    if not seps:
+        return {Decimal(txt)} if txt.isdigit() else set()
+
+    corpo, ultimo_sep = txt.rsplit(seps[-1], 1)
+    if not corpo or not ultimo_sep.isdigit() or not ultimo_sep:
+        return set()
+
+    outros = [c for c in corpo if c in ".,"]
+    inteiro_sem_sep = re.sub(r"[^0-9]", "", corpo)
+    if not inteiro_sem_sep.isdigit():
+        return set()
+
+    cands: set[Decimal] = set()
+
+    # Leitura A — o ultimo separador e DECIMAL. So faz sentido com <= 2 casas.
+    if len(ultimo_sep) <= _MAX_CASAS_DECIMAIS:
+        try:
+            cands.add(Decimal(f"{inteiro_sem_sep}.{ultimo_sep}"))
+        except InvalidOperation:  # pragma: no cover - regex ja garante digitos
+            pass
+
+    # Leitura B — o ultimo separador e MILHAR. Grupo de milhar tem 3 digitos
+    # exatos; exigir isso evita ler `1,5` como quinze mil.
+    if len(ultimo_sep) == 3:
+        try:
+            cands.add(Decimal(inteiro_sem_sep + ultimo_sep))
+        except InvalidOperation:  # pragma: no cover
+            pass
+
+    # Separadores MISTOS (`1.234,56`) desfazem a ambiguidade: se o texto usa os
+    # dois caracteres, o ultimo e decimal e os outros sao milhar — a leitura de
+    # milhar-puro nao se sustenta e sai.
+    if outros and len(set(seps)) > 1 and len(ultimo_sep) <= _MAX_CASAS_DECIMAIS:
+        cands.discard(Decimal(inteiro_sem_sep + ultimo_sep))
+
+    return cands
+
+
+def _valores_por_assinatura(texto: str) -> dict[str, set[Decimal]]:
+    """{assinatura -> quantias que o literal daquela assinatura pode valer}."""
+    out: dict[str, set[Decimal]] = {}
+    for tok in _NUM_LITERAL_RE.findall(texto):
+        vals = _valores_candidatos(tok)
+        if not vals:
+            continue
+        for assin in _assinatura_numerica(tok):
+            out.setdefault(assin, set()).update(vals)
+    return out
+
+
 def _numeros_divergentes(afirmacao: str, trecho: str) -> list[dict[str, str]]:
     """Os numeros da AFIRMACAO que o trecho nao confirma — em codigo.
 
@@ -154,9 +251,17 @@ def _numeros_divergentes(afirmacao: str, trecho: str) -> list[dict[str, str]]:
     da tabela — e isso NAO e divergencia. O que e divergencia e a afirmacao
     afirmar um numero que o trecho citado nao sustenta.
 
-    Ruido de OCR em LETRA ja morreu na canonizacao (`723.81O` casa com
-    `723.810`); o que sobra e digito diferente, que nunca se tolera. E o mesmo
-    gate G2 do shared, reusado aqui contra um alvo diferente.
+    DUAS provas de igualdade, nesta ordem, e basta UMA passar:
+
+    1. **Assinatura de digitos** — tolera ruido de OCR em LETRA (`723.81O` casa
+       com `723.810`), que e o gate G2 do shared reusado contra outro alvo.
+    2. **Valor numerico** (`_valores_candidatos`) — tolera FORMA: `500000.0`
+       (repr de float, como o shared serializa) e `R$ 500.000,00` sao a mesma
+       quantia, e a assinatura de digitos sozinha dizia que nao (`5000000` x
+       `50000000`), reprovando todo valor monetario correto do calculo.
+
+    O que NENHUMA das duas tolera e digito diferente: `500.000` x `600.000` nao
+    casa em assinatura nem em valor, e continua divergencia.
 
     Emparelhamento por PREFIXO/SUFIXO comum: `72391082757` na afirmacao e
     `72381082757` no trecho sao o mesmo valor mal lido, e o par so e util ao
@@ -172,10 +277,21 @@ def _numeros_divergentes(afirmacao: str, trecho: str) -> list[dict[str, str]]:
     lit_af = _literais_por_assinatura(afirmacao)
     lit_tr = _literais_por_assinatura(trecho)
 
+    val_af = _valores_por_assinatura(afirmacao)
+    # As quantias do TRECHO num conjunto so: a pergunta e "o trecho tem esta
+    # quantia em ALGUM lugar?", nao "em qual token".
+    vals_tr: set[Decimal] = set()
+    for vals in _valores_por_assinatura(trecho).values():
+        vals_tr.update(vals)
+
     out: list[dict[str, str]] = []
     vistos: set[str] = set()
     for a in assin_af:
         if a in assin_tr or a in vistos:
+            continue
+        # Assinatura nao casou: pode ser so a FORMA. Se alguma quantia que este
+        # numero pode valer aparece no trecho, nao ha divergencia.
+        if val_af.get(a, set()) & vals_tr:
             continue
         vistos.add(a)
         out.append({
