@@ -133,11 +133,15 @@ def test_o_no_do_admin_e_do_dominio_certo():
           NENHUM campo de UF. Medido em prod sobre as 266 refs de nos `tit_sp`: 139
           (52,3%) estao fora do TJ-SP, 98 delas no tribunal ESTADUAL de OUTRO estado.
 
-    ⛔ A forma abaixo e ORDER-FREE de proposito, e isso e load-bearing: este repo roda o
-    teste contra o WHEEL PINADO (`requirements.txt`), entao ele precisa passar sob o pin
-    velho (`tit_sp` -> ('estadual','SP')) E sob o wheel novo (-> ('estadual', None)). A
-    forma estrita `assert uf is None` so pode entrar no MESMO PR que bumpa o pin — antes
-    disso ela deixaria o gate fail-closed do `cloudbuild-deploy` vermelho em master."""
+    ⛔ A assercao abaixo nasceu ORDER-FREE (`uf is None or tipo.endswith('_sp')`) porque
+    este repo roda o teste contra o WHEEL PINADO (`requirements.txt`): enquanto o pin
+    estivesse no velho (`tit_sp` -> ('estadual','SP')), a forma estrita deixaria o gate
+    fail-closed do `cloudbuild-deploy` VERMELHO em master.
+    ✅ **O pin subiu pra 1.479.0 em 2026-08-17** (ai-agents#169, o bump que o bot abriu
+    depois do merge do garantis-shared#362), entao a forma estrita entrou. Ela e a que
+    importa: a order-free ACEITAVA `tit_sp` reganhar 'SP' — ou seja, deixava de pegar
+    exatamente a regressao que este pacote existe pra impedir. Ela so podia entrar DEPOIS
+    do bump, e o bump ja esta em master."""
     sem_esfera_por_design = {"pa"}
     assert sem_esfera_por_design <= set(ADMIN_TIPO_TO_NO), (
         "o generico sumiu do mapa: sem ele o sink volta a ter que ESCOLHER uma esfera "
@@ -150,10 +154,10 @@ def test_o_no_do_admin_e_do_dominio_certo():
             )
             continue
         assert esfera in ("federal", "estadual", "municipal"), f"{tipo}: {esfera!r}"
-        assert uf is None or (len(uf) == 2 and uf.isupper()), f"{tipo}: {uf!r}"
-        assert uf is None or tipo.endswith("_sp"), (
-            f"{tipo}: uf={uf!r}. UF gravada so em tipo que NOMEIA a UF — este e o lado "
-            "que FICA (o outro, 'quem nomeia tem de ter', caiu em 2026-08-14)."
+        assert uf is None, (
+            f"{tipo}: uf={uf!r}. NENHUM rotulo grava UF — o miner nao emite UF nenhuma "
+            "(`ProcessoAdminCitado` nao tem o campo), entao qualquer valor aqui vem do "
+            "NOME do enum e nao de evidencia. `tit_sp` foi o ultimo a cair (2026-08-14)."
         )
 
 
