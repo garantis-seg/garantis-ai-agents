@@ -189,13 +189,35 @@ def _reserializa(doc, pdf_bytes: bytes) -> bytes:
     3.245.132B num PDF de 6 páginas-imagem): o default `deflate=0` copia os streams
     já comprimidos como estão.
 
+    🚨 **O CASO DOMINANTE NÃO É PDF CORROMPIDO — É HTML SERVIDO COMO PDF, e é por
+    isso que `tobytes()` sozinho era NO-OP.** Medido em prod 2026-08-17 sobre os 85
+    cards cegos: **71 (83,5%) têm `file_format='html'`**, e nos 19 do cohort ATIVO
+    (os com `n_nao_enviados_cap`) são **19 de 19**. Os 4 que baixei abrem com
+    `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN">`.
+    ⛔ `pymupdf.open(stream=..., filetype="pdf")` **NÃO levanta** neles — `filetype`
+    é DICA, não imposição (a mesma armadilha do memory `autos-html-filetype-e-dica`,
+    2026-08-11). Ele abre como XHTML: `is_pdf=False`, `metadata['format']='XHTML'`.
+    Daí `paginas_imagem=0` e `motivos={}` — que é literalmente o `motivo: null`
+    gravado nos 19 cards em prod.
+    E `doc.tobytes()` sobre doc não-PDF levanta `AssertionError` NUA: o `except`
+    devolvia o MESMO OBJETO (medido `out is raw` → True, magic `b'<!DOCTYP'`), o
+    Gemini recebia XHTML rotulado `mime_type='application/pdf'` e respondia o mesmo
+    `400 The document has no pages`. Zero cards mudavam de estado.
+    ⇒ Por isso o ramo `convert_to_pdf()`: nos MESMOS 4 arquivos ele devolve
+    `%PDF-1.7` de verdade, 2 páginas, lido pelo pypdf sem levantar.
+    ⚠️ E a classe "PyMuPDF repara o que o parser estrito recusa" quase não existe no
+    acervo: **18 de 18 PDFs reais** da amostra passam no `pypdf(strict=False)` sem
+    erro. O valor deste helper está no ramo do HTML, não no do reparo.
+
     ⛔ Sem `garbage`/`deflate` de propósito. Encolher o blob mudaria QUANTO passa
     pelos caps inline do `vision.py` — é outra decisão, e pede medição própria.
 
     Falha ⇒ os bytes originais. O gate nunca quebra por causa disto.
     """
     try:
-        return doc.tobytes()
+        # `is_pdf` é o discriminador certo: o `filetype='pdf'` da abertura é dica, e
+        # um XHTML chega aqui como doc VÁLIDO e não-PDF.
+        return doc.tobytes() if doc.is_pdf else doc.convert_to_pdf()
     except Exception:
         return pdf_bytes
 

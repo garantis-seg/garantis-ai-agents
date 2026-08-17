@@ -218,3 +218,43 @@ if __name__ == "__main__":  # smoke sem pytest
     test_pagina_vetor_so_com_carimbo_e_inalcancavel()
     test_born_digital_sem_paths_nunca_vai_pro_vision()
     print("ok")
+
+
+def test_html_servido_como_pdf_sai_do_gate_como_PDF_DE_VERDADE():
+    """⛔ MUTANTE: trocar `doc.tobytes() if doc.is_pdf else doc.convert_to_pdf()` por
+    `doc.tobytes()` sozinho — que foi a 1a versao deste fix, e era NO-OP no cohort
+    inteiro que ela tinha por alvo.
+
+    Medido em prod 2026-08-17: dos 85 cards cegos, **71 (83,5%) tem
+    `file_format='html'`**, e nos 19 do cohort ATIVO sao **19 de 19**. Sao XHTML
+    servidos sob nome `.pdf`.
+
+    A cadeia do defeito, cada elo verificado por execucao:
+      1. `pymupdf.open(stream=..., filetype='pdf')` NAO levanta — `filetype` e DICA
+         (memory `autos-html-filetype-e-dica-nao-imposicao-2026-08-11`). Abre como
+         XHTML: `is_pdf=False`, `metadata['format']='XHTML'`.
+      2. logo `paginas_imagem=0` e `motivos={}` -> e o `motivo: null` dos 19 cards.
+      3. `doc.tobytes()` sobre nao-PDF levanta `AssertionError` NUA;
+      4. o `except` devolvia o MESMO objeto, o Gemini recebia XHTML rotulado
+         `application/pdf` e respondia o mesmo `400 The document has no pages`.
+
+    Este teste falha se alguem "simplificar" o ramo de volta."""
+    from src.agents._utils.ocr_gate import _reserializa
+
+    xhtml = (
+        b'<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" '
+        b'"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">'
+        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        + b"<p>EXCELENTISSIMO SENHOR DOUTOR JUIZ DE DIREITO</p>" * 40
+        + b"</body></html>"
+    )
+    doc = pymupdf.open(stream=xhtml, filetype="pdf")
+
+    # as premissas do caso real, antes da conclusao
+    assert not doc.is_pdf, "premissa: o filetype='pdf' e dica; isto abriu como XHTML"
+    assert doc.metadata.get("format") == "XHTML"
+
+    out = _reserializa(doc, xhtml)
+
+    assert out is not xhtml, "o gate devolveu o MESMO objeto: o fix virou no-op"
+    assert out[:5] == b"%PDF-", f"o Gemini recebe {out[:8]!r} rotulado application/pdf"
