@@ -13,6 +13,8 @@ mandaria pro Vision.
 """
 from __future__ import annotations
 
+import io
+
 import pytest
 
 pymupdf = pytest.importorskip("pymupdf")
@@ -151,6 +153,40 @@ def test_bytes_que_nao_sao_pdf_ficam_no_texto_sem_vazar_excecao(corpo):
 
 
 
+# ── O blob que sai é RECOMPOSTO, não o que entrou ────────────────────────────
+def test_pdf_que_parser_estrito_recusa_sai_RECOMPOSTO_do_gate():
+    """🚨 O 400 `The document has no pages`: o PyMuPDF repara na abertura, o Gemini
+    não. O gate já pagou o `open` pelo Sinal 1, então recompor sai de graça.
+
+    ⛔ MUTANTE: devolver `pdf_bytes` cru reprova aqui — e o modo de falha real é
+    MUDO (gate aprova, payload monta, o Gemini levanta, o `except` cai no texto e o
+    card fica gravado como saudável)."""
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError, PdfStreamError
+
+    inteiro = _pdf([{"paths": 900, "texto": CARIMBO}] * 3)
+    # sem xref NEM trailer — o que sobra de um PDF truncado no transporte
+    quebrado = inteiro[:inteiro.rfind(b"xref")]
+
+    with pytest.raises((PdfStreamError, PdfReadError)):
+        PdfReader(io.BytesIO(quebrado), strict=False)
+
+    manda, info = precisa_vision(CARIMBO * 6, quebrado)
+    assert manda is True, "premissa: o gate aprova (corpo em vetor)"
+    saindo = info["_pdf_bytes"]
+    assert saindo != quebrado, "o gate tem que entregar o blob RECOMPOSTO"
+    assert len(PdfReader(io.BytesIO(saindo), strict=False).pages) == 3
+
+
+def test_pdf_sadio_atravessa_o_gate_sem_perder_pagina():
+    """A outra metade: recompor não pode mexer no caso comum (99%+ do volume)."""
+    inteiro = _pdf([{"paths": 900, "texto": CARIMBO}] * 3)
+    from pypdf import PdfReader
+
+    _manda, info = precisa_vision(CARIMBO * 6, inteiro)
+    assert len(PdfReader(io.BytesIO(info["_pdf_bytes"]), strict=False).pages) == 3
+
+
 def test_a_GUARDA_PRIMARIA_area_texto_salva_pagina_com_imagem_de_fundo():
     """⛔ MUTANTE: remover o early-return `area_texto >= AREA_TEXTO_MAX` do
     `_pagina_motivo` sobrevivia a toda a suíte — as fixtures de tabela acima são
@@ -182,3 +218,43 @@ if __name__ == "__main__":  # smoke sem pytest
     test_pagina_vetor_so_com_carimbo_e_inalcancavel()
     test_born_digital_sem_paths_nunca_vai_pro_vision()
     print("ok")
+
+
+def test_html_servido_como_pdf_sai_do_gate_como_PDF_DE_VERDADE():
+    """⛔ MUTANTE: trocar `doc.tobytes() if doc.is_pdf else doc.convert_to_pdf()` por
+    `doc.tobytes()` sozinho — que foi a 1a versao deste fix, e era NO-OP no cohort
+    inteiro que ela tinha por alvo.
+
+    Medido em prod 2026-08-17: dos 85 cards cegos, **71 (83,5%) tem
+    `file_format='html'`**, e nos 19 do cohort ATIVO sao **19 de 19**. Sao XHTML
+    servidos sob nome `.pdf`.
+
+    A cadeia do defeito, cada elo verificado por execucao:
+      1. `pymupdf.open(stream=..., filetype='pdf')` NAO levanta — `filetype` e DICA
+         (memory `autos-html-filetype-e-dica-nao-imposicao-2026-08-11`). Abre como
+         XHTML: `is_pdf=False`, `metadata['format']='XHTML'`.
+      2. logo `paginas_imagem=0` e `motivos={}` -> e o `motivo: null` dos 19 cards.
+      3. `doc.tobytes()` sobre nao-PDF levanta `AssertionError` NUA;
+      4. o `except` devolvia o MESMO objeto, o Gemini recebia XHTML rotulado
+         `application/pdf` e respondia o mesmo `400 The document has no pages`.
+
+    Este teste falha se alguem "simplificar" o ramo de volta."""
+    from src.agents._utils.ocr_gate import _reserializa
+
+    xhtml = (
+        b'<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" '
+        b'"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">'
+        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        + b"<p>EXCELENTISSIMO SENHOR DOUTOR JUIZ DE DIREITO</p>" * 40
+        + b"</body></html>"
+    )
+    doc = pymupdf.open(stream=xhtml, filetype="pdf")
+
+    # as premissas do caso real, antes da conclusao
+    assert not doc.is_pdf, "premissa: o filetype='pdf' e dica; isto abriu como XHTML"
+    assert doc.metadata.get("format") == "XHTML"
+
+    out = _reserializa(doc, xhtml)
+
+    assert out is not xhtml, "o gate devolveu o MESMO objeto: o fix virou no-op"
+    assert out[:5] == b"%PDF-", f"o Gemini recebe {out[:8]!r} rotulado application/pdf"

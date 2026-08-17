@@ -93,9 +93,10 @@ async def _fetch_pdf_bytes(storage_client, gcs_url: str) -> Optional[bytes]:
 # proc trabalhista real (498/1076). LibreOffice 1-pág "Documento não existe ou possui
 # acesso restrito". Vision só devolveria "ilegível", então dropamos ANTES da call →
 # cai no fallback text-only (mais barato) em vez de gastar tokens de PDF.
-# (PDF 0-página/corrompido NÃO entra aqui: é raro e o guard de
-# call_l1_with_vision_fallback já o pega via o Gemini 400 → fallback text. Mantém
-# este filtro stdlib-only e trivial de testar.)
+# (PDF 0-página/corrompido NÃO entra aqui: é raro e, desde 2026-08-17, quem o
+# resolve é o `ocr_gate._reserializa` — recompõe o PDF antes da call, então o 400
+# do Gemini virou último recurso e não a defesa. Mantém este filtro stdlib-only e
+# trivial de testar.)
 # ponytail: hash-set de stubs conhecidos; cresce se a jusbrasil trocar o placeholder
 # (sniff pelo texto "acesso restrito" seria o upgrade se virar zoo de variantes).
 _KNOWN_UNREADABLE_PDF_SHA256 = {
@@ -339,8 +340,12 @@ async def call_l1_with_vision_fallback(
     gate nem rodou" produzem exatamente o mesmo silêncio no banco. `n_enviados`
     conta o que o Gemini REALMENTE recebeu: se a Vision call falhar e cair no
     texto, ele volta a 0 (o card é cego, e é isso que a métrica tem que dizer).
-    `n_nao_enviados_cap` = quantos o cap dropou. ⚠️ >0 com `n_enviados=0` NÃO
-    distingue "nada coube" de "o que coube tomou 400" — pra isso, só o log.
+    `n_nao_enviados_cap` = quantos o cap dropou. Quando a chamada Vision falha (o
+    Gemini recusa o payload, timeout, 400), o ramo de exceção acrescenta
+    `n_falha_vision` (quantos o gate aprovou e o card não leu) + `erro_vision`
+    (tipo + mensagem): é o que separa "nada coube" (`n_nao_enviados_cap>0`) de "o
+    que coube tomou 400". Sem eles, `n_enviados=0` era indistinguível de "o gate
+    não aprovou nada" e o card ia gravado como saudável.
 
     `prompt_vision` (opcional) é o prompt alternativo pro ramo VISION — o caller o
     monta sabendo que PODE haver anexo, e este helper decide se ele vale. Existe
@@ -444,8 +449,17 @@ async def call_l1_with_vision_fallback(
             # Guard: Gemini 400 (ex: "document has no pages" em PDF corrompido) ou
             # qualquer falha da Vision call NÃO pode derrubar a cascade — cai no
             # text-only abaixo. ponytail: fallback existente cobre; sem reraise.
+            # ⛔ Degradar é o certo; degradar MUDO é o defeito. Até 2026-08-17 este
+            # ramo não tocava o `gate_out`: o card saía com `n_enviados=0` e
+            # `errors=0`, indistinguível de "o gate não aprovou nada".
+            if gate_out is not None:
+                gate_out["n_falha_vision"] = len(pdf_bytes_list)
+                gate_out["erro_vision"] = f"{type(exc).__name__}: {exc}"[:300]
             logger.warning(
-                f"[VisionL1] {log_label}: Vision call falhou ({exc!r}); fallback pra text-only",
+                "VISION_CALL_FAIL %s n_aprovados=%d n_nao_enviados_cap=%s erro=%r;"
+                " fallback pra text-only",
+                log_label, len(pdf_bytes_list),
+                (gate_out or {}).get("n_nao_enviados_cap"), exc,
             )
     elif gcs_urls and flag_enabled(vision_flag_name):
         logger.warning(
