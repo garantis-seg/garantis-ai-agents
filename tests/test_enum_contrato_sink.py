@@ -113,14 +113,35 @@ def test_tipo_do_admin_cobertura_total_nos_dois_sentidos():
 
 def test_o_no_do_admin_e_do_dominio_certo():
     """Gemeo do teste das 3 colunas da CDA: `tipo` vira coluna E chave do UNIQUE, e
-    esfera/uf sao afirmacoes sobre o mundo. UF fixa so onde o proprio enum a nomeia —
+    esfera/uf sao afirmacoes sobre o mundo. UF gravada so onde o proprio enum a nomeia —
     'PA estadual' e qualquer fisco estadual, cravar 'SP' inventaria UF pra um PA do RJ.
 
     ⚠️ `pa` (v1.5) e a UNICA entrada com esfera NULL, e isso e o CONTRATO, nao buraco:
     ele e o default do miner e significa 'o documento nao disse a esfera'. A lista
     abaixo e NOMEADA de proposito — tipo novo com esfera NULL tem que ser uma decisao,
     nao um esquecimento, senao volta a virar afirmacao por omissao (que e exatamente o
-    que o default `paf` fazia ate 2026-08-13)."""
+    que o default `paf` fazia ate 2026-08-13).
+
+    ⚠️ **A implicacao CAIU PRA UM LADO SO em 2026-08-14** (garantis-shared#362). Ate
+    aqui a assercao de UF era `(uf is not None) == tipo.endswith('_sp')` — BI-direcional,
+    e por isso ela afirmava DUAS coisas:
+      (a) tipo COM uf tem de NOMEAR a uf   -> continua valendo, e e a metade que pega o
+          mutante que este teste existe pra pegar (`pa_estadual` ganhar `fixed_uf='SP'`);
+      (b) tipo que nomeia `_sp` tem de TER uf -> **caiu**. `tit_sp` era o unico rotulo do
+          sistema que gravava UF, e a gravava a partir do NOME do enum, nao de evidencia:
+          `ProcessoAdminCitado` (abaixo) tem `numero`, `tipo`, `contexto`, `par_numero` e
+          NENHUM campo de UF. Medido em prod sobre as 266 refs de nos `tit_sp`: 139
+          (52,3%) estao fora do TJ-SP, 98 delas no tribunal ESTADUAL de OUTRO estado.
+
+    ⛔ A assercao abaixo nasceu ORDER-FREE (`uf is None or tipo.endswith('_sp')`) porque
+    este repo roda o teste contra o WHEEL PINADO (`requirements.txt`): enquanto o pin
+    estivesse no velho (`tit_sp` -> ('estadual','SP')), a forma estrita deixaria o gate
+    fail-closed do `cloudbuild-deploy` VERMELHO em master.
+    ✅ **O pin subiu pra 1.479.0 em 2026-08-17** (ai-agents#169, o bump que o bot abriu
+    depois do merge do garantis-shared#362), entao a forma estrita entrou. Ela e a que
+    importa: a order-free ACEITAVA `tit_sp` reganhar 'SP' — ou seja, deixava de pegar
+    exatamente a regressao que este pacote existe pra impedir. Ela so podia entrar DEPOIS
+    do bump, e o bump ja esta em master."""
     sem_esfera_por_design = {"pa"}
     assert sem_esfera_por_design <= set(ADMIN_TIPO_TO_NO), (
         "o generico sumiu do mapa: sem ele o sink volta a ter que ESCOLHER uma esfera "
@@ -133,9 +154,10 @@ def test_o_no_do_admin_e_do_dominio_certo():
             )
             continue
         assert esfera in ("federal", "estadual", "municipal"), f"{tipo}: {esfera!r}"
-        assert uf is None or (len(uf) == 2 and uf.isupper()), f"{tipo}: {uf!r}"
-        assert (uf is not None) == tipo.endswith("_sp"), (
-            f"{tipo}: uf={uf!r}. UF fixa so em tipo que NOMEIA a UF."
+        assert uf is None, (
+            f"{tipo}: uf={uf!r}. NENHUM rotulo grava UF — o miner nao emite UF nenhuma "
+            "(`ProcessoAdminCitado` nao tem o campo), entao qualquer valor aqui vem do "
+            "NOME do enum e nao de evidencia. `tit_sp` foi o ultimo a cair (2026-08-14)."
         )
 
 
