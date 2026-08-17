@@ -212,3 +212,47 @@ def test_o_contador_do_cap_ATRAVESSA_o_fallback_text_only():
         ))
 
     assert gate["n_enviados"] == 0 and gate["n_nao_enviados_cap"] == 1
+
+
+# ── 4. O 400 do Gemini: degradar sim, degradar MUDO não ──────────────────────
+def test_400_no_pages_cai_no_texto_e_o_veredito_PARA_de_dizer_que_esta_saudavel():
+    """O modo de falha que produziu 85 cards cegos: o gate aprova, o payload monta
+    (`n_nao_enviados_cap=0`), o `generate_content` levanta `400 The document has no
+    pages` — e até 2026-08-17 o `except` engolia sem tocar no `gate_out`. O card
+    ficava com `n_enviados=0` e `errors=0`, que é exatamente o que um mérito sem
+    documento nenhum também grava.
+
+    ⛔ MUTANTE: apagar o carimbo do `except` reprova aqui. O fallback pro texto
+    continua sendo o comportamento CERTO (por isso o assert dele fica junto) — o
+    defeito nunca foi degradar, foi degradar sem dizer.
+
+    Este é o único teste que passa pelo `generate_content` DE VERDADE e sai pelo
+    fallback: os demais monkeypatcham `call_vision_l1` inteira, então nem chegam a
+    montar o payload que o Gemini recusa."""
+    prov = _FakeProvider()
+    gate: dict = {}
+
+    async def _400_no_pages(*, model, contents, config):
+        raise RuntimeError("400 INVALID_ARGUMENT: The document has no pages")
+
+    prov._client.aio.models.generate_content = _400_no_pages
+
+    async def _fake_fetch(urls):
+        return [_pdf(2 * _MB)]
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(V, "fetch_pdfs_from_gcs", _fake_fetch)
+        mp.setenv("VISION_L1_ENABLED", "true")
+        out = asyncio.run(V.call_l1_with_vision_fallback(
+            prov, model="m", prompt="p", response_schema=None,
+            gcs_urls=["gs://b/1.pdf"], gate_out=gate,
+        ))
+
+    assert out == "RESPOSTA_TEXTO", "degradar pro texto segue sendo o certo"
+    assert gate["n_enviados"] == 0
+    assert gate["n_nao_enviados_cap"] == 0, (
+        "premissa: o cap NÃO cortou nada — quem recusou foi o modelo")
+    assert gate["n_falha_vision"] == 1
+    assert "no pages" in gate["erro_vision"], (
+        "o veredito tem que carregar a RAZÃO; `n_enviados=0` sozinho não separa "
+        "'o modelo recusou' de 'o gate não aprovou nada'")

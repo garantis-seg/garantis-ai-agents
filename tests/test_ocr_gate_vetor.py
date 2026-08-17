@@ -13,6 +13,8 @@ mandaria pro Vision.
 """
 from __future__ import annotations
 
+import io
+
 import pytest
 
 pymupdf = pytest.importorskip("pymupdf")
@@ -149,6 +151,40 @@ def test_bytes_que_nao_sao_pdf_ficam_no_texto_sem_vazar_excecao(corpo):
     assert nota["fonte"] == "texto"
 
 
+
+
+# ── O blob que sai é RECOMPOSTO, não o que entrou ────────────────────────────
+def test_pdf_que_parser_estrito_recusa_sai_RECOMPOSTO_do_gate():
+    """🚨 O 400 `The document has no pages`: o PyMuPDF repara na abertura, o Gemini
+    não. O gate já pagou o `open` pelo Sinal 1, então recompor sai de graça.
+
+    ⛔ MUTANTE: devolver `pdf_bytes` cru reprova aqui — e o modo de falha real é
+    MUDO (gate aprova, payload monta, o Gemini levanta, o `except` cai no texto e o
+    card fica gravado como saudável)."""
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError, PdfStreamError
+
+    inteiro = _pdf([{"paths": 900, "texto": CARIMBO}] * 3)
+    # sem xref NEM trailer — o que sobra de um PDF truncado no transporte
+    quebrado = inteiro[:inteiro.rfind(b"xref")]
+
+    with pytest.raises((PdfStreamError, PdfReadError)):
+        PdfReader(io.BytesIO(quebrado), strict=False)
+
+    manda, info = precisa_vision(CARIMBO * 6, quebrado)
+    assert manda is True, "premissa: o gate aprova (corpo em vetor)"
+    saindo = info["_pdf_bytes"]
+    assert saindo != quebrado, "o gate tem que entregar o blob RECOMPOSTO"
+    assert len(PdfReader(io.BytesIO(saindo), strict=False).pages) == 3
+
+
+def test_pdf_sadio_atravessa_o_gate_sem_perder_pagina():
+    """A outra metade: recompor não pode mexer no caso comum (99%+ do volume)."""
+    inteiro = _pdf([{"paths": 900, "texto": CARIMBO}] * 3)
+    from pypdf import PdfReader
+
+    _manda, info = precisa_vision(CARIMBO * 6, inteiro)
+    assert len(PdfReader(io.BytesIO(info["_pdf_bytes"]), strict=False).pages) == 3
 
 
 def test_a_GUARDA_PRIMARIA_area_texto_salva_pagina_com_imagem_de_fundo():

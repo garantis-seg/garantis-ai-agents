@@ -173,10 +173,39 @@ def _pagina_eh_imagem(page, pymupdf) -> bool:
     return _pagina_motivo(page, pymupdf) is not None
 
 
+def _reserializa(doc, pdf_bytes: bytes) -> bytes:
+    """Recompõe o PDF a partir do `doc` que o Sinal 1 JÁ abriu — custo de provider
+    e de I/O ZERO (o parse foi pago acima).
+
+    `pymupdf.open` REPARA na abertura o que um parser estrito recusa, e o Gemini é
+    estrito: ele respondia `400 The document has no pages`, o `except` de
+    `call_l1_with_vision_fallback` engolia, e o card ia gravado com `errors=0` e o
+    PDF nunca lido — 85 cards cegos, 19 de 22 (86,4%) dos que têm veredito de gate
+    no código de hoje.
+
+    Medido 2026-08-17: PDF de 3 páginas truncado antes do xref — o pypdf levanta
+    `PdfStreamError`, o PyMuPDF lê as 3 e o `tobytes()` devolve 1.683B que o pypdf
+    lê inteiro. Onde não há o que reparar o tamanho não se mexe (3.245.132B →
+    3.245.132B num PDF de 6 páginas-imagem): o default `deflate=0` copia os streams
+    já comprimidos como estão.
+
+    ⛔ Sem `garbage`/`deflate` de propósito. Encolher o blob mudaria QUANTO passa
+    pelos caps inline do `vision.py` — é outra decisão, e pede medição própria.
+
+    Falha ⇒ os bytes originais. O gate nunca quebra por causa disto.
+    """
+    try:
+        return doc.tobytes()
+    except Exception:
+        return pdf_bytes
+
+
 def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
     """Mede o Sinal 1 por página sobre os BYTES do PDF + controle de páginas.
-    Retorna {pdf_bytes (inteiro ou recortado), n_paginas, paginas_imagem, motivos,
-    truncado, paginas_enviadas} ou None em qualquer falha (fallback: fica no texto).
+    Retorna {pdf_bytes (recomposto ou recortado), n_paginas, paginas_imagem,
+    motivos, truncado, paginas_enviadas} ou None em qualquer falha (fallback: fica
+    no texto). ⚠️ O `pdf_bytes` que sai NÃO é o que entrou: é o blob recomposto
+    por `_reserializa` — quem manda ao Gemini tem que usar ESTE.
 
     ⚠️ O `None` de fallback NÃO é teórico: 6 de 20 "PDFs" de uma amostra do cohort
     do gate são HTML ou RTF servidos sob nome `.pdf` (42-946 bytes começando com
@@ -200,8 +229,9 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
         return None
 
     if n <= TETO_PAGINAS:
-        return {"pdf_bytes": pdf_bytes, "n_paginas": n, "paginas_imagem": pgs_img,
-                "motivos": motivos, "truncado": False, "paginas_enviadas": n}
+        return {"pdf_bytes": _reserializa(doc, pdf_bytes), "n_paginas": n,
+                "paginas_imagem": pgs_img, "motivos": motivos,
+                "truncado": False, "paginas_enviadas": n}
 
     # monstro: recorta começo + fim com pypdf
     try:
@@ -217,8 +247,11 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
         return {"pdf_bytes": buf.getvalue(), "n_paginas": n, "paginas_imagem": pgs_img,
                 "motivos": motivos, "truncado": True, "paginas_enviadas": len(idxs)}
     except Exception:
-        return {"pdf_bytes": pdf_bytes, "n_paginas": n, "paginas_imagem": pgs_img,
-                "motivos": motivos, "truncado": False, "paginas_enviadas": n}
+        # o recorte falhou: vai o documento inteiro, mas RECOMPOSTO — este ramo é
+        # justamente o do PDF malformado, que é quem toma o 400 do Gemini.
+        return {"pdf_bytes": _reserializa(doc, pdf_bytes), "n_paginas": n,
+                "paginas_imagem": pgs_img, "motivos": motivos,
+                "truncado": False, "paginas_enviadas": n}
 
 
 def precisa_vision(text_content: Optional[str], pdf_bytes: Optional[bytes]) -> tuple[bool, dict]:
