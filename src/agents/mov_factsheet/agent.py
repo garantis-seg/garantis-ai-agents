@@ -19,6 +19,7 @@ from .._utils import (
     MODEL_VARIANT_TEXT,
     MODEL_VARIANT_VISION,
     call_l1_with_vision_fallback,
+    seed_for,
 )
 from .._utils.feature_flags import flag_enabled
 from .chunking import reduce_peca_cards, split_large_peca_variants
@@ -325,11 +326,46 @@ async def classify_mov_factsheet(
         )
         response_schema = MovFactSheetCard
 
+    # Seed determinístico (mov + prompt) — o MESMO padrão de L2/L3
+    # (processo_synthesis/merito_synthesis), que faltava no L1. Gated em
+    # ENGINE_LLM_SEED_ENABLED; `None` (flag OFF) é no-op no provider.
+    #
+    # POR QUE no L1: `temperature=0.0` NÃO é determinismo — o Gemini a temp=0 sem
+    # seed tem micro-ruído de decode entre runs, e no L1 esse ruído não sai como
+    # "outro fraseado": sai como OUTRO RÓTULO em campo enumerado. Medido em prod
+    # (pn 0168886-31.2016.4.02.5101, doc providers.jusbrasil_autos_documents#770644):
+    # dois cards a 3 SEGUNDOS de distância — 2232509 e 2232514, mesmo mov_id, mesmo
+    # doc_id, mesma prompt_version v6.0, mesmo modelo — classificaram o MESMO número
+    # administrativo como `paf` e como `pa`. Como `tipo` é metade da chave de
+    # `leads.admin_items` (UNIQUE (tipo, numero_normalizado), write-once), essa
+    # divergência não vira UPDATE: FORKA a entidade em dois nós permanentes.
+    #
+    # As `parts` do seed: `mov.mov_id` + o `prompt` inteiro. O `mov_id` é
+    # REDUNDANTE POR CONSTRUÇÃO, não só "provadamente grátis": o
+    # `build_mov_factsheet_prompt_v4` já embute o literal do mov_id DENTRO do
+    # prompt (verificado executando os dois — trocar o mov_id muda o prompt), então
+    # o prompt sozinho já discrimina E já estabiliza. Ele fica por simetria com o
+    # padrão de L2/L3. O cohort confirma que incluí-lo não perde caso vivo: os
+    # 52 de 52 pares (pn, número) discordantes vêm do MESMO mov_id E do MESMO
+    # doc_id (0 com card nulo, 0 cross-mov, 0 cross-doc).
+    # ⚠️ A redundância é CONDICIONAL ao prompt seguir embutindo o mov_id — e essa
+    # dependência mora em `prompts_v4.py`, não aqui. Se o prompt parar de embuti-lo,
+    # esta part deixa de ser decorativa e vira a ÚNICA coisa que separa leituras de
+    # mov_ids diferentes. (A versão anterior deste comentário dizia o inverso — que
+    # a part viraria o separador se o mesmo doc fosse lido sob mov_ids diferentes.
+    # Não vira: nesse cenário o prompt já difere, e o seed já difere sem ela.)
+    #
+    # ⛔ Isto NÃO conserta a raiz (o rótulo dentro da chave) nem toca o prompt: é
+    # redução de TAXA enquanto o N3 não entra. E `seed` é best-effort no Gemini —
+    # trate como "mesma resposta na maior parte das vezes", nunca como garantia.
+    seed = seed_for("mov_factsheet", mov.mov_id, prompt)
+
     response: LLMResponse = await call_l1_with_vision_fallback(
         llm_provider,
         model=model,
         prompt=prompt,
         gcs_urls=gate_urls,
+        seed=seed,
         # GATE DE OCR (L1 v7): pares (text_content, gcs_url) por doc — o gate decide
         # por documento se manda pro Vision (texto-lixo OU pagina-imagem). Ver ocr_gate.
         docs_text=gate_pairs,
