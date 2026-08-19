@@ -430,14 +430,25 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
     federal (Receita Federal / RFB / CARF / DRJ / Delegacia da Receita / PGFN), ou (ii) o
     número está na máscara NUP federal NNNNN.NNNNNN/AAAA-DD (5+6 dígitos antes da barra).
     Do número NÃO dá pra afirmar CARF.
-  · 'tit_sp' — o AIIM / auto de infração e imposição de multa ESTADUAL de SP (N.NNN.NNN-D).
+  · 'tit_sp' — o AIIM / auto de infração e imposição de multa de SÃO PAULO (N.NNN.NNN-D),
+    e SÓ quando o texto NOMEIA São Paulo: Tribunal de Impostos e Taxas, SEFAZ-SP, DRT,
+    Secretaria da Fazenda do Estado de São Paulo. ⛔ Auto de infração ESTADUAL cujo estado
+    o texto não nomeia como São Paulo NÃO é 'tit_sp' — mesmo com o número na máscara
+    N.NNN.NNN-D. Nesse caso use 'pa_estadual' (se o texto nomeia o órgão estadual) ou 'pa'.
   · 'pa_estadual' — processo administrativo de fisco ESTADUAL: o texto nomeia o órgão
     (Secretaria da Fazenda de um estado, SEFAZ, verificação fiscal estadual, defesa/recurso
     administrativo estadual). É o PROCESSO, não o auto — se o número que você está extraindo
-    é o do AIIM, ele é 'tit_sp'.
+    é o do AIIM PAULISTA, ele é 'tit_sp'.
   NÃO são processo administrativo: CDA/inscrição em dívida ativa (=> cdas[]), processo
   JUDICIAL/CNJ (=> processos_citados[]), artigo de lei. Só o que ESTÁ escrito no documento.
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
+  `uf` — a sigla do ESTADO do órgão que instaurou/lavrou o processo, e SÓ quando o texto
+  NOMEIA o estado ou o órgão estadual ('SEF/MG', 'SEFAZ-SP', 'Secretaria de Estado de
+  Fazenda de Minas Gerais'). Quando preencher `uf`, copie em `uf_evidencia` o trecho
+  (~120 chars) onde o estado é NOMEADO — uf sem esse trecho é DESCARTADA pela integração.
+  ⛔ NUNCA derive a `uf` do tribunal onde o processo JUDICIAL tramita, nem do `tipo` que
+  você escolheu: onde o auto está sendo discutido não diz de que fisco ele É. Na dúvida,
+  uf=null e uf_evidencia=null — que é o caso normal.
 - NÃO deduza direção do par (quem é mais novo/velho) — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores (texto limpo=alta; OCR
   ruidoso/citações ambíguas=baixa).
@@ -544,12 +555,19 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
   'pa'=esfera que o documento NÃO deixa clara (na dúvida é este; ⛔ não afirme federal só
   porque o número parece NUP); 'paf'=fiscal FEDERAL afirmado — o texto nomeia órgão federal
   (Receita Federal/RFB, CARF, DRJ, PGFN) OU o número está na máscara NUP NNNNN.NNNNNN/AAAA-DD;
-  'tit_sp'=AIIM/auto de infração de SP (N.NNN.NNN-D); 'pa_estadual'=processo administrativo
+  'tit_sp'=AIIM/auto de infração de SÃO PAULO (N.NNN.NNN-D) — SÓ quando o texto NOMEIA São
+  Paulo (Tribunal de Impostos e Taxas, SEFAZ-SP, DRT, Secretaria da Fazenda do Estado de São
+  Paulo); ⛔ auto estadual de outro estado, ou sem o estado nomeado, NÃO é 'tit_sp' mesmo na
+  máscara — use 'pa_estadual' ou 'pa'; 'pa_estadual'=processo administrativo
   de fisco ESTADUAL quando o texto NOMEIA o órgão (Secretaria da Fazenda estadual/SEFAZ,
   verificação fiscal) — é o PROCESSO, não o auto.
   ⚠️ PAR "Processo Administrativo nº X (AIIM nº Y)": emita os DOIS como itens SEPARADOS,
   cada um com `par_numero` = o número LITERAL do outro. Nunca descarte o do parêntese.
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
+  `uf` — sigla do ESTADO do órgão que instaurou/lavrou, SÓ quando o texto NOMEIA o estado ou
+  o órgão estadual ('SEF/MG', 'SEFAZ-SP'); copie em `uf_evidencia` o trecho (~120 chars) que
+  o nomeia — uf sem esse trecho é DESCARTADA. ⛔ NUNCA derive a uf do tribunal onde o
+  processo JUDICIAL tramita nem do `tipo` escolhido. Na dúvida, uf=null.
   NÃO é admin: CDA (=> cdas[]), CNJ judicial (=> processos_citados[]), artigo de lei.
 - NÃO deduza direção do par — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores. Documento de tipo incerto

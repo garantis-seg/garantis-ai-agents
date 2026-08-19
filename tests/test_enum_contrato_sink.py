@@ -141,7 +141,18 @@ def test_o_no_do_admin_e_do_dominio_certo():
     depois do merge do garantis-shared#362), entao a forma estrita entrou. Ela e a que
     importa: a order-free ACEITAVA `tit_sp` reganhar 'SP' — ou seja, deixava de pegar
     exatamente a regressao que este pacote existe pra impedir. Ela so podia entrar DEPOIS
-    do bump, e o bump ja esta em master."""
+    do bump, e o bump ja esta em master.
+
+    🚨 **A JUSTIFICATIVA da assercao de UF MUDOU em 2026-08-19 (R2, card 869ekv7b9); a
+    assercao FICA.** Ate aqui ela dizia "o miner nao emite UF nenhuma
+    (`ProcessoAdminCitado` nao tem o campo)". **Isso deixou de ser verdade**: o
+    `ProcessoAdminCitado` ganhou `uf` + `uf_evidencia`. O que NAO mudou e a direcao — a
+    UF do no vem da CLAIM COM EVIDENCIA ANCORADA (`resolve_admin_uf`, no shared), nunca
+    do NOME do rotulo. Por isso o MAPA continua devolvendo `None` em todos os 4.
+    ⚠️ Esta guarda vive no repo ERRADO em relacao ao mutante: quem repoe `'SP'` em
+    `ADMIN_TIPO_TO_NO` mexe no **garantis-shared**, e a suite do shared ficaria verde.
+    Ela esta ESPELHADA la (`tests/test_peticao_sink_admin_identidade.py::
+    test_o_MAPA_nunca_devolve_uf_por_ROTULO`) de proposito — nao "limpe" a duplicacao."""
     sem_esfera_por_design = {"pa"}
     assert sem_esfera_por_design <= set(ADMIN_TIPO_TO_NO), (
         "o generico sumiu do mapa: sem ele o sink volta a ter que ESCOLHER uma esfera "
@@ -155,9 +166,10 @@ def test_o_no_do_admin_e_do_dominio_certo():
             continue
         assert esfera in ("federal", "estadual", "municipal"), f"{tipo}: {esfera!r}"
         assert uf is None, (
-            f"{tipo}: uf={uf!r}. NENHUM rotulo grava UF — o miner nao emite UF nenhuma "
-            "(`ProcessoAdminCitado` nao tem o campo), entao qualquer valor aqui vem do "
-            "NOME do enum e nao de evidencia. `tit_sp` foi o ultimo a cair (2026-08-14)."
+            f"{tipo}: uf={uf!r}. NENHUM rotulo grava UF: qualquer valor aqui vem do NOME "
+            "do enum e nao de evidencia. `tit_sp` foi o ultimo a cair (2026-08-14). A UF "
+            "do no existe desde R2 (2026-08-19) mas vem do campo `uf` do miner, com "
+            "`uf_evidencia` ancorada — nao daqui."
         )
 
 

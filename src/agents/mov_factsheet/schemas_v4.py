@@ -351,6 +351,32 @@ class MovFactSheetCardV4(BaseModel):
 # conexos_engine => badge "A classificar", nao "Adm. Fed."; (b) STEERING dos anexos no prompt
 # (ver `_STEER_PDF_ANEXADOS` em prompts_v4) — SO quando o gate manda >=1 PDF. Bump invalida o
 # cache v1.4 -> re-extrai 1x pela onda (a onda e decisao a parte).
+# v1.6 (2026-08-19, card 869ekv7b9 / caso Ball, autopsia Alfredo): (a) `tit_sp` passa a EXIGIR
+# Sao Paulo NOMEADO no texto (Tribunal de Impostos e Taxas, SEFAZ-SP, DRT, Secretaria da
+# Fazenda do Estado de Sao Paulo); auto de infracao estadual sem SP nomeado vai pra
+# `pa_estadual` (fisco estadual nomeado) ou `pa`. E o espelho LITERAL da regra que ja
+# disciplina `pa_estadual` ("So marque quando o texto disser o ORGAO estadual").
+# ⭐ A RAZAO, MEDIDA — nao foi janela de contexto, foi DESENHO DE ROTULO: a LLM leu os
+# documentos INTEIROS (doc 898922 com 66.906 chars e "Minas Gerais" 33x; doc 893577 com
+# 100.710 chars e 20x, com "SEF/MG" a ~300 caracteres do numero) e AINDA ASSIM rotulou
+# `tit_sp`, porque `tit_sp` era o UNICO nome do enum para "auto de infracao estadual".
+# Censo em prod 2026-08-19 sobre `telemetria.engine_llm_calls.prompt` (a peca inteira fica
+# retida), 150 pns que produziram claim `tit_sp` e tem o prompt: **16 (10,7%) nomeiam so
+# SP · 37 (24,7%) SP E outro estado · 67 (44,7%) SO outro estado · 30 (20,0%) nenhum**.
+# => sob a regra nova o rotulo sobrevive em NO MAXIMO 53 de 150 (35,3%); o piso da queda e
+# 97 (64,7%). ⚠️ Patterns usados na medicao ('Impostos e Taxas', 'SEFAZ-SP', 'SEFAZ/SP',
+# 'Fazenda do Estado de Sao Paulo') foram escolhidos por NAO existirem no TEMPLATE do prompt
+# — ' SP ' e 'SEFAZ' sozinhos existem e contaminariam a conta. 🚨 Esta versao POE
+# 'Tribunal de Impostos e Taxas' e 'SEFAZ-SP' no template: esses 2 patterns QUEIMARAM e a
+# re-medicao pos-onda precisa de outro discriminador.
+# (b) campos `uf` + `uf_evidencia` (ver `ProcessoAdminCitado`) — a UF vira ATRIBUTO do no
+# (`leads.admin_items.uf`, coluna que ja existia e estava 100% NULL: 0 nao-nulos em 33.161
+# linhas vivas), NUNCA rotulo novo por estado. Literal e nao `str` de proposito: da
+# constrained decoding e mata 'SPO'/'S.P' na ORIGEM, que e o valor que o `varchar(2)`
+# rejeitaria com excecao dentro do savepoint do sink.
+# 🚨 O bump DISPARA a onda sozinho: `backfill-peticao-daily` roda com `reextract_stale=true`
+# (URI verificada 2026-08-19), 500/dia sobre 2.963 pns => ~6 dias, ~US$14,7. E mudanca
+# deliberada em massa que altera saida de risco => PEDE OK do Elton.
 # ⚠️ Os 2 VALORES (`PETICAO_PROMPT_VERSION` = peticao_extract.v1.5 e
 # `DOC_INCERTO_PROMPT_VERSION` = doc_incerto_extract.v1.3) moram no garantis-shared
 # (`engine_v6.persistence.peticao_contract`) e sao IMPORTADOS no topo deste arquivo —
@@ -366,6 +392,11 @@ class MovFactSheetCardV4(BaseModel):
 # v1.3 (2026-08-13): mesma mudanca do 1P v1.5 (`pa` default + steering dos anexos), pelo
 # mesmo motivo — schema COMPARTILHADO: o enum novo chega no 1X querendo ou nao, entao a
 # instrucao tem que chegar junto.
+# v1.4 (2026-08-19): mesma mudanca do 1P v1.6 (`tit_sp` exige SP nomeado + campos `uf`/
+# `uf_evidencia`), pelo MESMO motivo estrutural de sempre — o schema e o `PeticaoExtractCardV4`
+# COMPARTILHADO, entao os 2 campos novos chegam no ramo 1X querendo ou nao, e campo que o
+# prompt nao explica sob constrained decoding e pior que campo ausente. As DUAS prompts
+# (`prompts_v4.py`, blocos admin do 1P e do 1X) e as DUAS versoes mudam no mesmo PR.
 
 
 class CdaPeticao(BaseModel):
@@ -411,9 +442,17 @@ class ProcessoAdminCitado(BaseModel):
     Conector cross-type J->A da formação de conexos — taxpayer-specific. (WS-D 2026-06-27.)
 
     ⚠️ `tipo` é CONTRATO cross-repo: ele vira a coluna `leads.admin_items.tipo` (metade do
-    UNIQUE (tipo, numero_normalizado)) E a esfera/UF do nó, via
+    UNIQUE (tipo, numero_normalizado)) E a ESFERA do nó, via
     `garantis_shared...peticao_contract.ADMIN_TIPO_TO_NO`. Valor novo aqui sem entrada lá
     cai em `paf`/federal. `tests/test_enum_contrato_sink.py` cruza os dois lados.
+
+    ⚠️ A UF do nó NÃO vem mais do `tipo` (desde 2026-08-14) e passou a vir do campo `uf`
+    abaixo (R2, 2026-08-19, card 869ekv7b9) — CLAIM com evidência ancorada, resolvida
+    sobre o conjunto de claims daquele número pelo `resolve_admin_uf` do shared. ⛔ Ela
+    NUNCA se deriva do rótulo nem do tribunal: medido em prod, 144 de 269 refs `tit_sp`
+    (53,5%) estão fora da própria máscara AIIM e 98 em tribunal estadual de OUTRO estado.
+    ⛔ E não se cria rótulo por estado (`tit_mg`, ...): a lista de 9 `item_type` é
+    contrato com o parceiro (decisão Elton). O estado é ATRIBUTO, não rótulo.
     """
 
     numero: str = Field(description="Número LITERAL do processo administrativo como aparece no texto.")
@@ -425,15 +464,40 @@ class ProcessoAdminCitado(BaseModel):
             "número parece um NUP. 'paf'=fiscal FEDERAL AFIRMADO: o texto nomeia órgão "
             "federal (Receita Federal/RFB, CARF, DRJ, PGFN) OU o número está na máscara NUP "
             "NNNNN.NNNNNN/AAAA-DD (5+6 dígitos antes da barra); do número NÃO dá pra afirmar "
-            "CARF. 'tit_sp'=AIIM/auto de infração ESTADUAL de SP (N.NNN.NNN-D). "
+            "CARF. 'tit_sp'=AIIM/auto de infração de SÃO PAULO (N.NNN.NNN-D) — exige que o "
+            "texto NOMEIE São Paulo (Tribunal de Impostos e Taxas, SEFAZ-SP, DRT, Secretaria "
+            "da Fazenda do Estado de São Paulo). Auto de infração ESTADUAL sem São Paulo "
+            "nomeado NÃO é 'tit_sp': use 'pa_estadual' (fisco estadual nomeado) ou 'pa'. "
             "'pa_estadual'=processo administrativo de fisco ESTADUAL (Secretaria da Fazenda "
             "de um estado; verificação fiscal, defesa/recurso administrativo) — o PROCESSO, "
-            "não o auto: se o número é do AIIM use 'tit_sp'. Só marque quando o texto disser "
-            "o ÓRGÃO estadual."
+            "não o auto: se o número é do AIIM PAULISTA use 'tit_sp'. Só marque quando o "
+            "texto disser o ÓRGÃO estadual."
         ),
     )
     contexto: Optional[str] = Field(
         default=None, description="Snippet ~120 chars ao redor da citação (auditoria).",
+    )
+    uf: Optional[Literal[
+        "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS",
+        "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC",
+        "SP", "SE", "TO",
+    ]] = Field(
+        default=None,
+        description=(
+            "Sigla do ESTADO do órgão que instaurou/lavrou o processo, SÓ quando o texto "
+            "NOMEIA o estado ou o órgão estadual (ex.: 'SEF/MG', 'SEFAZ-SP', 'Secretaria de "
+            "Estado de Fazenda de Minas Gerais'). ⛔ NUNCA derive do tribunal onde o processo "
+            "JUDICIAL tramita, nem do tipo do item: onde o auto é discutido não diz de quem "
+            "ele é. null quando o texto não nomeia o estado — que é o caso normal."
+        ),
+    )
+    uf_evidencia: Optional[str] = Field(
+        default=None,
+        description=(
+            "Snippet ~120 chars copiado do texto onde o estado/órgão estadual é NOMEADO. "
+            "Obrigatório sempre que `uf` for preenchida: a integração DESCARTA a uf cujo "
+            "snippet não nomeie o estado. null quando uf=null."
+        ),
     )
     par_numero: Optional[str] = Field(
         default=None,
