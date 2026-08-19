@@ -25,7 +25,7 @@ from .middleware import GeminiCallTimeoutMiddleware
 #  Posicao mais ampla do Elton na mesma decisao: caminho de LLM para derivar FATO
 #  ESTRUTURAL do processo (tribunal, estado) e para ser EVITADO — o fato deve vir do
 #  provider ou de derivacao deterministica.)
-from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, celula_base_classifier, doc_indexer, doc_reader, ficha_writer, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, text, verificador
+from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, doc_indexer, doc_reader, ficha_writer, health, merito_reducao_v2, merito_synthesis, mov_factsheet, mov_summarizer, pdf, processo_synthesis, prompts, providers, text, verificador
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -80,7 +80,10 @@ app.include_router(mov_factsheet.router)
 app.include_router(processo_synthesis.router)
 app.include_router(merito_synthesis.router)
 app.include_router(merito_reducao_v2.router)
-app.include_router(celula_base_classifier.router)
+# ⚰️ `celula_base_classifier.router` (POST /celula-base/classify) saiu em 2026-08-19
+# com o piso celula-base do L3 (decisao Elton, garantis-shared#392). O unico caller
+# era `classify_celula_base` do shared, gateado por `CELULA_BASE_CLASSIFIER_ENABLED`,
+# que nasceu OFF em 2026-07-11 e nunca ligou -- 0 chamadas, sempre.
 app.include_router(ficha_writer.router)
 # S6 — auditor de ficha. Mesmo prefixo `/ficha` do writer (escrever e auditar
 # sao o mesmo recurso em dois momentos); registrado DEPOIS dele so por ordem de
