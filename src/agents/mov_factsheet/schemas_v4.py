@@ -368,8 +368,13 @@ class MovFactSheetCardV4(BaseModel):
 # piso da queda e 57 (69,5%). Os outros 70 dos 152 nao tem texto retido: nao sao "queda",
 # sao INVISIVEIS a esta sonda.
 # 🚨 METODO, e e aqui que a 1a versao errou: `telemetria.engine_llm_calls.prompt` **NAO
-# retem a peca do L1**. Medido: nas 4.222 linhas de `layer1_policy_factsheet_per_doc` +
-# `_monolith` desses pns, `length(prompt)` e **0 em 100%** — o unico texto retido e o do
+# retem a peca do L1**. RE-MEDIDO 2026-08-19 na 2a rodada do review (a 1a versao deste
+# bloco publicava '4.222 linhas' e NAO reproduz): nas **4.764** linhas de
+# `layer1_policy_factsheet_per_doc` + `_monolith` desses 152 pns — join por `entity_id`
+# exato; por digitos da 4.768 — `length(prompt)` e **0 em 100%**. A CONCLUSAO nao muda,
+# so o denominador, que estava 12,8% menor que o real: quem re-medir pos-onda partindo
+# do numero velho le "o universo encolheu" onde so houve outra contagem.
+# O unico texto retido e o do
 # `layer2_processo_synthesis` (225 linhas, ate 311.531 chars), que agrega o conjunto de
 # documentos. Logo o censo mede o corpus do L2, nao o prompt que produziu a claim, e o
 # denominador honesto e "pns com prompt NAO-VAZIO", nao "pns com prompt NOT NULL" (que
