@@ -360,23 +360,38 @@ class MovFactSheetCardV4(BaseModel):
 # documentos INTEIROS (doc 898922 com 66.906 chars e "Minas Gerais" 33x; doc 893577 com
 # 100.710 chars e 20x, com "SEF/MG" a ~300 caracteres do numero) e AINDA ASSIM rotulou
 # `tit_sp`, porque `tit_sp` era o UNICO nome do enum para "auto de infracao estadual".
-# Censo em prod 2026-08-19 sobre `telemetria.engine_llm_calls.prompt` (a peca inteira fica
-# retida), 150 pns que produziram claim `tit_sp` e tem o prompt: **16 (10,7%) nomeiam so
-# SP · 37 (24,7%) SP E outro estado · 67 (44,7%) SO outro estado · 30 (20,0%) nenhum**.
-# => sob a regra nova o rotulo sobrevive em NO MAXIMO 53 de 150 (35,3%); o piso da queda e
-# 97 (64,7%). ⚠️ Patterns usados na medicao ('Impostos e Taxas', 'SEFAZ-SP', 'SEFAZ/SP',
-# 'Fazenda do Estado de Sao Paulo') foram escolhidos por NAO existirem no TEMPLATE do prompt
-# — ' SP ' e 'SEFAZ' sozinhos existem e contaminariam a conta. 🚨 Esta versao POE
-# 'Tribunal de Impostos e Taxas' e 'SEFAZ-SP' no template: esses 2 patterns QUEIMARAM e a
-# re-medicao pos-onda precisa de outro discriminador.
+# Censo em prod, RE-MEDIDO 2026-08-19 no review adversarial (a 1a versao deste bloco
+# publicava '150 pns / teto de 53 (35,3%)' e NAO reproduz — ver o 🚨 do metodo abaixo).
+# Sao **152** os pns que produziram claim `tit_sp`. Destes, **82 (53,9%)** tem texto
+# retido pra medir, e **25 deles (30,5%) nomeiam SP** por um dos 4 patterns.
+# => sob a regra nova o rotulo sobrevive em NO MAXIMO **25 dos 82 medibles (30,5%)**; o
+# piso da queda e 57 (69,5%). Os outros 70 dos 152 nao tem texto retido: nao sao "queda",
+# sao INVISIVEIS a esta sonda.
+# 🚨 METODO, e e aqui que a 1a versao errou: `telemetria.engine_llm_calls.prompt` **NAO
+# retem a peca do L1**. Medido: nas 4.222 linhas de `layer1_policy_factsheet_per_doc` +
+# `_monolith` desses pns, `length(prompt)` e **0 em 100%** — o unico texto retido e o do
+# `layer2_processo_synthesis` (225 linhas, ate 311.531 chars), que agrega o conjunto de
+# documentos. Logo o censo mede o corpus do L2, nao o prompt que produziu a claim, e o
+# denominador honesto e "pns com prompt NAO-VAZIO", nao "pns com prompt NOT NULL" (que
+# devolve 142 e conta linha vazia como medicao).
+# ⚠️ Patterns ('Impostos e Taxas', 'SEFAZ-SP', 'SEFAZ/SP', 'Fazenda do Estado de S.o
+# Paulo') foram escolhidos por NAO existirem no TEMPLATE do prompt — ' SP ' e 'SEFAZ'
+# sozinhos existem e contaminariam a conta. 🚨 Esta versao POE 'Tribunal de Impostos e
+# Taxas' e 'SEFAZ-SP' no template: esses 2 patterns QUEIMARAM e a re-medicao pos-onda
+# precisa de outro discriminador.
 # (b) campos `uf` + `uf_evidencia` (ver `ProcessoAdminCitado`) — a UF vira ATRIBUTO do no
-# (`leads.admin_items.uf`, coluna que ja existia e estava 100% NULL: 0 nao-nulos em 33.161
+# (`leads.admin_items.uf`, coluna que ja existia e estava 100% NULL: 0 nao-nulos em 33.162
 # linhas vivas), NUNCA rotulo novo por estado. Literal e nao `str` de proposito: da
 # constrained decoding e mata 'SPO'/'S.P' na ORIGEM, que e o valor que o `varchar(2)`
 # rejeitaria com excecao dentro do savepoint do sink.
-# 🚨 O bump DISPARA a onda sozinho: `backfill-peticao-daily` roda com `reextract_stale=true`
-# (URI verificada 2026-08-19), 500/dia sobre 2.963 pns => ~6 dias, ~US$14,7. E mudanca
+# 🚨 O bump ARMA a onda: `backfill-peticao-daily` roda com `reextract_stale=true` (URI
+# verificada 2026-08-19), 500/dia sobre 2.963 pns => ~6 dias, ~US$14,7. E mudanca
 # deliberada em massa que altera saida de risco => PEDE OK do Elton.
+# ⚠️ ARMA, nao dispara (precisao exigida no review adversarial de 19/08): o filtro roda no
+# fe-api sobre `_CURRENT_PETICAO_VERSIONS`, que vem do wheel PINADO em
+# `frontend-api/requirements.txt`. Mergear/publicar o shared nao move card nenhum — quem
+# dispara e o **bump do pin do fe-api + deploy**. ⛔ E o inverso tambem: bumpar o pin
+# "so pra atualizar dependencia" DISPARA a onda.
 # ⚠️ Os 2 VALORES (`PETICAO_PROMPT_VERSION` = peticao_extract.v1.5 e
 # `DOC_INCERTO_PROMPT_VERSION` = doc_incerto_extract.v1.3) moram no garantis-shared
 # (`engine_v6.persistence.peticao_contract`) e sao IMPORTADOS no topo deste arquivo —

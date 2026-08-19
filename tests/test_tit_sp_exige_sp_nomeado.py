@@ -108,9 +108,14 @@ def test_a_uf_e_pedida_com_EVIDENCIA_e_PROIBIDA_de_derivar(_ctx, _doc, build):
     """As duas metades da regra da UF, nas duas prompts.
 
     ⛔ A proibicao de derivar do tribunal e a metade que o proximo leitor vai apagar
-    ("mas o processo esta no TJ-SP, entao..."). Medido em prod: das 269 refs `tit_sp`,
-    142 (52,8%) estao no TJ-SP e 83 em tribunal estadual de OUTRO estado — tribunal e
-    onde o auto e DISCUTIDO, nao de quem ele E."""
+    ("mas o processo esta no TJ-SP, entao..."). Medido em prod **2026-08-19** (pelo
+    segmento J.TR do CNJ): das 269 refs `tit_sp`, 142 (52,8%) estao no TJ-SP, **84
+    (31,2%)** em tribunal estadual de OUTRO estado e 43 (16,0%) na Justica Federal, que
+    nao diz UF nenhuma — tribunal e onde o auto e DISCUTIDO, nao de quem ele E.
+    ⚠️ O bloco de `ADMIN_TIPO_TO_NO` no garantis-shared cita `127 / 98 / 41` sobre 266
+    refs: e a MESMA medicao em 14/08. Tabela viva, duas datas — nao contradicao. Por
+    isso as duas pontas sao DATADAS; numero sem data aqui vira contradicao aparente no
+    primeiro leitor que abrir os dois arquivos juntos."""
     p = build(_ctx, _doc)
     assert "uf_evidencia" in p, "a uf foi pedida sem evidencia propria"
     assert "NUNCA derive" in p and "tribunal" in p
