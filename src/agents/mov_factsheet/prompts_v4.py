@@ -208,6 +208,17 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
     ao ato original, que tem movimento próprio), MESMO que transcreva sentenças/acórdãos.
     Exceção: certidão que CERTIFICA trânsito em julgado explícito => transito_certificado=true
     (mas tem_decisao continua false).
+- autor_polo: SÓ em decisão de MÉRITO (procedente/improcedente/parcialmente_procedente) ou de
+  EXTINÇÃO. Diga QUAL POLO DESTE PROCESSO é o AUTOR da AÇÃO QUE FOI JULGADA.
+  Quase sempre 'ativo' — a ação julgada é a do próprio processo.
+  ⚠ A EXCEÇÃO que importa: sentença de EMBARGOS À EXECUÇÃO trasladada pros autos da
+  EXECUÇÃO julga OUTRA ação. Lá o autor é o EMBARGANTE, e o embargante É o EXECUTADO da
+  execução => autor_polo='passivo'. Vale igual pra qualquer ação incidental julgada que
+  apareça nos autos da principal (embargos de terceiro, exceção de pré-executividade
+  julgada como ação).
+  REGRA: leia QUEM PROPÔS a ação que esta decisão julga, e diga em qual polo DESTE processo
+  essa parte está. Se não é mérito/extinção, ou não dá pra identificar => autor_polo=null.
+  NÃO diga se foi bom/ruim pra alguém — este campo é NEUTRO, igual aos outros polos.
 - recorrente_polo + provido: SÓ em decisão de RECURSO. Leia no texto QUEM recorreu (apelante/
   agravante/recorrente), ache em qual polo ele está ('ativo'/'passivo'), e o resultado
   (provido/negado/parcial/não-conhecido). Se não der pra identificar o recorrente =>

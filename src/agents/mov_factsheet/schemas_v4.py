@@ -140,6 +140,22 @@ class DecisaoBlockV4(BaseModel):
         description="True SÓ se a mov CERTIFICA trânsito em julgado (texto explícito).",
     )
     # ── fatos crus NOVOS (neutros) — desacoplam extração de julgamento ──
+    autor_polo: Optional[Literal["ativo", "passivo"]] = Field(
+        default=None,
+        description=(
+            "Em decisão de MÉRITO ou de EXTINÇÃO: QUAL POLO DESTE PROCESSO é o AUTOR da "
+            "AÇÃO QUE FOI JULGADA (neutro — 'ativo' OU 'passivo', NÃO 'o cliente'). "
+            "Normalmente é 'ativo' (a ação julgada é a do próprio processo). "
+            "MAS: sentença de EMBARGOS À EXECUÇÃO trasladada pros autos da EXECUÇÃO é "
+            "julgamento de OUTRA ação — lá o autor é o EMBARGANTE, que é o EXECUTADO da "
+            "execução, ou seja o polo 'passivo' deste processo. O mesmo vale pra qualquer "
+            "decisão de ação incidental que apareça nos autos da principal (embargos de "
+            "terceiro, exceção de pré-executividade julgada como ação). "
+            "REGRA PRÁTICA: leia QUEM PROPÔS a ação que a decisão julga e diga em qual "
+            "polo DESTE processo essa parte está. null se não é mérito/extinção ou não dá "
+            "pra identificar."
+        ),
+    )
     recorrente_polo: Optional[Literal["ativo", "passivo"]] = Field(
         default=None,
         description=(
