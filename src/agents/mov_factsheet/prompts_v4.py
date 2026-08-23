@@ -208,6 +208,10 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
     ao ato original, que tem movimento próprio), MESMO que transcreva sentenças/acórdãos.
     Exceção: certidão que CERTIFICA trânsito em julgado explícito => transito_certificado=true
     (mas tem_decisao continua false).
+- dispositivo: a PROVA das duas regras acima. Copie o TRECHO LITERAL que enuncia o desfecho
+  (nunca parafraseie), até ~300 chars. Não achou a frase no texto => dispositivo=null E
+  tem_decisao=false — é o mesmo teste dito de outro jeito: se você não consegue APONTAR onde
+  o documento decide, ele não decide. ⛔ null é resposta correta; inventar não é.
 - recorrente_polo + provido: SÓ em decisão de RECURSO. Leia no texto QUEM recorreu (apelante/
   agravante/recorrente), ache em qual polo ele está ('ativo'/'passivo'), e o resultado
   (provido/negado/parcial/não-conhecido). Se não der pra identificar o recorrente =>

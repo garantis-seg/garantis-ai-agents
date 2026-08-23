@@ -139,6 +139,22 @@ class DecisaoBlockV4(BaseModel):
         default=False,
         description="True SÓ se a mov CERTIFICA trânsito em julgado (texto explícito).",
     )
+    dispositivo: Optional[str] = Field(
+        default=None,
+        description=(
+            "O TRECHO LITERAL do documento que decide — copiado, nunca parafraseado. "
+            "É a ÂNCORA do `natureza`: sem ela, ninguém consegue verificar o veredito. "
+            "Copie a frase que enuncia o desfecho (ex.: 'julgo improcedentes os embargos', "
+            "'nego provimento à apelação', 'extingo o feito sem resolução do mérito'), até "
+            "~300 caracteres. "
+            "⛔ null quando o documento NÃO decide — inclusive quando ele apenas RELATA que "
+            "houve decisão em outro ato ou em outro processo (comunicação/publicação/"
+            "intimação de sentença, certidão narratória). Nesse caso `tem_decisao` também é "
+            "false: a decisão pertence ao ato original, que tem movimento próprio. "
+            "⛔ NÃO invente e NÃO reconstrua de memória: se você não consegue apontar a frase "
+            "no texto, deixe null — null é uma resposta correta e útil."
+        ),
+    )
     # ── fatos crus NOVOS (neutros) — desacoplam extração de julgamento ──
     recorrente_polo: Optional[Literal["ativo", "passivo"]] = Field(
         default=None,
