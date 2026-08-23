@@ -124,7 +124,80 @@ PROMPT_VERSION = "mov_factsheet.v3.1"
 L1_NEUTRAL_FLAG = "L1_NEUTRAL_ENABLED"
 
 
-def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None) -> dict:
+# ══════════════════════════════════════════════════════════════════════════════
+# TRAVA DE CORPO (2026-08-23, card 869ent0g8): sem CORPO e sem DOC ANEXO nao ha
+# decisao — e ponto, sem passar pelo olho do LLM.
+#
+# O que a trava substitui: a instrucao ESTETICA de `prompts_v4.py` ("Snippet
+# generico ... => tem_decisao=false"), que pede ao modelo um julgamento de gosto
+# sobre a propria entrada. Ela falha por construcao quando o rotulo do catalogo do
+# provider CONTEM as palavras do desfecho: "Julgado - Julgado improcedente o
+# pedido" (39 chars, sem corpo, sem doc) nao e generico — e especifico e ERRADO,
+# e ate o campo `dispositivo` (que exige o trecho literal) e satisfeito por ele,
+# porque a frase esta mesmo la. Medido em prod: 3.964 cards de decisao nascidos
+# assim, em 810 processos / 227 meritos (199 com apolice).
+#
+# A trava e MECANICA e usa so o que a funcao ja tem em maos — `mov.texto` e
+# `documentos_anexados`. ⛔ NAO precisa do `metadata` do provider: medido, o campo
+# `classificacao_automatica` do jusbrasil aparece em 49,1% das movs <=60 chars e em
+# 37,1% das movs com >1.000 chars de texto REAL, e o `step_type` do judit em 64,1%
+# x 48,4% — nenhum dos dois separa etiqueta de documento, e nenhum existe em
+# tjsp_legacy/datalake/escavador.
+#
+# O CORTE em 60 chars e medido, nao escolhido: censo de 1.663 strings-fonte
+# classificadas por 2 lentes independentes + desempate cego. Ate 60 chars, 96,1%
+# dos cards vem de etiqueta de catalogo (2,6% texto real); na faixa 61-120 a
+# etiqueta cai pra 68,8% e o texto real sobe pra 25,5%. O penhasco e 10x.
+# ⛔ Nao suba o teto pra "pegar mais": a 120 a trava silenciaria 1 ato real em 4.
+# ⚠️ TETO DECLARADO: sobram ~1.900 cards-etiqueta na faixa 61-120 que esta trava
+# NAO alcanca. Pegar aquela faixa exige outro discriminador (voz do juiz /
+# cardinalidade da string), nao um numero maior.
+#
+# ⛔ Default OFF: apagar decisao fabricada move banda nos DOIS sentidos (medido:
+# 18 meritos desceriam, 11 subiriam). Ligar so com OK explicito do Elton.
+#
+# O flag e o corte moram em `prompts_v4.py` (fonte unica — o prompt tambem os le).
+# Import LAZY, mesmo motivo do `schemas_v4`/`derivacoes` logo abaixo: o caminho
+# v3.1 default nao pode passar a depender do modulo v4.
+
+
+def _decisao_exige_corpo() -> bool:
+    from .prompts_v4 import _decisao_exige_corpo as _f
+    return _f()
+
+
+def _sem_corpo(mov: "MovInput", docs: list) -> bool:
+    """A unidade nao tem sobre o que decidir: nenhum doc anexo com texto E o texto da
+    mov e curto demais pra conter um dispositivo. PURA (testavel sem LLM/banco)."""
+    from .prompts_v4 import CORPO_MIN_CHARS
+    return not docs and len((mov.texto or "").strip()) <= CORPO_MIN_CHARS
+
+
+# Campos que so existem PORQUE ha decisao — caem juntos com ela (o proprio
+# `_REGRAS_CRUS` ja diz "e entao natureza/recorrente/provido/resultado = null").
+# `transito_certificado` fica de FORA de proposito: certidao de transito e um fato
+# proprio, com guard proprio no L2, e nao depende de haver decisao nesta mov.
+_CAMPOS_DA_DECISAO = (
+    "natureza", "instancia", "dispositivo", "recorrente_polo", "provido",
+    "requerente_polo", "resultado_interlocutorio", "motivo_extincao",
+    "efeito_suspensivo", "instrumento_cautelar",
+)
+
+
+def _travar_decisao_sem_corpo(card_data: dict) -> None:
+    """Zera o bloco `decisao` in-place. Roda ANTES de `aplicar_derivados_sujeito_indep`
+    pra que categoria/peca_pivo/relevante saiam coerentes com tem_decisao=false."""
+    d = card_data.get("decisao")
+    if not isinstance(d, dict):
+        return
+    d["tem_decisao"] = False
+    for k in _CAMPOS_DA_DECISAO:
+        if k in d:
+            d[k] = None
+
+
+def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
+                   sem_corpo: bool = False) -> dict:
     """Caminho v4 (fatos neutros): valida o card, injeta identidade pos-parse (mov_id/data
     NAO sao emitidos pela LLM — ficam fora do response_schema) e aplica os derivados
     sujeito-INDEPENDENTES no ponto comum G6 (categoria/status_garantia/relevante/peca_pivo).
@@ -147,6 +220,8 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None) -> dict:
     card_data["mov_id"] = mov.mov_id             # identidade injetada (nao LLM-emitida)
     if mov.data:
         card_data["data"] = mov.data
+    if sem_corpo and _decisao_exige_corpo():
+        _travar_decisao_sem_corpo(card_data)     # ANTES do G6: peca_pivo sai coerente
     aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
     return card_data
 
@@ -403,6 +478,7 @@ async def classify_mov_factsheet(
             card_data = _build_card_v4(
                 parsed, mov,
                 card_cls=response_schema if classe in ("peticao", "doc_incerto") else None,
+                sem_corpo=_sem_corpo(mov, docs_typed),
             )
         else:
             # Echo input identifiers em caso de LLM reset
