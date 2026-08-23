@@ -12,7 +12,10 @@ import asyncio
 import json
 import logging
 import os
+import pathlib
 from typing import Optional
+
+from .._utils.prompt_identity import versao_com_identidade
 
 from garantis_shared.llm_chunking import map_reduce_classify
 
@@ -107,7 +110,16 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #     campos novos sao out-of-band (materializer/projecao), preservam o byte-identico da
 #     chamada e a licao do canario (risco_factual drift). Memory:
 #     extracao-sinais-merito-level-2026-06-29.
-PROMPT_VERSION = "processo_synthesis.v2.5"
+# ⭐ DERIVADA, nao mantida a mao. O rotulo `v2.5` continua legivel; o sufixo e
+# `sha256[:12]` de (prompt + schema) — o que de fato molda a saida do LLM.
+# 🚨 Medido: `processo_synthesis.v2.5` era IDENTICO antes, durante e depois do #180 (a
+# mudanca que abaixou banda), entao "quais cards vieram do prompt ruim?" era irrespondivel.
+# Razao completa, medicoes e a armadilha do `summary_prompt_version`: `_utils/prompt_identity.py`.
+PROMPT_VERSION = versao_com_identidade(
+    "processo_synthesis.v2.5",
+    str(pathlib.Path(__file__).with_name("prompts.py")),
+    str(pathlib.Path(__file__).with_name("schemas.py")),
+)
 
 
 async def classify_processo_synthesis(
