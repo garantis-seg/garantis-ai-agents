@@ -30,6 +30,10 @@ from __future__ import annotations
 
 from typing import Literal, Optional, get_args
 
+import pathlib
+
+from .._utils.prompt_identity import versao_com_identidade
+
 from garantis_shared.engine_v6.persistence.peticao_contract import (
     DOC_INCERTO_PROMPT_VERSION,
     PETICAO_PROMPT_VERSION,
@@ -89,7 +93,14 @@ from pydantic import BaseModel, Field, field_validator
 #   ED + certidão, control (acórdão de mérito real) preservado improcedente/e_pivo=true.
 #   derivar_e_pivo já trata interlocutoria/tem_decisao=false => e_pivo=false (sem mudar
 #   derivacoes). Ver memory l1-misread-m1-load-m2-orfao.
-PROMPT_VERSION_V4 = "mov_factsheet.v4.5"
+# ⭐ DERIVADA, nao mantida a mao — ver `_utils/prompt_identity.py` pra a razao e as medicoes.
+# ⚠️ Inclui ESTE arquivo (o schema molda a saida tanto quanto o prompt: o campo `dispositivo`
+# do PR #182 mudou o comportamento do L1 mexendo aqui).
+PROMPT_VERSION_V4 = versao_com_identidade(
+    "mov_factsheet.v4.5",
+    str(pathlib.Path(__file__).with_name("prompts_v4.py")),
+    __file__,
+)
 
 # Taxonomia tipo_doc (34) — idêntica à v3.1 (`schemas.py` / `fundacao.TAXONOMIA_TIPO_DOC`).
 # Mantida aqui pra o módulo v4 ser auto-contido/reversível; insumo de `categoria` (DERIVED).
