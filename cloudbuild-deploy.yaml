@@ -194,7 +194,7 @@ steps:
       # Trocar por PROVIDER diferente (nao so versao) segue em aberto — do Alfredo.
       # (resolução 155×156: S6 em 3.5-flash — o 2.5-flash do PR aposenta 2026-10-16;
       #  writer segue 3.1-flash-lite = no-op; par redator×auditor continua distinto.)
-      - 'DEFAULT_MODEL=gemini-3.1-flash-lite,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,FICHA_WRITER_MODEL=gemini-3.1-flash-lite,FICHA_AUDITORIA_TEXTO_MODEL=gemini-3.5-flash,DEFAULT_PROMPT_VERSION=v3,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
+      - 'DEFAULT_MODEL=gemini-3.1-flash-lite,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,FICHA_WRITER_MODEL=gemini-3.1-flash-lite,FICHA_AUDITORIA_TEXTO_MODEL=gemini-3.5-flash,DEFAULT_PROMPT_VERSION=v3,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,L1_DECISAO_EXIGE_CORPO=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
       # Fase 3 vertex-sem-key (2026-07-21, OK Elton): GOOGLE_API_KEY=GEMINI_API_KEY:latest
       # REMOVIDO — auth e ADC do service account (GEMINI_BACKEND=vertex; provado em staging
       # 2026-07-21 rodando sem key nenhuma). --clear-secrets (e nao so tirar a flag) porque
