@@ -266,14 +266,6 @@ def _summarize_factsheet(fs: MovFactSheetMin) -> str:
     decisao = fs.decisao or {}
     if decisao.get("tem_decisao"):
         d_parts = [f"DECISAO {decisao.get('natureza') or '?'}"]
-        # `autor_polo` = qual polo DESTE processo moveu a ACAO JULGADA. Sem ele no render,
-        # o PASSO 0 da <regra_polos> nao tem sinal e o LLM volta a bucketizar pela CLASSE
-        # do processo — que inverte 100% das sentencas de embargos TRASLADADAS pros autos
-        # da execucao (o embargante e o EXECUTADO). Card 869efuvwk.
-        # ⚠️ O render escolhe CHAVE A CHAVE: campo que nao aparece aqui NAO chega ao LLM,
-        # por mais que o prompt fale dele. Instrucao sem dado e letra morta.
-        if decisao.get("autor_polo"):
-            d_parts.append(f"autor_polo={decisao['autor_polo']}")
         if decisao.get("instancia"):
             d_parts.append(decisao["instancia"])
         if decisao.get("sentido"):
@@ -618,31 +610,7 @@ NAO inclua esse campo neste output.
 PRINCIPIO: o Tomador da apolice pode estar em QUALQUER polo dependendo da classe
 processual. Identifique ONDE o Tomador esta ANTES de mapear decisao_vigente.sentido.
 
-PASSO 0 — DE QUAL ACAO E ESTA DECISAO? (faca ANTES do bucket)
-O bucket do PASSO 1 e pela classe do PROCESSO. Isso so vale quando a decisao julga a
-acao DESSE processo — e nem sempre e o caso.
-⚠ O caso que quebra: sentenca de EMBARGOS A EXECUCAO **trasladada pros autos da
-EXECUCAO** (o proprio dispositivo manda: "traslade-se a sentenca para os autos da
-execucao fiscal principal"). O documento esta na timeline da Execucao Fiscal, mas julga
-os EMBARGOS — e nos embargos os polos sao INVERTIDOS: o embargante e o EXECUTADO.
-Bucketizar pela classe do processo inverte o sentido em 100% desses casos.
-
-COMO RESOLVER, em ordem:
-(a) Se o factsheet traz `decisao.autor_polo` PREENCHIDO, ele ja responde: e o polo DESTE
-    processo que e AUTOR da acao julgada. `autor_polo='passivo'` num processo de Execucao
-    Fiscal significa "esta decisao e dos EMBARGOS" => use o bucket de EMBARGOS, nao o de
-    Execucao Fiscal.
-(b) Se vier null, leia o `resumo_ato`: "julgou (im)procedentes os embargos opostos por X",
-    "embargos de terceiro", "excecao de pre-executividade julgada" => a acao julgada NAO
-    e a do processo. Bucketize pela acao JULGADA.
-(c) Nao conseguiu decidir de qual acao e => sentido=null + confianca<=0.5. NAO chute pelo
-    bucket da classe.
-
-⭐ `autor_polo` e NEUTRO, como `recorrente_polo` e `requerente_polo`: ele diz QUEM MOVEU a
-acao julgada, nunca se foi bom ou ruim pra alguem. Quem converte em favoravel/desfavoravel
-e o PASSO 3.
-
-PASSO 1 — Bucket pela classe (DA ACAO JULGADA, resolvida no PASSO 0):
+PASSO 1 — Bucket pela classe:
 - Execucao Fiscal, Cumprimento de Sentenca, Acao Monitoria contra o Tomador:
   polo_ativo = Fazenda/Credor; polo_passivo = TOMADOR (executado).
   Procedente da execucao = TOMADOR PERDEU. Improcedente = TOMADOR GANHOU.
