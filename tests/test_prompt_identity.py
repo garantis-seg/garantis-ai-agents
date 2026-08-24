@@ -116,12 +116,26 @@ def test_o_L1_carimba_identidade_DERIVADA():
     assert PROMPT_VERSION_V4.split("+", 1)[1] != "unknown"
 
 
+def test_a_TRIAGEM_carimba_identidade_DERIVADA():
+    """🚨 A camada que MAIS roda e era a que menos se movia: 318.829 de 612.320 chamadas
+    reais em 30d (52%) saiam com `mov_triage.v1`, rotulo parado desde 2026-06-04. O
+    comentario acima da constante mandava bumpar a mao — e provou que instrucao nao e
+    mecanismo."""
+    from src.agents.mov_triage.agent import PROMPT_VERSION
+
+    assert PROMPT_VERSION.startswith("mov_triage.v1+"), (
+        f"a triagem voltou a carimbar identidade a mao: {PROMPT_VERSION!r}"
+    )
+    assert PROMPT_VERSION.split("+", 1)[1] != "unknown", "o hash nao resolveu — arquivo movido?"
+
+
 def test_cada_camada_cobre_PROMPT_E_SCHEMA_dela():
     """⚠️ A lacuna que eu quase deixei passar: os testes acima ficam TODOS verdes se alguem
     tirar o schema da chamada — o helper continua certo e o agent continua derivando algo.
     Aqui o valor e RECOMPUTADO a partir dos 2 arquivos e comparado: se a lista de entradas
     mudar, isto quebra. Comportamental, nao ancora de texto."""
     from src.agents.mov_factsheet import schemas_v4
+    from src.agents.mov_triage import agent as triage_agent
     from src.agents.processo_synthesis import agent as l2_agent
 
     l2_dir = pathlib.Path(l2_agent.__file__).parent
@@ -134,15 +148,56 @@ def test_cada_camada_cobre_PROMPT_E_SCHEMA_dela():
         "mov_factsheet.v4.5", str(l1_schema.with_name("prompts_v4.py")), str(l1_schema)
     ), "o L1 parou de cobrir prompt+schema (ou mudou a ordem)"
 
+    triage_dir = pathlib.Path(triage_agent.__file__).parent
+    assert triage_agent.PROMPT_VERSION == versao_com_identidade(
+        "mov_triage.v1",
+        str(triage_dir / "prompts.py"),
+        str(triage_dir / "schemas.py"),
+        str(triage_dir / "agent.py"),
+    ), "a triagem parou de cobrir prompt+schema+agent (ou mudou a ordem)"
 
-def test_as_duas_camadas_tem_identidades_DIFERENTES():
+
+def test_a_triagem_cobre_o_AGENT_e_nao_so_prompt_mais_schema():
+    """🚨 O conjunto {prompts,schemas} sozinho seria MUDO, nao estavel.
+
+    Medido em 2026-08-24: esses 2 arquivos tem **1 blob em TODA a historia** (nasceram em
+    `aa45a02`, 04/06, nunca tocados), enquanto o `agent.py` mudou 6 vezes — e pelo menos 5
+    dessas mudam o que o card EMITE: o leak guard de `resumo_ato` (#69-#72, 29/06), que
+    SOBRESCREVE pos-LLM um dos 3 campos que o ramo enxuto copia verbatim; e o swap de modelo
+    de `b82f156` (21/07). Com os 3 arquivos sao **7 baldes** em toda a historia.
+
+    ⇒ Sem o `agent.py` o hash seria uma CONSTANTE, carregando a mesma informacao que a string
+    `"mov_triage.v1"` que ele substitui. Este teste e o que impede alguem de "simplificar" o
+    conjunto de volta e reintroduzir o defeito com o carimbo parecendo certo.
+    """
+    from src.agents.mov_triage import agent as triage_agent
+
+    triage_dir = pathlib.Path(triage_agent.__file__).parent
+    sem_o_agent = versao_com_identidade(
+        "mov_triage.v1", str(triage_dir / "prompts.py"), str(triage_dir / "schemas.py")
+    )
+    assert triage_agent.PROMPT_VERSION != sem_o_agent, (
+        "o agent.py saiu do conjunto — o hash volta a ser constante em toda a historia"
+    )
+
+
+def test_as_tres_camadas_tem_identidades_DIFERENTES():
     """⭐ Verificado no git: o PR #182 mexeu SO no L1, e o blob do L2 ficou identico ao do
-    revert. A identidade e POR CAMADA — se as duas colidissem, uma mudanca no L1 acusaria
-    mudanca no L2 e o campo mentiria."""
+    revert. A identidade e POR CAMADA — se duas colidissem, uma mudanca numa acusaria
+    mudanca na outra e o campo mentiria.
+    ⚠️ A triagem entra aqui porque o `schemas.py` dela IMPORTA os tipos de input do
+    mov_factsheet: e a tentacao de incluir os arquivos do L1 completo no hash dela, e isso
+    faria exatamente a colisao que este teste proibe."""
     from src.agents.mov_factsheet.schemas_v4 import PROMPT_VERSION_V4
+    from src.agents.mov_triage.agent import PROMPT_VERSION as TRIAGE_VERSION
     from src.agents.processo_synthesis.agent import PROMPT_VERSION
 
-    assert PROMPT_VERSION.split("+", 1)[1] != PROMPT_VERSION_V4.split("+", 1)[1]
+    hashes = [
+        PROMPT_VERSION.split("+", 1)[1],
+        PROMPT_VERSION_V4.split("+", 1)[1],
+        TRIAGE_VERSION.split("+", 1)[1],
+    ]
+    assert len(set(hashes)) == 3, f"duas camadas colidiram no mesmo id: {hashes}"
 
 
 def test_o_agent_do_L2_RETORNA_a_versao_no_resultado():
@@ -156,4 +211,17 @@ def test_o_agent_do_L2_RETORNA_a_versao_no_resultado():
     fonte = inspect.getsource(m)
     assert '"prompt_version": PROMPT_VERSION' in fonte, (
         "o agent parou de devolver prompt_version — o carimbo nao chega em engine_llm_calls"
+    )
+
+
+def test_o_agent_da_TRIAGEM_RETORNA_a_versao_no_resultado():
+    """Mesmo motivo do L2, e aqui vale 52% do acervo: derivar a constante e nao devolve-la
+    deixaria a coluna com o valor VELHO em silencio."""
+    import inspect
+
+    import src.agents.mov_triage.agent as m
+
+    fonte = inspect.getsource(m)
+    assert '"prompt_version": PROMPT_VERSION' in fonte, (
+        "a triagem parou de devolver prompt_version — o carimbo nao chega em engine_llm_calls"
     )

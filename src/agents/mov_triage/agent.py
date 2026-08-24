@@ -17,12 +17,14 @@ malformado -> error dict, e o caller trata como "precisa completo".
 import json
 import logging
 import os
+import pathlib
 from typing import Optional
 
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
+from .._utils.prompt_identity import versao_com_identidade
 from ..mov_factsheet.agent import _resumo_looks_like_json_meta_leak
 from .prompts import build_mov_triage_prompt
 from .schemas import (
@@ -41,13 +43,43 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("MOV_TRIAGE_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-# Bump quando alterar build_mov_triage_prompt OR MovTriageCard schema.
-# Usado pra drift detection em leads.engine_llm_calls.prompt_version.
-#
 # v1 (2026-06-04): porte do POC l1_triagem.py (build_triagem_prompt +
 #   TRIAGEM_SCHEMA). Prompt curto (~5k chars), 2 portoes (mov_merito,
 #   mov_garantia_exec), persona de triagem + regra de ouro.
-PROMPT_VERSION = "mov_triage.v1"
+#
+# ⭐ DERIVADA, nao mantida a mao — razao e medicoes em `_utils/prompt_identity.py`.
+# 🚨 O comentario que estava aqui dizia "Bump quando alterar build_mov_triage_prompt OR
+# MovTriageCard schema / usado pra drift detection". Medido em 2026-08-24: o rotulo esta em
+# `v1` desde 04/06, e 50,9% dos cards L1 tem a triagem como UNICA provenance (o ramo enxuto
+# nao gera row em layer1_mov_factsheet) — a instrucao existia e a deteccao de drift era ZERO
+# na camada que decide o que as outras chegam a ver.
+#
+# ⭐⭐ `agent.py` ENTRA NO CONJUNTO, e essa e a parte que quase passou batido. O contrato
+# ESCRITO acima dizia "prompt OR schema", mas hashear so esses dois daria **1 balde em TODA
+# a historia** (os dois arquivos nasceram em `aa45a02` 04/06 e nunca mais foram tocados) —
+# um hash constante carrega exatamente a mesma informacao que a string que ele substitui.
+# No mesmo periodo o `agent.py` mudou 6 vezes, e pelo menos 5 delas mudam o que o card EMITE:
+#   #69/#70/#71/#72 (29/06) — o leak guard de `resumo_ato` (linhas ~124-133 abaixo), que
+#     SOBRESCREVE pos-LLM um dos 3 campos que o ramo enxuto copia verbatim da triagem;
+#   b82f156 (21/07)         — swap de MODELO (2.5-flash-lite -> 3.1-flash-lite), mudanca
+#     deliberada de qualidade (gold staging 16/26 vs 15/26).
+# Com os 3 arquivos: **7 baldes em toda a historia** (~2-3/trimestre; regua da casa: 25).
+# ⚠️ Isto inclui este proprio arquivo, entao edicao aqui que NAO muda a saida tambem bumpa.
+# E ruido barato e da classe que o `prompt_identity.py` abencoa ("sobre-sensivel na direcao
+# segura"): dois prompts diferentes nunca dividem um id.
+#
+# ⛔ NAO incluir arquivo do `mov_factsheet`: o `schemas.py` daqui importa os tipos de INPUT
+# de la, mas input nao molda saida, e incluir faria uma edicao no L1 completo acusar mudanca
+# na triagem (ha teste guardando as 3 identidades separadas).
+# ⭐ Ninguem casa este valor por LITERAL e ninguem quebra (grep em fe-api + shared +
+# garantis-app + views/matviews/pg_proc do banco, 2026-08-24) — ao contrario de
+# `PETICAO_PROMPT_VERSION`, que e chave de ROLLOUT do `reextract_stale` e fica congelada.
+PROMPT_VERSION = versao_com_identidade(
+    "mov_triage.v1",
+    str(pathlib.Path(__file__).with_name("prompts.py")),
+    str(pathlib.Path(__file__).with_name("schemas.py")),
+    __file__,
+)
 
 
 async def classify_mov_triage(
