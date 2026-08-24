@@ -11,7 +11,7 @@ import pytest
 from src.agents.mov_factsheet.agent import (
     _build_card_v4,
     _sem_corpo,
-    _travar_decisao_sem_corpo,
+    _zerar_decisao,
 )
 from src.agents.mov_factsheet.prompts_v4 import (
     CORPO_MIN_CHARS,
@@ -114,14 +114,14 @@ def test_transito_certificado_sobrevive_a_trava(monkeypatch):
 
 def test_travar_e_idempotente():
     card = {"decisao": {"tem_decisao": True, "natureza": "procedente"}}
-    _travar_decisao_sem_corpo(card)
-    _travar_decisao_sem_corpo(card)
+    _zerar_decisao(card)
+    _zerar_decisao(card)
     assert card["decisao"] == {"tem_decisao": False, "natureza": None}
 
 
 def test_travar_tolera_card_sem_bloco_decisao():
     card = {"resumo_ato": "x"}
-    _travar_decisao_sem_corpo(card)          # nao levanta
+    _zerar_decisao(card)          # nao levanta
     assert "decisao" not in card
 
 
