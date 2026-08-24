@@ -150,8 +150,35 @@ def test_cada_camada_cobre_PROMPT_E_SCHEMA_dela():
 
     triage_dir = pathlib.Path(triage_agent.__file__).parent
     assert triage_agent.PROMPT_VERSION == versao_com_identidade(
+        "mov_triage.v1",
+        str(triage_dir / "prompts.py"),
+        str(triage_dir / "schemas.py"),
+        str(triage_dir / "agent.py"),
+    ), "a triagem parou de cobrir prompt+schema+agent (ou mudou a ordem)"
+
+
+def test_a_triagem_cobre_o_AGENT_e_nao_so_prompt_mais_schema():
+    """🚨 O conjunto {prompts,schemas} sozinho seria MUDO, nao estavel.
+
+    Medido em 2026-08-24: esses 2 arquivos tem **1 blob em TODA a historia** (nasceram em
+    `aa45a02`, 04/06, nunca tocados), enquanto o `agent.py` mudou 6 vezes — e pelo menos 5
+    dessas mudam o que o card EMITE: o leak guard de `resumo_ato` (#69-#72, 29/06), que
+    SOBRESCREVE pos-LLM um dos 3 campos que o ramo enxuto copia verbatim; e o swap de modelo
+    de `b82f156` (21/07). Com os 3 arquivos sao **7 baldes** em toda a historia.
+
+    ⇒ Sem o `agent.py` o hash seria uma CONSTANTE, carregando a mesma informacao que a string
+    `"mov_triage.v1"` que ele substitui. Este teste e o que impede alguem de "simplificar" o
+    conjunto de volta e reintroduzir o defeito com o carimbo parecendo certo.
+    """
+    from src.agents.mov_triage import agent as triage_agent
+
+    triage_dir = pathlib.Path(triage_agent.__file__).parent
+    sem_o_agent = versao_com_identidade(
         "mov_triage.v1", str(triage_dir / "prompts.py"), str(triage_dir / "schemas.py")
-    ), "a triagem parou de cobrir prompt+schema (ou mudou a ordem)"
+    )
+    assert triage_agent.PROMPT_VERSION != sem_o_agent, (
+        "o agent.py saiu do conjunto — o hash volta a ser constante em toda a historia"
+    )
 
 
 def test_as_tres_camadas_tem_identidades_DIFERENTES():

@@ -50,18 +50,35 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 # ⭐ DERIVADA, nao mantida a mao — razao e medicoes em `_utils/prompt_identity.py`.
 # 🚨 O comentario que estava aqui dizia "Bump quando alterar build_mov_triage_prompt OR
 # MovTriageCard schema / usado pra drift detection". Medido em 2026-08-24: o rotulo esta em
-# `v1` desde 04/06 e a triagem e o MAIOR emissor do acervo (318.829 de 612.320 chamadas reais
-# em 30d, 52%) — ou seja, a instrucao existia e a deteccao de drift era ZERO na camada que
-# mais roda. O sufixo `sha256[:12]` de (prompt + schema) e o que ninguem precisa lembrar.
-# ⚠️ SO estes 2 arquivos: `schemas.py` importa os tipos de INPUT do mov_factsheet, mas eles
-# nao moldam a saida — incluir arquivo de outra camada faria uma edicao no L1 completo
-# acusar mudanca na triagem (ha teste guardando as duas identidades separadas).
-# ⭐ Ninguem casa este valor por igualdade (grep em fe-api + shared, 2026-08-24) — ao
-# contrario de `PETICAO_PROMPT_VERSION`, que e chave de ROLLOUT e por isso fica congelado.
+# `v1` desde 04/06, e 50,9% dos cards L1 tem a triagem como UNICA provenance (o ramo enxuto
+# nao gera row em layer1_mov_factsheet) — a instrucao existia e a deteccao de drift era ZERO
+# na camada que decide o que as outras chegam a ver.
+#
+# ⭐⭐ `agent.py` ENTRA NO CONJUNTO, e essa e a parte que quase passou batido. O contrato
+# ESCRITO acima dizia "prompt OR schema", mas hashear so esses dois daria **1 balde em TODA
+# a historia** (os dois arquivos nasceram em `aa45a02` 04/06 e nunca mais foram tocados) —
+# um hash constante carrega exatamente a mesma informacao que a string que ele substitui.
+# No mesmo periodo o `agent.py` mudou 6 vezes, e pelo menos 5 delas mudam o que o card EMITE:
+#   #69/#70/#71/#72 (29/06) — o leak guard de `resumo_ato` (linhas ~124-133 abaixo), que
+#     SOBRESCREVE pos-LLM um dos 3 campos que o ramo enxuto copia verbatim da triagem;
+#   b82f156 (21/07)         — swap de MODELO (2.5-flash-lite -> 3.1-flash-lite), mudanca
+#     deliberada de qualidade (gold staging 16/26 vs 15/26).
+# Com os 3 arquivos: **7 baldes em toda a historia** (~2-3/trimestre; regua da casa: 25).
+# ⚠️ Isto inclui este proprio arquivo, entao edicao aqui que NAO muda a saida tambem bumpa.
+# E ruido barato e da classe que o `prompt_identity.py` abencoa ("sobre-sensivel na direcao
+# segura"): dois prompts diferentes nunca dividem um id.
+#
+# ⛔ NAO incluir arquivo do `mov_factsheet`: o `schemas.py` daqui importa os tipos de INPUT
+# de la, mas input nao molda saida, e incluir faria uma edicao no L1 completo acusar mudanca
+# na triagem (ha teste guardando as 3 identidades separadas).
+# ⭐ Ninguem casa este valor por LITERAL e ninguem quebra (grep em fe-api + shared +
+# garantis-app + views/matviews/pg_proc do banco, 2026-08-24) — ao contrario de
+# `PETICAO_PROMPT_VERSION`, que e chave de ROLLOUT do `reextract_stale` e fica congelada.
 PROMPT_VERSION = versao_com_identidade(
     "mov_triage.v1",
     str(pathlib.Path(__file__).with_name("prompts.py")),
     str(pathlib.Path(__file__).with_name("schemas.py")),
+    __file__,
 )
 
 
