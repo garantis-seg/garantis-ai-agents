@@ -17,12 +17,14 @@ malformado -> error dict, e o caller trata como "precisa completo".
 import json
 import logging
 import os
+import pathlib
 from typing import Optional
 
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
+from .._utils.prompt_identity import versao_com_identidade
 from ..mov_factsheet.agent import _resumo_looks_like_json_meta_leak
 from .prompts import build_mov_triage_prompt
 from .schemas import (
@@ -41,13 +43,26 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = os.getenv("MOV_TRIAGE_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-# Bump quando alterar build_mov_triage_prompt OR MovTriageCard schema.
-# Usado pra drift detection em leads.engine_llm_calls.prompt_version.
-#
 # v1 (2026-06-04): porte do POC l1_triagem.py (build_triagem_prompt +
 #   TRIAGEM_SCHEMA). Prompt curto (~5k chars), 2 portoes (mov_merito,
 #   mov_garantia_exec), persona de triagem + regra de ouro.
-PROMPT_VERSION = "mov_triage.v1"
+#
+# ⭐ DERIVADA, nao mantida a mao — razao e medicoes em `_utils/prompt_identity.py`.
+# 🚨 O comentario que estava aqui dizia "Bump quando alterar build_mov_triage_prompt OR
+# MovTriageCard schema / usado pra drift detection". Medido em 2026-08-24: o rotulo esta em
+# `v1` desde 04/06 e a triagem e o MAIOR emissor do acervo (318.829 de 612.320 chamadas reais
+# em 30d, 52%) — ou seja, a instrucao existia e a deteccao de drift era ZERO na camada que
+# mais roda. O sufixo `sha256[:12]` de (prompt + schema) e o que ninguem precisa lembrar.
+# ⚠️ SO estes 2 arquivos: `schemas.py` importa os tipos de INPUT do mov_factsheet, mas eles
+# nao moldam a saida — incluir arquivo de outra camada faria uma edicao no L1 completo
+# acusar mudanca na triagem (ha teste guardando as duas identidades separadas).
+# ⭐ Ninguem casa este valor por igualdade (grep em fe-api + shared, 2026-08-24) — ao
+# contrario de `PETICAO_PROMPT_VERSION`, que e chave de ROLLOUT e por isso fica congelado.
+PROMPT_VERSION = versao_com_identidade(
+    "mov_triage.v1",
+    str(pathlib.Path(__file__).with_name("prompts.py")),
+    str(pathlib.Path(__file__).with_name("schemas.py")),
+)
 
 
 async def classify_mov_triage(
