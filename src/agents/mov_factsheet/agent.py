@@ -202,9 +202,13 @@ _CAMPOS_DA_DECISAO = (
 )
 
 
-def _travar_decisao_sem_corpo(card_data: dict) -> None:
+def _zerar_decisao(card_data: dict) -> None:
     """Zera o bloco `decisao` in-place. Roda ANTES de `aplicar_derivados_sujeito_indep`
-    pra que categoria/peca_pivo/relevante saiam coerentes com tem_decisao=false."""
+    pra que categoria/peca_pivo/relevante saiam coerentes com tem_decisao=false.
+
+    ⚠️ Chamada por DOIS predicados independentes (corpo e dispositivo) — por isso o nome
+    e a acao, nao a razao. Idempotente: aplicar duas vezes e igual a aplicar uma.
+    """
     d = card_data.get("decisao")
     if not isinstance(d, dict):
         return
@@ -212,6 +216,51 @@ def _travar_decisao_sem_corpo(card_data: dict) -> None:
     for k in _CAMPOS_DA_DECISAO:
         if k in d:
             d[k] = None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TRAVA DE DISPOSITIVO (card 869enpem7): sem a ANCORA, o L1 nao afirma decisao.
+#
+# ⛔ NAO e a irma da trava de corpo, e a OUTRA METADE. Sao dois predicados para a
+# mesma conclusao, e nenhum contem o outro:
+#   corpo       = "nao ha sobre o que decidir"  (a unidade nao tem texto nem doc)
+#   dispositivo = "ha corpo e o card nao aponta onde"  (o card ADMITE que nao sustenta)
+# O cohort residual desta trava e, por construcao, o que a de corpo NAO alcanca:
+# card COM corpo, que afirma veredito e nao consegue citar a frase que o enuncia.
+#
+# ⭐ A regra JA EXISTE no prompt, palavra por palavra (`_REGRAS_CRUS`):
+#   "Nao achou a frase no texto => dispositivo=null E tem_decisao=false".
+# Ela e VIOLADA, nao mal escrita — por isso o conserto e MECANICO e nao mais uma
+# frase no prompt. O bullet FICA: ele e o que faz o modelo emitir a ancora nos casos
+# em que ele consegue, e e o controle positivo desta trava.
+#
+# ⛔ Default OFF. O custo declarado: decisao LEGITIMA que o modelo simplesmente nao
+# soube citar cai junto (falso positivo de higiene virando perda de sinal). O numero
+# medido e o dry-run estao no corpo do PR — nao ligue a flag sem eles.
+L1_DECISAO_EXIGE_DISPOSITIVO = "L1_DECISAO_EXIGE_DISPOSITIVO"
+
+
+def _decisao_exige_dispositivo() -> bool:
+    """Flag da trava de dispositivo. Default OFF = card IDENTICO ao de hoje.
+
+    ⛔ Mora AQUI, e nao em `prompts_v4.py` como o `L1_DECISAO_EXIGE_CORPO`: aquele tem
+    DOIS consumidores (o prompt tambem o le, pra remover o anticorpo estetico) e por isso
+    precisa de fonte unica no modulo folha. Este tem UM — o prompt nao muda sob ele.
+    """
+    return flag_enabled(L1_DECISAO_EXIGE_DISPOSITIVO)
+
+
+def _sem_dispositivo(card_data: dict) -> bool:
+    """O card AFIRMA decisao e nao consegue apontar a frase que decide. PURA.
+
+    String vazia conta como ausente: o schema declara `None` como default, mas '' passa
+    igual pela validacao e some do `IS NULL` da leitura — os dois significam a MESMA
+    coisa ("nao achei a frase") e tem de cair no mesmo lado do predicado.
+    """
+    d = card_data.get("decisao")
+    if not isinstance(d, dict) or not d.get("tem_decisao"):
+        return False
+    return not (d.get("dispositivo") or "").strip()
 
 
 def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
@@ -239,7 +288,19 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
     if mov.data:
         card_data["data"] = mov.data
     if sem_corpo and _decisao_exige_corpo():
-        _travar_decisao_sem_corpo(card_data)     # ANTES do G6: peca_pivo sai coerente
+        _zerar_decisao(card_data)                # ANTES do G6: peca_pivo sai coerente
+    if _sem_dispositivo(card_data):
+        # ⭐ O log sai com a flag DESLIGADA, de proposito — ele e a metade que MEDE.
+        # A fase 0 deste card mediu 4 ocorrencias, todas de UM merito e UMA run: nao ha
+        # volume pra decidir ligar. Um contador que so fala quando a trava age nunca
+        # acumularia esse volume, e "contador em zero" seria indistinguivel de mudo.
+        logger.warning(
+            "L1_DECISAO_SEM_ANCORA mov_id=%s natureza=%s tipo_doc=%s travado=%s",
+            mov.mov_id, (card_data.get("decisao") or {}).get("natureza"),
+            card_data.get("tipo_doc"), _decisao_exige_dispositivo(),
+        )
+        if _decisao_exige_dispositivo():
+            _zerar_decisao(card_data)            # idem — a ancora e a outra metade
     aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
     return card_data
 
