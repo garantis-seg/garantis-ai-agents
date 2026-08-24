@@ -164,3 +164,38 @@ def test_ato_real_curto_e_o_custo_declarado(monkeypatch):
     assert _sem_corpo(_mov(ATO_REAL_CURTO), [])
     card = _build_card_v4(_card_llm(), _mov(ATO_REAL_CURTO), sem_corpo=True)
     assert card["decisao"]["tem_decisao"] is False
+
+
+# ── 3o estado: documento EXISTE mas nao foi admitido (869enu94n) ──────────────
+def _mov_ilegivel(texto: str, n: int = 1) -> MovInput:
+    """Mov curta, SEM doc admissivel, mas com `n` docs que existem e nao passaram no
+    filtro (sem texto E sem gcs_url) — o carimbo vem do loader do shared."""
+    return MovInput(mov_id="m1", data="2022-08-18", tipo="Andamento - Julgado",
+                    texto=texto, docs_inadmissiveis=n)
+
+
+def test_doc_ilegivel_nao_e_sem_corpo():
+    """O caso do merito 17 (CVC): a `Sentenca Tipo A` existe, mas com has_text=false e
+    gcs_url NULL. O rotulo e PONTEIRO pra peca real — nao pode ser apagado."""
+    assert not _sem_corpo(_mov_ilegivel(ROTULO), [])
+
+
+def test_sem_doc_nenhum_continua_sendo_sem_corpo():
+    """O discriminador: 0 docs inadmissiveis = nao existe peca = afirmacao sem lastro."""
+    assert _sem_corpo(_mov_ilegivel(ROTULO, n=0), [])
+
+
+def test_campo_declarado_no_schema_senao_pydantic_descarta():
+    """⛔ Guard da armadilha: pydantic v2 descarta campo NAO declarado em silencio, e o
+    sinal viraria letra morta sem erro nenhum (mesma classe do bug da fundacao do
+    Tomador). Este teste falha se alguem remover o campo do MovInput."""
+    m = MovInput(**{"mov_id": "m1", "texto": ROTULO, "docs_inadmissiveis": 3})
+    assert m.docs_inadmissiveis == 3
+
+
+def test_flag_on_nao_apaga_decisao_quando_doc_e_ilegivel(monkeypatch):
+    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
+    card = _build_card_v4(_card_llm(), _mov_ilegivel(ROTULO),
+                          sem_corpo=_sem_corpo(_mov_ilegivel(ROTULO), []))
+    assert card["decisao"]["tem_decisao"] is True
+    assert card["decisao"]["natureza"] == "improcedente"

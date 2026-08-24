@@ -315,6 +315,16 @@ class MovInput(BaseModel):
     data: Optional[str] = None
     tipo: Optional[str] = None
     texto: str
+    # Quantos documentos EXISTEM pra esta mov e NAO passaram no filtro de admissao
+    # do loader (sem texto E sem gcs_url). Lido so pela trava de corpo, em
+    # `agent.py::_sem_corpo` — ver 869enu94n. >0 significa "ha peca, nao conseguimos
+    # ler", que NAO e a mesma coisa que "nao ha peca": no 1o caso o rotulo do
+    # provider e ponteiro pra um documento real, e apagar a decisao perderia um fato
+    # provavelmente verdadeiro (sub-rating quando adverso).
+    # ⛔ Tem de estar DECLARADO aqui: pydantic v2 DESCARTA campo nao declarado em
+    # silencio — mesma armadilha que ja custou a fundacao do Tomador (ver o docstring
+    # de ProcessoContext logo abaixo).
+    docs_inadmissiveis: int = 0
 
 
 class ProcessoContext(BaseModel):

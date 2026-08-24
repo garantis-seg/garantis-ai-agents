@@ -167,9 +167,27 @@ def _decisao_exige_corpo() -> bool:
 
 
 def _sem_corpo(mov: "MovInput", docs: list) -> bool:
-    """A unidade nao tem sobre o que decidir: nenhum doc anexo com texto E o texto da
-    mov e curto demais pra conter um dispositivo. PURA (testavel sem LLM/banco)."""
+    """A unidade nao tem sobre o que decidir. PURA (testavel sem LLM/banco).
+
+    TRES estados, nao dois (869enu94n) — "lista de docs vazia" e ambiguo:
+
+      1. ha doc admissivel                 -> False (o agent le o doc)
+      2. NAO existe documento nenhum       -> True  (rotulo do provider sem lastro)
+      3. existe doc e nao foi admitido     -> False (ponteiro pra peca que nao demos conta
+                                                     de ler; apagar perderia fato REAL)
+
+    O 3o caso e o que faltava. Ele custou o merito 17 (CVC, com apolice), cuja
+    `decisao_atual` improcedente 2022-08-18 se apoia num card-rotulo cujo unico doc e uma
+    `Sentenca Tipo A` com `has_text=false` E `gcs_url` NULL — a peca EXISTE, so nao chega
+    aqui. Medido: 15 cards em 14 meritos. Raro, mas e o unico dos tres em que a trava
+    erra, e erra na direcao perigosa (sub-rating).
+
+    `docs_inadmissiveis` vem carimbado pelo loader do shared
+    (`fetch_docs_for_movs_batch`). Ausente/0 = comportamento anterior.
+    """
     from .prompts_v4 import CORPO_MIN_CHARS
+    if getattr(mov, "docs_inadmissiveis", 0):
+        return False
     return not docs and len((mov.texto or "").strip()) <= CORPO_MIN_CHARS
 
 
