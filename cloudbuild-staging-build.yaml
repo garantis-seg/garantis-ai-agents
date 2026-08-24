@@ -38,6 +38,26 @@ steps:
       # explicita garante que staging ensaie o par real. Precisa ser != FICHA_WRITER_MODEL.
       # (resolucao 155x156: S6 em 3.5-flash — o 2.5-flash aposenta 2026-10-16.)
       - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,FICHA_WRITER_MODEL=gemini-3.1-flash-lite,FICHA_AUDITORIA_TEXTO_MODEL=gemini-3.5-flash'
+      # ⭐ O PAR do --update-env-vars acima, e a razao e ele: sendo ADITIVO, env que
+      # some do repo NUNCA some do servico — ela fica viva no clone pra sempre.
+      # Padrao copiado do irmao `execucao-fiscal/risk-engine-worker/
+      # cloudbuild-staging-build.yaml`, que ja carrega esta lista.
+      # ⛔ NAO troque por um `gcloud run services update --remove-env-vars` a mao:
+      # o proximo build aditivo NAO a remove, mas tambem nao a repoe — o que volta
+      # e o proximo `refresh-staging-from-prod`, e ai a limpeza se desfaz calada.
+      # ⚠️ Env inexistente em `--remove-env-vars` e NO-OP, entao a linha e idempotente
+      # e uma env ja removida pode ficar aqui sem custo.
+      #
+      # L3_AB_TEST_ENABLED (card 869ejape0, item 3): a flag foi REMOVIDA DO CODIGO
+      # na poda de 2026-07-05 (`garantis_shared/engine_v6/feature_flags.py`) e as 5
+      # ocorrencias que restam nos 4 repos sao LAPIDE — zero leitor, verificado
+      # 2026-08-24. Ela seguia `=true` no `garantis-ai-agents-staging` justamente
+      # por este cloudbuild ser aditivo. ⚠️ Nao economiza nada hoje; o que desarma
+      # e a mina: se um leitor com esse NOME voltar, staging liga sozinho 4 chamadas
+      # LLM extras do L3 (~US$0,02/cascade, `execucao-fiscal/config/services.yaml`)
+      # sem ninguem ter decidido.
+      # ⛔ SECRET nao sai por --remove-env-vars (mesma ressalva do irmao).
+      - '--remove-env-vars=L3_AB_TEST_ENABLED'
       - '--region=southamerica-east1'
       - '--project=neqsti'
 timeout: '1500s'
