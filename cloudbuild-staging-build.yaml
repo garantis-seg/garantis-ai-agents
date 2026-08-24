@@ -38,6 +38,13 @@ steps:
       # explicita garante que staging ensaie o par real. Precisa ser != FICHA_WRITER_MODEL.
       # (resolucao 155x156: S6 em 3.5-flash — o 2.5-flash aposenta 2026-10-16.)
       - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,FICHA_WRITER_MODEL=gemini-3.1-flash-lite,FICHA_AUDITORIA_TEXTO_MODEL=gemini-3.5-flash'
+      # PAR do --update-env-vars acima, que sendo ADITIVO nunca REMOVE: env que sai
+      # do repo fica viva no servico pra sempre. Padrao copiado do irmao
+      # `execucao-fiscal/risk-engine-worker/cloudbuild-staging-build.yaml`.
+      # ⛔ Nao troque por um `gcloud ... --remove-env-vars` a mao: o proximo
+      # `refresh-staging-from-prod` desfaz a limpeza, calado.
+      # `L3_AB_TEST_ENABLED`: sem leitor desde a poda de 2026-07-05 (card 869ejape0).
+      - '--remove-env-vars=L3_AB_TEST_ENABLED'
       - '--region=southamerica-east1'
       - '--project=neqsti'
 timeout: '1500s'
