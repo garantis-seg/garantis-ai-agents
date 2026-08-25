@@ -167,25 +167,43 @@ def _get(processo: Any, campo: str):
 
 
 def _familia_key(processo: Any) -> str:
-    """Família da mov a partir de materia + classe (viés a injetar: na dúvida → cível).
+    """Família da mov — escolhe qual bloco de VOCAB_FAMILIA instrui o extrator.
 
-    `classe` pode vir como tree-path CNJ ("1116 - PROCESSO CÍVEL E DO TRABALHO ->
-    Processo de Execução -> Execução Fiscal") — o cabeçalho contém "TRABALHO" pra
-    QUALQUER classe e roteava Execução Fiscal pro vocab trabalhista (censo do
-    prompt-review 2026-06-10, proc 5159436-51.2025.8.09.0051/TJGO; 'trabalh' tem
-    precedência sobre 'fiscal'). Com "->" na classe, só o ÚLTIMO segmento (a classe
-    folha) entra no match. `materia` não precisa: vocabulário controlado de
-    apolices_monitoradas (Tributario/Trabalhista/Civel).
+    ⭐ DELEGA pra `garantis_shared.materia.classificar_materia` desde 2026-08-25
+    (card 869edc6u7). Antes era um match de SUBSTRING sobre `materia + classe`, e
+    ele errava por dois lados, medido sobre os 5.857 pns com membro ativo:
+
+    - 203 processos puramente TRIBUTÁRIOS viravam `trabalhista`, porque o
+      cabeçalho da árvore CNJ contém a palavra TRABALHO ("1208 - PROCESSO CÍVEL E
+      DO TRABALHO - ..."). O guard que existia aqui só cortava o cabeçalho quando
+      o separador era `->`; com ` - ` ele passava batido.
+    - 204 processos fiscais viravam `civel` porque o `assunto` do processo NUNCA
+      chegava aqui: `ProcessoContext` não o declarava, e pydantic o descartava —
+      a mesma armadilha do fix L1 v7 com materia/nm_tomador/cnpj_tomador.
+
+    ⚠️ `materia` (o texto da linha `Matéria:` do prompt) CONTINUA vindo de
+    `resolve_materia`, que responde outra pergunta e mantém a apólice na frente.
+    Aqui ela entra só como o último degrau da escada.
+
+    ⛔ `classe_cnj_code` NÃO é passado adiante DE PROPÓSITO: o degrau da curadoria
+    lê `ref.cnj_classes` no banco, e este serviço roda com `uses_cloud_sql: false`
+    (services.yaml) — a chamada levantaria e derrubaria TODO prompt do L1. Quem
+    tem banco é o shared, e ele já manda a resposta pronta no campo `familia`
+    (`fetch_processo_context`); o caminho local é só o fallback DB-less pra
+    payload antigo, teste e chamada direta da API.
     """
-    classe = str(_get(processo, "classe") or "")
-    if "->" in classe:
-        classe = classe.rsplit("->", 1)[-1]
-    blob = f"{_get(processo, 'materia') or ''} {classe}".lower()
-    if "trabalh" in blob or "reclamac" in blob:
-        return "trabalhista"
-    if "fiscal" in blob or "tribut" in blob:
-        return "fiscal"
-    return "civel"
+    familia = _get(processo, "familia")
+    if familia in VOCAB_FAMILIA:
+        return familia
+
+    from garantis_shared.materia import classificar_materia
+
+    return classificar_materia(
+        processo_numero=_get(processo, "cnj"),
+        assunto=_get(processo, "assunto"),
+        classe=_get(processo, "classe"),
+        apolice_materia=_get(processo, "materia"),
+    ).familia
 
 
 def _contexto_processo_block(processo: ProcessoContext) -> str:
