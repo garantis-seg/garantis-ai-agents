@@ -326,11 +326,16 @@ async def call_l1_with_vision_fallback(
     Caller monta o prompt — esse helper só roteia + fetcha PDFs. Single
     source da Vision branch (elimina copy-paste em cada agent L1).
 
-    GATE DE OCR (L1 v7): se `docs_text` (lista de (text_content, gcs_url)) for
-    passado, aplica o gate por documento (ocr_gate.precisa_vision) — só os docs com
+    GATE DE OCR (L1 v7): se `docs_text` (lista de (text_content, gcs_url[, so_capa]))
+    for passado, aplica o gate por documento (ocr_gate.precisa_vision) — só os docs com
     texto-lixo OU página-imagem vão pro Vision; os demais ficam no texto do prompt.
     Sem `docs_text` (callers legados como day), mantém o comportamento atual (todos
     os gcs_urls fetchados vão pro Vision). Fallback seguro em qualquer falha do gate.
+
+    O 3º elemento `so_capa` (opcional, default False) diz que o caller JÁ identificou
+    a peça e que o texto extraído é a CAPA dela — o doc fura o piso de teor e o ramo
+    "PDF tem texto nativo". Ver `ocr_gate.precisa_vision`. Nunca fura os fallbacks
+    NEGATIVOS (sem PDF, PDF ilegível): lá o certo continua sendo ficar no texto.
 
     `log_label` é appended em warnings de fallback (ex: "mov_id=X").
 
@@ -371,7 +376,11 @@ async def call_l1_with_vision_fallback(
         if docs_text:
             # GATE por documento: baixa e filtra só os que o gate aprova.
             from .ocr_gate import precisa_vision, texto_decide_sozinho
-            for text_content, gcs_url in docs_text:
+            for _par in docs_text:
+                # 2 ou 3 elementos: o 3º (`so_capa`) é ADITIVO — caller antigo e o
+                # fallback por `documentos_anexados` mandam pares, como sempre.
+                text_content, gcs_url = _par[0], _par[1]
+                so_capa = len(_par) > 2 and bool(_par[2])
                 if not gcs_url:
                     continue
                 if gate_out is not None:
@@ -401,14 +410,20 @@ async def call_l1_with_vision_fallback(
                 # scan cujo único texto é o carimbo do PJe / rodapé do ESAJ — limpo pro
                 # rmgarbage, e com a peça presa na imagem. 8.597 docs assim em prod
                 # (2026-08-10). `texto_decide_sozinho` soma o piso de TEOR.
-                if texto_decide_sozinho(text_content):
+                # ⛔ `so_capa` FURA este corte, e sem isso a regra da peça-identificada
+                # é NO-OP: o cohort dela tem 403-1.995 chars de teor (medido em prod
+                # 2026-08-25), passa folgado no piso de 400 e o PDF nem seria baixado.
+                # O piso pergunta "dá pra confiar no texto?"; quando o caller já sabe
+                # que o texto é a CAPA de uma peça que ele identificou pelo TÍTULO, a
+                # resposta veio de fora e não é o tamanho que a dá.
+                if not so_capa and texto_decide_sozinho(text_content):
                     continue
                 try:
                     raw = await fetch_pdfs_from_gcs([gcs_url])
                     pdf_bytes = raw[0] if raw else None
                 except Exception:
                     pdf_bytes = None
-                manda, info = precisa_vision(text_content, pdf_bytes)
+                manda, info = precisa_vision(text_content, pdf_bytes, so_capa=so_capa)
                 if manda:
                     pdf_bytes_list.append(info.get("_pdf_bytes") or pdf_bytes)
                     if gate_out is not None:

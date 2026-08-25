@@ -276,12 +276,24 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
                 "truncado": False, "paginas_enviadas": n}
 
 
-def precisa_vision(text_content: Optional[str], pdf_bytes: Optional[bytes]) -> tuple[bool, dict]:
+def precisa_vision(text_content: Optional[str], pdf_bytes: Optional[bytes],
+                   *, so_capa: bool = False) -> tuple[bool, dict]:
     """Decisão por documento: manda pro Vision se texto-lixo (Sinal 2) OU há
     página-imagem (Sinal 1). Retorna (manda, nota). Fallback: (False, {}).
 
     pdf_bytes pode ser None (sem PDF) → decide só pelo Sinal 2 (mas sem PDF não há
-    o que mandar, então retorna False)."""
+    o que mandar, então retorna False).
+
+    `so_capa=True`: o caller já identificou QUE PEÇA este documento é (título literal
+    / código / doctype) e sabe que o texto extraído é a CAPA, não o documento. Aí os
+    2 Sinais estão respondendo a pergunta errada — eles decidem se dá pra CONFIAR no
+    texto, e a resposta já veio de fora. Sem isto, uma petição cuja capa o extrator
+    pegou limpa (rmgarbage ≈ 0, páginas com texto nativo) sairia por
+    "texto OK + PDF tem texto nativo" e o corpo dela nunca seria lido.
+    ⛔ NÃO é "PDF textual vai pro Vision" — aquele benchmark (2026-05-28) mediu lift
+    ZERO e continua vetado. O que muda aqui é que o texto extraído não é o documento.
+    ⚠️ Os fallbacks NEGATIVOS ficam acima deste ramo de propósito: sem PDF e PDF
+    ilegível continuam voltando (False, …) — é o fail-open, e ele não tem exceção."""
     lixo = texto_lixo(text_content)
     if not pdf_bytes:
         return False, {"fonte": "texto", "motivo": "sem PDF"}
@@ -289,15 +301,22 @@ def precisa_vision(text_content: Optional[str], pdf_bytes: Optional[bytes]) -> t
     if not info:
         return False, {"fonte": "texto", "motivo": "falha ao analisar PDF (fallback texto)"}
     pgs_img = info.get("paginas_imagem", 0)
-    if not lixo and pgs_img == 0:
+    if not lixo and pgs_img == 0 and not so_capa:
         return False, {"fonte": "texto", "motivo": "texto OK + PDF tem texto nativo"}
     # Motivo DISCRIMINADO (`pag-vetor` vs `pag-imagem`): sem isso, ligar o ramo de
     # vetor ficaria indistinguível na telemetria de "o gate de raster passou a
     # pegar mais" — e a pergunta que se faz depois do flip é exatamente qual dos
     # dois cresceu, porque o custo de cada um tem denominador diferente.
     detalhe = ", ".join(f"{v} pag-{k}" for k, v in sorted(info.get("motivos", {}).items()))
-    motivo = ("texto-lixo (rmgarbage)" if lixo
-              else f"{pgs_img}/{info['n_paginas']} inalcancavel ({detalhe})")
+    if lixo:
+        motivo = "texto-lixo (rmgarbage)"
+    elif pgs_img:
+        motivo = f"{pgs_img}/{info['n_paginas']} inalcancavel ({detalhe})"
+    else:
+        # ⭐ Rótulo PRÓPRIO, não `0/N inalcancavel ()`: este ramo só existe porque o
+        # caller declarou que o texto é a capa, e na telemetria ele tem que ser
+        # distinguível dos 2 Sinais — a pergunta depois do flip é qual dos três cresceu.
+        motivo = f"peca-identificada-so-capa ({info['n_paginas']} pag)"
     nota = {"fonte": "pdf_vision", "motivo": motivo, "pdf_paginas": info["n_paginas"],
             "paginas_imagem": pgs_img, "motivos": info.get("motivos", {}),
             "truncado": info.get("truncado", False)}
