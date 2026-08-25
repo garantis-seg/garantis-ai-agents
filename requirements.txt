@@ -99,7 +99,11 @@ pypdf>=4.0.0
 # `calculo_fichas/confianca.py` existe nela.
 # ⚠️ Bump ATOMICO, mesma razao dos anteriores: sem a wheel nova o
 # `tests/test_verificador_cego.py` nem coleta.
-garantis-shared==1.521.0
+# 1.537.0 (2026-08-25, card 869edc6u7): traz `garantis_shared/materia.py`, do qual
+# `_familia_key` passou a depender. Versao lida do LOG do build de publish
+# (`[version] computed 1.537.0`, build 9486e455), nao do `versions list`.
+# ⚠️ Bump ATOMICO com o codigo deste PR: sem a wheel nova o `prompts_v4.py` nem importa.
+garantis-shared==1.537.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
