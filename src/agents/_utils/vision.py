@@ -428,7 +428,18 @@ async def call_l1_with_vision_fallback(
                     pdf_bytes_list.append(info.get("_pdf_bytes") or pdf_bytes)
                     if gate_out is not None:
                         gate_out["n_inalcancaveis"] += 1
-                    motivos.extend((info.get("_nota") or {}).get("motivos") or {})
+                    # ⛔ `motivos` (plural) e o dict de PAGINA (`imagem`/`vetor`/`vazia`), e
+                    # so ele era agregado: doc que vai pro Vision por TEXTO-LIXO ou por
+                    # `so_capa` tem paginas OK, entao entrava com dict VAZIO e a causa
+                    # sumia — as duas que a pergunta "por que tanto Vision?" precisa contar.
+                    # O `motivo` (singular) discrimina as tres; o prefixo antes do " ("
+                    # tira a contagem variavel (`3/40 inalcancavel (...)`), que faria cada
+                    # doc virar uma chave propria e o agregado nao agregar nada.
+                    nota = info.get("_nota") or {}
+                    por_pagina = nota.get("motivos") or {}
+                    motivos.extend(por_pagina)
+                    if not por_pagina:
+                        motivos.append((nota.get("motivo") or "?").split(" (")[0])
         else:
             pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
 
@@ -436,6 +447,18 @@ async def call_l1_with_vision_fallback(
         gate_out["motivo"] = ",".join(sorted(set(motivos)))
 
     if pdf_bytes_list:
+        # ⭐ O POR QUE, no unico lugar que TODO caller alcanca — o `gate_out` e devolvido
+        # "pro caller PERSISTIR" e so o materializer de PETICAO persiste (o do mov tem 0
+        # ocorrencias de `vision_gate`). Contexto e numeros: card 869eqbpyk.
+        # ⛔ Log, nao coluna: `mov_factsheet` nao tem JSONB e a pergunta e DIAGNOSTICA —
+        # coluna custaria migration + bump de pin em 2 repos por um dado que 30 dias de
+        # retencao respondem. Historico maior que isso, ai sim vira coluna.
+        # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (zero neste projeto desde 12/08).
+        logger.info(
+            "[VisionL1] GATE %s: enviando %d de %d docs · motivo=%s",
+            log_label or "-", len(pdf_bytes_list),
+            (gate_out or {}).get("n_docs", 0), (gate_out or {}).get("motivo") or "?",
+        )
         try:
             resposta = await call_vision_l1(
                 provider,
