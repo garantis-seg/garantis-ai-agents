@@ -238,9 +238,12 @@ def test_o_agent_roteia_o_gate_pelo_documentos_gate(monkeypatch):
     visto = _classify(monkeypatch, documentos_anexados=_ANEXADO_CONCATENADO,
                       documentos_gate=_GATE_POR_DOC)
     assert visto["gcs_urls"] == ["gs://b/agravo.pdf", "gs://b/peticao.pdf"]
-    assert [t for t, _u in visto["docs_text"]] == [
+    # ⚠️ Trinca desde 2026-08-25 (`so_capa` no 3º elemento) — o ramo do
+    # `documentos_gate` é o ÚNICO que sabe o flag. Ver `test_vision_gate_so_capa.py`.
+    assert [p[0] for p in visto["docs_text"]] == [
         _GATE_POR_DOC[0]["text_content"], CARIMBO_6_PAGINAS,
     ]
+    assert [p[2] for p in visto["docs_text"]] == [False, False], "default ADITIVO"
 
 
 def test_sem_documentos_gate_o_agent_cai_nos_anexados(monkeypatch):

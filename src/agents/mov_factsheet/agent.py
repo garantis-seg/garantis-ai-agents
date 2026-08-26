@@ -383,8 +383,11 @@ async def classify_mov_factsheet(
     gate_typed: list[DocGate] = [
         g if isinstance(g, DocGate) else DocGate(**g) for g in documentos_gate or []
     ]
-    gate_pairs: list[tuple[Optional[str], Optional[str]]] = (
-        [(g.text_content, g.gcs_url) for g in gate_typed if g.gcs_url]
+    # 3º elemento = `so_capa` (o caller já identificou a peça e o texto é só a capa).
+    # Tupla de 3 só no ramo do `documentos_gate`: o fallback por `documentos_anexados`
+    # não tem como saber isso, e o helper aceita as duas aridades.
+    gate_pairs: list[tuple] = (
+        [(g.text_content, g.gcs_url, g.so_capa) for g in gate_typed if g.gcs_url]
         if gate_typed
         else [(d.text_content, d.gcs_url) for d in docs_typed if d.gcs_url]
     )

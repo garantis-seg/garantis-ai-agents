@@ -418,6 +418,17 @@ class DocGate(BaseModel):
     gcs_url: Optional[str] = Field(
         default=None, description="gs://bucket/path do PDF deste doc específico",
     )
+    so_capa: bool = Field(
+        default=False,
+        description=(
+            "O caller JÁ identificou este documento como a peça que quer (título "
+            "literal / código / doctype) e o extrator de texto só alcançou a CAPA. "
+            "⇒ o `text_content` NÃO é o documento, e o gate não deve deixar o texto "
+            "decidir sozinho. Quem carimba é o `texto_e_so_a_capa` do garantis-shared "
+            "(2ª passada da escada afirmativa do `fetch_peticao_doc`). Campo ADITIVO: "
+            "default False = comportamento de sempre."
+        ),
+    )
 
 
 class MovFactSheetRequest(BaseModel):
