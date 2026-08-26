@@ -447,23 +447,17 @@ async def call_l1_with_vision_fallback(
         gate_out["motivo"] = ",".join(sorted(set(motivos)))
 
     if pdf_bytes_list:
-        # ⭐ O POR QUE, no unico lugar que TODO caller alcanca. O `gate_out` e devolvido
-        # "pro caller PERSISTIR", mas so o materializer de PETICAO persiste — o do mov
-        # descarta (0 ocorrencias de `vision_gate` nele), e por isso "por que este mov foi
-        # pro Vision?" nao tinha resposta no banco. Card 869eqbpyk: responder isso pra UM
-        # conexo custou 8 medicoes indiretas e nao fechou (51% de Vision contra 11% dos
-        # vizinhos, num conexo com autos MAIS ricos em texto que eles).
-        # ⛔ Log, nao coluna: `leitura_conexos.mov_factsheet` nao tem JSONB, e a pergunta e
-        # DIAGNOSTICA e ocasional — coluna custaria migration + bump de pin em 2 repos pra
-        # um dado que 30 dias de retencao respondem. Se um dia precisar de historico maior,
-        # ai sim e coluna.
-        # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (devolve zero neste projeto
-        # desde 2026-08-12).
+        # ⭐ O POR QUE, no unico lugar que TODO caller alcanca — o `gate_out` e devolvido
+        # "pro caller PERSISTIR" e so o materializer de PETICAO persiste (o do mov tem 0
+        # ocorrencias de `vision_gate`). Contexto e numeros: card 869eqbpyk.
+        # ⛔ Log, nao coluna: `mov_factsheet` nao tem JSONB e a pergunta e DIAGNOSTICA —
+        # coluna custaria migration + bump de pin em 2 repos por um dado que 30 dias de
+        # retencao respondem. Historico maior que isso, ai sim vira coluna.
+        # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (zero neste projeto desde 12/08).
         logger.info(
             "[VisionL1] GATE %s: enviando %d de %d docs · motivo=%s",
             log_label or "-", len(pdf_bytes_list),
-            (gate_out or {}).get("n_docs", len(docs_text or [])),
-            (gate_out or {}).get("motivo") or "?",
+            (gate_out or {}).get("n_docs", 0), (gate_out or {}).get("motivo") or "?",
         )
         try:
             resposta = await call_vision_l1(
