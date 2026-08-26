@@ -428,7 +428,18 @@ async def call_l1_with_vision_fallback(
                     pdf_bytes_list.append(info.get("_pdf_bytes") or pdf_bytes)
                     if gate_out is not None:
                         gate_out["n_inalcancaveis"] += 1
-                    motivos.extend((info.get("_nota") or {}).get("motivos") or {})
+                    # ⛔ `motivos` (plural) e o dict de PAGINA (`imagem`/`vetor`/`vazia`), e
+                    # so ele era agregado: doc que vai pro Vision por TEXTO-LIXO ou por
+                    # `so_capa` tem paginas OK, entao entrava com dict VAZIO e a causa
+                    # sumia — as duas que a pergunta "por que tanto Vision?" precisa contar.
+                    # O `motivo` (singular) discrimina as tres; o prefixo antes do " ("
+                    # tira a contagem variavel (`3/40 inalcancavel (...)`), que faria cada
+                    # doc virar uma chave propria e o agregado nao agregar nada.
+                    nota = info.get("_nota") or {}
+                    por_pagina = nota.get("motivos") or {}
+                    motivos.extend(por_pagina)
+                    if not por_pagina:
+                        motivos.append((nota.get("motivo") or "?").split(" (")[0])
         else:
             pdf_bytes_list = await fetch_pdfs_from_gcs(gcs_urls)
 
@@ -436,6 +447,24 @@ async def call_l1_with_vision_fallback(
         gate_out["motivo"] = ",".join(sorted(set(motivos)))
 
     if pdf_bytes_list:
+        # ⭐ O POR QUE, no unico lugar que TODO caller alcanca. O `gate_out` e devolvido
+        # "pro caller PERSISTIR", mas so o materializer de PETICAO persiste — o do mov
+        # descarta (0 ocorrencias de `vision_gate` nele), e por isso "por que este mov foi
+        # pro Vision?" nao tinha resposta no banco. Card 869eqbpyk: responder isso pra UM
+        # conexo custou 8 medicoes indiretas e nao fechou (51% de Vision contra 11% dos
+        # vizinhos, num conexo com autos MAIS ricos em texto que eles).
+        # ⛔ Log, nao coluna: `leitura_conexos.mov_factsheet` nao tem JSONB, e a pergunta e
+        # DIAGNOSTICA e ocasional — coluna custaria migration + bump de pin em 2 repos pra
+        # um dado que 30 dias de retencao respondem. Se um dia precisar de historico maior,
+        # ai sim e coluna.
+        # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (devolve zero neste projeto
+        # desde 2026-08-12).
+        logger.info(
+            "[VisionL1] GATE %s: enviando %d de %d docs · motivo=%s",
+            log_label or "-", len(pdf_bytes_list),
+            (gate_out or {}).get("n_docs", len(docs_text or [])),
+            (gate_out or {}).get("motivo") or "?",
+        )
         try:
             resposta = await call_vision_l1(
                 provider,

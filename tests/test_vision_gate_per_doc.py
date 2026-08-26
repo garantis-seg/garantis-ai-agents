@@ -367,3 +367,54 @@ def test_a_lane_MOV_nao_recebe_prompt_de_vision(monkeypatch):
     visto = _classify(monkeypatch, documentos_anexados=_ANEXADO_CONCATENADO,
                       documentos_gate=_GATE_POR_DOC, classe=None)
     assert visto["prompt_vision"] is None
+
+
+# ── 3. O AGREGADO era cego pra causa que nao tem pagina ──────────────────────
+_LIXO = "wkxhq zzzz qqqq###  bvcxz %%%% jjjj ~~~~ tttt|||| mmmm@@@ nnnn::: " * 12
+
+
+def test_ANCORA_o_lixo_e_lixo_e_as_paginas_estao_OK():
+    """Premissa do teste abaixo, explicitada: este par vai pro Vision pelo Sinal 2
+    (texto-lixo) e NAO pelo Sinal 1 — o PDF e de texto nativo, zero pagina-imagem.
+    Sem esta ancora, o teste seguinte passaria por Vision pelo motivo errado."""
+    from src.agents._utils.ocr_gate import analisar_pdf_bytes, texto_lixo
+
+    assert texto_lixo(_LIXO)
+    assert (analisar_pdf_bytes(_pdf_texto()) or {}).get("paginas_imagem") == 0
+
+
+def test_o_motivo_TEXTO_LIXO_aparece_no_veredito():
+    """⛔ Antes de 2026-08-26 o agregado so lia `nota['motivos']`, que e o dict de
+    PAGINA (`imagem`/`vetor`/`vazia`). Doc que sobe por TEXTO-LIXO tem paginas OK,
+    entrava com dict VAZIO, e `motivo` saia None — indistinguivel de "o gate nem
+    rodou". Era justamente a causa que a pergunta "por que tanto Vision?" precisa
+    contar (card 869eqbpyk)."""
+    gate, enviados, _ = _roda([(_LIXO, "gs://b/scan.pdf")],
+                              fetched={"gs://b/scan.pdf": _pdf_texto()})
+    assert len(enviados) == 1, "premissa: este par TEM que subir"
+    assert gate["motivo"] == "texto-lixo"
+
+
+def test_o_motivo_de_PAGINA_continua_sem_a_contagem_variavel():
+    """A contagem (`3/40 inalcancavel (...)`) NAO pode entrar na chave: com ela cada
+    doc vira uma chave propria e o agregado deixa de agregar."""
+    gate, _e, _ = _roda([(CARIMBO_6_PAGINAS, "gs://b/vetor.pdf")],
+                        fetched={"gs://b/vetor.pdf": _pdf_vetor()})
+    assert gate["motivo"] == "vetor"
+    assert "/" not in gate["motivo"] and "(" not in gate["motivo"]
+
+
+def test_o_LOG_carrega_o_motivo_porque_e_ELE_o_entregavel(caplog):
+    """⭐ O `gate_out` e devolvido "pro caller PERSISTIR" e o materializer do MOV
+    NAO persiste (0 ocorrencias de `vision_gate` nele) — so o de peticao persiste.
+    Entao pro mov o log e a UNICA resposta pra "por que este foi pro Vision?", e sem
+    o motivo nele a pergunta volta a custar medicao indireta (card 869eqbpyk).
+    ⚠️ Ancora no `motivo=`, nao na frase toda: o texto do log pode ser reescrito, o
+    campo e o contrato."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger=V.__name__):
+        _roda([(_LIXO, "gs://b/scan.pdf")], fetched={"gs://b/scan.pdf": _pdf_texto()})
+    linhas = [r.getMessage() for r in caplog.records if "GATE" in r.getMessage()]
+    assert linhas, "o gate nao logou nada — a pergunta fica sem resposta pro mov"
+    assert "motivo=texto-lixo" in linhas[0], linhas[0]
