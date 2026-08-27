@@ -30,7 +30,7 @@ from src.agents.mov_factsheet.agent import (
     _sem_dispositivo,
     _zerar_decisao,
 )
-from src.agents.mov_factsheet.prompts_v4 import L1_DECISAO_EXIGE_CORPO
+from src.agents.mov_factsheet.agent import _sem_corpo
 from src.agents.mov_factsheet.schemas import MovInput
 
 # O caso-alvo, literal, do merito 13294: o card que dirige a banda tem natureza='procedente'
@@ -72,11 +72,17 @@ def _card_llm(dispositivo=None, **decisao) -> dict:
     }
 
 
-@pytest.fixture(autouse=True)
-def _corpo_off(monkeypatch):
-    """A trava de CORPO fica OFF em todo este arquivo. Ela esta LIGADA em prod, e se
-    vazasse pra ca um teste verde poderia estar medindo a trava errada."""
-    monkeypatch.delenv(L1_DECISAO_EXIGE_CORPO, raising=False)
+def test_o_mov_deste_arquivo_TEM_corpo():
+    """⭐ Substitui a fixture `_corpo_off` (autouse), que desligava a trava de CORPO em
+    todo este arquivo por env. A flag saiu em 2026-08-27 (card 869entgbc) e a trava agora
+    e incondicional — ou seja, o isolamento **nao pode mais vir de env**, tem de vir do
+    DADO. E o motivo declarado da fixture continua valendo palavra por palavra: se a trava
+    de corpo alcancasse `_mov()`, um teste verde aqui estaria medindo a trava ERRADA.
+
+    ⛔ Nao troque o texto de `_mov()` por um snippet curto: este assert cai, e ele e a
+    unica coisa que separa os dois predicados neste arquivo."""
+    assert not _sem_corpo(_mov(), [])
+    assert not _sem_corpo(_mov(DISPOSITIVO_REAL), [])
 
 
 # ── o predicado, isolado (sem LLM, sem banco) ─────────────────────────────────
@@ -167,16 +173,14 @@ def test_transito_certificado_sobrevive(monkeypatch):
 
 # ── os dois predicados sao INDEPENDENTES ──────────────────────────────────────
 def test_a_trava_de_corpo_nao_liga_esta(monkeypatch):
-    """⛔ Ligar a trava de CORPO nao pode ligar a de dispositivo. Sao duas decisoes de
-    risco separadas, e colapsar as flags faria a barata governar a cara."""
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
+    """⛔ A trava de CORPO (hoje incondicional) nao pode ligar a de dispositivo. Sao duas
+    decisoes de risco separadas, e colapsa-las faria a barata governar a cara."""
     monkeypatch.delenv(L1_DECISAO_EXIGE_DISPOSITIVO, raising=False)
     card = _build_card_v4(_card_llm(), _mov())     # tem corpo => a de corpo nao alcanca
     assert card["decisao"]["tem_decisao"] is True
 
 
 def test_as_duas_ligadas_e_idempotente(monkeypatch):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
     monkeypatch.setenv(L1_DECISAO_EXIGE_DISPOSITIVO, "true")
     card = _build_card_v4(_card_llm(), _mov(), sem_corpo=True)
     assert card["decisao"]["tem_decisao"] is False
