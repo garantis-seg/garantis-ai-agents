@@ -153,17 +153,14 @@ L1_NEUTRAL_FLAG = "L1_NEUTRAL_ENABLED"
 # NAO alcanca. Pegar aquela faixa exige outro discriminador (voz do juiz /
 # cardinalidade da string), nao um numero maior.
 #
-# ⛔ Default OFF: apagar decisao fabricada move banda nos DOIS sentidos (medido:
-# 18 meritos desceriam, 11 subiriam). Ligar so com OK explicito do Elton.
+# ⚰️ Nasceu default OFF (apagar decisao fabricada move banda nos DOIS sentidos: 18
+# meritos desceriam, 11 subiriam), foi LIGADA em prod em 2026-08-23 com OK do Elton e
+# nao se moveu mais. A flag `L1_DECISAO_EXIGE_CORPO` saiu em 2026-08-27 (card 869entgbc).
+# ⛔ O comportamento e o de HOJE — saiu a possibilidade de desligar, nao a trava.
 #
-# O flag e o corte moram em `prompts_v4.py` (fonte unica — o prompt tambem os le).
-# Import LAZY, mesmo motivo do `schemas_v4`/`derivacoes` logo abaixo: o caminho
-# v3.1 default nao pode passar a depender do modulo v4.
-
-
-def _decisao_exige_corpo() -> bool:
-    from .prompts_v4 import _decisao_exige_corpo as _f
-    return _f()
+# O corte mora em `prompts_v4.py` (fonte unica — o prompt tambem o le). Import LAZY,
+# mesmo motivo do `schemas_v4`/`derivacoes` logo abaixo: o caminho v3.1 default nao
+# pode passar a depender do modulo v4.
 
 
 def _sem_corpo(mov: "MovInput", docs: list) -> bool:
@@ -287,7 +284,7 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
     card_data["mov_id"] = mov.mov_id             # identidade injetada (nao LLM-emitida)
     if mov.data:
         card_data["data"] = mov.data
-    if sem_corpo and _decisao_exige_corpo():
+    if sem_corpo:
         _zerar_decisao(card_data)                # ANTES do G6: peca_pivo sai coerente
     if _sem_dispositivo(card_data):
         # ⭐ O log sai com a flag DESLIGADA, de proposito — ele e a metade que MEDE.

@@ -4,10 +4,14 @@ O caso-alvo e literal: `"Julgado - Julgado improcedente o pedido"` (39 chars), a
 do catalogo do jusbrasil que cunhou 3.964 cards de decisao em prod, em 810 processos /
 227 meritos. O teste NAO chama LLM nem banco — a trava e mecanica de proposito.
 
-⚠️ O flag e default OFF. Os testes de OFF sao os que provam "byte-identico em prod hoje".
+⚰️ A trava era gated por `L1_DECISAO_EXIGE_CORPO`, default OFF. A flag SAIU em 2026-08-27
+(card 869entgbc) e com ela os 3 testes que provavam o mundo desligado
+(`test_flag_off_e_byte_identico`, `test_prompt_flag_off_mantem_o_anticorpo` e o parametrize
+das formas negativas). ⛔ Os dois primeiros guardavam um mundo que nao existe mais — prod
+rodava ON desde 23/08, entao eles passavam VERDE afirmando o contrario do que producao
+fazia. O terceiro NAO era um teste desta trava: era o unico oraculo do parser do
+`flag_enabled`, e mudou de casa em vez de morrer (`tests/test_feature_flags.py`).
 """
-import pytest
-
 from src.agents.mov_factsheet.agent import (
     _build_card_v4,
     _sem_corpo,
@@ -15,7 +19,6 @@ from src.agents.mov_factsheet.agent import (
 )
 from src.agents.mov_factsheet.prompts_v4 import (
     CORPO_MIN_CHARS,
-    L1_DECISAO_EXIGE_CORPO,
     build_mov_factsheet_prompt_v4,
 )
 from src.agents.mov_factsheet.schemas import DocAnexado, MovInput, ProcessoContext
@@ -75,16 +78,7 @@ def test_texto_vazio_ou_so_espaco():
 
 
 # ── a trava aplicada ao card ──────────────────────────────────────────────────
-def test_flag_off_e_byte_identico(monkeypatch):
-    monkeypatch.delenv(L1_DECISAO_EXIGE_CORPO, raising=False)
-    card = _build_card_v4(_card_llm(), _mov(ROTULO), sem_corpo=True)
-    assert card["decisao"]["tem_decisao"] is True
-    assert card["decisao"]["natureza"] == "improcedente"
-    assert card["peca_pivo"]["e_pivo"] is True
-
-
-def test_flag_on_apaga_a_decisao_fabricada(monkeypatch):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
+def test_apaga_a_decisao_fabricada():
     card = _build_card_v4(_card_llm(), _mov(ROTULO), sem_corpo=True)
     d = card["decisao"]
     assert d["tem_decisao"] is False
@@ -94,17 +88,15 @@ def test_flag_on_apaga_a_decisao_fabricada(monkeypatch):
     assert card["peca_pivo"]["e_pivo"] is False
 
 
-def test_flag_on_nao_toca_card_com_corpo(monkeypatch):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
+def test_nao_toca_card_com_corpo():
     card = _build_card_v4(_card_llm(), _mov("z" * 400), sem_corpo=False)
     assert card["decisao"]["tem_decisao"] is True
     assert card["decisao"]["natureza"] == "improcedente"
 
 
-def test_transito_certificado_sobrevive_a_trava(monkeypatch):
+def test_transito_certificado_sobrevive_a_trava():
     """Certidao de transito e fato PROPRIO, com guard proprio no L2 — a trava e sobre
     `tem_decisao`, nao sobre o transito. Se isto quebrar, a trava passou do escopo."""
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
     parsed = _card_llm()
     parsed["decisao"]["transito_certificado"] = True
     card = _build_card_v4(parsed, _mov("Transitado em julgado"), sem_corpo=True)
@@ -125,15 +117,8 @@ def test_travar_tolera_card_sem_bloco_decisao():
     assert "decisao" not in card
 
 
-@pytest.mark.parametrize("valor", ["", "false", "0", "no"])
-def test_flag_desligada_em_qualquer_forma(monkeypatch, valor):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, valor)
-    card = _build_card_v4(_card_llm(), _mov(ROTULO), sem_corpo=True)
-    assert card["decisao"]["tem_decisao"] is True
-
-
-# ── o anticorpo estetico sai do prompt sob o mesmo flag ───────────────────────
-def _prompt(**env) -> str:
+# ── o anticorpo estetico saiu do prompt ──────────────────────────────────────
+def _prompt() -> str:
     return build_mov_factsheet_prompt_v4(
         ProcessoContext(cnj="1002058-77.2022.8.26.0053"),
         _mov(ROTULO),
@@ -141,26 +126,24 @@ def _prompt(**env) -> str:
     )
 
 
-def test_prompt_flag_off_mantem_o_anticorpo(monkeypatch):
-    monkeypatch.delenv(L1_DECISAO_EXIGE_CORPO, raising=False)
-    assert "Snippet gen" in _prompt()
+def test_prompt_NAO_tem_mais_o_anticorpo_estetico():
+    """Criterio 4 do card: o conserto REMOVE o anticorpo, nao empilha em cima dele.
 
-
-def test_prompt_flag_on_remove_o_anticorpo(monkeypatch):
-    """Criterio 4 do card: o conserto REMOVE o anticorpo, nao empilha em cima dele."""
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
+    ⛔ O `not in` e a metade que importa e nao e redundante com o `in`: o anticorpo pedia
+    ao modelo um juizo de GOSTO sobre a entrada ("Snippet generico => tem_decisao=false"),
+    e ele falha por construcao no caso-alvo — o rotulo do catalogo NAO e generico. Se
+    alguem re-introduzir a frase, este assert cai."""
     p = _prompt()
     assert "Snippet gen" not in p
     assert "texto INTEIRO" in p
 
 
-def test_ato_real_curto_e_o_custo_declarado(monkeypatch):
+def test_ato_real_curto_e_o_custo_declarado():
     """⚠️ NAO e um bug: a trava e cega a voz do juiz e derruba tambem o dispositivo
     curto e verdadeiro. Medido: 2,6% dos cards <=60 chars. Se um dia isso for
     inaceitavel, o discriminador e a VOZ (1a pessoa), como no guard do L2 —
     `transito_classifier._VOZ_DO_JUIZ`. Este teste existe pra que a perda seja
     VISIVEL no diff, nunca descoberta em prod."""
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
     assert _sem_corpo(_mov(ATO_REAL_CURTO), [])
     card = _build_card_v4(_card_llm(), _mov(ATO_REAL_CURTO), sem_corpo=True)
     assert card["decisao"]["tem_decisao"] is False
@@ -193,8 +176,7 @@ def test_campo_declarado_no_schema_senao_pydantic_descarta():
     assert m.docs_inadmissiveis == 3
 
 
-def test_flag_on_nao_apaga_decisao_quando_doc_e_ilegivel(monkeypatch):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_CORPO, "true")
+def test_nao_apaga_decisao_quando_doc_e_ilegivel():
     card = _build_card_v4(_card_llm(), _mov_ilegivel(ROTULO),
                           sem_corpo=_sem_corpo(_mov_ilegivel(ROTULO), []))
     assert card["decisao"]["tem_decisao"] is True

@@ -39,18 +39,15 @@ from .prompts import _summarize_doc
 # Não há mais cap de 5 docs/mov nem 8k/doc: TODOS os docs entram, governados por um
 # ORÇAMENTO por unidade (guarda de janela do modelo, não economia). Censo 2026-06-10:
 # sem cap o input multiplica ~8,9× — custo MEDIDO e aceito pela decisão.
-# TRAVA DE CORPO (869ent0g8) — FONTE ÚNICA do flag e do corte. Mora aqui, no módulo
-# FOLHA, porque os dois consumidores (este prompt e `agent.py::_sem_corpo`) precisam do
-# MESMO nome de env: duplicar a string é como um dos lados fica ligado e o outro não,
-# em silêncio. `agent.py` importa isto lazy, no mesmo bloco de `schemas_v4`/`derivacoes`.
+# TRAVA DE CORPO (869ent0g8) — FONTE ÚNICA do corte. Mora aqui, no módulo FOLHA, porque
+# os dois consumidores (este prompt e `agent.py::_sem_corpo`) precisam do MESMO valor:
+# duplicar o 60 é como um dos lados corta num ponto e o outro noutro, em silêncio.
+# `agent.py` importa isto lazy, no mesmo bloco de `schemas_v4`/`derivacoes`.
 # O racional completo (números, censo, por que 60) está em `agent.py`.
-L1_DECISAO_EXIGE_CORPO = "L1_DECISAO_EXIGE_CORPO"
+# ⚰️ A flag `L1_DECISAO_EXIGE_CORPO` saiu em 2026-08-27 (card 869entgbc). Nasceu default
+# OFF, foi ligada em prod em 2026-08-23 com OK do Elton e não se moveu mais. ⛔ O
+# comportamento é o de HOJE — saiu a possibilidade de desligar, não a trava.
 CORPO_MIN_CHARS = 60
-
-
-def _decisao_exige_corpo() -> bool:
-    """Flag da trava de corpo. Default OFF = prompt e card IDÊNTICOS aos de hoje."""
-    return flag_enabled(L1_DECISAO_EXIGE_CORPO)
 
 
 _V4_MOV_TEXT_CAP = 200_000        # snippet da mov (publicação pode trazer inteiro teor)
@@ -707,24 +704,19 @@ def build_mov_factsheet_prompt_v4(
             "- resumo_ato sintetiza O QUE ESTÁ NESTA MOV (incl. os docs), NÃO copia o resumo do "
             "processo."
         )
-    elif _decisao_exige_corpo():
-        # ⚰️ ANTICORPO REMOVIDO (869ent0g8). Aqui vivia o teste ESTÉTICO "Snippet genérico
-        # (ex: 'Expedição de outros documentos', 'Juntada de petição') => tem_decisao=false",
-        # que pedia ao modelo um juízo de gosto sobre a própria entrada. Ele falha por
-        # construção no caso que importa: o rótulo do catálogo do provider NÃO é genérico —
-        # "Julgado - Julgado improcedente o pedido" é específico, e errado. Quem decide isso
-        # agora é a TRAVA MECÂNICA de `agent.py::_sem_corpo` (sem corpo E sem doc ⇒
-        # tem_decisao=false), que não depende de o modelo achar a frase feia.
+    else:
+        # ⚰️ ANTICORPO REMOVIDO (869ent0g8; o ramo `else` que o carregava saiu em 2026-08-27
+        # com a flag). Aqui vivia o teste ESTÉTICO "Snippet genérico (ex: 'Expedição de outros
+        # documentos', 'Juntada de petição') => tem_decisao=false", que pedia ao modelo um
+        # juízo de gosto sobre a própria entrada. Ele falha por construção no caso que
+        # importa: o rótulo do catálogo do provider NÃO é genérico — "Julgado - Julgado
+        # improcedente o pedido" é específico, e errado. Quem decide isso é a TRAVA MECÂNICA
+        # de `agent.py::_sem_corpo` (sem corpo E sem doc ⇒ tem_decisao=false), que não
+        # depende de o modelo achar a frase feia.
         instrucoes.append(
             "- Sem doc anexo, você SÓ tem o snippet da publicação + metadata. NÃO INVENTE "
             "conteúdo: o snippet é o texto INTEIRO de que se dispõe, não um resumo de algo "
             "maior. Se o desfecho não está redigido AQUI, ele não está em lugar nenhum."
-        )
-    else:
-        instrucoes.append(
-            "- Sem doc anexo, você SÓ tem o snippet da publicação + metadata. NÃO INVENTE "
-            "conteúdo. Snippet genérico (ex: 'Expedição de outros documentos', 'Juntada de "
-            "petição') => relevancia_merito='ruido'/'baixa' + tem_decisao=false."
         )
     contexto_extra = (
         "\n\n=== INSTRUÇÕES PARA USO DO CONTEXTO ===\n" + "\n".join(instrucoes) if instrucoes else ""
