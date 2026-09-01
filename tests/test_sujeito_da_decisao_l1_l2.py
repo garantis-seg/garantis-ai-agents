@@ -127,15 +127,31 @@ class TestOQueNaoMuda:
     def test_NAO_ha_bump_de_summary_prompt_version(self):
         """⛔ Bump de `summary_prompt_version` e re-cascade do UNIVERSO
         (`supersede_other_versions`). O `prompt_identity` (sha) muda sozinho, e e isso
-        que se quer: rastreabilidade sem custo."""
-        import subprocess
-        # ⛔ encoding EXPLICITO: no Windows o default do subprocess e cp1252 e o diff
-        # (que tem ⛔/⭐) estoura UnicodeDecodeError — o teste morreria por ambiente.
-        diff = subprocess.run(["git", "diff", "origin/master", "--unified=0"],
-                              capture_output=True, text=True,
-                              encoding="utf-8", errors="replace").stdout
-        for proibido in ("summary_prompt_version", "PROMPT_VERSION ="):
-            assert proibido not in diff, f"o diff mexe em {proibido}"
+        que se quer: rastreabilidade sem custo.
+
+        ⚰️ **Ate 2026-09-01 este teste rodava `git diff origin/master` por subprocess, e
+        era INERTE DE DUAS FORMAS:**
+        (a) a imagem do step de unit-tests e `python:3.11-slim` e **nao tem o binario
+            `git`** -> `FileNotFoundError` -> `1 failed` -> o DEPLOY inteiro reprovava.
+            Ficou vermelho de 01/09 17:45 ate o conserto, e a `acao_julgada_cnj` ficou
+            PELA METADE em prod (a coluna do fe-api subiu; o emissor, nao).
+        (b) mesmo COM git, o predicado e vazio depois do merge — `git diff origin/master`
+            contra o proprio commit nao devolve nada, entao ele passaria verde sem olhar
+            coisa nenhuma. ⛔ Guarda que le zero POR CONSTRUCAO e pior que guarda nenhuma:
+            parece proteger.
+
+        ⭐ Hoje ele fixa o **ROTULO** das duas versoes que carimbam a coluna — os
+        materializers do shared gravam `summary_prompt_version=versao` a partir destes
+        `PROMPT_VERSION`. Bumpar exige editar esta linha, que e exatamente a decisao que se
+        quer explicita.
+        ⛔ **NAO asserte o `PROMPT_VERSION` INTEIRO do L2:** o sufixo e `sha256[:12]` de
+        (prompt + schema) e muda de proposito a cada edicao de prompt — era esse o ponto de
+        `versao_com_identidade`.
+        """
+        import src.agents.mov_factsheet.agent as L1
+        import src.agents.processo_synthesis.agent as L2
+        assert L1.PROMPT_VERSION == "mov_factsheet.v3.1"
+        assert L2.PROMPT_VERSION.startswith("processo_synthesis.v2.5")
 
     def test_o_proxy_autor_polo_NAO_voltou(self):
         import inspect
