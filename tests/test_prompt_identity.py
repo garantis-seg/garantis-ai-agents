@@ -225,3 +225,97 @@ def test_o_agent_da_TRIAGEM_RETORNA_a_versao_no_resultado():
     assert '"prompt_version": PROMPT_VERSION' in fonte, (
         "a triagem parou de devolver prompt_version — o carimbo nao chega em engine_llm_calls"
     )
+
+
+# ── (b) merito_reducao_v2 — o B1, card RAIZ [869enrt3w] ──────────────────────
+
+def test_o_B1_carimba_identidade_DERIVADA():
+    """🚨 A camada mais CARA da casa era a que não tinha proveniência nenhuma.
+
+    Medido 2026-09-01 (claude-db-tools `POST /api/query`)::
+
+        SELECT model, coalesce(prompt_version,'(NULL)') AS pv, count(*),
+               round(sum(cost_usd)::numeric,2) AS usd
+        FROM telemetria.engine_llm_calls
+        WHERE layer='layer3_merito_synthesis' AND error IS NULL
+          AND created_at > now() - interval '30 days'
+        GROUP BY 1,2 ORDER BY 3 DESC
+
+    `gemini-3.5-flash` / NULL = 347 chamadas e **US$44,93 de US$48,76 (92,1% do dólar do
+    L3)** — e é este agent que decide a banda AUTORITATIVA. Por LINHA ele é 0,3% do acervo;
+    por DÓLAR, e por AUTORIDADE, é o primeiro.
+    """
+    from src.agents.merito_reducao_v2.agent import PROMPT_VERSION
+
+    assert PROMPT_VERSION.startswith("merito_reducao.v2+"), (
+        f"o B1 voltou a carimbar identidade a mao: {PROMPT_VERSION!r}"
+    )
+    assert PROMPT_VERSION.split("+", 1)[1] != "unknown", "o hash nao resolveu — arquivo movido?"
+
+
+def test_o_B1_hasheia_o_PROPRIO_agent_e_isso_basta_por_MEDICAO():
+    """⭐ UM arquivo, e por medição — não por preguiça.
+
+    O pacote só tem `agent.py` + `__init__.py`, e a CONVENTION (o prompt), os schemas
+    `BandOut`/`VerifyOut` e o `DEFAULT_MODEL` moram TODOS no `agent.py`. Reproduz::
+
+        git log --no-merges master -- src/agents/merito_reducao_v2/agent.py   # 4 commits
+
+    4 blobs distintos em toda a história = **4 baldes**: não é MUDO (o defeito que quase
+    afundou o #190, onde 2 arquivos davam 1 blob em toda a história) e está muito dentro da
+    régua de 25. ⛔ O `__init__.py` fica fora: é re-export, não molda saída — peso mudo.
+    """
+    from src.agents.merito_reducao_v2 import agent as b1
+
+    assert b1.PROMPT_VERSION == versao_com_identidade("merito_reducao.v2", b1.__file__), (
+        "o B1 parou de hashear o proprio agent.py (ou mudou o conjunto)"
+    )
+
+
+def test_a_identidade_do_B1_NAO_colide_com_as_outras_camadas():
+    """⭐ A identidade é POR CAMADA: se duas colidissem, uma mudança numa acusaria mudança
+    na outra e o campo mentiria. O B1 e o `merito_synthesis` legado escrevem na MESMA
+    `layer` (`layer3_merito_synthesis`) — aqui é onde a colisão doeria de verdade."""
+    from src.agents.merito_reducao_v2.agent import PROMPT_VERSION as B1
+    from src.agents.mov_factsheet.schemas_v4 import PROMPT_VERSION_V4
+    from src.agents.mov_triage.agent import PROMPT_VERSION as TRIAGE
+    from src.agents.processo_synthesis.agent import PROMPT_VERSION as L2
+
+    hashes = [v.split("+", 1)[1] for v in (B1, L2, PROMPT_VERSION_V4, TRIAGE)]
+    assert len(set(hashes)) == 4, f"duas camadas colidiram no mesmo id: {hashes}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "resposta,ramo",
+    [
+        ('{"band":"Alto","governing_process":"P1","decisive_doc_present":true,'
+         '"reasoning":"r","citations":["c"]}', "sucesso"),
+        ("isto nao e json", "parse-fail"),
+    ],
+)
+async def test_o_B1_RETORNA_a_versao_nos_DOIS_ramos(monkeypatch, resposta, ramo):
+    """⛔ Sem isto o carimbo é letra morta: o `garantis-shared/.../clients/ai_agents.py` só
+    enriquece a telemetria *quando o agent retorna* `prompt_version`.
+
+    ⭐ O ramo de PARSE-FAIL entra de propósito, e é o mais fácil de esquecer: ele também
+    grava row em `engine_llm_calls`, e é nele que a pergunta "isto piorou depois de qual
+    versão do prompt?" é de fato feita. Teste comportamental (não `inspect.getsource`):
+    um `return` que perdesse a chave em UM dos dois ramos passaria numa âncora de texto.
+    """
+    from src.agents.merito_reducao_v2 import agent as b1
+    from src.providers.base import LLMResponse
+
+    class _LLM:
+        async def agenerate(self, **_kw):
+            return LLMResponse(text=resposta, model="gemini-3.5-flash",
+                               input_tokens=10, output_tokens=5)
+
+    monkeypatch.setattr(b1, "create_provider", lambda _p: _LLM())
+
+    out = await b1.classify_merito_reducao_v2(
+        {"merito_id": 13294, "dossier": "dossie de teste", "run_verify": False}
+    )
+    assert out["prompt_version"] == b1.PROMPT_VERSION
+    # controle: o parametrize tem de exercitar os DOIS ramos de verdade.
+    assert ("error" in out["card"]) == (ramo == "parse-fail")
