@@ -282,6 +282,14 @@ def _summarize_factsheet(fs: MovFactSheetMin) -> str:
             d_parts.append(decisao["sentido"])
         if decisao.get("transito_certificado"):
             d_parts.append("(TRANSITO)")
+        # O SUJEITO da decisão (RAIZ 869ep4gp1). Sai SÓ quando a decisão é de OUTRA ação
+        # — o G6 do shared já anulou formato inválido e auto-ponteiro, então a presença
+        # do token, sozinha, JÁ significa "outra ação": ninguém aqui compara CNJs.
+        # ⭐ Sem o token a linha é BYTE-IDÊNTICA à de antes ⇒ `_est_render_chars` e o
+        # `split_movs_chronological` (chunking.py) ficam inalterados nos 395.241 cards
+        # de hoje, que é onde o PR #180 se machucou.
+        if decisao.get("acao_julgada_cnj"):
+            d_parts.append(f"acao_julgada={decisao['acao_julgada_cnj']}")
         parts.append(" ".join(d_parts))
 
     eg = fs.evento_garantia or {}
@@ -632,6 +640,12 @@ PASSO 1 — Bucket pela classe:
   polo_ativo = TOMADOR (autor/impetrante); polo_passivo = Fazenda (re/coatora).
   Procedente = TOMADOR GANHOU. Improcedente = TOMADOR PERDEU.
 - Procedimento Comum Civel generico: identifique pelo objeto + quem moveu.
+- DE QUAL ACAO e a decisao: quando a linha da timeline trouxer `acao_julgada=<CNJ>`, a
+  decisao foi proferida em OUTRA acao — o CNJ do cabecalho NAO e o dela. Bucketize por
+  AQUELA acao, nao pela classe do cabecalho. O caso tipico e sentenca de Embargos a
+  Execucao TRASLADADA pros autos da execucao: ali "improcedente" e improcedencia DOS
+  EMBARGOS => TOMADOR PERDEU (e nao "improcedente da execucao => TOMADOR GANHOU").
+  Sem `acao_julgada=` na linha, a acao julgada e a do cabecalho e nada muda.
 
 PASSO 2 — Identifique o Tomador (cruze CNPJ/nome em apolice/factsheet com
 polo_ativo e polo_passivo do header).

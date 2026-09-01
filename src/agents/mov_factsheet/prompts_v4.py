@@ -242,6 +242,13 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
   (nunca parafraseie), até ~300 chars. Não achou a frase no texto => dispositivo=null E
   tem_decisao=false — é o mesmo teste dito de outro jeito: se você não consegue APONTAR onde
   o documento decide, ele não decide. ⛔ null é resposta correta; inventar não é.
+- acao_julgada_cnj: o SUJEITO da decisão — de QUAL ação é este julgamento. null = a ação
+  julgada é a DESTE processo, e é a resposta normal na esmagadora maioria dos documentos.
+  Preencha SÓ quando o documento julga OUTRA ação E diz o número dela: copie o CNJ LITERAL
+  que está escrito (ex.: "julgo improcedentes os embargos à execução fiscal nº X",
+  "traslade-se a sentença para os autos da execução principal nº X"). O caso típico é
+  sentença de EMBARGOS trasladada pros autos da EXECUÇÃO. ⛔ Não invente, não deduza e não
+  repita o número deste processo — número que não está no texto => null.
 - recorrente_polo + provido: SÓ em decisão de RECURSO. Leia no texto QUEM recorreu (apelante/
   agravante/recorrente), ache em qual polo ele está ('ativo'/'passivo'), e o resultado
   (provido/negado/parcial/não-conhecido). Se não der pra identificar o recorrente =>
