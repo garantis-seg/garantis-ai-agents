@@ -39,9 +39,18 @@ Lote(s) que falham (parse/exception) são descartados pelo framework → o reduc
 janela PARCIAL. O agent.py torna isso VISÍVEL (log L2_CHUNK_PARTIAL + clamp de confianca via
 n_ok/n_variants), nunca silencioso.
 
-ponytail: SEM marcador "[PARTE j/N]" no prompt do lote (de propósito) — adicioná-lo mudaria
-o template e forçaria bump de PROMPT_VERSION = re-cascade de TODOS os procs, não só os ~22
-gigantes. O reduce faz o raciocínio cross-janela; o LLM só sintetiza cada janela.
+ponytail: SEM marcador "[PARTE j/N]" no prompt do lote (de propósito) — ele não é
+necessário: o reduce faz o raciocínio cross-janela, e o LLM só sintetiza cada janela.
+⚠️ CORRIGIDO em 2026-09-01: até aqui esta linha dizia que adicioná-lo "forçaria bump de
+PROMPT_VERSION = re-cascade de TODOS os procs". Isso CADUCOU. O HIT de cache do L2 é
+"card ATIVO?" (superseded_at IS NULL) + scope_key + frescor — NÃO "existe synthesis na
+versão X?"; ver o corpo de `_ja_existe` em layer2_processo_synthesis/materializer.py, que
+diz "a gravação continua carimbando summary_prompt_version (proveniência), só a leitura
+mudou". Quem supersede é `enroll_processo`, pela versão do PROCESSO (allowlist v6/v7),
+não pelo PROMPT_VERSION. ⇒ editar prompts.py NÃO re-cascateia nada.
+⛔ A consequência inversa é o limite real, e é ela que precisa estar escrita: sem
+invalidação, card L2 já gerado MANTÉM a saída do prompt antigo até ser superseded por
+outro motivo. Mudança de prompt vale PRA FRENTE, nunca retroativamente. O reduce faz o raciocínio cross-janela; o LLM só sintetiza cada janela.
 """
 from __future__ import annotations
 
