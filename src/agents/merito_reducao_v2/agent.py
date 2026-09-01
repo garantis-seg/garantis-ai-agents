@@ -19,8 +19,28 @@ from pydantic import BaseModel
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from .._utils import MODEL_VARIANT_TEXT, seed_for
+from .._utils.prompt_identity import versao_com_identidade
 
 logger = logging.getLogger(__name__)
+
+# ⭐ DERIVADA, nao mantida a mao — razao e medicoes em `_utils/prompt_identity.py`.
+# Card RAIZ [869enrt3w]. Medido 2026-09-01 (claude-db-tools `/api/query`, `error IS NULL`,
+# 30d): este emissor e `gemini-3.5-flash` + `prompt_version` NULL = 347 chamadas e
+# **US$44,93 de US$48,76 do L3 inteiro (92,1% do dolar)** — e ele decide a banda
+# AUTORITATIVA. Era a camada mais cara da casa sem nenhuma proveniencia:
+#   SELECT model, coalesce(prompt_version,'(NULL)'), count(*), round(sum(cost_usd)::numeric,2)
+#   FROM telemetria.engine_llm_calls WHERE layer='layer3_merito_synthesis'
+#     AND error IS NULL AND created_at > now() - interval '30 days' GROUP BY 1,2
+#
+# ⭐ UM arquivo basta, e por medicao: o pacote so tem `agent.py` + `__init__.py`, e a
+# CONVENTION (o prompt), os schemas `BandOut`/`VerifyOut` e o `DEFAULT_MODEL` moram TODOS
+# aqui. `git log --no-merges master -- src/agents/merito_reducao_v2/agent.py` -> 4 commits
+# em toda a historia, 4 blobs distintos ⇒ 4 baldes: nao e MUDO (o defeito que quase afundou
+# o #190) e esta muito dentro da regua de 25.
+# ⛔ NAO incluir o `__init__.py`: e re-export, nao molda saida nenhuma — peso mudo.
+# ⭐ Ninguem casa este valor por LITERAL (o unico leitor e o badge do painel de debug, que
+# casa `/__ab_(.+)$/` no FIM da string; o rotulo+hash vem ANTES do sufixo `__ab_`).
+PROMPT_VERSION = versao_com_identidade("merito_reducao.v2", __file__)
 
 # gemini-3.5-flash: o alvo L2 de acurácia (não-lite; 3.5-flash-lite não existe). Gate-0
 # provou que carrega o raciocínio da redução (iguala/supera opus). O engine injeta o model
@@ -178,8 +198,13 @@ async def classify_merito_reducao_v2(
     model: Optional[str] = None,
     provider: str = "gemini",
 ) -> dict:
-    """Retorna {card: {band,governing_process,decisive_doc_present,reasoning,citations,verify}, usage, raw_response}
-    ou {card:{error:...}} em parse-fail (o materializer trata como fail-clean → mantém o L3 legado)."""
+    """Retorna {card: {band,governing_process,decisive_doc_present,reasoning,citations,verify}, usage, raw_response, prompt_version}
+    ou {card:{error:...}} em parse-fail (o materializer trata como fail-clean → mantém o L3 legado).
+
+    ⭐ `prompt_version` sai nos DOIS ramos de propósito: o parse-fail também vira uma row em
+    `telemetria.engine_llm_calls`, e é justamente nele que a pergunta "isto piorou depois de
+    qual versão do prompt?" é feita. Quem lê é `garantis-shared/.../clients/ai_agents.py`
+    (`result.get("prompt_version")` → `dataclasses.replace` no ctx)."""
     if isinstance(request, dict):
         request = MeritoReducaoV2Request(**request)
     model = model or request.model or DEFAULT_MODEL
@@ -200,6 +225,7 @@ async def classify_merito_reducao_v2(
             request.merito_id, e, (resp.text or "")[:200],
         )
         return {"card": {"error": repr(e)}, "raw_response": resp.text,
+                "prompt_version": PROMPT_VERSION,
                 "usage": _usage(resp, model, provider)}
 
     usage = _usage(resp, model, provider)
@@ -224,4 +250,5 @@ async def classify_merito_reducao_v2(
 
     card = band.model_dump()
     card["verify"] = verify
-    return {"card": card, "raw_response": resp.text, "usage": usage}
+    return {"card": card, "raw_response": resp.text,
+            "prompt_version": PROMPT_VERSION, "usage": usage}
