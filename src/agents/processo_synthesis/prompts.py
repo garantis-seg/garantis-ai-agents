@@ -253,8 +253,18 @@ def _summarize_factsheet(fs: MovFactSheetMin) -> str:
     re-materializes, causava drift do prompt L2 entre cascades).
     """
     parts = []
+    # ⭐ A AUSENCIA e DECLARADA, nao omitida. Sem o `else` a linha entrava no bloco
+    # sem colchete nenhum, num bloco cujo cabecalho diz "ordenados por data ASC" — e o
+    # LLM nao tinha como separar "a mais antiga" de "desconhecida". Medido 2026-09-01:
+    # 4.065 unidades renderizadas assim em 93 processos, 1.873 delas COM decisao e 98
+    # com transito certificado; todas classe 1D (documento orfao sem `juntada_at`).
+    # ⛔ Isto NAO afirma nada sobre QUANDO o ato aconteceu — so que nao se sabe. Preencher
+    # a data com a inferencia do LLM foi VETADO pela decisao G.2 (2026-06-11), e as
+    # colunas correspondentes foram dropadas em 2026-09-01 (card 869etg201).
     if fs.data:
         parts.append(f"[{fs.data}]")
+    else:
+        parts.append("[sem data]")
     parts.append(f"#{_short_mov_id(fs.mov_id)}")
     if fs.categoria:
         parts.append(fs.categoria)

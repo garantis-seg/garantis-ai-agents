@@ -489,7 +489,13 @@ class ApoliceContextMin(BaseModel):
     chegavam None em 0 de 125.788 cards ativos -> a apolice nunca informou a Camada 2.
     `aceita` nao existe no card: vem de lifecycle.acceptance_status.
 
-    ⛔ SEM bump de PROMPT_VERSION: bump = re-cascade de TODOS os procs (ver chunking.py).
+    ⚠️ CORRIGIDO em 2026-09-01: esta linha dizia "⛔ SEM bump de PROMPT_VERSION: bump =
+    re-cascade de TODOS os procs". A premissa CADUCOU — o HIT de cache do L2 é "card
+    ATIVO?" e não "existe synthesis na versão X?" (ver chunking.py e o corpo do
+    materializer). O PROMPT_VERSION é derivado (sha de prompts.py+schemas.py), então
+    editar ESTE arquivo já o muda sozinho — e isso não re-cascateia nada.
+    ⛔ O que continua valendo, e é o motivo real de cuidado aqui: mudança de schema/prompt
+    vale PRA FRENTE. Card L2 já gerado mantém a saída antiga até ser superseded.
     Report: ~/.claude/plans/report-cards-apolice-engine-2026-07-29.md
     """
 
