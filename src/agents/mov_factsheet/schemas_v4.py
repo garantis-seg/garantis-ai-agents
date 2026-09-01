@@ -166,6 +166,22 @@ class DecisaoBlockV4(BaseModel):
             "no texto, deixe null — null é uma resposta correta e útil."
         ),
     )
+    acao_julgada_cnj: Optional[str] = Field(
+        default=None,
+        description=(
+            "O SUJEITO da decisão: o número CNJ da AÇÃO que está sendo julgada, quando ela "
+            "NÃO é a deste processo. Copie o CNJ LITERAL do próprio dispositivo/texto. "
+            "⭐ null é a resposta NORMAL e correta: null significa 'a ação julgada é a deste "
+            "processo', que é o caso da esmagadora maioria dos documentos. "
+            "Preencha SÓ quando o documento julga OUTRA ação e diz qual — o caso típico é "
+            "sentença de EMBARGOS À EXECUÇÃO trasladada para os autos da EXECUÇÃO ('julgo "
+            "improcedentes os embargos à execução fiscal nº X', 'traslade-se a sentença para "
+            "os autos da execução principal'). "
+            "⛔ NÃO invente, NÃO deduza e NÃO reconstrua de memória: se o número não está "
+            "escrito no texto, deixe null. ⛔ NÃO repita aqui o número DESTE processo. "
+            "⛔ NÃO é polo, NÃO é classe e NÃO é 'quem ganhou' — é só o ponteiro para a ação."
+        ),
+    )
     # ── fatos crus NOVOS (neutros) — desacoplam extração de julgamento ──
     recorrente_polo: Optional[Literal["ativo", "passivo"]] = Field(
         default=None,
