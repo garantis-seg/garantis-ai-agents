@@ -290,6 +290,22 @@ def _summarize_factsheet(fs: MovFactSheetMin) -> str:
         # de hoje, que é onde o PR #180 se machucou.
         if decisao.get("acao_julgada_cnj"):
             d_parts.append(f"acao_julgada={decisao['acao_julgada_cnj']}")
+        # A ÂNCORA da RAIZ 869enpem7 (OK Elton 2026-09-02, card 869ep4gp1). O `dispositivo`
+        # existia no banco e atravessava `card_to_row`/`_row_to_card` até o `MovFactSheetMin`,
+        # mas morria AQUI: nunca chegava ao prompt do L2. A RAIZ entregou a âncora que torna o
+        # veredito verificável e ninguém a consumia.
+        # ⭐ Condicional, como o `acao_julgada_cnj` logo acima, e pelo mesmo motivo: medido em
+        # 2026-09-02, `dispositivo` é não-nulo em 3.112 de 395.241 linhas (0,79%) e TODAS as
+        # 3.112 já têm `tem_decisao=TRUE` ⇒ o `if` que envolve este bloco já as cobre, e as
+        # outras 392.129 (99,21%) saem BYTE-IDÊNTICAS. Não é o "muda todos os 395.241" que o
+        # card supunha.
+        # ⚠️ O clip de 300 chars não é estético: o pior processo do acervo ganha ~29k chars, e
+        # `_L2_CHUNK_DETECT_CHARS` é 800.000 (chunking.py) ⇒ 3,6% de um limiar dormente. Sem o
+        # clip um dispositivo longo sozinho pode dominar o chunk.
+        # ⭐ `_est_render_chars` CHAMA esta mesma função (chunking.py), então detector e render
+        # não podem divergir por construção — não há um 2º lugar pra atualizar.
+        if decisao.get("dispositivo"):
+            d_parts.append(f'disp="{decisao["dispositivo"][:300]}"')
         parts.append(" ".join(d_parts))
 
     eg = fs.evento_garantia or {}
