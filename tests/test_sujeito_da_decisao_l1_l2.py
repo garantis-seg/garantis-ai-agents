@@ -159,27 +159,70 @@ class TestOQueNaoMuda:
         assert "autor_polo" not in inspect.getsource(S)
 
 
-class TestAAncoraDaRaizAEstaInerte:
-    """🚨 ACHADO REGISTRADO, NAO CONSERTADO NESTE PR (869ep4gp1, comentario no card).
+class TestAAncoraDaRaizAChegaAoL2:
+    """✅ A ancora da RAIZ A (869enpem7) DEIXOU DE SER INERTE em 2026-09-02 (OK Elton, 869ep4gp1).
 
-    O `dispositivo` — a ancora que a RAIZ A (869enpem7) entregou pra tornar o veredito
-    VERIFICAVEL — existe no banco, atravessa o `card_to_row`/`_row_to_card`, chega ao
-    `MovFactSheetMin`... e o `_summarize_factsheet` NAO o renderiza. Ele nunca chega ao
-    prompt do L2.
+    ⚰️ Esta classe se chamava `TestAAncoraDaRaizAEstaInerte` e assertava o OPOSTO: que o
+    `dispositivo` NAO chegava ao prompt do L2. Ela era um sensor deliberado — *"quando alguem
+    ligar o render, ele fica vermelho e obriga a atualizar a lapide junto"*. Foi o que houve.
 
-    ⛔ Ligar aqui de carona seria errado: mudaria a linha de TODOS os 395.241 cards, o
-    tamanho do prompt do L2 e o `_est_render_chars` do chunking — ou seja, destruiria
-    exatamente a byte-neutralidade que este PR precisa provar. Card proprio.
+    🚨 As TRES razoes escritas pra adiar caíram, todas MEDIDAS em 2026-09-02, e ficam aqui
+    porque cada uma errava na direcao CARA (fazia o conserto parecer maior do que e):
 
-    Este teste EXISTE pra que o achado nao se perca: quando alguem ligar o render, ele
-    fica vermelho e obriga a atualizar a lapide junto.
+      1. *"mudaria a linha de TODOS os 395.241 cards"* -> `dispositivo` e nao-nulo em
+         **3.112 de 395.241 (0,79%)**, e os 3.112 ja tem `tem_decisao=TRUE`. Render
+         condicional deixa 392.129 linhas (99,21%) byte-identicas.
+      2. *"o tamanho do prompt do L2"* -> o pior processo do acervo ganha ~29k chars contra
+         `_L2_CHUNK_DETECT_CHARS = 800.000`. So 3 processos passam de +20k.
+      3. *"o `_est_render_chars` do chunking"* -> ele CHAMA `_summarize_factsheet`. Detector e
+         render nao podem divergir por construcao; este pe nunca existiu.
+
+    ⚠️ O que MUDA o tamanho daqui pra frente, e o card nao dizia: `L1_DECISAO_EXIGE_DISPOSITIVO`
+    esta ON em prod, entao todo card que afirmar decisao PRECISA de dispositivo por construcao —
+    da proxima rodada do L1 em diante a populacao sai de 3.112 pra a ordem de 25.613.
+
+        SELECT count(*) total,
+               count(*) FILTER (WHERE dispositivo IS NOT NULL AND dispositivo <> '') com_disp,
+               count(*) FILTER (WHERE tem_decisao) tem_dec
+          FROM leitura_conexos.mov_factsheet
+        -- 2026-09-02: 395241 | 3112 | 25613
     """
 
-    def test_o_dispositivo_NAO_chega_ao_prompt_do_L2_hoje(self):
+    def test_o_dispositivo_CHEGA_ao_prompt_do_L2(self):
         fs = _FS(decisao={"tem_decisao": True, "natureza": "improcedente",
                           "dispositivo": "JULGO IMPROCEDENTES OS EMBARGOS"})
         render = _summarize_factsheet(fs)
-        assert "IMPROCEDENTES OS EMBARGOS" not in render, (
-            "o `dispositivo` passou a ser renderizado — otimo, mas isso muda a linha de "
-            "TODOS os cards: atualize esta lapide e re-meca o chunking do L2."
-        )
+        assert "IMPROCEDENTES OS EMBARGOS" in render
+
+    def test_sem_dispositivo_a_linha_e_BYTE_IDENTICA(self):
+        """Os 99,21% que nao tem dispositivo nao podem se mexer — e a byte-neutralidade.
+
+        🚨 A assercao e ABSOLUTA (`"disp=" not in render`), nao uma comparacao entre dois
+        renders. Mutante verificado: com `d_parts.append(f'disp="{... or ""}"')` — render
+        INCONDICIONAL, que emite `disp=""` em 392.129 cards — a versao relativa passava
+        VERDE, porque os DOIS lados da igualdade ganhavam o mesmo sufixo. Comparar mutante
+        com mutante nao mede nada.
+        """
+        base = {"tem_decisao": True, "natureza": "improcedente", "instancia": "1a"}
+        for extra in ({}, {"dispositivo": None}, {"dispositivo": ""}):
+            render = _summarize_factsheet(_FS(decisao={**base, **extra}))
+            assert "disp=" not in render, (
+                f"card sem dispositivo ganhou token no prompt do L2 ({extra}): {render!r}. "
+                "Isso muda a linha de 392.129 cards e o `_est_render_chars` do chunking."
+            )
+        # e os 3 renderizam a MESMA coisa entre si
+        assert len({_summarize_factsheet(_FS(decisao={**base, **e}))
+                    for e in ({}, {"dispositivo": None}, {"dispositivo": ""})}) == 1
+
+    def test_o_dispositivo_e_CLIPADO_em_300_chars(self):
+        """Sem clip, um dispositivo longo sozinho domina o chunk do L2."""
+        fs = _FS(decisao={"tem_decisao": True, "natureza": "improcedente",
+                          "dispositivo": "X" * 5000})
+        render = _summarize_factsheet(fs)
+        assert "X" * 300 in render
+        assert "X" * 301 not in render
+
+    def test_sem_decisao_o_dispositivo_NAO_vaza(self):
+        """O render inteiro e gateado por `tem_decisao` — card sem decisao nao ganha linha."""
+        fs = _FS(decisao={"tem_decisao": False, "dispositivo": "JULGO IMPROCEDENTE"})
+        assert "JULGO IMPROCEDENTE" not in _summarize_factsheet(fs)
