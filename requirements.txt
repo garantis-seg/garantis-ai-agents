@@ -103,7 +103,7 @@ pypdf>=4.0.0
 # `_familia_key` passou a depender. Versao lida do LOG do build de publish
 # (`[version] computed 1.537.0`, build 9486e455), nao do `versions list`.
 # ⚠️ Bump ATOMICO com o codigo deste PR: sem a wheel nova o `prompts_v4.py` nem importa.
-garantis-shared==1.574.0
+garantis-shared==1.588.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
