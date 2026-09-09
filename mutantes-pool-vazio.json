@@ -1,0 +1,11 @@
+[
+  ["src/agents/peticao_confirmador/schemas.py",
+   "    candidatos: list[CandidatoConfirmador] = Field(min_length=1)",
+   "    candidatos: list[CandidatoConfirmador] = Field(default_factory=list)",
+   "p1 volta-o-defeito: pool vazio vira request valido e a rota PAGA por ele"],
+
+  ["src/agents/peticao_confirmador/schemas.py",
+   "    candidatos: list[CandidatoConfirmador] = Field(min_length=1)",
+   "    candidatos: list[CandidatoConfirmador] = Field(min_length=999)",
+   "p2 CONTROLE: recusa larga demais -- o controle positivo (1 candidato -> 200) tem de quebrar"]
+]

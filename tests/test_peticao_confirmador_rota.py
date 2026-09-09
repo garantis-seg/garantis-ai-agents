@@ -488,14 +488,14 @@ def test_card_quebrado_vira_500_e_NUNCA_abstencao(client, monkeypatch):
     assert "escolhido" not in resp.text or "LLM parse error" in resp.text
 
 
-def test_pool_vazio_nao_inventa_candidato(client, monkeypatch):
-    """N=0: nao ha o que escolher, e o unico veredito possivel e 0."""
-    fake = _mock_provider(monkeypatch, _veredito(0))
-    resp = client.post(ROTA, json=_req(candidatos=[]))
-
-    assert resp.status_code == 200
-    assert resp.json()["card"]["escolhido"] == 0
-    assert "Escolha entre os candidatos [1] a [0]" in fake.chamadas[0]["prompt"]
+#: ⚰️ AQUI VIVIA `test_pool_vazio_nao_inventa_candidato`, e ele GUARDAVA O DEFEITO.
+#: Ele afirmava *"N=0: o unico veredito possivel e 0"* e provava isso lendo
+#: `fake.chamadas[0]["prompt"]` -- ou seja, **exigia que o LLM tivesse sido chamado** --
+#: e congelava a frase sem sentido `"Escolha entre os candidatos [1] a [0]"`.
+#: A propriedade ("nao inventa candidato") era certa; o mecanismo, nao: ela vale de graca
+#: quando a chamada nao acontece, e a chamada custava dinheiro. Substituido por
+#: `test_pool_VAZIO_e_recusado_SEM_chamar_o_LLM` (secao 8), que e estritamente mais forte
+#: -- o modelo nao pode inventar um candidato numa chamada que nao existe.
 
 
 # ══ 7. REGISTRO ═════════════════════════════════════════════════════════════
@@ -514,3 +514,39 @@ def test_a_rota_esta_registrada_no_app_principal():
     # as irmas continuam de pe -- o C5 e ADITIVO
     assert "/mov-factsheet/classify" in caminhos
     assert "/mov-factsheet/triage" in caminhos
+
+
+# ══ 8. POOL VAZIO NAO E UMA PERGUNTA ════════════════════════════════════════
+
+def test_pool_VAZIO_e_recusado_SEM_chamar_o_LLM(client, monkeypatch):
+    """⛔⛔ Frame comparativo sobre ZERO candidatos nao e pergunta -- e nao se paga.
+
+    Achado sondando a rota recem-deployada em prod com `POST {}` (esperava-se 422; veio
+    **200**): `candidatos` era `default_factory=list`, e o agente chama `agenerate` sem
+    curto-circuito ⇒ o corpo vazio montava um prompt dizendo *"CANDIDATOS (0
+    documentos)"* / *"Escolha entre os candidatos [1] a [0]"* e **pagava** por ele.
+
+    ⭐ O caller de producao nunca manda vazio (o `garantis_shared` para em
+    `if not candidatos`), e e exatamente por isso que o vazamento seria INVISIVEL: so
+    chega aqui por bug de caller, retry malformado ou sonda -- e cada um paga calado.
+    ⭐ 422 e o desfecho certo tambem rio abaixo: nao-2xx chega no caller como abstencao,
+    que e o estado de hoje. Nada regride.
+
+    ⛔ A assercao que importa e `n_chamadas == 0`, nao o 422: um `min_length` que
+    recusasse DEPOIS de chamar continuaria queimando dinheiro com o teste verde.
+    """
+    fake = _mock_provider(monkeypatch, _veredito(1))
+
+    vazio = client.post(ROTA, json=_req(candidatos=[]))
+    ausente = client.post(ROTA, json={})
+
+    assert vazio.status_code == 422
+    assert ausente.status_code == 422
+    assert fake.n_chamadas == 0, "pagou por um pool vazio"
+
+    # CONTROLE POSITIVO: o mesmo cliente, o mesmo mock, UM candidato -> 200 e 1 chamada.
+    # Sem ele, `min_length=999` (ou uma rota quebrada) tambem daria 422/0 e passaria.
+    ok = client.post(ROTA, json=_req(candidatos=[
+        {"n": 1, "doc_key": "jb-1", "titulo": "PETICAO", "head": HEAD_1}]))
+    assert ok.status_code == 200
+    assert fake.n_chamadas == 1
