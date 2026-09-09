@@ -1,0 +1,91 @@
+[
+ ["src/agents/peticao_confirmador/prompts.py",
+  "Nao existe premio por",
+  "Existe um grande premio por",
+  "INV-2: inverte a regra de abstencao -- passa a premiar escolher"],
+
+ ["src/agents/peticao_confirmador/prompts.py",
+  "automaticos ou enganosos. Decida pelo TEXTO",
+  "automaticos ou enganosos. Decida pelo titulo",
+  "INV-3: manda decidir pelo TITULO (que vem do tribunal e engana)"],
+
+ ["src/agents/peticao_confirmador/prompts.py",
+  "a inicial DAQUELE processo.",
+  "a inicial deste mesmo processo.",
+  "INV-4: deixa de recusar copia integral de OUTRO processo"],
+
+ ["src/agents/peticao_confirmador/prompts.py",
+  "Escolha entre os candidatos [1] a [{n}], ou 0 para NENHUM.",
+  "Escolha o melhor candidato.",
+  "INV-1/2: tira a numeracao comparativa E a saida 0 do fecho"],
+
+ ["src/agents/peticao_confirmador/prompts.py",
+  "for i, c in enumerate(candidatos, 1)",
+  "for i, c in enumerate(candidatos[:1], 1)",
+  "INV-1: so 1 candidato chega ao prompt -- o frame INDUTOR disfarcado"],
+
+ ["src/agents/peticao_confirmador/prompts.py",
+  "classe=_ou(processo.get(\"classe\")),",
+  "classe=_ou(processo.get(\"nm_tomador\")),",
+  "VAZAMENTO: metadado do tomador entra no prompt"],
+
+ ["src/agents/peticao_confirmador/prompts.py",
+  "head=(c.get(\"head\") or \"\")[:head_chars],",
+  "head=(c.get(\"head\") or \"\"),",
+  "JANELA: some o corte -- a defesa estrutural contra copia-integral cai"],
+
+ ["src/agents/peticao_confirmador/agent.py",
+  "card_data = {\"error\": repr(e), \"raw\": raw_response}",
+  "card_data = {\"escolhido\": 0, \"continuacao\": [], \"motivo\": \"parse\"}",
+  "FALHA CALMA: parse quebrado vira abstencao (o caller carimbaria decidiu=True)"],
+
+ ["src/agents/peticao_confirmador/agent.py",
+  "        temperature=0.0,",
+  "        temperature=0.7,",
+  "PARAM: perde o determinismo medido 12/12"],
+
+ ["src/agents/peticao_confirmador/agent.py",
+  "        thinking_budget=0,",
+  "        thinking_budget=1024,",
+  "PARAM: liga thinking (custo e latencia sem lift medido)"],
+
+ ["src/agents/peticao_confirmador/agent.py",
+  "        system_instruction=sistema,",
+  "        system_instruction=\"\",",
+  "FRAME: a persona (invariantes 2/3/4) nao chega ao modelo"],
+
+ ["src/agents/peticao_confirmador/agent.py",
+  "\"PETICAO_CONFIRMADOR_MODEL\", \"gemini-3.1-flash-lite\"",
+  "\"PETICAO_CONFIRMADOR_MODEL\", \"gemini-3.1-flash\"",
+  "MODELO: o NAO-lite, que 404a no Vertex e esta fora do catalogo de preco"],
+
+ ["src/agents/peticao_confirmador/agent.py",
+  "\"llm_raw_prompt\": f\"{sistema}\\n\\n{usuario}\"",
+  "\"llm_raw_prompt\": usuario",
+  "AUDITORIA: o campo auditado perde metade do frame -- vazamento na persona passa"],
+
+ ["src/agents/peticao_confirmador/schemas.py",
+  "\"required\": [\"escolhido\", \"continuacao\", \"motivo\"]",
+  "\"required\": [\"motivo\"]",
+  "CONTRATO: o structured output deixa de exigir o veredito"],
+
+ ["src/agents/peticao_confirmador/schemas.py",
+  "escolhido: int = Field(strict=True)",
+  "escolhido: int = Field()",
+  "COERCAO LAX: `true` vira indice 1 e DESARMA a guarda de bool do garantis_shared"],
+
+ ["src/agents/peticao_confirmador/schemas.py",
+  "continuacao: list[StrictInt] = Field(default_factory=list)",
+  "continuacao: list[int] = Field(default_factory=list)",
+  "COERCAO LAX: `[true]` vira `[1]` -- o candidato 1 entra como 'parte 2' da peca"],
+
+ ["src/api/routes/mov_factsheet.py",
+  "@router.post(\"/confirmar-peticao\"",
+  "@router.post(\"/confirma-peticao\"",
+  "ROTA: o caminho diverge do que o garantis_shared chama => 404 => C5 inerte"],
+
+ ["src/providers/gemini.py",
+  "if kwargs.get(\"system_instruction\"):",
+  "if False and kwargs.get(\"system_instruction\"):",
+  "PROVIDER: o passthrough descarta a persona em SILENCIO"]
+]

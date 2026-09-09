@@ -322,6 +322,15 @@ class GeminiProvider(BaseLLMProvider):
             # (necessario quando schema tem dict[str, Any] que Gemini Developer API rejeita)
             config_params["response_mime_type"] = kwargs["response_mime_type"]
 
+        # System instruction (opcional). ADITIVO em 2026-09-09 pelo confirmador da
+        # peticao (C5): o arnes que MEDIU aquela camada mandou a persona/as regras
+        # como `system_instruction` e os candidatos como `contents`, e concatenar as
+        # duas metades num `prompt` so mudaria a chamada em relacao ao que foi medido.
+        # ⛔ Puramente opt-in: sem o kwarg, nada muda para nenhum caller existente
+        # (medido: zero callers passavam `system_instruction` antes deste).
+        if kwargs.get("system_instruction"):
+            config_params["system_instruction"] = kwargs["system_instruction"]
+
         # Greedy strict decoding quando temperature=0 (top_p=1, top_k=1).
         # Override possivel via kwargs.
         if temperature == 0.0:
