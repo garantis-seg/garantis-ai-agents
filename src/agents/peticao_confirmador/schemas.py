@@ -107,7 +107,19 @@ class ConfirmadorRequest(BaseModel):
                      "contra copia-integral e o dono dela e o `garantis_shared` "
                      "(`_CONFIRMADOR_HEAD_CHARS`), onde o guard a alcanca."),
     )
-    candidatos: list[CandidatoConfirmador] = Field(default_factory=list)
+    #: ⛔⛔ **`min_length=1`: pool VAZIO nao e uma pergunta, e nao se paga por ele.**
+    #: Ate 2026-09-09 este campo era `default_factory=list`, entao `POST {}` montava um
+    #: request valido com ZERO candidatos, o agente chamava `agenerate` sem
+    #: curto-circuito, e a rota devolvia **200 pagando** por um prompt que dizia
+    #: *"CANDIDATOS (0 documentos)"* e *"Escolha entre os candidatos [1] a [0]"*.
+    #: Achado sondando a rota recem-deployada com `{}` (esperava-se 422; veio 200).
+    #: ⭐ O caller de producao nunca manda vazio -- o `garantis_shared` curto-circuita em
+    #: `if not candidatos`. Justamente por isso o vazamento seria **invisivel**: so
+    #: chegaria aqui por bug de caller, retry malformado ou sonda, e cada um paga calado.
+    #: ⭐ A recusa e DECLARATIVA (Pydantic), nao um `if` no agente: um `if` seria um 2o
+    #: dono da mesma pre-condicao, e o schema ja e quem responde "este request e uma
+    #: pergunta?". Sai 422 -- e 422 chega no caller como abstencao, que e o estado de hoje.
+    candidatos: list[CandidatoConfirmador] = Field(min_length=1)
     model: Optional[str] = None
     provider: Optional[str] = None
 
