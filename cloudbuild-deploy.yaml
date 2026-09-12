@@ -94,7 +94,39 @@ steps:
       - 'southamerica-east1'
       - '--platform'
       - 'managed'
-      - '--allow-unauthenticated'
+      # ⛔⛔ NAO volte pra `--allow-unauthenticated`. Card 869f12nv9, 2026-09-12.
+      #
+      # Este flag GRAVA `allUsers -> roles/run.invoker` na IAM policy do servico a
+      # cada deploy — nao e "permitir se alguem ja tiver permitido". PROVA de audit
+      # log, do merge do 3347f02 em 2026-09-09:
+      #   gcloud logging read 'protoPayload.serviceName="run.googleapis.com" AND
+      #     protoPayload.methodName:"SetIamPolicy" AND protoPayload.resourceName=
+      #     "projects/neqsti/locations/southamerica-east1/services/garantis-ai-agents"'
+      #     --project=neqsti --freshness=180d
+      # => `SetIamPolicy` as 13:13 e 13:26 UTC pela SA de build
+      #    (394302633873-compute@, que tem roles/run.admin no projeto), com
+      #    `request.policy.bindings = [{members:["allUsers"], role:"roles/run.invoker"}]`.
+      #
+      # 🚨 Consequencia, e a razao deste comentario ser tao longo: tirar `allUsers`
+      # por `gcloud run services remove-iam-policy-binding` NAO DURA. O trigger
+      # `deploy-garantis-ai-agents` observa `^master$` e **nao tem includedFiles**,
+      # entao QUALQUER push em master reabre o servico pra internet — inclusive o PR
+      # de pin que o bot do `bump_consumers.py` do garantis-shared abre sozinho,
+      # minutos depois de um merge la. E nada detecta: o reconcile diario STRICT
+      # compara `services.yaml` x Cloud Run vivo em env_vars/secrets/sizing, e o
+      # bloco deste servico nao declara campo de auth nenhum (`grep -c
+      # 'unauth\|invoker\|allUsers' execucao-fiscal/config/services.yaml` = 0).
+      # ⇒ o fecho tem de morar AQUI, no caminho de deploy, nao numa escrita de IAM
+      # fora do git. Este flag E o freio.
+      #
+      # ⭐ Quem chama este servico manda OIDC (`garantis_shared.s2s_auth.
+      # auth_header_for`, audience = a URL base), e a SA chamadora
+      # (394302633873-compute@ — a mesma do fe-api, do fe-api-staging e do worker
+      # pool risk-engine-worker) tem `run.invoker` concedido no recurso. Guarda de
+      # que nenhum call site esquece o header: `garantis_shared/s2s_auth_lint.py` +
+      # os 2 testes gemeos (garantis-shared e frontend-api).
+      # ⭐ Precedente do padrao nesta casa: `claude-db-tools/cloudbuild.yaml`.
+      - '--no-allow-unauthenticated'
       - '--min-instances'
       - '3'
       - '--max-instances'

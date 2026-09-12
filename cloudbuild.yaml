@@ -26,7 +26,10 @@ steps:
       - 'southamerica-east1'
       - '--platform'
       - 'managed'
-      - '--allow-unauthenticated'
+      # ⛔ Card 869f12nv9: ver o comentario longo em cloudbuild-deploy.yaml. Este flag
+      # GRAVA `allUsers` na IAM policy (prova de audit log la). Este arquivo e LEGACY e
+      # nao tem trigger, mas e comando COPIAVEL — nao deixe a grafia errada aqui.
+      - '--no-allow-unauthenticated'
       - '--memory'
       - '1Gi'
       - '--timeout'
