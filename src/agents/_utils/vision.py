@@ -215,8 +215,22 @@ async def call_vision_l1(
     max_tokens: int | None = None,
     gate_out: Optional[dict] = None,
     seed: int | None = None,
+    system_instruction: str | None = None,
+    top_p: float | None = None,
+    top_k: int | None = None,
+    rotulos: list[str] | None = None,
 ) -> Any:
     """Chama Gemini Vision com PDFs + prompt text. Retorna LLMResponse.
+
+    `system_instruction`/`top_p`/`top_k` (opcionais, 2026-09-15): o C5 foi medido com
+    a persona no `system_instruction` e a janela de decodificacao explicita — sem eles
+    aqui, a leitura do candidato SCAN seria outra chamada. `None` = nao vai no config,
+    e os callers de hoje ficam byte-identicos.
+
+    `rotulos` (opcional): 1 texto por PDF, que sobe IMEDIATAMENTE antes dele. Existe porque
+    o prompt do C5 numera CANDIDATOS e os PDFs sao so parte deles — sem o rotulo o modelo
+    casa "candidato 3" com "o 3o PDF" (medido no gold scan de 15/09). ⛔ Rotulo e PDF tem
+    de continuar pareados: se o cap dropar algum, levanta em vez de desalinhar.
 
     O payload é montado por `_build_pdf_parts`, que dropa e conta o que passa
     dos caps inline. `gate_out` (dict mutável, opcional) recebe
@@ -238,6 +252,11 @@ async def call_vision_l1(
     types = provider._types
 
     pdf_parts = _build_pdf_parts(types, pdf_bytes_list, gate_out)
+    if rotulos is not None:
+        if len(rotulos) != len(pdf_parts):
+            raise ValueError(f"rotulos={len(rotulos)} != pdfs enviados={len(pdf_parts)}")
+        pdf_parts = [p for r, pdf in zip(rotulos, pdf_parts)
+                     for p in (types.Part.from_text(text=r), pdf)]
     parts = pdf_parts + [types.Part.from_text(text=prompt)]
 
     config_kwargs: dict[str, Any] = {"temperature": temperature}
@@ -253,6 +272,10 @@ async def call_vision_l1(
             pass
     if seed is not None:
         config_kwargs["seed"] = seed
+    for chave, valor in (("system_instruction", system_instruction),
+                         ("top_p", top_p), ("top_k", top_k)):
+        if valor is not None:
+            config_kwargs[chave] = valor
 
     config = types.GenerateContentConfig(**config_kwargs)
 

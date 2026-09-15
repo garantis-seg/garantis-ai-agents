@@ -134,6 +134,7 @@ async def confirmar_peticao_endpoint(request: ConfirmadorRequest):
             processo=request.processo,
             candidatos=request.candidatos,
             head_chars=request.head_chars,
+            head_paginas=request.head_paginas,
             model=request.model,
             provider=request.provider or "gemini",
         )

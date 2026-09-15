@@ -50,7 +50,10 @@ from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
+from .._utils.ocr_gate import inicio_do_pdf
 from .._utils.prompt_identity import versao_com_identidade
+from .._utils.vision import (_INLINE_PER_PDF_BYTES_CAP, _INLINE_TOTAL_BYTES_CAP,
+                             call_vision_l1, fetch_pdfs_from_gcs)
 from .prompts import build_confirmador_prompt
 from .schemas import CONFIRMADOR_RESPONSE_SCHEMA
 
@@ -84,6 +87,47 @@ PROMPT_VERSION = versao_com_identidade(
     __file__,
 )
 
+# ⭐ O CANDIDATO SCAN (fatia 2 da cabeca dos autos, OK Elton 2026-09-15, card 869equgwd).
+# Doc da cabeca sem teor de texto chega com `head` vazio + `gcs_url`: as N primeiras
+# paginas vao como PDF inline na MESMA chamada comparativa, e o `head` dele vira uma
+# marca que aponta o anexo. ⛔ `SISTEMA`/`USUARIO`/`BLOCO` NAO mudam (sha256 guardado):
+# pool sem scan continua byte-identico ao medido; so o conteudo do `head` do scan difere.
+# ⛔ A marca nao carrega titulo, data nem pista — so "o inicio deste candidato e o PDF rotulado".
+# ⭐⭐ O rotulo e a POSICAO DO CANDIDATO, nunca a ordem do anexo. Com "PDF anexo numero k" o
+# modelo casou "candidato 3" com "o 3o PDF" no gold scan de 15/09 (afirmou o doc errado em 1 pn
+# e perdeu a inicial em 2): duas numeracoes no mesmo prompt sao uma a mais.
+_ROTULO_PDF = "PDF DO CANDIDATO [{i}]"
+_MARCA_PDF = ("[documento digitalizado sem texto extraivel: o INICIO dele sao as "
+              "{p} primeiras paginas do arquivo rotulado " + _ROTULO_PDF + "]")
+_MARCA_SEM_PDF = "[documento digitalizado sem texto extraivel; PDF indisponivel]"
+
+
+async def _anexa_pdfs_dos_scans(cands: list[dict],
+                                head_paginas: int) -> tuple[list[bytes], list[str]]:
+    """Troca o `head` vazio dos candidatos com `gcs_url` pela marca, e devolve os PDFs
+    cortados + o rotulo de cada um (`PDF DO CANDIDATO [i]`, i = posicao no pool).
+
+    ⛔ Os caps inline sao aplicados AQUI, antes de rotular: o `_build_pdf_parts` dropa o
+    que nao cabe, e um drop depois faria a marca apontar um PDF que nao subiu. Mesma greedy,
+    mesma ordem — e o `call_vision_l1` ainda levanta se rotulo e PDF desalinharem."""
+    pdfs: list[bytes] = []
+    rotulos: list[str] = []
+    total = 0
+    for i, c in enumerate(cands, 1):
+        if c.get("head") or not c.get("gcs_url"):
+            continue
+        baixados = await fetch_pdfs_from_gcs([c["gcs_url"]])
+        corte = inicio_do_pdf(baixados[0], head_paginas) if baixados else None
+        if (corte is None or len(corte) > _INLINE_PER_PDF_BYTES_CAP
+                or total + len(corte) > _INLINE_TOTAL_BYTES_CAP):
+            c["head"] = _MARCA_SEM_PDF
+            continue
+        pdfs.append(corte)
+        rotulos.append(_ROTULO_PDF.format(i=i))
+        total += len(corte)
+        c["head"] = _MARCA_PDF.format(p=head_paginas, i=i)
+    return pdfs, rotulos
+
 
 async def confirmar_peticao(
     processo: Any,
@@ -91,6 +135,7 @@ async def confirmar_peticao(
     head_chars: int,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
+    head_paginas: int = 2,
 ) -> dict:
     """Julga os N candidatos JUNTOS. 1 LLM call, veredito 0..N.
 
@@ -116,6 +161,7 @@ async def confirmar_peticao(
         model = DEFAULT_MODEL
 
     llm_provider = create_provider(provider)
+    pdfs, rotulos = await _anexa_pdfs_dos_scans(cands, head_paginas)
     sistema, usuario = build_confirmador_prompt(proc, cands, head_chars)
 
     # ⛔ `temperature=0.0` + `top_p=1.0` + `top_k=1` sao os parametros MEDIDOS
@@ -124,17 +170,15 @@ async def confirmar_peticao(
     # medido, e um default que muda nao pode mudar esta camada calada.
     # ⭐ `thinking_budget=0`: prompt curto e decisao de leitura, nao de raciocinio --
     # e o mesmo regime do L1 de extracao (43/43 campos identicos com e sem thinking).
-    response: LLMResponse = await llm_provider.agenerate(
-        prompt=usuario,
-        model=model,
-        temperature=0.0,
-        max_tokens=_MAX_TOKENS,
-        response_schema=CONFIRMADOR_RESPONSE_SCHEMA,
-        system_instruction=sistema,
-        top_p=1.0,
-        top_k=1,
-        thinking_budget=0,
-    )
+    # ⭐ Com PDF, os MESMOS parametros vao pelo helper Vision (sem 2o OCR, sem 2a chamada).
+    comuns = dict(model=model, temperature=0.0, max_tokens=_MAX_TOKENS,
+                  response_schema=CONFIRMADOR_RESPONSE_SCHEMA,
+                  system_instruction=sistema, top_p=1.0, top_k=1, thinking_budget=0)
+    if pdfs:
+        response: LLMResponse = await call_vision_l1(
+            llm_provider, prompt=usuario, pdf_bytes_list=pdfs, rotulos=rotulos, **comuns)
+    else:
+        response = await llm_provider.agenerate(prompt=usuario, **comuns)
 
     raw_response = response.text
     try:
@@ -150,8 +194,8 @@ async def confirmar_peticao(
     # num `if`. O `doc_key` aparece aqui, e SO aqui: e pra isso que ele vem.
     escolhido = card_data.get("escolhido") if isinstance(card_data, dict) else None
     logger.info(
-        "PETICAO_CONFIRMADOR escolhido=%s de=%d head_chars=%d doc_key=%s model=%s",
-        escolhido, len(cands), head_chars,
+        "PETICAO_CONFIRMADOR escolhido=%s de=%d pdfs=%d head_chars=%d doc_key=%s model=%s",
+        escolhido, len(cands), len(pdfs), head_chars,
         (cands[escolhido - 1].get("doc_key")
          if isinstance(escolhido, int) and not isinstance(escolhido, bool)
          and 1 <= escolhido <= len(cands) else None),
