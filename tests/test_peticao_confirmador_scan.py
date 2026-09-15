@@ -1,20 +1,19 @@
 """O C5 le o candidato SCAN (fatia 2 da cabeca dos autos, card 869equgwd, OK Elton 15/09).
 
-Pool sem scan = a chamada de texto de hoje, byte a byte. Pool com scan = a de texto sobre os
-candidatos de texto + 1 Vision SO dos scans (decisao Elton 15/09: misturadas, o PDF quebrou o
-determinismo e contaminou o julgamento do texto). Respostas voltam pra numeracao global.
+O Vision so TRANSCREVE as N primeiras paginas do scan; a transcricao vira o `head` e o
+julgamento e a MESMA chamada de texto medida. ⛔ Nenhum PDF entra na chamada que julga
+(gold scan 15/09: misturado contaminou o texto; so-scans afirmou inicial de outro processo).
 """
 from __future__ import annotations
 
 import io
-import json
+from types import SimpleNamespace
 
 import pytest
 from pypdf import PdfReader, PdfWriter
 
-from src.agents._utils import ocr_gate, vision
+from src.agents._utils import ocr_gate
 from src.agents.peticao_confirmador import agent as agent_mod
-from src.agents.peticao_confirmador.prompts import SISTEMA
 from tests.test_peticao_confirmador_rota import (HEAD_1, HEAD_2, ROTA, _mock_provider,
                                                  _req, _veredito, client)  # noqa: F401
 
@@ -28,8 +27,9 @@ def _pdf(paginas: int) -> bytes:
     return buf.getvalue()
 
 
-def _vision_fake(monkeypatch, resposta=_veredito(0)):
-    """Grava a chamada Vision e serve os PDFs por URL (`gs://b/<paginas>` ou `gs://b/sumido`)."""
+def _vision_fake(monkeypatch, texto="EXCELENTISSIMO SENHOR JUIZ transcrito do scan",
+                 falha=False):
+    """Transcricao duble. PDFs por URL: `gs://b/<paginas>` ou `gs://b/sumido`."""
     chamadas: list[dict] = []
 
     async def _fetch(urls):
@@ -37,9 +37,10 @@ def _vision_fake(monkeypatch, resposta=_veredito(0)):
 
     async def _call(provider, **kw):
         chamadas.append(kw)
-        from types import SimpleNamespace
-        return SimpleNamespace(text=resposta, model=kw["model"], input_tokens=900,
-                               output_tokens=30, cached_tokens=0,
+        if falha:
+            raise RuntimeError("400 The document has no pages")
+        return SimpleNamespace(text=f"{texto} #{len(chamadas)}", model=kw["model"],
+                               input_tokens=900, output_tokens=300, cached_tokens=0,
                                metadata={"cost_usd": 0.0009, "model_variant": "vision"})
 
     monkeypatch.setattr(agent_mod, "fetch_pdfs_from_gcs", _fetch)
@@ -51,118 +52,72 @@ def _scan(n, url):
     return {"n": n, "doc_key": f"esc-{n}", "titulo": "Auto", "head": "", "gcs_url": url}
 
 
-def _pool_misto():
-    req = _req()
+def _pool_misto(**over):
+    req = _req(**over)
     t1, t2, _ = req["candidatos"]
     req["candidatos"] = [t1, _scan(2, "gs://b/40"), t2, _scan(4, "gs://b/3")]
     return req
 
 
-def test_pool_sem_scan_e_a_chamada_de_hoje(client, monkeypatch):
-    """⛔ MUTANTE: mandar pro Vision todo candidato com `gcs_url`. `head` presente = texto."""
+def test_pool_sem_scan_nao_chama_Vision(client, monkeypatch):
+    """⛔ MUTANTE: transcrever todo candidato com `gcs_url`. `head` presente = texto."""
     vis = _vision_fake(monkeypatch)
     fake = _mock_provider(monkeypatch, _veredito(1))
     req = _req()
     req["candidatos"][0]["gcs_url"] = "gs://b/3"
     body = client.post(ROTA, json=req).json()
-    assert fake.n_chamadas == 1 and vis == []
-    assert "PDF DO CANDIDATO" not in fake.chamadas[0]["prompt"]
-    assert body["usage"]["model_variant"] == "text"
+    assert vis == [] and fake.n_chamadas == 1
+    assert body["usage"]["model_variant"] != "vision"
 
 
-def test_texto_e_scan_vao_em_chamadas_SEPARADAS(client, monkeypatch):
-    """⛔ MUTANTE: juntar os PDFs na chamada de texto (o desenho medido e refutado em 15/09)."""
+def test_scan_vira_TEXTO_e_o_julgamento_e_UMA_chamada_sem_PDF(client, monkeypatch):
+    """⛔ MUTANTE: mandar o PDF pra chamada que julga (o desenho refutado no gold de 15/09)."""
     vis = _vision_fake(monkeypatch)
-    fake = _mock_provider(monkeypatch, _veredito(0))
+    fake = _mock_provider(monkeypatch, _veredito(2))
     body = client.post(ROTA, json=_pool_misto()).json()
 
-    assert fake.n_chamadas == 1 and len(vis) == 1
-    texto = fake.chamadas[0]["prompt"]
-    assert HEAD_1 in texto and HEAD_2 in texto and "PDF DO CANDIDATO" not in texto
-    assert "Escolha entre os candidatos [1] a [2]" in texto, "so os 2 de texto"
-    kw = vis[0]
-    assert HEAD_1 not in kw["prompt"], "o scan nao ve o texto"
-    assert "Escolha entre os candidatos [1] a [2]" in kw["prompt"], "so os 2 scans"
-    assert kw["rotulos"] == ["PDF DO CANDIDATO [1]", "PDF DO CANDIDATO [2]"]
-    assert agent_mod._MARCA_PDF.format(p=2, i=1) in kw["prompt"]
-    assert (kw["system_instruction"], kw["temperature"], kw["top_p"], kw["top_k"],
-            kw["thinking_budget"], kw["max_tokens"]) == (SISTEMA, 0.0, 1.0, 1, 0, 2048)
-    assert kw["seed"] == agent_mod._SEED_SCAN
-    assert "seed" not in fake.chamadas[0], "o texto segue sem seed, como foi medido"
-    assert [len(PdfReader(io.BytesIO(b)).pages) for b in kw["pdf_bytes_list"]] == [2, 2]
-    assert "gs://" not in body["llm_raw_prompt"]
-    assert body["card"]["escolhido"] == 0
-    assert body["usage"]["cost_usd"] == pytest.approx(0.0001 + 0.0009)
+    assert len(vis) == 2, "1 transcricao POR scan"
+    assert all(kw["prompt"] == agent_mod._TRANSCREVA for kw in vis)
+    assert all(kw["seed"] == agent_mod._SEED_TRANSCRICAO and kw["temperature"] == 0.0
+               for kw in vis)
+    assert [len(PdfReader(io.BytesIO(kw["pdf_bytes_list"][0])).pages) for kw in vis] == [2, 2]
+    assert "response_schema" not in vis[0] or vis[0].get("response_schema") is None, \
+        "transcricao e extracao, nao veredito"
+
+    assert fake.n_chamadas == 1, "o julgamento continua UMA chamada comparativa"
+    julg = fake.chamadas[0]
+    assert "pdf_bytes_list" not in julg
+    prompt = julg["prompt"]
+    assert "Escolha entre os candidatos [1] a [4]" in prompt, "os 4 juntos, na ordem"
+    assert prompt.index(HEAD_1) < prompt.index("transcrito do scan #1") < prompt.index(HEAD_2) \
+        < prompt.index("transcrito do scan #2"), "a transcricao ocupa a POSICAO do scan"
+    assert "gs://" not in prompt
+    assert body["card"]["escolhido"] == 2, "card cru, numeracao do pool"
+    assert body["usage"]["cost_usd"] == pytest.approx(0.0001 + 2 * 0.0009)
     assert body["usage"]["model_variant"] == "vision"
 
 
-def test_afirmacao_do_scan_volta_na_numeracao_GLOBAL(client, monkeypatch):
-    """⛔ MUTANTE: devolver o indice local. Scan local [2] = global [4]."""
-    _vision_fake(monkeypatch, json.dumps({"escolhido": 2, "continuacao": [1, 9],
-                                          "motivo": "abre enderecando"}))
-    _mock_provider(monkeypatch, _veredito(0))
-    card = client.post(ROTA, json=_pool_misto()).json()["card"]
-    assert card["escolhido"] == 4
-    assert card["continuacao"] == [2, 5], "invalido local vira invalido GLOBAL (n+1)"
-
-
-def test_afirmacao_do_texto_volta_na_numeracao_GLOBAL(client, monkeypatch):
-    _vision_fake(monkeypatch)
-    _mock_provider(monkeypatch, _veredito(2))
-    assert client.post(ROTA, json=_pool_misto()).json()["card"]["escolhido"] == 3
-
-
-def test_as_duas_afirmando_e_ABSTENCAO(client, monkeypatch):
-    """⛔ MUTANTE: preferir uma das duas. Duas pecas inaugurais = uma delas e errada."""
-    _vision_fake(monkeypatch, _veredito(1))
-    _mock_provider(monkeypatch, _veredito(1))
-    card = client.post(ROTA, json=_pool_misto()).json()["card"]
-    assert card["escolhido"] == 0 and card["continuacao"] == []
-
-
-def test_bool_no_pool_misto_nao_vira_abstencao(client, monkeypatch):
-    """⛔ MUTANTE: `escolhido != 0` como filtro — `False == 0` e o scan sumiria como abstencao."""
-    _vision_fake(monkeypatch, json.dumps({"escolhido": False, "continuacao": [], "motivo": "x"}))
-    _mock_provider(monkeypatch, _veredito(0))
-    assert client.post(ROTA, json=_pool_misto()).status_code == 500
-
-
-def test_card_quebrado_em_qualquer_chamada_e_500(client, monkeypatch):
-    _vision_fake(monkeypatch, "isto nao e json")
-    _mock_provider(monkeypatch, _veredito(1))
-    assert client.post(ROTA, json=_pool_misto()).status_code == 500
-
-
-def test_nenhum_PDF_disponivel_nao_paga_a_chamada_Vision(client, monkeypatch):
-    vis = _vision_fake(monkeypatch)
+def test_a_transcricao_e_cortada_na_janela_DECLARADA(client, monkeypatch):
+    """A janela anti-copia vale pro scan tambem: a inicial alheia abre ~char 3.914."""
+    _vision_fake(monkeypatch, texto="A" * 40 + "SEGREDO_ALEM_DA_JANELA")
     fake = _mock_provider(monkeypatch, _veredito(0))
+    req = _req(head_chars=50)
+    req["candidatos"] = [_scan(1, "gs://b/2")]
+    client.post(ROTA, json=req)
+    assert "SEGREDO_ALEM_DA_JANELA" not in fake.chamadas[0]["prompt"]
+
+
+@pytest.mark.parametrize("url,falha", [("gs://b/sumido", False), ("gs://b/2", True)])
+def test_scan_sem_transcricao_segue_no_pool_como_marca(client, monkeypatch, url, falha):
+    """PDF indisponivel ou Vision quebrado NAO derruba a pergunta: o candidato vai sem
+    conteudo, e o C5 julga os demais."""
+    _vision_fake(monkeypatch, falha=falha)
+    fake = _mock_provider(monkeypatch, _veredito(1))
     req = _req()
-    req["candidatos"] = [req["candidatos"][0], _scan(2, "gs://b/sumido")]
-    client.post(ROTA, json=req)
-    assert vis == [] and fake.n_chamadas == 1
-
-
-def test_o_rotulo_e_a_POSICAO_do_scan_e_so_PDF_que_sobe_ganha_rotulo(client, monkeypatch):
-    """⛔ MUTANTE: rotular pela ordem dos anexos. O 1o scan some; o PDF que sobe e o [2]."""
-    vis = _vision_fake(monkeypatch)
-    _mock_provider(monkeypatch, _veredito(0))
-    req = _req(head_paginas=3)
-    req["candidatos"] = [_scan(1, "gs://b/sumido"), _scan(2, "gs://b/5")]
-    client.post(ROTA, json=req)
-    kw = vis[0]
-    assert kw["rotulos"] == ["PDF DO CANDIDATO [2]"] and len(kw["pdf_bytes_list"]) == 1
-    assert agent_mod._MARCA_SEM_PDF in kw["prompt"]
-    assert agent_mod._MARCA_PDF.format(p=3, i=2) in kw["prompt"]
-
-
-def test_PDF_acima_do_cap_nao_sobe(client, monkeypatch):
-    monkeypatch.setattr(agent_mod, "_INLINE_PER_PDF_BYTES_CAP", 10)
-    vis = _vision_fake(monkeypatch)
-    fake = _mock_provider(monkeypatch, _veredito(0))
-    req = _req()
-    req["candidatos"] = [req["candidatos"][0], _scan(2, "gs://b/1")]
-    client.post(ROTA, json=req)
-    assert vis == [] and fake.n_chamadas == 1
+    req["candidatos"] = [req["candidatos"][0], _scan(2, url)]
+    resp = client.post(ROTA, json=req)
+    assert resp.status_code == 200 and fake.n_chamadas == 1
+    assert agent_mod._MARCA_SEM_PDF in fake.chamadas[0]["prompt"]
 
 
 def test_inicio_do_pdf_corta_so_o_COMECO():
@@ -170,67 +125,3 @@ def test_inicio_do_pdf_corta_so_o_COMECO():
     curto = _pdf(1)
     assert ocr_gate.inicio_do_pdf(curto, 2) is curto
     assert ocr_gate.inicio_do_pdf(b"<p>html</p>", 2) is None
-
-
-class _Types:
-    class GenerateContentConfig:
-        def __init__(self, **kw):
-            self.kw = kw
-
-    class ThinkingConfig:
-        def __init__(self, **kw):
-            pass
-
-    class Part:
-        def __init__(self, **kw):
-            self.pdf = True
-
-        @staticmethod
-        def from_text(text):
-            return text
-
-    class Blob:
-        def __init__(self, **kw):
-            pass
-
-
-def _prov(visto):
-    class _Models:
-        async def generate_content(self, model, contents, config):
-            visto.append((config.kw, contents))
-            from types import SimpleNamespace
-            return SimpleNamespace(text="{}", usage_metadata=None)
-
-    class _Prov:
-        _types = _Types
-        _client = type("C", (), {"aio": type("A", (), {"models": _Models()})()})()
-
-        def get_model_pricing(self, m):
-            return {}
-
-    return _Prov()
-
-
-@pytest.mark.asyncio
-async def test_call_vision_l1_encaminha_persona_e_janela_so_quando_pedidas():
-    visto = []
-    await vision.call_vision_l1(_prov(visto), model="m", prompt="p", pdf_bytes_list=[b"x"],
-                                system_instruction="S", top_p=1.0, top_k=1)
-    await vision.call_vision_l1(_prov(visto), model="m", prompt="p", pdf_bytes_list=[b"x"])
-    com, sem = visto[0][0], visto[1][0]
-    assert (com["system_instruction"], com["top_p"], com["top_k"]) == ("S", 1.0, 1)
-    assert not {"system_instruction", "top_p", "top_k"} & set(sem)
-    assert len(visto[1][1]) == 2, "sem rotulos: PDF + prompt, como sempre"
-
-
-@pytest.mark.asyncio
-async def test_call_vision_l1_intercala_rotulo_ANTES_de_cada_PDF_e_recusa_desalinho():
-    visto = []
-    await vision.call_vision_l1(_prov(visto), model="m", prompt="p",
-                                pdf_bytes_list=[b"a", b"b"], rotulos=["R1", "R2"])
-    c = visto[0][1]
-    assert (c[0], getattr(c[1], "pdf", False), c[2], getattr(c[3], "pdf", False), c[4]) == \
-        ("R1", True, "R2", True, "p")
-    with pytest.raises(ValueError):
-        await vision.call_vision_l1(_prov([]), model="m", prompt="p",
-                                    pdf_bytes_list=[b"a"], rotulos=["R1", "R2"])

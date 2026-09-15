@@ -99,8 +99,9 @@ class CandidatoConfirmador(BaseModel):
     gcs_url: Optional[str] = Field(
         default=None,
         description=("PDF do candidato SCAN (sem teor de texto). So e lido quando `head` "
-                     "vem vazio: o agente manda as `head_paginas` primeiras paginas ao "
-                     "Vision na MESMA chamada comparativa. ⛔ Nao vai pro prompt."),
+                     "vem vazio: o Vision TRANSCREVE as `head_paginas` primeiras paginas e "
+                     "a transcricao vira o `head` na chamada de texto. ⛔ A URL nao vai pro "
+                     "prompt, e o PDF nunca entra na chamada que julga."),
     )
 
 
