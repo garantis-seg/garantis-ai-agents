@@ -50,6 +50,7 @@ afirmou inicial de OUTRO processo em 3/22. Vision extrai; quem afirma e o C5 de 
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import pathlib
@@ -107,18 +108,13 @@ _MARCA_SEM_PDF = "[documento digitalizado sem texto extraivel; PDF indisponivel]
 
 
 async def _transcreve_scans(llm_provider, cands: list[dict], head_paginas: int,
-                            model: str) -> tuple[int, list[LLMResponse]]:
+                            model: str) -> tuple[int, list[LLMResponse], list[LLMResponse]]:
     """`head` vazio + `gcs_url` -> a transcricao das `head_paginas` primeiras paginas.
 
     1 chamada POR documento, de proposito: com varios PDFs numa chamada so, o modelo casou
     "candidato 3" com "o 3o PDF" (gold scan 15/09). Falha de fetch/corte/Vision vira a marca
     `_MARCA_SEM_PDF` — o candidato segue no pool, sem conteudo, e o C5 nao o afirma."""
-    respostas: list[LLMResponse] = []
-    n_scans = 0
-    for c in cands:
-        if c.get("head") or not c.get("gcs_url"):
-            continue
-        n_scans += 1
+    async def _um(c: dict) -> LLMResponse | None:
         try:
             baixados = await fetch_pdfs_from_gcs([c["gcs_url"]])
             corte = inicio_do_pdf(baixados[0], head_paginas) if baixados else None
@@ -128,13 +124,22 @@ async def _transcreve_scans(llm_provider, cands: list[dict], head_paginas: int,
                                      pdf_bytes_list=[corte], temperature=0.0,
                                      thinking_budget=0, max_tokens=_MAX_TOKENS_TRANSCRICAO,
                                      seed=_SEED_TRANSCRICAO)
-            respostas.append(r)
-            c["head"] = (r.text or "").strip() or _MARCA_SEM_PDF
         except Exception as exc:
             logger.warning("PETICAO_CONFIRMADOR_TRANSCRICAO_FALHOU doc_key=%s erro=%r",
                            c.get("doc_key"), exc)
             c["head"] = _MARCA_SEM_PDF
-    return n_scans, respostas
+            return None
+        c["head"] = (r.text or "").strip() or _MARCA_SEM_PDF
+        return r
+
+    # ⭐ EM PARALELO (review 15/09): em serie, 4 scans lentos estouravam o timeout do caller, e
+    # o retry dele re-pagava todas as transcricoes. Cada uma escreve so no PROPRIO candidato.
+    scans = [c for c in cands if not c.get("head") and c.get("gcs_url")]
+    respostas = await asyncio.gather(*(_um(c) for c in scans))
+    # `transcritos` conta so o que virou texto — transcricao vazia (bloqueio) e marca, nao leitura.
+    return (len(scans),
+            [r for r, c in zip(respostas, scans) if r is not None and c["head"] != _MARCA_SEM_PDF],
+            [r for r in respostas if r is not None])
 
 
 async def confirmar_peticao(
@@ -170,7 +175,8 @@ async def confirmar_peticao(
         model = DEFAULT_MODEL
 
     llm_provider = create_provider(provider)
-    n_scans, transcricoes = await _transcreve_scans(llm_provider, cands, head_paginas, model)
+    n_scans, transcricoes, pagas = await _transcreve_scans(llm_provider, cands, head_paginas,
+                                                           model)
     sistema, usuario = build_confirmador_prompt(proc, cands, head_chars)
 
     # ⛔ `temperature=0.0` + `top_p=1.0` + `top_k=1` sao os parametros MEDIDOS
@@ -215,7 +221,7 @@ async def confirmar_peticao(
         model,
     )
 
-    todas = [response, *transcricoes]
+    todas = [response, *pagas]   # custo = toda transcricao que respondeu, vazia ou nao
     usage = {
         "input_tokens": sum(r.input_tokens or 0 for r in todas),
         "output_tokens": sum(r.output_tokens or 0 for r in todas),
