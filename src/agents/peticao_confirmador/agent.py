@@ -52,8 +52,8 @@ from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
 from .._utils.ocr_gate import inicio_do_pdf
 from .._utils.prompt_identity import versao_com_identidade
-from .._utils.vision import (_INLINE_PER_PDF_BYTES_CAP, _INLINE_TOTAL_BYTES_CAP,
-                             call_vision_l1, fetch_pdfs_from_gcs)
+from .._utils.vision import (MODEL_VARIANT_VISION, _INLINE_PER_PDF_BYTES_CAP,
+                             _INLINE_TOTAL_BYTES_CAP, call_vision_l1, fetch_pdfs_from_gcs)
 from .prompts import build_confirmador_prompt
 from .schemas import CONFIRMADOR_RESPONSE_SCHEMA
 
@@ -87,25 +87,32 @@ PROMPT_VERSION = versao_com_identidade(
     __file__,
 )
 
-# ⭐ O CANDIDATO SCAN (fatia 2 da cabeca dos autos, OK Elton 2026-09-15, card 869equgwd).
-# Doc da cabeca sem teor de texto chega com `head` vazio + `gcs_url`: as N primeiras
-# paginas vao como PDF inline na MESMA chamada comparativa, e o `head` dele vira uma
-# marca que aponta o anexo. ⛔ `SISTEMA`/`USUARIO`/`BLOCO` NAO mudam (sha256 guardado):
-# pool sem scan continua byte-identico ao medido; so o conteudo do `head` do scan difere.
-# ⛔ A marca nao carrega titulo, data nem pista — so "o inicio deste candidato e o PDF rotulado".
-# ⭐⭐ O rotulo e a POSICAO DO CANDIDATO, nunca a ordem do anexo. Com "PDF anexo numero k" o
-# modelo casou "candidato 3" com "o 3o PDF" no gold scan de 15/09 (afirmou o doc errado em 1 pn
-# e perdeu a inicial em 2): duas numeracoes no mesmo prompt sao uma a mais.
+# ⭐ O CANDIDATO SCAN (fatia 2 da cabeca dos autos, card 869equgwd, OK Elton 2026-09-15).
+# Doc da cabeca sem teor chega com `head` vazio + `gcs_url` e e julgado numa 2a chamada,
+# SO DE SCANS, com as N primeiras paginas inline.
+# ⛔⛔ SEPARADA, e nao misturada ao pool de texto (decisao Elton 15/09, gold scan): com os PDFs
+# na mesma chamada o C5 perdeu o determinismo medido (o MESMO pool deu FP 1 em 3) e passou a
+# afirmar um DESPACHO de texto que so-texto abstem. Separadas, a chamada de texto e a de hoje,
+# byte a byte, e o PDF nao contamina o julgamento dela.
+# ⛔ `SISTEMA`/`USUARIO`/`BLOCO` NAO mudam (sha256 guardado); a marca so aponta o PDF.
+# ⭐⭐ O rotulo e a POSICAO DO CANDIDATO, nunca a ordem do anexo: com "PDF anexo numero k" o
+# modelo casou "candidato 3" com "o 3o PDF" (1 afirmacao errada + 2 iniciais perdidas).
 _ROTULO_PDF = "PDF DO CANDIDATO [{i}]"
 _MARCA_PDF = ("[documento digitalizado sem texto extraivel: o INICIO dele sao as "
               "{p} primeiras paginas do arquivo rotulado " + _ROTULO_PDF + "]")
 _MARCA_SEM_PDF = "[documento digitalizado sem texto extraivel; PDF indisponivel]"
+# Seed FIXO so no ramo Vision: o de texto foi medido sem seed (12/12) e fica como esta.
+_SEED_SCAN = 915
+
+
+def _e_scan(c: dict) -> bool:
+    return not c.get("head") and bool(c.get("gcs_url"))
 
 
 async def _anexa_pdfs_dos_scans(cands: list[dict],
                                 head_paginas: int) -> tuple[list[bytes], list[str]]:
-    """Troca o `head` vazio dos candidatos com `gcs_url` pela marca, e devolve os PDFs
-    cortados + o rotulo de cada um (`PDF DO CANDIDATO [i]`, i = posicao no pool).
+    """Troca o `head` vazio dos scans pela marca e devolve os PDFs cortados + o rotulo de
+    cada um (`PDF DO CANDIDATO [i]`, i = posicao NESTA chamada).
 
     ⛔ Os caps inline sao aplicados AQUI, antes de rotular: o `_build_pdf_parts` dropa o
     que nao cabe, e um drop depois faria a marca apontar um PDF que nao subiu. Mesma greedy,
@@ -114,8 +121,6 @@ async def _anexa_pdfs_dos_scans(cands: list[dict],
     rotulos: list[str] = []
     total = 0
     for i, c in enumerate(cands, 1):
-        if c.get("head") or not c.get("gcs_url"):
-            continue
         baixados = await fetch_pdfs_from_gcs([c["gcs_url"]])
         corte = inicio_do_pdf(baixados[0], head_paginas) if baixados else None
         if (corte is None or len(corte) > _INLINE_PER_PDF_BYTES_CAP
@@ -129,6 +134,44 @@ async def _anexa_pdfs_dos_scans(cands: list[dict],
     return pdfs, rotulos
 
 
+async def _julga(llm_provider, proc: dict, cands: list[dict], head_chars: int, model: str,
+                 pdfs: list[bytes] | None = None, rotulos: list[str] | None = None) -> dict:
+    """UMA chamada comparativa sobre `cands` (numerados 1..len). Devolve o card cru + o fio."""
+    sistema, usuario = build_confirmador_prompt(proc, cands, head_chars)
+    # ⛔ `temperature=0.0` + `top_p=1.0` + `top_k=1` sao os parametros MEDIDOS
+    # (determinismo 12/12 com prompt byte-identico). O provider ja forca top_p/top_k
+    # quando `temperature == 0.0`; eles vao explicitos porque sao parte do que foi
+    # medido, e um default que muda nao pode mudar esta camada calada.
+    # ⭐ `thinking_budget=0`: prompt curto e decisao de leitura, nao de raciocinio --
+    # e o mesmo regime do L1 de extracao (43/43 campos identicos com e sem thinking).
+    comuns = dict(model=model, temperature=0.0, max_tokens=_MAX_TOKENS,
+                  response_schema=CONFIRMADOR_RESPONSE_SCHEMA,
+                  system_instruction=sistema, top_p=1.0, top_k=1, thinking_budget=0)
+    if pdfs:
+        response: LLMResponse = await call_vision_l1(
+            llm_provider, prompt=usuario, pdf_bytes_list=pdfs, rotulos=rotulos,
+            seed=_SEED_SCAN, **comuns)
+    else:
+        response = await llm_provider.agenerate(prompt=usuario, **comuns)
+    try:
+        card: dict = parse_llm_json(response.text)
+    except Exception as e:
+        logger.error("peticao_confirmador parse failed: %r", e)
+        card = {"error": repr(e), "raw": response.text}
+    return {"card": card, "response": response, "prompt": f"{sistema}\n\n{usuario}"}
+
+
+def _para_global(k: Any, posicoes: list[int], n_total: int) -> Any:
+    """Indice LOCAL (1..len(posicoes)) -> GLOBAL. ⛔ Fora de faixa/tipo passa como invalido
+    GLOBAL (n_total+1 ou o valor cru), pra o `_valida_veredito` do shared continuar dono da
+    regra — nunca vira um indice valido por acidente."""
+    if isinstance(k, bool) or not isinstance(k, int):
+        return k
+    if k == 0:
+        return 0
+    return posicoes[k - 1] if 1 <= k <= len(posicoes) else n_total + 1
+
+
 async def confirmar_peticao(
     processo: Any,
     candidatos: list[Any],
@@ -137,92 +180,104 @@ async def confirmar_peticao(
     provider: str = DEFAULT_PROVIDER,
     head_paginas: int = 2,
 ) -> dict:
-    """Julga os N candidatos JUNTOS. 1 LLM call, veredito 0..N.
+    """Julga os N candidatos. Veredito 0..N na numeracao do pool recebido.
 
-    Args:
-        processo: contexto do processo (so 6 campos dele chegam ao prompt).
-        candidatos: o pool, na ordem em que sera apresentado. A POSICAO e a
-            numeracao -- `escolhido = k` significa `candidatos[k - 1]`.
-        head_chars: a janela declarada pelo caller (dono: `garantis_shared`).
-        model: override do modelo.
-        provider: 'gemini' (default).
+    Pool sem scan: 1 chamada de texto, exatamente a de antes. Pool com scan: a de texto
+    sobre os candidatos de texto + 1 Vision sobre os scans; as duas respostas voltam pra
+    numeracao global. ⛔ As duas afirmando = ABSTENCAO (apontar errado e pior).
 
     Returns:
         {"card": {"escolhido", "continuacao", "motivo"} | error_dict,
-         "raw_response": str,
-         "llm_raw_prompt": str,
-         "prompt_version": str,
-         "usage": dict}
+         "raw_response": str, "llm_raw_prompt": str, "prompt_version": str, "usage": dict}
     """
     proc = processo if isinstance(processo, dict) else processo.model_dump()
     cands = [c if isinstance(c, dict) else c.model_dump() for c in candidatos]
-
-    if model is None:
-        model = DEFAULT_MODEL
-
+    model = model or DEFAULT_MODEL
     llm_provider = create_provider(provider)
-    pdfs, rotulos = await _anexa_pdfs_dos_scans(cands, head_paginas)
-    sistema, usuario = build_confirmador_prompt(proc, cands, head_chars)
 
-    # ⛔ `temperature=0.0` + `top_p=1.0` + `top_k=1` sao os parametros MEDIDOS
-    # (determinismo 12/12 com prompt byte-identico). O provider ja forca top_p/top_k
-    # quando `temperature == 0.0`; eles vao explicitos porque sao parte do que foi
-    # medido, e um default que muda nao pode mudar esta camada calada.
-    # ⭐ `thinking_budget=0`: prompt curto e decisao de leitura, nao de raciocinio --
-    # e o mesmo regime do L1 de extracao (43/43 campos identicos com e sem thinking).
-    # ⭐ Com PDF, os MESMOS parametros vao pelo helper Vision (sem 2o OCR, sem 2a chamada).
-    comuns = dict(model=model, temperature=0.0, max_tokens=_MAX_TOKENS,
-                  response_schema=CONFIRMADOR_RESPONSE_SCHEMA,
-                  system_instruction=sistema, top_p=1.0, top_k=1, thinking_budget=0)
-    if pdfs:
-        response: LLMResponse = await call_vision_l1(
-            llm_provider, prompt=usuario, pdf_bytes_list=pdfs, rotulos=rotulos, **comuns)
+    pos_texto = [i for i, c in enumerate(cands, 1) if not _e_scan(c)]
+    pos_scan = [i for i, c in enumerate(cands, 1) if _e_scan(c)]
+    julgados: list[tuple[list[int], dict]] = []
+    n_pdfs = 0
+    if pos_texto:
+        julgados.append((pos_texto, await _julga(
+            llm_provider, proc, [cands[i - 1] for i in pos_texto], head_chars, model)))
+    if pos_scan:
+        scans = [cands[i - 1] for i in pos_scan]
+        pdfs, rotulos = await _anexa_pdfs_dos_scans(scans, head_paginas)
+        n_pdfs = len(pdfs)
+        if pdfs:   # ⛔ nenhum PDF subiu: nao ha o que ler, nao se paga pergunta vazia
+            julgados.append((pos_scan, await _julga(
+                llm_provider, proc, scans, head_chars, model, pdfs, rotulos)))
+
+    erro = next((j["card"] for _, j in julgados if not isinstance(j["card"], dict)
+                 or "error" in j["card"]), None)
+    if erro is not None:
+        card_data: dict = erro if isinstance(erro, dict) else {"error": "card nao e objeto"}
+    elif len(julgados) == 1 and len(julgados[0][0]) == len(cands):
+        # ⛔ UMA chamada sobre o pool inteiro: o card sai CRU, como sempre saiu — o
+        # `_valida_veredito` do shared e o dono de fora-de-faixa e fora-de-tipo, e remapear
+        # aqui transformaria `99` num indice valido ou `false` numa abstencao.
+        card_data = julgados[0][1]["card"]
     else:
-        response = await llm_provider.agenerate(prompt=usuario, **comuns)
-
-    raw_response = response.text
-    try:
-        card_data: dict = parse_llm_json(raw_response)
-    except Exception as e:
-        logger.error("peticao_confirmador parse failed: %r", e)
-        card_data = {"error": repr(e), "raw": raw_response}
+        # ⛔ So `0` INTEIRO e abstencao: `False == 0` em Python, e bool/str/float tem de chegar
+        # ao shared como afirmacao invalida, nao sumir como "nao afirmou".
+        afirmam = [(p, j["card"]) for p, j in julgados
+                   if not (type(j["card"].get("escolhido")) is int
+                           and j["card"].get("escolhido") == 0)]
+        if not afirmam:
+            card_data = {"escolhido": 0, "continuacao": [],
+                         "motivo": " | ".join(str(j["card"].get("motivo") or "")
+                                              for _, j in julgados)}
+        elif len(afirmam) > 1:
+            card_data = {"escolhido": 0, "continuacao": [],
+                         "motivo": "texto e scan afirmaram documentos diferentes: abstencao"}
+        else:
+            p, c = afirmam[0]
+            card_data = {
+                "escolhido": _para_global(c.get("escolhido"), p, len(cands)),
+                "continuacao": [_para_global(k, p, len(cands))
+                                for k in (c.get("continuacao") or [])],
+                "motivo": c.get("motivo") or "",
+            }
 
     # 🚨 CONTADOR POSITIVO E COM DENOMINADOR. `escolhido=0 de=6` = passo OCIOSO
     # (avaliou 6 e nao afirmou nenhum); LINHA AUSENTE = passo MUDO. O modo de falha
     # desta classe e "nao afirmar o que importava", que e invisivel -- por isso a
     # linha sai SEMPRE, inclusive quando o card veio quebrado, e nunca pendurada
     # num `if`. O `doc_key` aparece aqui, e SO aqui: e pra isso que ele vem.
-    escolhido = card_data.get("escolhido") if isinstance(card_data, dict) else None
+    escolhido = card_data.get("escolhido")
     logger.info(
-        "PETICAO_CONFIRMADOR escolhido=%s de=%d pdfs=%d head_chars=%d doc_key=%s model=%s",
-        escolhido, len(cands), len(pdfs), head_chars,
+        "PETICAO_CONFIRMADOR escolhido=%s de=%d scans=%d pdfs=%d chamadas=%d head_chars=%d"
+        " doc_key=%s model=%s",
+        escolhido, len(cands), len(pos_scan), n_pdfs, len(julgados), head_chars,
         (cands[escolhido - 1].get("doc_key")
          if isinstance(escolhido, int) and not isinstance(escolhido, bool)
          and 1 <= escolhido <= len(cands) else None),
         model,
     )
 
+    resps = [j["response"] for _, j in julgados]
+    tin = sum(r.input_tokens or 0 for r in resps)
+    tout = sum(r.output_tokens or 0 for r in resps)
     usage = {
-        "input_tokens": response.input_tokens or 0,
-        "output_tokens": response.output_tokens or 0,
-        "total_tokens": (response.input_tokens or 0) + (response.output_tokens or 0),
-        "cached_tokens": getattr(response, "cached_tokens", 0) or 0,
-        "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
+        "input_tokens": tin,
+        "output_tokens": tout,
+        "total_tokens": tin + tout,
+        "cached_tokens": sum(getattr(r, "cached_tokens", 0) or 0 for r in resps),
+        "cost_usd": sum((r.metadata or {}).get("cost_usd", 0.0) for r in resps),
         "model": model,
         "provider": provider,
-        "model_variant": (
-            response.metadata.get("model_variant", MODEL_VARIANT_TEXT)
-            if response.metadata else MODEL_VARIANT_TEXT
-        ),
+        "model_variant": MODEL_VARIANT_VISION if n_pdfs else MODEL_VARIANT_TEXT,
     }
 
     return {
         "card": card_data,
-        "raw_response": raw_response,
-        # ⭐ O que o modelo VIU, inteiro, num campo so -- o `system_instruction` vai
-        # separado no fio, mas quem debuga (e o guard de vazamento) precisa do texto
-        # completo. ⛔ Nao reduza ao `usuario`: metade do frame mora no `sistema`.
-        "llm_raw_prompt": f"{sistema}\n\n{usuario}",
+        "raw_response": "\n\n".join(r.text or "" for r in resps),
+        # ⭐ O que o modelo VIU, inteiro -- o `system_instruction` vai separado no fio, mas
+        # quem debuga (e o guard de vazamento) precisa do texto completo. Com scan, as 2
+        # chamadas vao concatenadas. ⛔ Nao reduza ao `usuario`: metade do frame mora no `sistema`.
+        "llm_raw_prompt": "\n\n".join(j["prompt"] for _, j in julgados),
         "prompt_version": PROMPT_VERSION,
         "usage": usage,
     }
