@@ -37,10 +37,20 @@ Mesmo desenho: 1 chamada barata, text-only, `thinking_budget=0`, card malformado
 do lado do `garantis_shared` qualquer erro (404, 5xx, timeout, JSON fora do
 contrato) vira ABSTENCAO, que e o estado de HOJE -- o pn fica exatamente onde ja
 esta e volta na proxima passada.
+
+## O candidato SCAN (fatia 2 da cabeca dos autos, card 869equgwd)
+
+Doc da cabeca sem teor chega com `head` vazio + `gcs_url`. O Vision **so TRANSCREVE** as N
+primeiras paginas dele, e a transcricao vira o `head` — o julgamento continua sendo a MESMA
+chamada de texto, com o frame medido. ⛔⛔ Nao ponha o PDF na chamada que JULGA (decisao
+Elton 15/09, gold scan): misturado, o PDF quebrou o determinismo e contaminou o julgamento do
+texto (FP 1 em 3 no mesmo pool); numa chamada so de scans, o modelo perdeu o contraste e
+afirmou inicial de OUTRO processo em 3/22. Vision extrai; quem afirma e o C5 de texto.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import pathlib
@@ -49,8 +59,10 @@ from typing import Any, Optional
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
-from .._utils import MODEL_VARIANT_TEXT
+from .._utils import MODEL_VARIANT_TEXT, MODEL_VARIANT_VISION
+from .._utils.ocr_gate import inicio_do_pdf
 from .._utils.prompt_identity import versao_com_identidade
+from .._utils.vision import call_vision_l1, fetch_pdfs_from_gcs
 from .prompts import build_confirmador_prompt
 from .schemas import CONFIRMADOR_RESPONSE_SCHEMA
 
@@ -84,6 +96,51 @@ PROMPT_VERSION = versao_com_identidade(
     __file__,
 )
 
+# A TRANSCRICAO do scan. ⛔ Extracao, nunca julgamento: nada de "e a peticao inicial?" aqui —
+# essa pergunta e da chamada comparativa, e so dela.
+_TRANSCREVA = ("Transcreva LITERALMENTE o texto das paginas deste PDF, na ordem em que "
+               "aparece, sem resumir, sem comentar e sem corrigir. Se uma pagina nao tiver "
+               "texto legivel, escreva [ilegivel]. Responda somente com a transcricao.")
+# ~3.000 chars de janela ≈ 1.000 tokens; o teto e folga pra 2 paginas densas.
+_MAX_TOKENS_TRANSCRICAO = 2048
+_SEED_TRANSCRICAO = 915
+_MARCA_SEM_PDF = "[documento digitalizado sem texto extraivel; PDF indisponivel]"
+
+
+async def _transcreve_scans(llm_provider, cands: list[dict], head_paginas: int,
+                            model: str) -> tuple[int, list[LLMResponse], list[LLMResponse]]:
+    """`head` vazio + `gcs_url` -> a transcricao das `head_paginas` primeiras paginas.
+
+    1 chamada POR documento, de proposito: com varios PDFs numa chamada so, o modelo casou
+    "candidato 3" com "o 3o PDF" (gold scan 15/09). Falha de fetch/corte/Vision vira a marca
+    `_MARCA_SEM_PDF` — o candidato segue no pool, sem conteudo, e o C5 nao o afirma."""
+    async def _um(c: dict) -> LLMResponse | None:
+        try:
+            baixados = await fetch_pdfs_from_gcs([c["gcs_url"]])
+            corte = inicio_do_pdf(baixados[0], head_paginas) if baixados else None
+            if corte is None:
+                raise ValueError("PDF indisponivel ou nao recortavel")
+            r = await call_vision_l1(llm_provider, model=model, prompt=_TRANSCREVA,
+                                     pdf_bytes_list=[corte], temperature=0.0,
+                                     thinking_budget=0, max_tokens=_MAX_TOKENS_TRANSCRICAO,
+                                     seed=_SEED_TRANSCRICAO)
+        except Exception as exc:
+            logger.warning("PETICAO_CONFIRMADOR_TRANSCRICAO_FALHOU doc_key=%s erro=%r",
+                           c.get("doc_key"), exc)
+            c["head"] = _MARCA_SEM_PDF
+            return None
+        c["head"] = (r.text or "").strip() or _MARCA_SEM_PDF
+        return r
+
+    # ⭐ EM PARALELO (review 15/09): em serie, 4 scans lentos estouravam o timeout do caller, e
+    # o retry dele re-pagava todas as transcricoes. Cada uma escreve so no PROPRIO candidato.
+    scans = [c for c in cands if not c.get("head") and c.get("gcs_url")]
+    respostas = await asyncio.gather(*(_um(c) for c in scans))
+    # `transcritos` conta so o que virou texto — transcricao vazia (bloqueio) e marca, nao leitura.
+    return (len(scans),
+            [r for r, c in zip(respostas, scans) if r is not None and c["head"] != _MARCA_SEM_PDF],
+            [r for r in respostas if r is not None])
+
 
 async def confirmar_peticao(
     processo: Any,
@@ -91,8 +148,9 @@ async def confirmar_peticao(
     head_chars: int,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
+    head_paginas: int = 2,
 ) -> dict:
-    """Julga os N candidatos JUNTOS. 1 LLM call, veredito 0..N.
+    """Julga os N candidatos JUNTOS. 1 LLM call de julgamento, veredito 0..N.
 
     Args:
         processo: contexto do processo (so 6 campos dele chegam ao prompt).
@@ -101,6 +159,7 @@ async def confirmar_peticao(
         head_chars: a janela declarada pelo caller (dono: `garantis_shared`).
         model: override do modelo.
         provider: 'gemini' (default).
+        head_paginas: a janela em PAGINAS do candidato scan (dono: `garantis_shared`).
 
     Returns:
         {"card": {"escolhido", "continuacao", "motivo"} | error_dict,
@@ -116,6 +175,8 @@ async def confirmar_peticao(
         model = DEFAULT_MODEL
 
     llm_provider = create_provider(provider)
+    n_scans, transcricoes, pagas = await _transcreve_scans(llm_provider, cands, head_paginas,
+                                                           model)
     sistema, usuario = build_confirmador_prompt(proc, cands, head_chars)
 
     # ⛔ `temperature=0.0` + `top_p=1.0` + `top_k=1` sao os parametros MEDIDOS
@@ -148,25 +209,29 @@ async def confirmar_peticao(
     # desta classe e "nao afirmar o que importava", que e invisivel -- por isso a
     # linha sai SEMPRE, inclusive quando o card veio quebrado, e nunca pendurada
     # num `if`. O `doc_key` aparece aqui, e SO aqui: e pra isso que ele vem.
+    # `scans=` quantos vieram sem texto; `transcritos=` quantos o Vision leu.
     escolhido = card_data.get("escolhido") if isinstance(card_data, dict) else None
     logger.info(
-        "PETICAO_CONFIRMADOR escolhido=%s de=%d head_chars=%d doc_key=%s model=%s",
-        escolhido, len(cands), head_chars,
+        "PETICAO_CONFIRMADOR escolhido=%s de=%d scans=%d transcritos=%d head_chars=%d"
+        " doc_key=%s model=%s",
+        escolhido, len(cands), n_scans, len(transcricoes), head_chars,
         (cands[escolhido - 1].get("doc_key")
          if isinstance(escolhido, int) and not isinstance(escolhido, bool)
          and 1 <= escolhido <= len(cands) else None),
         model,
     )
 
+    todas = [response, *pagas]   # custo = toda transcricao que respondeu, vazia ou nao
     usage = {
-        "input_tokens": response.input_tokens or 0,
-        "output_tokens": response.output_tokens or 0,
-        "total_tokens": (response.input_tokens or 0) + (response.output_tokens or 0),
+        "input_tokens": sum(r.input_tokens or 0 for r in todas),
+        "output_tokens": sum(r.output_tokens or 0 for r in todas),
+        "total_tokens": sum((r.input_tokens or 0) + (r.output_tokens or 0) for r in todas),
         "cached_tokens": getattr(response, "cached_tokens", 0) or 0,
-        "cost_usd": (response.metadata.get("cost_usd", 0.0) if response.metadata else 0.0),
+        # 🚨 A transcricao entra no custo: sem ela o contador da lane leria o scan de graca.
+        "cost_usd": sum((r.metadata or {}).get("cost_usd", 0.0) for r in todas),
         "model": model,
         "provider": provider,
-        "model_variant": (
+        "model_variant": MODEL_VARIANT_VISION if transcricoes else (
             response.metadata.get("model_variant", MODEL_VARIANT_TEXT)
             if response.metadata else MODEL_VARIANT_TEXT
         ),
@@ -178,6 +243,7 @@ async def confirmar_peticao(
         # ⭐ O que o modelo VIU, inteiro, num campo so -- o `system_instruction` vai
         # separado no fio, mas quem debuga (e o guard de vazamento) precisa do texto
         # completo. ⛔ Nao reduza ao `usuario`: metade do frame mora no `sistema`.
+        # A transcricao do scan ja esta dentro dele, como `head`.
         "llm_raw_prompt": f"{sistema}\n\n{usuario}",
         "prompt_version": PROMPT_VERSION,
         "usage": usage,

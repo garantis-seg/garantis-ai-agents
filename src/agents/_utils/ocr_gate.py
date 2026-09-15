@@ -222,6 +222,32 @@ def _reserializa(doc, pdf_bytes: bytes) -> bytes:
         return pdf_bytes
 
 
+def _recorta(pdf_bytes: bytes, idxs: list[int]) -> bytes:
+    """As páginas `idxs` do PDF, com pypdf. Levanta em qualquer falha — o caller decide."""
+    import io
+    from pypdf import PdfReader, PdfWriter
+    reader = PdfReader(io.BytesIO(pdf_bytes))
+    writer = PdfWriter()
+    for i in idxs:
+        writer.add_page(reader.pages[i])
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def inicio_do_pdf(pdf_bytes: bytes, n_paginas: int) -> Optional[bytes]:
+    """As `n_paginas` primeiras páginas — a JANELA do C5 para candidato scan, que é o
+    equivalente em páginas do `head_chars` em texto. None em qualquer falha (o candidato
+    segue sem PDF, e sem conteúdo o C5 não o afirma)."""
+    try:
+        from pypdf import PdfReader
+        import io
+        n = len(PdfReader(io.BytesIO(pdf_bytes)).pages)
+        return pdf_bytes if n <= n_paginas else _recorta(pdf_bytes, list(range(n_paginas)))
+    except Exception:
+        return None
+
+
 def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
     """Mede o Sinal 1 por página sobre os BYTES do PDF + controle de páginas.
     Retorna {pdf_bytes (recomposto ou recortado), n_paginas, paginas_imagem,
@@ -257,17 +283,10 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
 
     # monstro: recorta começo + fim com pypdf
     try:
-        import io
-        from pypdf import PdfReader, PdfWriter
-        reader = PdfReader(io.BytesIO(pdf_bytes))
-        writer = PdfWriter()
         idxs = list(range(AMOSTRA_PONTAS)) + list(range(n - AMOSTRA_PONTAS, n))
-        for i in idxs:
-            writer.add_page(reader.pages[i])
-        buf = io.BytesIO()
-        writer.write(buf)
-        return {"pdf_bytes": buf.getvalue(), "n_paginas": n, "paginas_imagem": pgs_img,
-                "motivos": motivos, "truncado": True, "paginas_enviadas": len(idxs)}
+        return {"pdf_bytes": _recorta(pdf_bytes, idxs), "n_paginas": n,
+                "paginas_imagem": pgs_img, "motivos": motivos, "truncado": True,
+                "paginas_enviadas": len(idxs)}
     except Exception:
         # o recorte falhou: vai o documento inteiro, mas RECOMPOSTO — este ramo é
         # justamente o do PDF malformado, que é quem toma o 400 do Gemini.

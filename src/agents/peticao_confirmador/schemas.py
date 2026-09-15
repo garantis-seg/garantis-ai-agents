@@ -96,6 +96,13 @@ class CandidatoConfirmador(BaseModel):
         default=None,
         description="INICIO do texto, ja truncado em `head_chars` pelo caller.",
     )
+    gcs_url: Optional[str] = Field(
+        default=None,
+        description=("PDF do candidato SCAN (sem teor de texto). So e lido quando `head` "
+                     "vem vazio: o Vision TRANSCREVE as `head_paginas` primeiras paginas e "
+                     "a transcricao vira o `head` na chamada de texto. ⛔ A URL nao vai pro "
+                     "prompt, e o PDF nunca entra na chamada que julga."),
+    )
 
 
 class ConfirmadorRequest(BaseModel):
@@ -106,6 +113,12 @@ class ConfirmadorRequest(BaseModel):
         description=("A JANELA, DECLARADA PELO CALLER. ⛔ Ela e a defesa estrutural "
                      "contra copia-integral e o dono dela e o `garantis_shared` "
                      "(`_CONFIRMADOR_HEAD_CHARS`), onde o guard a alcanca."),
+    )
+    head_paginas: int = Field(
+        default=2,
+        gt=0,
+        description=("A mesma JANELA, em PAGINAS, pro candidato scan. Dono: o "
+                     "`garantis_shared` (`_CONFIRMADOR_HEAD_PAGINAS`)."),
     )
     #: ⛔⛔ **`min_length=1`: pool VAZIO nao e uma pergunta, e nao se paga por ele.**
     #: Ate 2026-09-09 este campo era `default_factory=list`, entao `POST {}` montava um
