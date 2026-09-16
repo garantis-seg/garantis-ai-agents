@@ -274,6 +274,9 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
         # caller: ReadTimeout nas 6 tentativas, TODA passada, com o C5 já pago (card
         # 869equgwd). E página-imagem FORA da amostra nunca chega ao Gemini: contá-la
         # só mandava 60 páginas textuais pro Vision, que é o uso vetado.
+        # ⚠️ Exceção: se o `_recorta` abaixo levantar, sobe o doc inteiro, e aí imagem
+        # só no miolo passa a ficar no texto. Aceito: recorte quebrado + scan só no
+        # miolo + pontas textuais, e 1.000+ págs inline estourariam de qualquer jeito.
         idxs = (range(n) if n <= TETO_PAGINAS
                 else [*range(AMOSTRA_PONTAS), *range(n - AMOSTRA_PONTAS, n)])
         for i in idxs:
