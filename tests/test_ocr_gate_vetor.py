@@ -133,6 +133,26 @@ def test_motivo_separa_vetor_de_imagem():
     assert "pag-vetor" in nota["_nota"]["motivo"]
 
 
+# ── Monstro: o Sinal 1 mede SÓ a amostra que sobe ────────────────────────────
+def test_monstro_mede_so_as_paginas_da_amostra():
+    """Autos de 1.289 págs estouravam o timeout de 45s do caller só MEDINDO páginas
+    que nunca subiriam (card 869equgwd). Página-inalcançável no MEIO fica fora da
+    amostra e não conta; na PONTA conta. ⛔ Mutante alvo: voltar a iterar `doc`."""
+    from src.agents._utils.ocr_gate import AMOSTRA_PONTAS, TETO_PAGINAS
+    texto = {"paths": 0, "texto": "EXCELENTISSIMO SENHOR DOUTOR JUIZ. " * 40, "tamanho": 11}
+    vazia = {"paths": 0, "texto": ""}
+    n = TETO_PAGINAS + 1
+    meio = [texto] * n
+    meio[AMOSTRA_PONTAS] = vazia                  # 1ª página FORA da amostra
+    info = analisar_pdf_bytes(_pdf(meio))
+    assert info["truncado"] and info["paginas_enviadas"] == 2 * AMOSTRA_PONTAS
+    assert info["paginas_imagem"] == 0
+
+    ponta = [texto] * n
+    ponta[AMOSTRA_PONTAS - 1] = vazia             # última página DENTRO da amostra
+    assert analisar_pdf_bytes(_pdf(ponta))["motivos"] == {"vazia": 1}
+
+
 # ── Fallback: "PDF" que não é PDF ────────────────────────────────────────────
 @pytest.mark.parametrize("corpo", [
     b"<p>Access Denied</p>",                       # HTML sob nome .pdf

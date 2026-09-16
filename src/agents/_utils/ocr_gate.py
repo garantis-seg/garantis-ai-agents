@@ -268,8 +268,19 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
         doc = pymupdf.open(stream=pdf_bytes, filetype="pdf")
         n = len(doc)
         motivos: dict[str, int] = {}
-        for p in doc:
-            m = _pagina_motivo(p, pymupdf)
+        # 🚨 Monstro: o Sinal 1 mede SÓ as páginas que vão subir (a amostra do recorte
+        # abaixo). Medir as N custava ~55ms/pág — 71s local, ~150s no Cloud Run, nos
+        # autos de 1.289 págs do 30031394020138260296 — contra o timeout de 45s do
+        # caller: ReadTimeout nas 6 tentativas, TODA passada, com o C5 já pago (card
+        # 869equgwd). E página-imagem FORA da amostra nunca chega ao Gemini: contá-la
+        # só mandava 60 páginas textuais pro Vision, que é o uso vetado.
+        # ⚠️ Exceção: se o `_recorta` abaixo levantar, sobe o doc inteiro, e aí imagem
+        # só no miolo passa a ficar no texto. Aceito: recorte quebrado + scan só no
+        # miolo + pontas textuais, e 1.000+ págs inline estourariam de qualquer jeito.
+        idxs = (range(n) if n <= TETO_PAGINAS
+                else [*range(AMOSTRA_PONTAS), *range(n - AMOSTRA_PONTAS, n)])
+        for i in idxs:
+            m = _pagina_motivo(doc[i], pymupdf)
             if m:
                 motivos[m] = motivos.get(m, 0) + 1
         pgs_img = sum(motivos.values())
@@ -283,7 +294,6 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
 
     # monstro: recorta começo + fim com pypdf
     try:
-        idxs = list(range(AMOSTRA_PONTAS)) + list(range(n - AMOSTRA_PONTAS, n))
         return {"pdf_bytes": _recorta(pdf_bytes, idxs), "n_paginas": n,
                 "paginas_imagem": pgs_img, "motivos": motivos, "truncado": True,
                 "paginas_enviadas": len(idxs)}
