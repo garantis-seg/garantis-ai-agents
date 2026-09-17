@@ -269,18 +269,16 @@ async def call_vision_l1(
     )
 
     from ...providers.base import LLMResponse
+    from ...providers.gemini import _usage_tokens
 
-    input_tokens = 0
-    output_tokens = 0
-    if hasattr(response, "usage_metadata") and response.usage_metadata:
-        input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-        output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
-
-    pricing = provider.get_model_pricing(model)
-    cost = (
-        (input_tokens / 1_000_000) * pricing.get("input_per_1m", 0)
-        + (output_tokens / 1_000_000) * pricing.get("output_per_1m", 0)
+    # Contagem e custo pelos MESMOS donos do caminho texto (GeminiProvider.agenerate):
+    # `_usage_tokens` (cached + thinking no output) e `calculate_cost` do base.py,
+    # que cobra o cacheado no `cached_per_1m`. Ate 2026-09-17 isto era uma formula
+    # local flat que cobrava cacheado como input cheio e ignorava thoughts.
+    input_tokens, output_tokens, cached_tokens = _usage_tokens(
+        getattr(response, "usage_metadata", None)
     )
+    cost = provider.calculate_cost(model, input_tokens, output_tokens, cached_tokens)
 
     return LLMResponse(
         text=response.text or "",
@@ -288,10 +286,7 @@ async def call_vision_l1(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         total_tokens=input_tokens + output_tokens,
-        # Vision NAO le cached_content_token_count (a formula de custo local acima e
-        # flat); 0 explicito pra deixar claro que e nao-instrumentado, nao ausencia
-        # de cache. Mudar isso mexeria no cost_usd de model_variant='vision'.
-        cached_tokens=0,
+        cached_tokens=cached_tokens,
         metadata={
             "cost_usd": round(cost, 6),
             "model_variant": MODEL_VARIANT_VISION,

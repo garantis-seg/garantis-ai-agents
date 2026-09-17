@@ -26,6 +26,7 @@ from google.genai import types as gtypes  # noqa: E402
 
 from src.agents._utils import vision as V  # noqa: E402
 from src.agents._utils.llm_seed import seed_for  # noqa: E402
+from src.providers.base import BaseLLMProvider
 
 _FLAG = "ENGINE_LLM_SEED_ENABLED"
 
@@ -70,6 +71,9 @@ class _ProviderQueCaptura:
 
     def get_model_pricing(self, model):
         return {"input_per_1m": 0.0, "output_per_1m": 0.0}
+
+    # a aritmetica REAL do base.py (o call_vision_l1 cobra por ela)
+    calculate_cost = BaseLLMProvider.calculate_cost
 
     async def agenerate(self, **kw):
         self.agenerate_kwargs.append(kw)
