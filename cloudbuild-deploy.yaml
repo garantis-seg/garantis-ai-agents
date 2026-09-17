@@ -40,7 +40,9 @@ steps:
         pip install --quiet --no-cache-dir keyrings.google-artifactregistry-auth
         PIP_EXTRA_INDEX_URL=https://southamerica-east1-python.pkg.dev/$PROJECT_ID/python-packages/simple/ \
           pip install --quiet --no-cache-dir -r requirements.txt
-        pip install --quiet --no-cache-dir "pytest>=8.0.0" "pytest-asyncio>=0.24.0"
+        # ruff PINADO: tests/test_ruff.py roda o lint e REPROVA sem ele; versao nova
+        # com regra nova nao pode pintar o deploy de vermelho sozinha.
+        pip install --quiet --no-cache-dir "pytest>=8.0.0" "pytest-asyncio>=0.24.0" "ruff==0.15.10"
         python -m pytest -q -p no:cacheprovider
     timeout: '600s'
 

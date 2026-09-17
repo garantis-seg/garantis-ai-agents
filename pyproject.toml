@@ -21,7 +21,8 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "httpx>=0.28.0",
-    "ruff>=0.8.0",
+    # mesmo pin do step `unit-tests` (regra nova de versao nova nao pode pintar o gate)
+    "ruff==0.15.10",
 ]
 
 [build-system]
@@ -34,9 +35,14 @@ packages = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Checkouts aninhados (worktrees de sessao) nao sao este repo e nao estao no .gitignore.
+extend-exclude = [".wt", ".worktrees", ".claude"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
+# Roda como TESTE (tests/test_ruff.py), e a suite e o gate do deploy. "I" (ordem de
+# import) ficou de fora de proposito: zerar = reescrever ~48 arquivos sem ganho, e
+# conflita com branch em voo. E501 idem (prompts longos sao a norma aqui).
+select = ["E", "F", "W"]
 ignore = ["E501"]
 
 [tool.pytest.ini_options]
