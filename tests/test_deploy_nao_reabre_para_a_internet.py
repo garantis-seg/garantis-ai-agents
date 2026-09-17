@@ -93,8 +93,8 @@ def test_o_deploy_de_prod_declara_o_flag_NEGATIVO_explicitamente():
     IDEMPOTENTEMENTE fechado: cada build re-afirma o fecho.
     """
     arq = _RAIZ / "cloudbuild-deploy.yaml"
-    linhas = [l for _n, l in _linhas_executaveis(arq.read_text(encoding="utf-8"))]
-    assert any(re.search(r"--no-allow-unauthenticated\b", l) for l in linhas), (
+    linhas = [ln for _n, ln in _linhas_executaveis(arq.read_text(encoding="utf-8"))]
+    assert any(re.search(r"--no-allow-unauthenticated\b", ln) for ln in linhas), (
         "cloudbuild-deploy.yaml nao declara `--no-allow-unauthenticated`. Sem ele o "
         "deploy so PRESERVA a policy, e o fecho volta a depender de escrita manual de "
         "IAM — que o proximo deploy de qualquer branch pode desfazer."
@@ -110,7 +110,7 @@ def test_controle_positivo_o_detector_ENXERGA_a_grafia_proibida():
     forma_args = "      - '--allow-unauthenticated'"
     forma_bash = "        gcloud run deploy x --region=y --allow-unauthenticated --quiet"
     for forma in (forma_args, forma_bash):
-        achou = [l for _n, l in _linhas_executaveis(forma) if _PROIBIDO.search(l)]
+        achou = [ln for _n, ln in _linhas_executaveis(forma) if _PROIBIDO.search(ln)]
         assert achou, f"detector CEGO a forma: {forma!r}"
 
 
@@ -120,7 +120,7 @@ def test_controle_negativo_a_grafia_CERTA_nao_e_confundida():
     que e justamente o estado que `test_o_deploy_de_prod_declara_o_flag_NEGATIVO` proibe.
     """
     certa = "      - '--no-allow-unauthenticated'"
-    assert not [l for _n, l in _linhas_executaveis(certa) if _PROIBIDO.search(l)], (
+    assert not [ln for _n, ln in _linhas_executaveis(certa) if _PROIBIDO.search(ln)], (
         "o detector casou `--no-allow-unauthenticated` — a fronteira de token esta "
         "errada e o conserto reprova a si mesmo"
     )
@@ -130,7 +130,7 @@ def test_comentario_que_CITA_o_flag_nao_reprova():
     """⭐ A lapide tem de sobreviver. O comentario de 20 linhas que documenta este risco
     cita o flag de proposito, e ha 3 arquivos com essa citacao."""
     lapide = "      # ⛔⛔ NAO volte pra `--allow-unauthenticated`. Card 869f12nv9."
-    assert not [l for _n, l in _linhas_executaveis(lapide) if _PROIBIDO.search(l)], (
+    assert not [ln for _n, ln in _linhas_executaveis(lapide) if _PROIBIDO.search(ln)], (
         "o detector reprovou um COMENTARIO — guarda de nome proibido escrita com grep "
         "no fonte reprova a propria documentacao dela"
     )

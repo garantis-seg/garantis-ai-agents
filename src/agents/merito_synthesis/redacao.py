@@ -85,8 +85,11 @@ _PROX = {
 
 def _facts2cell(dv: dict) -> str:
     """eval_29.facts2cell (verbatim ordering) sobre 1 decisao_vigente dict."""
-    nat = dv.get("natureza"); sent = dv.get("sentido"); inst = dv.get("instancia")
-    transit = bool(dv.get("transito_certificado")); recorrida = bool(dv.get("recorrida"))
+    nat = dv.get("natureza")
+    sent = dv.get("sentido")
+    inst = dv.get("instancia")
+    transit = bool(dv.get("transito_certificado"))
+    recorrida = bool(dv.get("recorrida"))
     if transit:
         if sent == "desfavoravel":
             return "Altissimo"
@@ -125,9 +128,11 @@ def _template_prose(req: RedacaoRequest) -> dict:
     risco_lc = _RISCO_LC.get(risco, risco.lower())
     dv, pn = _dominant_decisao(req)
     dv = dv or {}
-    sent = dv.get("sentido"); nat = dv.get("natureza")
+    sent = dv.get("sentido")
+    nat = dv.get("natureza")
     inst = _INST.get(dv.get("instancia"), "")
-    transit = bool(dv.get("transito_certificado")); recorrida = bool(dv.get("recorrida"))
+    transit = bool(dv.get("transito_certificado"))
+    recorrida = bool(dv.get("recorrida"))
     cnj = f" (processo {pn})" if pn else ""
 
     if transit and sent == "desfavoravel":
@@ -237,7 +242,9 @@ async def redact_merito_synthesis(
 
     # Attempt 1.
     card, raw_response, u = await _call_llm(llm_provider, prompt, model)
-    in_tok += u["input_tokens"]; out_tok += u["output_tokens"]; cost += u["cost_usd"]
+    in_tok += u["input_tokens"]
+    out_tok += u["output_tokens"]
+    cost += u["cost_usd"]
     cached_tok += u["cached_tokens"]
 
     prose_source = "llm"
@@ -258,7 +265,9 @@ async def redact_merito_synthesis(
         if viols:
             retry_prompt = prompt + "\n\n" + _corrective_block(viols)
             retry_card, raw2, u2 = await _call_llm(llm_provider, retry_prompt, model)
-            in_tok += u2["input_tokens"]; out_tok += u2["output_tokens"]; cost += u2["cost_usd"]
+            in_tok += u2["input_tokens"]
+            out_tok += u2["output_tokens"]
+            cost += u2["cost_usd"]
             cached_tok += u2["cached_tokens"]
             if raw2:
                 raw_response = raw2

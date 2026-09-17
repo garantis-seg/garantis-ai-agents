@@ -16,7 +16,7 @@ falha → trata como "não precisa Vision" (fica no texto), nunca quebra.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Optional
 
 # Régua de teor ÚNICA, compartilhada com o piso de admissão do L1-petição no
 # garantis-shared. ⛔ Import DURO de propósito: um fallback local aqui seria a 6ª

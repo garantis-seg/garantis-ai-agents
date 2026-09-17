@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import hashlib
 
-import pytest
 
 from src.agents.processo_synthesis.prompts import (
     _short_mov_id,
@@ -20,7 +19,6 @@ from src.agents.processo_synthesis.prompts import (
     build_processo_synthesis_prompt,
 )
 from src.agents.processo_synthesis.schemas import (
-    ApoliceContextMin,
     MovFactSheetMin,
     ProcessoSynthesisRequest,
 )

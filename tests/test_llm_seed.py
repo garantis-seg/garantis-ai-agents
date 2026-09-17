@@ -4,7 +4,6 @@ O ponto do #2 (convergência da volatilidade): mesmo input → mesmo seed → me
 banda N×. Estes testes provam a parte determinística (o seed), sem queimar call
 LLM. A prova empírica end-to-end (banda N× estável) é o harness L3-only.
 """
-import os
 
 import pytest
 

@@ -14,8 +14,13 @@ from pypdf import PdfReader, PdfWriter
 
 from src.agents._utils import ocr_gate
 from src.agents.peticao_confirmador import agent as agent_mod
+from tests import test_peticao_confirmador_rota as _rota
 from tests.test_peticao_confirmador_rota import (HEAD_1, HEAD_2, ROTA, _mock_provider,
-                                                 _req, _veredito, client)  # noqa: F401
+                                                 _req, _veredito)
+
+#: a fixture `client` da rota, exposta aqui por ATRIBUICAO: importada pelo nome, o
+#: parametro `client` de cada teste vira redefinicao do import (F811).
+client = _rota.client
 
 
 def _pdf(paginas: int) -> bytes:

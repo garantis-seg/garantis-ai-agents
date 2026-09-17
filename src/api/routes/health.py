@@ -6,7 +6,6 @@ import os
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Response
-from ..schemas.responses import HealthResponse
 
 router = APIRouter(tags=["health"])
 logger = logging.getLogger(__name__)

@@ -20,8 +20,6 @@ from __future__ import annotations
 
 import asyncio
 
-import pytest
-
 from google.genai import types as gtypes  # noqa: E402
 
 from src.agents._utils import vision as V  # noqa: E402

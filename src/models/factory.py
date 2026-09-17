@@ -2,7 +2,6 @@
 Factory para criação de clientes de modelos.
 """
 
-import os
 import socket
 from typing import Optional
 

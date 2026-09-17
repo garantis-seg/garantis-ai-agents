@@ -5,7 +5,6 @@ Uses Gemini's native PDF understanding to extract text from scanned documents,
 replacing the heavy marker-pdf/PyTorch/surya-ocr local OCR pipeline.
 """
 
-import base64
 import logging
 import os
 from typing import Optional

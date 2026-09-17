@@ -11,8 +11,6 @@ confidence reduzido).
 Padrao arquitetural: ver memory `engine-v6-prompt-modular-pattern`.
 """
 
-import json
-import os
 from collections import Counter
 from typing import Literal
 
@@ -617,8 +615,8 @@ correspondente (decisao de merito desfavoravel exigivel, transito, intimacao).""
 # quando mode=new + derived != Indeterminado. Override pre-transito implicit.
 #
 # Flag PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED dropada do services.yaml +
-# cloudbuild no proximo deploy (mesmo PR).
-_REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO = ""  # noqa: removed pos-PR7.2
+# cloudbuild no proximo deploy (mesmo PR). (O `= ""` vestigial, sem leitor, saiu em
+# 2026-09-17.)
 
 
 def _build_regras_anti_falso_alto() -> str:

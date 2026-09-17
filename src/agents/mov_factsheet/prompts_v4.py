@@ -31,9 +31,9 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .._utils.feature_flags import flag_enabled
 from .fundacao import TAXONOMIA_TIPO_DOC
 from .prompts import _summarize_doc
+from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
 
 # ── Caps v4.4 (decisão "SEM LIMITE primeiro — qualidade > custo", 2026-06-11) ──
 # Não há mais cap de 5 docs/mov nem 8k/doc: TODOS os docs entram, governados por um
@@ -53,7 +53,6 @@ CORPO_MIN_CHARS = 60
 _V4_MOV_TEXT_CAP = 200_000        # snippet da mov (publicação pode trazer inteiro teor)
 _V4_DOC_TEXT_CAP = 1_000_000      # teto por doc (janela; casa com o fetch do shared)
 _V4_DOCS_BUDGET = 2_000_000       # orçamento agregado de docs por unidade (~500k tokens)
-from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
 
 # ── Perfil de leitura por Tipo de doc (2026-06-19) ─────────────────────────
 # Resolve o timeout do L1 em docs grandes (demonstrativo de 567pg = 1,9M chars →

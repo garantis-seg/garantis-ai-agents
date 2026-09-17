@@ -180,7 +180,8 @@ def test_route_http_roundtrip_preserves_echo(monkeypatch):
                 "prompt_version": "processo_synthesis.v2.3", "usage": {}}
 
     monkeypatch.setattr(route_mod, "classify_processo_synthesis", _fake_classify)
-    app = FastAPI(); app.include_router(route_mod.router)
+    app = FastAPI()
+    app.include_router(route_mod.router)
     r = TestClient(app).post("/processo-synthesis/classify",
                              json={"processo_numero": "1", "tipo_judicial": "fiscal", "mov_factsheets": []})
     assert r.status_code == 200

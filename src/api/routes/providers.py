@@ -2,7 +2,7 @@
 Endpoints para gerenciamento de LLM providers.
 """
 
-from typing import Dict, List
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
