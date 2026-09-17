@@ -25,6 +25,7 @@ from .schemas import (
     # v2.7.3 (2026-07-02): PreviousSnapshot removido do import (render do bloco
     # SNAPSHOT ANTERIOR deletado; o campo segue Optional no request schema).
     ProcessoSynthesisMin,
+    RedacaoRequest,
     TomadorCardMin,
 )
 
@@ -1742,7 +1743,7 @@ _RISCO_POR_EXTENSO = {
 }
 
 
-def build_redacao_prompt(req: "RedacaoRequest") -> str:
+def build_redacao_prompt(req: RedacaoRequest) -> str:
     """Prompt do passe de redacao: o risco JA foi decidido (req.risco_final) e
     entra como FATO IMUTAVEL; a tarefa e SO escrever a prosa que o explica.
 
