@@ -40,7 +40,7 @@ python run_l3_eval.py                    # --from-snapshot (usa o risco de produ
 python run_l3_eval.py --live --runs 3                 # 3-run majority sobre os cards congelados
 python run_l3_eval.py --live --limit 3               # smoke
 
-# 4) A/B de prompt (gate estilo gate_v4)
+# 4) A/B de prompt (3-run majority contra baseline salvo)
 python run_l3_eval.py --live --runs 3 --save base.json          # prompt ATUAL (nesta branch)
 git checkout <branch-com-prompt-proposto>
 python run_l3_eval.py --live --runs 3 --compare-to base.json    # imprime DELTA + gate

@@ -11,9 +11,9 @@ steps:
   # de pin de preco (test_vision_filter.py:24) — o mesmo drift que ja custou
   # "~US$25/semana invisivel" (comentario em src/providers/gemini.py:123-124).
   #
-  # Canal de deps IDENTICO ao cloudbuild-eval.yaml (keyring + ADC do SA do Cloud
-  # Build pro AR) e imagem IDENTICA a base do Dockerfile. DIFERENCA pro eval: sem
-  # `set +e` e sem `|| exit 0` — pytest != 0 aborta o build e o kaniko NEM RODA.
+  # Canal de deps = keyring + ADC do SA do Cloud Build pro AR, e imagem IDENTICA a
+  # base do Dockerfile. Sem `set +e` e sem `|| exit 0` — pytest != 0 aborta o build
+  # e o kaniko NEM RODA.
   # (Os testes rodam em step proprio, e nao dentro da imagem, porque .dockerignore:12
   # exclui `tests/` e o Dockerfile so faz COPY de src/.)
   # Medido em python:3.11-slim (2026-07-26): install 61s + suite 4s.
@@ -72,12 +72,6 @@ steps:
       - '--cache-repo=southamerica-east1-docker.pkg.dev/$PROJECT_ID/garantis-build-cache/garantis-ai-agents-cache'
       - '--snapshot-mode=redo'
     timeout: '600s'
-
-  # PromptFoo regression eval moved to its own non-blocking build 2026-06-01.
-  # It is warning-only (never fails the build), so gating `deploy` on it added
-  # ~120s of wall-clock for zero safety. Now lives in cloudbuild-eval.yaml +
-  # trigger `eval-garantis-ai-agents` — runs in parallel on the same push, off
-  # the deploy critical path. See memory deploy-bottleneck-analysis-2026-06-01.
 
   # Deploy container image to Cloud Run
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'

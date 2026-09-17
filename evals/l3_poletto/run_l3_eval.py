@@ -16,7 +16,7 @@ DOIS modos:
                     GEMINI_BACKEND=aistudio explicito + GEMINI_API_KEY manual
                     (NUNCA a de prod; a _EVAL foi aposentada 2026-07-21).
 
-A/B (gate estilo gate_v4): rodar --live com o prompt ATUAL e `--save base.json`;
+A/B (3-run majority contra baseline salvo): rodar --live com o prompt ATUAL e `--save base.json`;
 trocar o prompt (outra branch) e rodar `--compare-to base.json` -> imprime o DELTA
 (false_baixo nao pode subir = HARD constraint).
 
