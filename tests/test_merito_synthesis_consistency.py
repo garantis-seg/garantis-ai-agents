@@ -16,7 +16,10 @@ NAO testa o output do LLM (Gemini residual flicker; ataque ortogonal).
 """
 from __future__ import annotations
 
-from src.agents.merito_synthesis.prompts import build_merito_synthesis_prompt
+from src.agents.merito_synthesis.prompts import (
+    _build_consistency_check,
+    build_merito_synthesis_prompt,
+)
 from src.agents.merito_synthesis.schemas import MeritoSynthesisRequest
 
 
@@ -49,18 +52,26 @@ def test_consistency_check_after_glossario_before_merito():
 
 
 def test_consistency_check_lists_pro_alto_phrases():
-    """Lista de frases que TRIGGER risco Alto obrigatorio."""
+    """Lista de frases que TRIGGER risco Alto obrigatorio.
+
+    ⛔ "probabilidade remota de exito" SAIU da lista de proposito (c4452ea, v2.7,
+    2026-06-20): prob_exito virou CONTEXTO, quem decide o nivel e a Matriz de Risco
+    (Regra F). Ela voltar como gatilho pro-Alto reintroduz o over-rating que o A/B
+    do l3_poletto mediu — por isso o assert NEGATIVO, sobre o bloco do check."""
     p = build_merito_synthesis_prompt(_empty_request())
     pro_alto_phrases = [
         "empurra o risco para Alto",
         "alta chance de reversao desfavoravel ao Tomador",
         "elevando o risco de acionamento da apolice",
-        "probabilidade remota de exito do Tomador",
         "jurisprudencia desfavoravel a tese",
         "tendencia de perda em instancias superiores",
     ]
     for phrase in pro_alto_phrases:
         assert phrase in p, f"Frase pro-Alto faltando no CONSISTENCY CHECK: {phrase!r}"
+    assert "remota" not in _build_consistency_check(), (
+        "prob_exito 'remota' voltou a ser gatilho pro-Alto no CONSISTENCY CHECK — "
+        "desde v2.7 ela e contexto (Regra F), nao decide o nivel"
+    )
 
 
 def test_consistency_check_pro_alto_blocks_medio_baixo():
@@ -130,11 +141,19 @@ def test_consistency_check_references_real_cascade():
 
 
 def test_consistency_check_releitura_explicit():
-    """Step 1: releia explicitamente os campos pro-risco."""
+    """Step 1: releia explicitamente os campos pro-risco que o LLM EMITE.
+
+    Eram 4; `trajetoria_motivo` saiu de proposito (7e79a93, 2026-05-24): o
+    materializer ignora o campo (schemas.py: "LLM NAO preenche esses campos"), e
+    pedir a releitura dele gastava token num campo morto. O assert agora olha o
+    PASSO 1 do check — nao o prompt inteiro, onde "justificativa" casa em qualquer
+    lugar — e barra o campo morto de voltar."""
     p = build_merito_synthesis_prompt(_empty_request())
-    assert "Releia" in p
-    # Os 4 campos a checar
-    assert "contribuicao_no_risco" in p
-    assert "justificativa" in p
-    assert "narrativa_executiva" in p
-    assert "trajetoria_motivo" in p
+    check = _build_consistency_check()
+    passo_1 = " ".join(check.split("\n\n2.")[0].split())
+    assert "Releia" in passo_1
+    for campo in ("contribuicao_no_risco", "justificativa", "narrativa_executiva"):
+        assert f"`{campo}`" in passo_1 or f".{campo}`" in passo_1, (
+            f"passo 1 do CONSISTENCY CHECK nao manda reler {campo!r}"
+        )
+    assert "trajetoria_motivo" not in p
