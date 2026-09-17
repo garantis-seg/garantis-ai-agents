@@ -18,8 +18,8 @@ class LLMFactory:
     """
     Factory class for creating LLM provider instances.
 
-    Supports multiple LLM providers (Gemini, OpenAI, Groq, OpenRouter) and allows
-    runtime provider selection through environment variables or explicit parameters.
+    Only Gemini is registered (`_register_available_providers`); any other name
+    raises ValueError. Selection is by DEFAULT_PROVIDER env or explicit parameter.
     """
 
     _registry: Dict[str, Type[BaseLLMProvider]] = {}

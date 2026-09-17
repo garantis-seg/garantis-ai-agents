@@ -12,6 +12,7 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Type
 
+from garantis_shared.llm_models import cached_price_for, gemini_pricing_pairs
 from garantis_shared.rate_limit import TokenBucketRateLimiter
 
 from .base import BaseLLMProvider, LLMResponse
@@ -122,7 +123,6 @@ _gemini_tpm_limiter = _TokenRateLimiter(
 # byte-a-byte + inclui gemini-3.5-flash (o modelo do B1). Sem a entry do 3.5-flash,
 # get_model_pricing devolvia 0/0 e engine_llm_calls gravava cost_usd=0 pro cascade
 # B1 (~US$25/semana invisivel — F2 2026-07-24).
-from garantis_shared.llm_models import cached_price_for, gemini_pricing_pairs
 
 # `cached_per_1m` = preco do input servido do CACHE (10% do input onde a fatura tem
 # SKU de caching; input CHEIO onde nao tem — o catalogo nunca inventa desconto).

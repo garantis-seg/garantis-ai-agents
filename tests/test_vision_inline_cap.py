@@ -13,6 +13,7 @@ import pytest
 from google.genai import types as gtypes  # noqa: E402
 
 from src.agents._utils import vision as V  # noqa: E402
+from src.providers.base import BaseLLMProvider
 
 _MB = 1024 * 1024
 
@@ -56,6 +57,9 @@ class _FakeProvider:
 
     def get_model_pricing(self, model):
         return {"input_per_1m": 0.0, "output_per_1m": 0.0}
+
+    # a aritmetica REAL do base.py (o call_vision_l1 cobra por ela)
+    calculate_cost = BaseLLMProvider.calculate_cost
 
     async def agenerate(self, **kw):
         return "RESPOSTA_TEXTO"

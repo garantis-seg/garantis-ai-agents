@@ -97,43 +97,49 @@ def test_prompt_version_base_constant():
 
 
 # ── Rules block: keywords especificos por variant ──────────────────────────
+#
+# ⚠️ Os paradigmas de JURISPRUDENCIA (Tema 372 CSLL, Tema 1226, DIFAL, Tema 725
+# Pejotizacao) sairam do L3 de proposito em a0a82f8 (v2.2, 2026-05-25): a juris
+# passou a pesar SO no L2 (regras J/J.1/J.2), porque aplicada nas duas camadas
+# contava 2x. Um assert "Tema 372 not in p" virou VACUO (a string nao existe em
+# variant nenhuma) — os marcadores abaixo sao os EXCLUSIVOS vivos de cada variant,
+# entao o guard de cross-contamination volta a ter os dois lados.
 
 
 def test_rules_fiscal_keywords():
-    """Variant fiscal contem termos paradigmaticos fiscais (Tema 372 CSLL,
-    Anulatoria conexa, EF suspensa) e NAO contem termos trab/civel-exclusivos."""
+    """Variant fiscal contem vocabulario fiscal exclusivo (EF, pre-executividade,
+    CTN art. 174, tese pro_fazenda_firmado) e NAO contem termos trab/civel-exclusivos."""
     p = _build_rules("fiscal")
-    # Fiscal-specific paradigms
-    assert "Tema 372" in p, "Fiscal deve citar Tema 372 STF (CSLL paradigma)"
-    assert "CSLL" in p
-    assert "Tema 1226" in p, "Fiscal deve citar Tema 1226 (IRPJ Stock Options)"
+    # Fiscal-specific
+    assert "pro_fazenda_firmado" in p, "Fiscal deve usar a tese pro_fazenda_firmado na ESCALA"
+    assert "CTN art. 174" in p, "Fiscal deve citar prescricao intercorrente (CTN art. 174)"
+    assert "credito tributario" in p, "Fiscal deve falar em credito tributario"
     assert "Execucao Fiscal" in p
     assert "Anulatoria" in p, "Fiscal deve mencionar Anulatoria conexa (regra H)"
     assert "pre-executividade" in p, "Fiscal deve listar excecao de pre-executividade processual"
     # Trab/civel-exclusive devem estar AUSENTES (cross-contamination guard)
     assert "AIRR" not in p, "AIRR (trabalhista) nao deve aparecer em fiscal"
     assert "Sumula 331 TST" not in p, "Sumula 331 TST nao deve aparecer em fiscal"
-    assert "Tema 725" not in p, "Tema 725 STF Pejotizacao nao deve aparecer em fiscal"
+    assert "deposito recursal" not in p, "deposito recursal (trabalhista) nao deve aparecer em fiscal"
 
 
 def test_rules_trabalhista_keywords():
-    """Variant trabalhista contem termos paradigmaticos trabalhistas (TST,
-    AIRR, Sumula 331, Tema 725 Pejotizacao, deposito recursal) e NAO
-    contem termos fiscal/civel-exclusivos."""
+    """Variant trabalhista contem termos trabalhistas exclusivos (TST, AIRR,
+    Sumula 331, TRT, deposito recursal) e NAO contem termos fiscal-exclusivos."""
     p = _build_rules("trabalhista")
-    # Trabalhista-specific paradigms
+    # Trabalhista-specific
     assert "TST" in p, "Trabalhista deve citar TST (Tribunal Superior do Trabalho)"
     assert "AIRR" in p, "Trabalhista deve listar AIRR como recurso processual"
     assert "Sumula 331" in p, "Trabalhista deve citar Sumula 331 TST (terceirizacao)"
-    assert "Tema 725" in p, "Trabalhista deve citar Tema 725 STF (Pejotizacao)"
+    assert "TRT" in p, "Trabalhista deve citar acordao TRT (2g trabalhista)"
     assert "deposito recursal" in p, "Trabalhista deve mencionar deposito recursal (CLT art. 899)"
     assert "Cumprimento Provisorio" in p or "cumprimento provisorio" in p.lower(), (
         "Trabalhista deve mencionar Cumprimento Provisorio (suspensao analoga regra H)"
     )
     # Fiscal-exclusive devem estar AUSENTES (cross-contamination guard)
-    assert "Tema 372" not in p, "Tema 372 STF (CSLL fiscal) nao deve aparecer em trabalhista"
-    assert "Tema 1226" not in p, "Tema 1226 (IRPJ fiscal) nao deve aparecer em trabalhista"
-    assert "DIFAL" not in p, "DIFAL (ICMS fiscal) nao deve aparecer em trabalhista"
+    assert "pro_fazenda_firmado" not in p, "tese pro_fazenda_firmado (fiscal) nao deve aparecer em trabalhista"
+    assert "CTN art. 174" not in p, "CTN art. 174 (fiscal) nao deve aparecer em trabalhista"
+    assert "credito tributario" not in p, "credito tributario (fiscal) nao deve aparecer em trabalhista"
     assert "pre-executividade" not in p, "Pre-executividade (fiscal) nao deve aparecer em trabalhista"
 
 
@@ -152,7 +158,7 @@ def test_rules_civel_keywords():
     )
     assert "AREsp" in p, "Civel deve listar AREsp como recurso processual"
     # Fiscal/Trab-exclusive devem estar AUSENTES
-    assert "Tema 372" not in p, "Tema 372 STF (CSLL fiscal) nao deve aparecer em civel"
+    assert "CTN art. 174" not in p, "CTN art. 174 (fiscal) nao deve aparecer em civel"
     assert "AIRR" not in p, "AIRR (trabalhista) nao deve aparecer em civel"
     assert "Sumula 331 TST" not in p, "Sumula 331 TST nao deve aparecer em civel"
     assert "pre-executividade" not in p, "Pre-executividade (fiscal) nao deve aparecer em civel"
@@ -166,10 +172,14 @@ def test_rules_misto_keywords_and_confidence():
     assert "0.10" in p, "Misto deve ter Regra E reduzindo confidence em 0.10"
     assert "MISTO" in p or "misto" in p
     assert "incerteza" in p, "Misto deve justificar reducao por incerteza estrutural"
-    # Regras G condicionais por tipo
-    assert "FISCAL" in p, "Misto Regra G condicional cita FISCAL"
-    assert "TRABALHISTA" in p, "Misto Regra G condicional cita TRABALHISTA"
-    assert "CIVEL" in p, "Misto Regra G condicional cita CIVEL"
+    # Vocabulario CONDICIONAL por tipo de processo. Morava na Regra G (FISCAL/
+    # TRABALHISTA/CIVEL em caixa alta), que saiu com a juris em a0a82f8; o
+    # condicional sobreviveu na NOTA da ESCALA misto. Espaco normalizado porque a
+    # frase quebra linha no meio.
+    norm = " ".join(p.split())
+    assert "pra processo fiscal use vocabulario fiscal" in norm, "Misto condicional: fiscal"
+    assert "pra trabalhista use TST/RR" in norm, "Misto condicional: trabalhista"
+    assert "pra civel use STJ/REsp" in norm, "Misto condicional: civel"
 
 
 # ── Integration: prompt completo dispatch corretamente ─────────────────────
@@ -179,9 +189,11 @@ def test_rules_misto_keywords_and_confidence():
     "tipo,must_contain,must_not_contain",
     [
         # "Anulatoria" nao serve como marker exclusivo: aparece no _REGRA_H1_COMUM (shared).
-        ("fiscal", ["Tema 372", "pre-executividade", "DIFAL"], ["AIRR", "AREsp", "Tema 725"]),
-        ("trabalhista", ["AIRR", "Tema 725", "deposito recursal"], ["Tema 372", "DIFAL", "pre-executividade"]),
-        ("civel", ["AREsp", "Tema repetitivo"], ["AIRR", "Tema 372", "pre-executividade"]),
+        # Idem "pro_fazenda_firmado" e "Execucao Fiscal" no prompt COMPLETO (blocos comuns).
+        # Tema 372/725 e DIFAL sairam com a juris do L3 (a0a82f8) — ver o bloco acima.
+        ("fiscal", ["pre-executividade", "CTN art. 174", "credito tributario"], ["AIRR", "AREsp", "deposito recursal"]),
+        ("trabalhista", ["AIRR", "Sumula 331 TST", "deposito recursal"], ["CTN art. 174", "credito tributario", "pre-executividade"]),
+        ("civel", ["AREsp", "Tema repetitivo"], ["AIRR", "CTN art. 174", "pre-executividade"]),
     ],
 )
 def test_prompt_dispatch_by_dominant_tipo(tipo, must_contain, must_not_contain):

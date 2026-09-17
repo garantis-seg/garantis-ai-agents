@@ -69,7 +69,6 @@ async def extract_key_info(
         else:
             # Fallback: parse from text
             import json
-            import re
 
             text_response = response.text.strip()
 

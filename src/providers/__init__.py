@@ -1,8 +1,8 @@
 """
 LLM Providers - Unified interface for multiple LLM providers.
 
-This module provides a consistent interface for interacting with different
-LLM providers (Gemini, OpenAI, Groq, OpenRouter) through a factory pattern.
+This module provides a consistent interface for interacting with LLM providers
+through a factory pattern. Only Gemini is registered (see factory.py).
 """
 
 from .base import BaseLLMProvider, LLMResponse

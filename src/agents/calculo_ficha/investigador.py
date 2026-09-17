@@ -34,7 +34,7 @@ from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .ferramentas import Budget, CircuitBreaker, menu_do_investigador, parse_chamada
 from .prompts import build_decisao_prompt, build_formatacao_prompt
-from .schemas import GrafoAchatado, MontarGrafoRequest, MontarGrafoResponse
+from .schemas import MontarGrafoRequest, MontarGrafoResponse
 
 logger = logging.getLogger(__name__)
 

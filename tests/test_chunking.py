@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """Chunk map-reduce de peça grande no L1 (2026-06-19) — split + reduce."""
 from src.agents.mov_factsheet.chunking import (
-    CHUNK_SIZE,
     _split_text,
     reduce_peca_cards,
     split_large_peca_variants,

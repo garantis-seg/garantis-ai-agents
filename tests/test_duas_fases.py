@@ -7,7 +7,6 @@ o turno que decide ferramenta NUNCA leva `response_mime_type`/`response_schema`.
 
 import asyncio
 import json
-from types import SimpleNamespace
 
 import src.agents.calculo_ficha.investigador as inv_mod
 from src.agents.calculo_ficha.investigador import investigar

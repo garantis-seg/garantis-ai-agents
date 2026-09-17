@@ -20,7 +20,8 @@ FIX = _THIS.parent / "fixtures"
 def main() -> int:
     fixtures = [json.loads(f.read_text(encoding="utf-8")) for f in sorted(FIX.glob("*.json"))]
     if not fixtures:
-        print("Sem fixtures.", file=sys.stderr); return 1
+        print("Sem fixtures.", file=sys.stderr)
+        return 1
 
     dvp, evp, evd = [], [], []   # daycoval-vs-poletto, engine-vs-poletto, engine-vs-daycoval
     for fx in fixtures:

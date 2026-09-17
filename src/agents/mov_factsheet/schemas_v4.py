@@ -34,9 +34,10 @@ import pathlib
 
 from .._utils.prompt_identity import versao_com_identidade
 
+# Re-export: `agent.py` e `tests/test_peticao_extract.py` importam os dois DAQUI.
 from garantis_shared.engine_v6.persistence.peticao_contract import (
-    DOC_INCERTO_PROMPT_VERSION,
-    PETICAO_PROMPT_VERSION,
+    DOC_INCERTO_PROMPT_VERSION,  # noqa: F401
+    PETICAO_PROMPT_VERSION,  # noqa: F401
 )
 from pydantic import BaseModel, Field, field_validator
 

@@ -9,43 +9,20 @@ authors = [
     {name = "Garantis", email = "dev@garantis.com.br"}
 ]
 
-dependencies = [
-    # >=1.46.0: floor pro http_options custom-httpx (socket_options keepalive) ser
-    # honrado — ver requirements.txt. httpx agora dep direta (models/factory.py).
-    "google-genai>=1.46.0",
-    "httpx>=0.28.0",
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.32.0",
-    "pydantic>=2.10.0",
-    "pydantic-settings>=2.0.0",
-    "python-dotenv>=1.0.0",
-    # Kept in sync with requirements.txt (the Dockerfile installs from
-    # requirements.txt; pyproject is used for wheel/local installs). Drift
-    # here previously omitted garantis-shared → import failure on any
-    # pyproject-based build path.
-    "garantis-shared>=1.19.1",
-]
+# ⛔ Sem `dependencies` aqui, de proposito (2026-09-17). As deps de runtime moram SO
+# no `requirements.txt`: e ele que o Dockerfile e o step `unit-tests` do
+# cloudbuild-deploy.yaml instalam, e e so ele que o bot de bump do garantis-shared
+# edita. A copia que vivia aqui ja tinha divergido (shared `>=1.19.1` contra
+# `==1.630.0`, e sem PyMuPDF/pypdf/google-cloud-storage) — uma segunda lista a mao
+# nunca e a que roda. Instalar local: `pip install -r requirements.txt`.
 
 [project.optional-dependencies]
-# Individual providers (install what you need)
-openai = ["openai>=1.0.0"]
-groq = ["groq>=0.4.0"]
-
-# HTTP client for external integrations
-client = ["httpx>=0.28.0"]
-
-# All providers + client
-all = [
-    "openai>=1.0.0",
-    "groq>=0.4.0",
-    "httpx>=0.28.0",
-]
-
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "httpx>=0.28.0",
-    "ruff>=0.8.0",
+    # mesmo pin do step `unit-tests` (regra nova de versao nova nao pode pintar o gate)
+    "ruff==0.15.10",
 ]
 
 [build-system]
@@ -58,9 +35,14 @@ packages = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+# Checkouts aninhados (worktrees de sessao) nao sao este repo e nao estao no .gitignore.
+extend-exclude = [".wt", ".worktrees", ".claude"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
+# Roda como TESTE (tests/test_ruff.py), e a suite e o gate do deploy. "I" (ordem de
+# import) ficou de fora de proposito: zerar = reescrever ~48 arquivos sem ganho, e
+# conflita com branch em voo. E501 idem (prompts longos sao a norma aqui).
+select = ["E", "F", "W"]
 ignore = ["E501"]
 
 [tool.pytest.ini_options]

@@ -5,12 +5,12 @@ Uses Gemini's native PDF understanding to extract text from scanned documents,
 replacing the heavy marker-pdf/PyTorch/surya-ocr local OCR pipeline.
 """
 
-import base64
 import logging
 import os
 from typing import Optional
 
 from ...providers import LLMFactory
+from ...providers.gemini import _usage_tokens
 from .prompts import PDF_TO_MARKDOWN_PROMPT
 from .schemas import PdfOcrResult
 
@@ -80,19 +80,13 @@ async def convert_pdf_to_markdown(
             config=config,
         )
 
-        # Extract token usage
-        input_tokens = 0
-        output_tokens = 0
-        if hasattr(response, "usage_metadata") and response.usage_metadata:
-            input_tokens = getattr(response.usage_metadata, "prompt_token_count", 0) or 0
-            output_tokens = getattr(response.usage_metadata, "candidates_token_count", 0) or 0
-
-        # Calculate cost
-        pricing = provider.get_model_pricing(model)
-        cost = (
-            (input_tokens / 1_000_000) * pricing.get("input_per_1m", 0)
-            + (output_tokens / 1_000_000) * pricing.get("output_per_1m", 0)
+        # Tokens e custo pelos donos do caminho texto: `_usage_tokens` (cached +
+        # thinking no output) e `calculate_cost` do base.py (cacheado no
+        # `cached_per_1m`). Mesmo conserto do `_utils/vision.py::call_vision_l1`.
+        input_tokens, output_tokens, cached_tokens = _usage_tokens(
+            getattr(response, "usage_metadata", None)
         )
+        cost = provider.calculate_cost(model, input_tokens, output_tokens, cached_tokens)
 
         markdown_text = response.text.strip() if response.text else ""
 

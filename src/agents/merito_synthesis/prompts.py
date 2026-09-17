@@ -11,8 +11,6 @@ confidence reduzido).
 Padrao arquitetural: ver memory `engine-v6-prompt-modular-pattern`.
 """
 
-import json
-import os
 from collections import Counter
 from typing import Literal
 
@@ -25,6 +23,7 @@ from .schemas import (
     # v2.7.3 (2026-07-02): PreviousSnapshot removido do import (render do bloco
     # SNAPSHOT ANTERIOR deletado; o campo segue Optional no request schema).
     ProcessoSynthesisMin,
+    RedacaoRequest,
     TomadorCardMin,
 )
 
@@ -616,8 +615,8 @@ correspondente (decisao de merito desfavoravel exigivel, transito, intimacao).""
 # quando mode=new + derived != Indeterminado. Override pre-transito implicit.
 #
 # Flag PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED dropada do services.yaml +
-# cloudbuild no proximo deploy (mesmo PR).
-_REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO = ""  # noqa: removed pos-PR7.2
+# cloudbuild no proximo deploy (mesmo PR). (O `= ""` vestigial, sem leitor, saiu em
+# 2026-09-17.)
 
 
 def _build_regras_anti_falso_alto() -> str:
@@ -1742,7 +1741,7 @@ _RISCO_POR_EXTENSO = {
 }
 
 
-def build_redacao_prompt(req: "RedacaoRequest") -> str:
+def build_redacao_prompt(req: RedacaoRequest) -> str:
     """Prompt do passe de redacao: o risco JA foi decidido (req.risco_final) e
     entra como FATO IMUTAVEL; a tarefa e SO escrever a prosa que o explica.
 

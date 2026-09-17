@@ -16,7 +16,7 @@ DOIS modos:
                     GEMINI_BACKEND=aistudio explicito + GEMINI_API_KEY manual
                     (NUNCA a de prod; a _EVAL foi aposentada 2026-07-21).
 
-A/B (gate estilo gate_v4): rodar --live com o prompt ATUAL e `--save base.json`;
+A/B (3-run majority contra baseline salvo): rodar --live com o prompt ATUAL e `--save base.json`;
 trocar o prompt (outra branch) e rodar `--compare-to base.json` -> imprime o DELTA
 (false_baixo nao pode subir = HARD constraint).
 
@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
-import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -105,7 +104,7 @@ async def _classify_one(payload: dict, runs: int, no_override: bool = False) -> 
         final = llm if no_override else (derived if derived in _LEVELS else llm)
         finals.append(final)
     final_majority = Counter([f for f in finals if f]).most_common(1)
-    llm_majority = Counter([l for l in llms if l]).most_common(1)
+    llm_majority = Counter([x for x in llms if x]).most_common(1)
     return {
         "final": final_majority[0][0] if final_majority else None,
         "llm": llm_majority[0][0] if llm_majority else None,

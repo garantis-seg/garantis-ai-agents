@@ -207,7 +207,6 @@ def main() -> int:
     for mid in mids:
         meta = meritos[mid]
         roles = roles_by_merito.get(mid, [])
-        role_map = dict(roles)
         ps_cards = []
         for pn, role in roles:
             summ = ps_by_pn.get(pn)

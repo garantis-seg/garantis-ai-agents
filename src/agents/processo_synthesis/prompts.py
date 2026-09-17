@@ -30,10 +30,14 @@ dados em nenhum lugar"):
   split por documento (mov_id '<id>:<doc>', regra 1-doc-maximo shared#68).
 """
 
-import json
 import logging
-import os
-from typing import Any
+
+# Matriz Daycoval (Probabilidade de Exito): extraida em 2026-05-31 (PR2 Architecture D)
+# pra garantis_shared.engine_v6.matrices.daycoval. Sobrou so o alias do builder; os
+# `_DAYCOVAL_*`/`_SCORE_BY_CLASS` nao tinham leitor e sairam em 2026-09-17.
+from garantis_shared.engine_v6.matrices.daycoval import (
+    build_matriz_block_compat as _build_matriz_block,
+)
 
 from .schemas import ApoliceContextMin, MovFactSheetMin, ProcessoSynthesisRequest
 
@@ -79,24 +83,6 @@ def _short_mov_id(mov_id: str | None) -> str:
             and s[18] == "-" and s[23] == "-"):
         return s[:_MOV_ID_DISPLAY_CHARS]
     return s
-
-
-# ── Matriz Daycoval (Probabilidade de Exito) ─────────────────────────────
-# Extraida em 2026-05-31 (PR2 Architecture D) pra
-# garantis_shared.engine_v6.matrices.daycoval. Mantemos aliases legacy
-# (_DAYCOVAL_*, _SCORE_BY_CLASS, _build_matriz_block) pra calls existentes
-# nesse modulo continuarem funcionando byte-identical. PR3+ remove
-# dependencia se necessario.
-from garantis_shared.engine_v6.matrices import (
-    DAYCOVAL_CIVEL as _DAYCOVAL_CIVEL,
-    DAYCOVAL_FISCAL as _DAYCOVAL_FISCAL,
-    DAYCOVAL_MATRIZES as _DAYCOVAL_MATRIZES,
-    DAYCOVAL_SCORE_BY_CLASS as _SCORE_BY_CLASS,
-    DAYCOVAL_TRABALHISTA as _DAYCOVAL_TRABALHISTA,
-)
-from garantis_shared.engine_v6.matrices.daycoval import (
-    build_matriz_block_compat as _build_matriz_block,
-)
 
 
 # ── Filtro de relevância p/ processo GIGANTE (2026-06-20) ──────────────────────

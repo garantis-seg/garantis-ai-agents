@@ -24,7 +24,6 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
-import os
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -43,7 +42,6 @@ from src.agents.auditor_ficha.prompts import (
 )
 from src.agents.auditor_ficha.schemas import (
     AuditarFichaRequest,
-    AuditarFichaResponse,
 )
 from src.api.routes.auditor_ficha import router
 
