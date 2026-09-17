@@ -10,29 +10,20 @@ Repositório centralizado de AI Agents com suporte a múltiplos LLM providers.
 
 > Nota: os agentes vivos do engine v6 (L1/L2/L3: mov_factsheet, processo_synthesis, merito_synthesis, apolice_lifecycle, mov_summarizer, pdf/ocr) são montados via `src/api/main.py` — esta tabela cobre só utilitários. Timing Analysis foi REMOVIDO (pré-engine-v6, 2026-07-08). `court_state_classifier` foi REMOVIDO em 2026-08-10 (decisão do Elton): a flag `USE_LLM_COURT_STATE_CLASSIFIER` do frontend-api nasceu `false` e não há registro de `true` em ambiente nenhum (medido 2026-08-10: 0 requests à rota nos logs de prod e staging na janela inteira de log disponível — ⚠️ retenção é 30d, então esse é o teto da prova) e o classificador de estado é o **regex** em `execucao-fiscal/frontend-api/services/court_presentation_inference_service.py` — LLM para derivar fato estrutural do processo (tribunal, estado) é para ser evitado; o fato vem do provider ou de derivação determinística.
 
-## Providers Suportados
+## Provider
 
-- **Gemini** (Google) - Default: `gemini-2.5-flash-lite` ✨
-- **OpenAI** (GPT-4o, GPT-4o-mini)
-- **Groq** (Llama 3.3 70B)
-- **OpenRouter** (múltiplos modelos)
-
-### Custo Estimado (Gemini Flash Lite)
-- **Input**: $0.075 per 1M tokens
-- **Output**: $0.30 per 1M tokens
-- **Análise típica**: ~$0.0012 (vs $0.005 com Flash regular)
+Só **Gemini** (Google) — é o único registrado em `src/providers/factory.py`. Preço por
+modelo vem de `garantis_shared.llm_models` (catálogo com preço de fatura); o custo de
+cada chamada, inclusive a parte servida do cache implícito, é `BaseLLMProvider.calculate_cost`.
 
 ## Instalação
 
 ```bash
-# Instalar dependências básicas
-pip install .
+# As deps de runtime moram só no requirements.txt (é o que o Dockerfile e o gate instalam)
+pip install -r requirements.txt
 
-# Com providers adicionais
-pip install ".[all]"
-
-# Com cliente HTTP
-pip install ".[client]"
+# Ferramentas de teste/lint
+pip install ".[dev]"
 ```
 
 ## Uso Local
