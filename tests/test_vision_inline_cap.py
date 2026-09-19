@@ -7,6 +7,7 @@ real e um client fake que CONTA as chamadas: quando nada cabe, zero chamada.
 from __future__ import annotations
 
 import asyncio
+import re
 
 import pytest
 
@@ -236,8 +237,20 @@ def test_400_no_pages_cai_no_texto_e_o_veredito_PARA_de_dizer_que_esta_saudavel(
     prov = _FakeProvider()
     gate: dict = {}
 
+    class _ErroDaAPI(RuntimeError):
+        """Molde do `google.genai.errors.APIError`, e o molde e o ponto: o `__str__` dele
+        e `f"{code} {status}. {details}"` (tem o CODIGO) e o `.message` e so a frase (NAO
+        tem). Um `RuntimeError` pelado passaria os dois jeitos de montar o `erro_vision`,
+        e a guarda de formato abaixo nasceria decorativa."""
+
+        def __init__(self) -> None:
+            super().__init__(
+                "400 INVALID_ARGUMENT. {'error': {'code': 400, "
+                "'message': 'The document has no pages.', 'status': 'INVALID_ARGUMENT'}}")
+            self.message = "The document has no pages."
+
     async def _400_no_pages(*, model, contents, config):
-        raise RuntimeError("400 INVALID_ARGUMENT: The document has no pages")
+        raise _ErroDaAPI()
 
     prov._client.aio.models.generate_content = _400_no_pages
 
@@ -260,3 +273,12 @@ def test_400_no_pages_cai_no_texto_e_o_veredito_PARA_de_dizer_que_esta_saudavel(
     assert "no pages" in gate["erro_vision"], (
         "o veredito tem que carregar a RAZÃO; `n_enviados=0` sozinho não separa "
         "'o modelo recusou' de 'o gate não aprovou nada'")
+    # ⛔⛔ O FORMATO é contrato com a TELA, e este é o único lugar que o prende.
+    # O app lê o código ANCORADO no começo (`<Classe>: <código> …`) pra separar o 400 — em
+    # que o problema é o ARQUIVO e repetir não resolve — de 429/5xx, que é transitório
+    # (garantis-app `src/lib/peticao-leitura.ts`, PR #554 de 19/09). Trocar `{exc}` por
+    # `exc.message` na linha que monta isto some com o código: o `APIError.message` do
+    # google-genai é só "The document has no pages.", e a tela volta a mandar o operador
+    # repetir uma falha certa — com esta suíte, a do shared e a do app TODAS verdes.
+    assert re.match(r"^\w+: \d{3}\b", gate["erro_vision"]), (
+        f"o formato tem que ser `<Classe>: <codigo> ...` — veio {gate['erro_vision']!r}")
