@@ -29,6 +29,13 @@ for _opt_name, _opt_val in (("TCP_KEEPIDLE", 10), ("TCP_KEEPINTVL", 5), ("TCP_KE
     if _opt is not None:
         _GENAI_SOCKET_OPTIONS.append((socket.IPPROTO_TCP, _opt, _opt_val))
 
+# ⛔ O `limits` MORA NO TRANSPORT (abaixo), nunca ao lado dele: quando o client
+# recebe `transport=`, o httpx IGNORA o `limits` passado junto, em silencio. Ate
+# 2026-09-23 ele ia no client_args e os pools sync/async rodavam no DEFAULT
+# (100 / keepalive 20 / expiry 5s) — mesmo defeito do garantis-shared#576.
+# O que o 40/15s compra e so menos handshake TLS com o Gemini; ⚠️ NAO e cura de
+# conexao morta (expiry MAIOR alarga a janela de reuso). `tests/test_genai_pool_limits.py`
+# le o pool EFETIVO.
 _GENAI_LIMITS = httpx.Limits(
     max_connections=100, max_keepalive_connections=40, keepalive_expiry=15.0,
 )
@@ -74,14 +81,14 @@ def create_genai_client(api_key: Optional[str] = None) -> genai.Client:
             client_args={
                 "transport": httpx.HTTPTransport(
                     retries=2, socket_options=_GENAI_SOCKET_OPTIONS,
+                    limits=_GENAI_LIMITS,
                 ),
-                "limits": _GENAI_LIMITS,
             },
             async_client_args={
                 "transport": httpx.AsyncHTTPTransport(
                     retries=2, socket_options=_GENAI_SOCKET_OPTIONS,
+                    limits=_GENAI_LIMITS,
                 ),
-                "limits": _GENAI_LIMITS,
             },
         ),
     )
