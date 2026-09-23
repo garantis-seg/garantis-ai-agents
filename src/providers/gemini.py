@@ -9,6 +9,7 @@ import asyncio
 import contextvars
 import os
 import logging
+import re
 import time
 from typing import Any, Dict, List, Optional, Type
 
@@ -49,6 +50,42 @@ gemini_call_timeout_cv: "contextvars.ContextVar[Optional[float]]" = (
     contextvars.ContextVar("gemini_call_timeout_s", default=None)
 )
 _GEMINI_CALL_TIMEOUT_BACKSTOP_S = float(os.getenv("GEMINI_CALL_TIMEOUT_S", "600.0"))
+
+# ── Labels de cobranca do Vertex (2026-09-23, card 869f65eyv) ─────────────────
+# A fatura (billing export) so agrupa gasto por label: sem eles, o gasto de Gemini
+# aparecia sem dono (dava QUANTO, nunca QUEM). `rota` = TEMPLATE da rota HTTP que
+# originou a chamada, posto aqui pelo middleware (api/middleware.py) — mesmo
+# mecanismo do `gemini_call_timeout_cv`. None fora de request => sem label de rota.
+gemini_rota_cv: "contextvars.ContextVar[Optional[str]]" = (
+    contextvars.ContextVar("gemini_rota", default=None)
+)
+
+
+def label_vertex(valor: str) -> str:
+    """Valor aceito como label pelo Vertex: minusculas, `[a-z0-9_-]`, ate 63 chars.
+
+    ⛔ Nao e cosmetico: label fora da regra faz o Vertex devolver 400 e a CHAMADA
+    falha. Mesma regra de `garantis_shared.gemini_backend._label_vertex`.
+    """
+    return re.sub(r"[^a-z0-9_-]+", "_", (valor or "").lower()).strip("_")[:63]
+
+
+def vertex_labels(client: Any) -> Optional[Dict[str, str]]:
+    """Labels por request pro Vertex; None fora dele (o AI Studio REJEITA `labels` —
+    o SDK levanta ValueError antes de mandar).
+
+    `produtor` aqui e PONTE: o garantis-shared com o label no client
+    (`make_genai_client`) poe o mesmo `produtor` em toda request, e no merge do SDK o
+    do client VENCE este — mesmo valor em prod (K_SERVICE do Cloud Run).
+    """
+    if getattr(client, "vertexai", False) is not True:
+        return None
+    labels = {"produtor": label_vertex(os.getenv("K_SERVICE") or "garantis-ai-agents")}
+    rota = gemini_rota_cv.get()
+    if rota:
+        labels["rota"] = rota
+    return labels
+
 
 _gemini_rate_limiter = TokenBucketRateLimiter(
     rate=_GEMINI_RATE,
@@ -378,6 +415,11 @@ class GeminiProvider(BaseLLMProvider):
                 config_params["seed"] = seed
             except Exception:
                 pass
+
+        # Labels de cobranca (so Vertex) — metadado da fatura, nao muda a chamada.
+        labels = vertex_labels(getattr(self, "_client", None))
+        if labels:
+            config_params["labels"] = labels
 
         return config_params
 
