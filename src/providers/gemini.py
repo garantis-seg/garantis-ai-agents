@@ -50,6 +50,26 @@ gemini_call_timeout_cv: "contextvars.ContextVar[Optional[float]]" = (
 )
 _GEMINI_CALL_TIMEOUT_BACKSTOP_S = float(os.getenv("GEMINI_CALL_TIMEOUT_S", "600.0"))
 
+# ── Piloto Flex PayGo (2026-09-23) ────────────────────────────────────────────
+# Flex = MESMO modelo e MESMO prompt a -50% (SKU "Gemini 3.1 Flash Lite Global Text
+# Input Flex": US$0,125/M in, 0,75/M out), com latencia MAIOR e capacidade sem
+# garantia — so serve pra chamada que ninguem espera na tela. Quem marca a request e
+# o middleware, pelo PATH (`_FLEX_PATHS` em api/middleware.py); None = Standard.
+# ⭐ A prova de que o tier pegou e o `traffic_type` na linha GEMINI_TIER: header
+# ignorado continuaria cobrando Standard EM SILENCIO.
+gemini_service_tier_cv: "contextvars.ContextVar[Optional[str]]" = (
+    contextvars.ContextVar("gemini_service_tier", default=None)
+)
+_FLEX_HEADERS = {
+    "X-Vertex-AI-LLM-Request-Type": "shared",
+    "X-Vertex-AI-LLM-Shared-Request-Type": "flex",
+}
+# Fatia do prazo do engine que o Flex pode gastar antes de cair pro Standard; o
+# resto fica pro Standard terminar a MESMA chamada. Timeout aqui vira retry no
+# engine, e o retry do L1 ESCALA pro 3.5-flash (6x o input) — Flex que estoura o
+# prazo sairia mais CARO que o Standard.
+_FLEX_BUDGET_FRACTION = 0.5
+
 _gemini_rate_limiter = TokenBucketRateLimiter(
     rate=_GEMINI_RATE,
     bucket_size=_GEMINI_BURST,
@@ -498,14 +518,7 @@ class GeminiProvider(BaseLLMProvider):
         # wait_for cancela a coroutine no estouro -> aborta a chamada orfa.
         _call_timeout_s = gemini_call_timeout_cv.get() or _GEMINI_CALL_TIMEOUT_BACKSTOP_S
         try:
-            response = await asyncio.wait_for(
-                self._client.aio.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=config,
-                ),
-                timeout=_call_timeout_s,
-            )
+            response = await self._bounded_generate(model, prompt, config, _call_timeout_s)
         except asyncio.TimeoutError:
             logger.warning(
                 "GEMINI_CALL_TIMEOUT model=%s timeout=%.0fs prompt_chars=%d — "
@@ -543,6 +556,43 @@ class GeminiProvider(BaseLLMProvider):
                 ),
             },
         )
+
+    async def _bounded_generate(self, model: str, prompt: Any, config: Any, timeout_s: float):
+        """generate_content capado em `timeout_s`. Na request marcada Flex, tenta o
+        Flex com parte do prazo e refaz no Standard com o RESTO dele.
+
+        ponytail: QUALQUER falha do Flex (timeout, 429 de capacidade, 400 de modelo
+        sem Flex) cai no Standard — o piloto nunca pode sair pior que o Standard. O
+        motivo vai na linha GEMINI_TIER, que e o que se conta pra decidir o piloto."""
+        def _call(cfg, t):
+            return asyncio.wait_for(
+                self._client.aio.models.generate_content(model=model, contents=prompt, config=cfg),
+                timeout=t,
+            )
+
+        if gemini_service_tier_cv.get() != "flex" or not getattr(self._client, "vertexai", False):
+            return await _call(config, timeout_s)
+
+        t0 = time.monotonic()
+        flex_cfg = config.model_copy(
+            update={"http_options": self._types.HttpOptions(headers=_FLEX_HEADERS)}
+        )
+        try:
+            response = await _call(flex_cfg, timeout_s * _FLEX_BUDGET_FRACTION)
+        except Exception as e:
+            code = getattr(e, "code", None)
+            logger.warning(
+                "GEMINI_TIER tier=flex outcome=fallback reason=%s%s latency_ms=%d model=%s",
+                type(e).__name__, f":{code}" if code else "",
+                (time.monotonic() - t0) * 1000, model,
+            )
+            return await _call(config, max(timeout_s - (time.monotonic() - t0), 1.0))
+        tt = getattr(getattr(response, "usage_metadata", None), "traffic_type", None)
+        logger.info(
+            "GEMINI_TIER tier=flex outcome=ok traffic_type=%s latency_ms=%d model=%s",
+            getattr(tt, "value", tt), (time.monotonic() - t0) * 1000, model,
+        )
+        return response
 
     def test_connection(self) -> bool:
         """Test Gemini API connection."""
