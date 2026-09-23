@@ -10,7 +10,7 @@ import os
 from typing import Optional
 
 from ...providers import LLMFactory
-from ...providers.gemini import _usage_tokens
+from ...providers.gemini import _usage_tokens, vertex_labels
 from .prompts import PDF_TO_MARKDOWN_PROMPT
 from .schemas import PdfOcrResult
 
@@ -70,6 +70,7 @@ async def convert_pdf_to_markdown(
         config = types.GenerateContentConfig(
             temperature=0.1,
             max_output_tokens=32768,
+            labels=vertex_labels(client),  # cobranca, so Vertex (None = sem label)
         )
 
         logger.info(f"[PDF-OCR] Sending {filename} ({len(pdf_bytes)} bytes) to Gemini Vision ({model})")

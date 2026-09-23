@@ -253,6 +253,13 @@ async def call_vision_l1(
             pass
     if seed is not None:
         config_kwargs["seed"] = seed
+    # Labels de cobranca (so Vertex): este caminho monta o config A MAO, entao o que
+    # o `_build_config_params` poe sozinho tem de ser fiado aqui (como o seed acima).
+    from ...providers.gemini import vertex_labels
+
+    labels = vertex_labels(client)
+    if labels:
+        config_kwargs["labels"] = labels
 
     config = types.GenerateContentConfig(**config_kwargs)
 
