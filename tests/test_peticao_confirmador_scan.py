@@ -112,10 +112,17 @@ def test_a_transcricao_e_cortada_na_janela_DECLARADA(client, monkeypatch):
     assert "SEGREDO_ALEM_DA_JANELA" not in fake.chamadas[0]["prompt"]
 
 
-@pytest.mark.parametrize("url,falha", [("gs://b/sumido", False), ("gs://b/2", True)])
-def test_scan_sem_transcricao_segue_no_pool_como_marca(client, monkeypatch, url, falha):
+@pytest.mark.parametrize("url,falha,falhas", [("gs://b/sumido", False, 0),
+                                              ("gs://b/2", True, 1)])
+def test_scan_sem_transcricao_segue_no_pool_como_marca(client, monkeypatch, url, falha, falhas):
     """PDF indisponivel ou Vision quebrado NAO derruba a pergunta: o candidato vai sem
-    conteudo, e o C5 julga os demais."""
+    conteudo, e o C5 julga os demais.
+
+    🚨 E o `usage` diz QUAL das duas falhas foi, porque o caller (`garantis_shared`) trata as
+    duas de jeito oposto: `transcricoes_falhas` conta SO a EXCECAO (transitoria — a abstencao
+    sobre o candidato cego nao pode virar decisao); o PDF ilegivel e do ARQUIVO (a proxima
+    passada daria a mesma marca), e conta-lo re-pagaria o C5 a cada passada pelo mesmo stub.
+    ⛔ MUTANTES: contar o PDF ilegivel como falha; nao contar a excecao."""
     _vision_fake(monkeypatch, falha=falha)
     fake = _mock_provider(monkeypatch, _veredito(1))
     req = _req()
@@ -123,6 +130,47 @@ def test_scan_sem_transcricao_segue_no_pool_como_marca(client, monkeypatch, url,
     resp = client.post(ROTA, json=req)
     assert resp.status_code == 200 and fake.n_chamadas == 1
     assert agent_mod._MARCA_SEM_PDF in fake.chamadas[0]["prompt"]
+    usage = resp.json()["usage"]
+    assert (usage["scans"], usage["transcritos"], usage["transcricoes_falhas"]) == (1, 0, falhas)
+
+
+def test_o_cliente_do_GCS_que_levanta_e_EXCECAO_contada_e_nao_derruba(client, monkeypatch):
+    """O `fetch_pdfs_from_gcs` engole o erro do download, mas o CLIENTE dele pode levantar
+    (credencial, rede): e excecao do caminho, contada — e a pergunta segue.
+    ⛔ MUTANTE: tirar o `try` do fetch (a excecao sobe e a rota inteira vira 500)."""
+    _vision_fake(monkeypatch)
+
+    async def _fetch_quebrado(urls):
+        raise RuntimeError("DefaultCredentialsError")
+
+    monkeypatch.setattr(agent_mod, "fetch_pdfs_from_gcs", _fetch_quebrado)
+    fake = _mock_provider(monkeypatch, _veredito(0))
+    req = _req()
+    req["candidatos"] = [req["candidatos"][0], _scan(2, "gs://b/2")]
+    resp = client.post(ROTA, json=req)
+    assert resp.status_code == 200 and fake.n_chamadas == 1
+    assert resp.json()["usage"]["transcricoes_falhas"] == 1
+
+
+def test_o_usage_conta_scans_transcritos_e_falhas_no_pool_MISTO(client, monkeypatch):
+    """2 scans, 1 lido e 1 com o Vision levantando: `(2, 1, 1)`. ⛔ MUTANTE: `falhas` contando
+    o scan LIDO (a abstencao de todo pool com scan deixaria de valer como decisao)."""
+    chamadas = _vision_fake(monkeypatch)
+
+    async def _call(provider, **kw):
+        chamadas.append(kw)
+        if len(chamadas) == 2:
+            raise RuntimeError("429 RESOURCE_EXHAUSTED")
+        return SimpleNamespace(text="EXCELENTISSIMO transcrito", model=kw["model"],
+                               input_tokens=900, output_tokens=300, cached_tokens=0,
+                               metadata={"cost_usd": 0.0009, "model_variant": "vision"})
+
+    monkeypatch.setattr(agent_mod, "call_vision_l1", _call)
+    _mock_provider(monkeypatch, _veredito(1))
+    usage = client.post(ROTA, json=_pool_misto()).json()["usage"]
+    assert (usage["scans"], usage["transcritos"], usage["transcricoes_falhas"]) == (2, 1, 1)
+    assert usage["cost_usd"] == pytest.approx(0.0001 + 0.0009), \
+        "o custo e o da transcricao que RESPONDEU, a que levantou nao cobrou"
 
 
 def test_inicio_do_pdf_corta_so_o_COMECO():

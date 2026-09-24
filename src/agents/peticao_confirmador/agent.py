@@ -107,39 +107,64 @@ _SEED_TRANSCRICAO = 915
 _MARCA_SEM_PDF = "[documento digitalizado sem texto extraivel; PDF indisponivel]"
 
 
-async def _transcreve_scans(llm_provider, cands: list[dict], head_paginas: int,
-                            model: str) -> tuple[int, list[LLMResponse], list[LLMResponse]]:
+async def _transcreve_scans(llm_provider, cands: list[dict], head_paginas: int, model: str,
+                            ) -> tuple[int, list[LLMResponse], list[LLMResponse], int]:
     """`head` vazio + `gcs_url` -> a transcricao das `head_paginas` primeiras paginas.
 
     1 chamada POR documento, de proposito: com varios PDFs numa chamada so, o modelo casou
     "candidato 3" com "o 3o PDF" (gold scan 15/09). Falha de fetch/corte/Vision vira a marca
-    `_MARCA_SEM_PDF` — o candidato segue no pool, sem conteudo, e o C5 nao o afirma."""
-    async def _um(c: dict) -> LLMResponse | None:
+    `_MARCA_SEM_PDF` — o candidato segue no pool, sem conteudo, e o C5 nao o afirma.
+
+    🚨 As DUAS falhas nao sao a mesma coisa, e o 4o item do retorno e o que as separa pro
+    caller (o `garantis_shared` le `usage.transcricoes_falhas`):
+      · PDF ILEGIVEL (nao baixou, stub de "acesso restrito", HTML servido como .pdf, nao
+        recorta) — e do ARQUIVO, DETERMINISTICO: a proxima passada daria a mesma marca. O C5
+        julgar sem ele e uma decisao valida sobre o que existe. ⚠️ Medido 24/09: as 27 falhas
+        dos 30 dias eram TODAS deste tipo (arquivos de 31-502 B e um XHTML de 9,5 KB no GCS).
+      · EXCECAO do Vision (429/timeout/5xx) ou do cliente do GCS — e do CAMINHO, TRANSITORIA:
+        o C5 julgou com um candidato CEGO que a proxima passada leria. E ela que vai contada,
+        pra o caller NAO gravar essa abstencao como decisao (senao o pre-guard congela o pool
+        para sempre).
+    ⚠️ Limite conhecido: o `fetch_pdfs_from_gcs` engole o erro do DOWNLOAD de cada PDF e
+    devolve lista vazia, entao um download que falhou por rede cai no 1o tipo."""
+    def _excecao(c: dict, exc: Exception) -> tuple[None, bool]:
+        logger.warning("PETICAO_CONFIRMADOR_TRANSCRICAO_FALHOU doc_key=%s tipo=excecao erro=%r",
+                       c.get("doc_key"), exc)
+        c["head"] = _MARCA_SEM_PDF
+        return None, True
+
+    async def _um(c: dict) -> tuple[LLMResponse | None, bool]:
         try:
             baixados = await fetch_pdfs_from_gcs([c["gcs_url"]])
-            corte = inicio_do_pdf(baixados[0], head_paginas) if baixados else None
-            if corte is None:
-                raise ValueError("PDF indisponivel ou nao recortavel")
+        except Exception as exc:   # o cliente do GCS que nem sobe (credencial, rede)
+            return _excecao(c, exc)
+        corte = inicio_do_pdf(baixados[0], head_paginas) if baixados else None
+        if corte is None:
+            logger.warning("PETICAO_CONFIRMADOR_TRANSCRICAO_FALHOU doc_key=%s tipo=pdf_ilegivel"
+                           " erro=%r", c.get("doc_key"),
+                           ValueError("PDF indisponivel ou nao recortavel"))
+            c["head"] = _MARCA_SEM_PDF
+            return None, False
+        try:
             r = await call_vision_l1(llm_provider, model=model, prompt=_TRANSCREVA,
                                      pdf_bytes_list=[corte], temperature=0.0,
                                      thinking_budget=0, max_tokens=_MAX_TOKENS_TRANSCRICAO,
                                      seed=_SEED_TRANSCRICAO)
         except Exception as exc:
-            logger.warning("PETICAO_CONFIRMADOR_TRANSCRICAO_FALHOU doc_key=%s erro=%r",
-                           c.get("doc_key"), exc)
-            c["head"] = _MARCA_SEM_PDF
-            return None
+            return _excecao(c, exc)
         c["head"] = (r.text or "").strip() or _MARCA_SEM_PDF
-        return r
+        return r, False
 
     # ⭐ EM PARALELO (review 15/09): em serie, 4 scans lentos estouravam o timeout do caller, e
     # o retry dele re-pagava todas as transcricoes. Cada uma escreve so no PROPRIO candidato.
     scans = [c for c in cands if not c.get("head") and c.get("gcs_url")]
-    respostas = await asyncio.gather(*(_um(c) for c in scans))
+    saidas = await asyncio.gather(*(_um(c) for c in scans))
+    respostas = [r for r, _ in saidas]
     # `transcritos` conta so o que virou texto — transcricao vazia (bloqueio) e marca, nao leitura.
     return (len(scans),
             [r for r, c in zip(respostas, scans) if r is not None and c["head"] != _MARCA_SEM_PDF],
-            [r for r in respostas if r is not None])
+            [r for r in respostas if r is not None],
+            sum(1 for _, falhou in saidas if falhou))
 
 
 async def confirmar_peticao(
@@ -175,8 +200,8 @@ async def confirmar_peticao(
         model = DEFAULT_MODEL
 
     llm_provider = create_provider(provider)
-    n_scans, transcricoes, pagas = await _transcreve_scans(llm_provider, cands, head_paginas,
-                                                           model)
+    n_scans, transcricoes, pagas, falhas = await _transcreve_scans(llm_provider, cands,
+                                                                   head_paginas, model)
     sistema, usuario = build_confirmador_prompt(proc, cands, head_chars)
 
     # ⛔ `temperature=0.0` + `top_p=1.0` + `top_k=1` sao os parametros MEDIDOS
@@ -209,12 +234,13 @@ async def confirmar_peticao(
     # desta classe e "nao afirmar o que importava", que e invisivel -- por isso a
     # linha sai SEMPRE, inclusive quando o card veio quebrado, e nunca pendurada
     # num `if`. O `doc_key` aparece aqui, e SO aqui: e pra isso que ele vem.
-    # `scans=` quantos vieram sem texto; `transcritos=` quantos o Vision leu.
+    # `scans=` quantos vieram sem texto; `transcritos=` quantos o Vision leu; `falhas=` quantos
+    # nao foram lidos por EXCECAO (ver `_transcreve_scans`).
     escolhido = card_data.get("escolhido") if isinstance(card_data, dict) else None
     logger.info(
-        "PETICAO_CONFIRMADOR escolhido=%s de=%d scans=%d transcritos=%d head_chars=%d"
+        "PETICAO_CONFIRMADOR escolhido=%s de=%d scans=%d transcritos=%d falhas=%d head_chars=%d"
         " doc_key=%s model=%s",
-        escolhido, len(cands), n_scans, len(transcricoes), head_chars,
+        escolhido, len(cands), n_scans, len(transcricoes), falhas, head_chars,
         (cands[escolhido - 1].get("doc_key")
          if isinstance(escolhido, int) and not isinstance(escolhido, bool)
          and 1 <= escolhido <= len(cands) else None),
@@ -235,6 +261,12 @@ async def confirmar_peticao(
             response.metadata.get("model_variant", MODEL_VARIANT_TEXT)
             if response.metadata else MODEL_VARIANT_TEXT
         ),
+        # ⭐ O CONTRATO com o `garantis_shared` (`_confirma_peticao`): `transcricoes_falhas > 0`
+        # ⇒ o veredito NAO vale como decisao (o frame teve candidato CEGO por excecao). ⛔ O PDF
+        # ilegivel NAO entra nela — ver `_transcreve_scans`. Caller antigo ignora as chaves.
+        "scans": n_scans,
+        "transcritos": len(transcricoes),
+        "transcricoes_falhas": falhas,
     }
 
     return {
