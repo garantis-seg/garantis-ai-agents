@@ -70,7 +70,7 @@ class _FakeProvider:
 def test_o_que_cabe_SOBE_e_o_excedente_vira_CONTADOR():
     """⛔ MUTANTE: voltar a rotear pra Files API reprova aqui — `_build_pdf_parts`
     não recebe mais `client`, então não tem como chamar o SDK."""
-    peq1, grande, peq2 = _pdf(2 * _MB), _pdf(6 * _MB), _pdf(_MB)
+    peq1, grande, peq2 = _pdf(2 * _MB), _pdf(14 * _MB), _pdf(_MB)   # 2+14 > 15
     gate: dict = {}
 
     parts = V._build_pdf_parts(gtypes, [peq1, grande, peq2], gate)
@@ -92,7 +92,7 @@ def test_payload_dentro_dos_caps_nao_muda_de_comportamento():
 
 
 def test_o_teto_TOTAL_corta_o_FIM_da_fila_e_conta():
-    """4 x 5MB = 20MB > 15MB. Sem o teto somado, o cap por PDF deixaria passar.
+    """4 x 5MB = 20MB > 15MB: o teto somado e o unico, e corta o 4o.
 
     ⛔ MUTANTE que este teste existe pra pegar: percorrer `reversed(pdf_bytes_list)`
     (e reverter no fim) mantém `len(parts)==3` e `n_nao_enviados_cap==1` — passava
@@ -123,13 +123,26 @@ def test_pdf_unico_acima_do_cap_nao_paga_chamada_nenhuma():
 
     with pytest.raises(ValueError) as exc:
         asyncio.run(V.call_vision_l1(
-            prov, model="m", prompt="p", pdf_bytes_list=[_pdf(6 * _MB)],
+            prov, model="m", prompt="p", pdf_bytes_list=[_pdf(16 * _MB)],
             gate_out=gate,
         ))
 
     assert "VISION_INLINE_CAP_DROP" in str(exc.value)
     assert gate["n_nao_enviados_cap"] == 1
     assert prov._client.chamadas == [], "não pode chamar o Gemini sem PDF nenhum"
+
+
+def test_peticao_escaneada_de_7MB_SOBE_inteira():
+    """O caso que tirou o cap de 5MB POR PDF (25/09, card 869equgwd): 9 peticoes ativas
+    estavam CEGAS so por ele; a de 6,7MB do 50335989620224036100 foi lida inline com
+    ~7k tokens. ⛔ MUTANTE: reintroduzir um teto por PDF abaixo de 7MB reprova aqui."""
+    peticao = _pdf(7 * _MB)
+    gate: dict = {}
+
+    parts = V._build_pdf_parts(gtypes, [peticao], gate)
+
+    assert [p.inline_data.data for p in parts] == [peticao]
+    assert gate["n_nao_enviados_cap"] == 0
 
 
 # ── 3. A fiação até o veredito que a sentinela lê ────────────────────────────
@@ -140,7 +153,7 @@ def test_o_veredito_conta_o_que_SUBIU_nao_o_que_o_gate_aprovou():
     gate: dict = {}
 
     async def _fake_fetch(urls):
-        return [_pdf(2 * _MB), _pdf(6 * _MB)]
+        return [_pdf(2 * _MB), _pdf(14 * _MB)]
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(V, "fetch_pdfs_from_gcs", _fake_fetch)
@@ -206,7 +219,7 @@ def test_o_contador_do_cap_ATRAVESSA_o_fallback_text_only():
     gate: dict = {}
 
     async def _fake_fetch(urls):
-        return [_pdf(6 * _MB)]
+        return [_pdf(16 * _MB)]
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(V, "fetch_pdfs_from_gcs", _fake_fetch)
