@@ -3,8 +3,9 @@ mov_factsheet (day_factsheet usava tambem, ate o teardown 2026-06-13).
 
 Acionado quando flag VISION_L1_ENABLED=true E o caller fornece pelo menos 1
 gcs_url no input. Todo payload sobe INLINE (`types.Blob`), sob dois caps
-(15MB total / 5MB por PDF) que deixam margem pro envelope da request —
-o limite do Gemini é ~20MB por request inline.
+(14MiB total / 5MiB por PDF, com o 1o PDF da fila isento do por-PDF) que deixam
+margem pro envelope — o limite do Gemini é ~20MB por request, e o SDK manda os
+bytes em BASE64 (x4/3). Ver `_build_pdf_parts`.
 
 ⚠️ Até 2026-08-14 o que não cabia nesses caps ia pela Files API
 (`client.aio.files.upload`). Esse ramo está MORTO em prod desde o flip pro
@@ -39,12 +40,18 @@ _GCS_FETCH_SEMAPHORE_LIMIT = 5
 # Cap de PDFs por chamada Gemini Vision — evita estouro de context window.
 _MAX_PDFS_PER_CALL = 20
 
-# Caps do payload inline — deixam margem pro buffer da request envelope.
-# ⚠️ Desde a remoção do ramo Files API eles são o ÚNICO teto: o que passa deles
-# não é lido, é contado. Afrouxá-los é a alavanca mais barata pra recuperar
-# leitura, mas mexe no que vai pro modelo e precisa de medição própria.
-_INLINE_TOTAL_BYTES_CAP = 15 * 1024 * 1024   # 15MB
-_INLINE_PER_PDF_BYTES_CAP = 5 * 1024 * 1024  # 5MB
+# Caps do payload inline. ⚠️ Desde a remoção do ramo Files API eles são o ÚNICO
+# teto: o que passa deles não é lido, é contado.
+# ⭐ O TOTAL e 14MiB, e nao 15: o SDK manda os bytes em BASE64, entao 14MiB viram
+# ~18,7MiB no fio — abaixo dos ~20MB do Gemini com folga pro prompt. 15MiB dava 20MiB
+# exatos (review do ai-agents#227).
+# ⭐ O POR PDF vale so do 2o em diante (25/09, card 869equgwd): 9 peticoes ativas estavam
+# CEGAS porque a PECA — que o materializer poe na frente — passava de 5MB (escaneada:
+# a de 6,7MB/13 paginas do 50335989620224036100 foi lida inline com ~7k tokens). Nos
+# anexos ele fica: sem ele, 1 anexo grande tomaria o orcamento dos pequenos, e um 400
+# vindo dele (PDF sem pagina) cegaria tambem a peca.
+_INLINE_TOTAL_BYTES_CAP = 14 * 1024 * 1024   # 14MiB
+_INLINE_PER_PDF_BYTES_CAP = 5 * 1024 * 1024  # 5MiB, do 2o PDF em diante
 
 # Sanity guard absoluto. PDF >100MB sinaliza bug upstream (GCS read errado).
 # Dropa esse PDF específico mas NÃO bloqueia a Vision call dos restantes.
@@ -161,7 +168,7 @@ async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
 def _build_pdf_parts(
     types, pdf_bytes_list: list[bytes], gate_out: Optional[dict] = None,
 ) -> list[Any]:
-    """Constrói os parts inline. O que não cabe nos caps é DROPADO e CONTADO;
+    """Constrói os parts inline. O que não cabe no cap é DROPADO e CONTADO;
     levanta ValueError só quando NADA cabe (aí não há chamada Vision a fazer).
 
     A seleção é greedy NA ORDEM RECEBIDA de propósito: no ramo de petição o
@@ -170,8 +177,8 @@ def _build_pdf_parts(
     """
     cabem: list[bytes] = []
     total_bytes = 0
-    for b in pdf_bytes_list:
-        if (len(b) > _INLINE_PER_PDF_BYTES_CAP
+    for i, b in enumerate(pdf_bytes_list):
+        if ((i > 0 and len(b) > _INLINE_PER_PDF_BYTES_CAP)
                 or total_bytes + len(b) > _INLINE_TOTAL_BYTES_CAP):
             continue
         cabem.append(b)
@@ -194,7 +201,7 @@ def _build_pdf_parts(
         raise ValueError(
             f"VISION_INLINE_CAP_DROP: os {len(pdf_bytes_list)} PDFs excedem o cap "
             f"inline (maior={max(len(b) for b in pdf_bytes_list)}B, "
-            f"cap_por_pdf={_INLINE_PER_PDF_BYTES_CAP}B)"
+            f"cap_total={_INLINE_TOTAL_BYTES_CAP}B)"
         )
 
     return [

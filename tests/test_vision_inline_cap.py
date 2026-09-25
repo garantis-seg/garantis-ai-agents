@@ -70,7 +70,7 @@ class _FakeProvider:
 def test_o_que_cabe_SOBE_e_o_excedente_vira_CONTADOR():
     """⛔ MUTANTE: voltar a rotear pra Files API reprova aqui — `_build_pdf_parts`
     não recebe mais `client`, então não tem como chamar o SDK."""
-    peq1, grande, peq2 = _pdf(2 * _MB), _pdf(6 * _MB), _pdf(_MB)
+    peq1, grande, peq2 = _pdf(2 * _MB), _pdf(6 * _MB), _pdf(_MB)   # anexo > 5MiB
     gate: dict = {}
 
     parts = V._build_pdf_parts(gtypes, [peq1, grande, peq2], gate)
@@ -92,7 +92,7 @@ def test_payload_dentro_dos_caps_nao_muda_de_comportamento():
 
 
 def test_o_teto_TOTAL_corta_o_FIM_da_fila_e_conta():
-    """4 x 5MB = 20MB > 15MB. Sem o teto somado, o cap por PDF deixaria passar.
+    """4 x 4MiB = 16MiB > 14MiB: o teto somado corta o 4o.
 
     ⛔ MUTANTE que este teste existe pra pegar: percorrer `reversed(pdf_bytes_list)`
     (e reverter no fim) mantém `len(parts)==3` e `n_nao_enviados_cap==1` — passava
@@ -101,7 +101,7 @@ def test_o_teto_TOTAL_corta_o_FIM_da_fila_e_conta():
     3 anexos periféricos, com o card gravado como "lido". Por isso os 4 PDFs são
     do mesmo tamanho e DISTINGUÍVEIS: com blobs idênticos só dá pra contar, e é
     contando que o mutante escapa."""
-    quatro = [_pdf(5 * _MB, marca=m) for m in (b"A", b"B", b"C", b"D")]
+    quatro = [_pdf(4 * _MB, marca=m) for m in (b"A", b"B", b"C", b"D")]
     gate: dict = {}
 
     parts = V._build_pdf_parts(gtypes, quatro, gate)
@@ -123,13 +123,55 @@ def test_pdf_unico_acima_do_cap_nao_paga_chamada_nenhuma():
 
     with pytest.raises(ValueError) as exc:
         asyncio.run(V.call_vision_l1(
-            prov, model="m", prompt="p", pdf_bytes_list=[_pdf(6 * _MB)],
+            prov, model="m", prompt="p", pdf_bytes_list=[_pdf(16 * _MB)],
             gate_out=gate,
         ))
 
     assert "VISION_INLINE_CAP_DROP" in str(exc.value)
     assert gate["n_nao_enviados_cap"] == 1
     assert prov._client.chamadas == [], "não pode chamar o Gemini sem PDF nenhum"
+
+
+def test_peticao_escaneada_de_7MB_SOBE_inteira():
+    """O caso que tirou o cap de 5MB POR PDF (25/09, card 869equgwd): 9 peticoes ativas
+    estavam CEGAS so por ele; a de 6,7MB do 50335989620224036100 foi lida inline com
+    ~7k tokens. ⛔ MUTANTE: reintroduzir um teto por PDF abaixo de 7MB reprova aqui."""
+    peticao = _pdf(7 * _MB)
+    gate: dict = {}
+
+    parts = V._build_pdf_parts(gtypes, [peticao], gate)
+
+    assert [p.inline_data.data for p in parts] == [peticao]
+    assert gate["n_nao_enviados_cap"] == 0
+
+
+def test_a_PECA_vai_ate_o_teto_total_e_nem_1_byte_alem():
+    """⛔ MUTANTE: um teto por PDF de 10 ou 13MB no 1o (review do #227) reprova aqui — a
+    fronteira e o TOTAL, nos dois lados."""
+    no_limite, acima = _pdf(V._INLINE_TOTAL_BYTES_CAP), _pdf(V._INLINE_TOTAL_BYTES_CAP + 1)
+    assert [p.inline_data.data for p in V._build_pdf_parts(gtypes, [no_limite], {})] == [
+        no_limite]
+    gate: dict = {}
+    with pytest.raises(ValueError):
+        V._build_pdf_parts(gtypes, [acima], gate)
+    assert gate["n_nao_enviados_cap"] == 1
+
+
+def test_o_ANEXO_segue_barrado_acima_de_5MiB_mesmo_com_orcamento():
+    """So a peca (o 1o) e isenta. ⛔ MUTANTE: isentar todos deixa o anexo grande tomar o
+    orcamento dos pequenos — e um 400 vindo dele cegaria a peca junto."""
+    peca, anexo_grande, anexo = (_pdf(_MB, marca=b"P"), _pdf(V._INLINE_PER_PDF_BYTES_CAP + 1),
+                                 _pdf(_MB, marca=b"A"))
+    gate: dict = {}
+    parts = V._build_pdf_parts(gtypes, [peca, anexo_grande, anexo], gate)
+    assert [p.inline_data.data for p in parts] == [peca, anexo]
+    assert gate["n_nao_enviados_cap"] == 1
+
+
+def test_o_teto_total_cabe_no_limite_do_Gemini_em_base64():
+    """O SDK manda os bytes em base64 (x4/3). ⛔ MUTANTE: voltar o total a 15MiB da 20MiB
+    no fio antes do prompt — o 400 que o limite de ~20MB do Gemini devolve."""
+    assert V._INLINE_TOTAL_BYTES_CAP * 4 / 3 < 19 * 1024 * 1024
 
 
 # ── 3. A fiação até o veredito que a sentinela lê ────────────────────────────
@@ -140,7 +182,7 @@ def test_o_veredito_conta_o_que_SUBIU_nao_o_que_o_gate_aprovou():
     gate: dict = {}
 
     async def _fake_fetch(urls):
-        return [_pdf(2 * _MB), _pdf(6 * _MB)]
+        return [_pdf(2 * _MB), _pdf(14 * _MB)]
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(V, "fetch_pdfs_from_gcs", _fake_fetch)
@@ -206,7 +248,7 @@ def test_o_contador_do_cap_ATRAVESSA_o_fallback_text_only():
     gate: dict = {}
 
     async def _fake_fetch(urls):
-        return [_pdf(6 * _MB)]
+        return [_pdf(16 * _MB)]
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(V, "fetch_pdfs_from_gcs", _fake_fetch)

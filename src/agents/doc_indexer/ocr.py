@@ -11,7 +11,7 @@ delas.
     call_vision_l1(provider, model=…, prompt=…, pdf_bytes_list=[…])
 
 `vision.py` já resolve o que importa e o RECON-ocr é explícito em mandar reusar:
-roteador **inline vs Files API** por tamanho (15MB total / 5MB por PDF),
+roteador **inline vs Files API** por tamanho (14MiB total / 5MiB por PDF, o 1o isento),
 `types.Blob` com `bytes()` explícito, `_MAX_PDFS_PER_CALL`, `usage_metadata` →
 `cost_usd` no envelope, e — o detalhe que mais importa aqui — **os PDFs ANTES
 do prompt** nas `contents`. A ordem não é estilo: com o PDF depois da
