@@ -177,6 +177,10 @@ async def confirmar_peticao(
     llm_provider = create_provider(provider)
     n_scans, transcricoes, pagas = await _transcreve_scans(llm_provider, cands, head_paginas,
                                                            model)
+    # Os scans que o Vision NAO leu (a marca): o C5 os viu sem conteudo, entao a abstencao nao
+    # diz nada sobre eles. O `garantis_shared` os deixa fora do que o C5 JULGOU.
+    nao_transcritos = [c["doc_key"] for c in cands
+                       if c.get("doc_key") and c.get("head") == _MARCA_SEM_PDF]
     sistema, usuario = build_confirmador_prompt(proc, cands, head_chars)
 
     # ⛔ `temperature=0.0` + `top_p=1.0` + `top_k=1` sao os parametros MEDIDOS
@@ -247,4 +251,5 @@ async def confirmar_peticao(
         "llm_raw_prompt": f"{sistema}\n\n{usuario}",
         "prompt_version": PROMPT_VERSION,
         "usage": usage,
+        "nao_transcritos": nao_transcritos,
     }

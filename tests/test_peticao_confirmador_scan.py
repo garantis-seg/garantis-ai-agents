@@ -100,6 +100,7 @@ def test_scan_vira_TEXTO_e_o_julgamento_e_UMA_chamada_sem_PDF(client, monkeypatc
     assert body["card"]["escolhido"] == 2, "card cru, numeracao do pool"
     assert body["usage"]["cost_usd"] == pytest.approx(0.0001 + 2 * 0.0009)
     assert body["usage"]["model_variant"] == "vision"
+    assert body["nao_transcritos"] == [], "os 2 scans foram lidos"
 
 
 def test_a_transcricao_e_cortada_na_janela_DECLARADA(client, monkeypatch):
@@ -115,7 +116,9 @@ def test_a_transcricao_e_cortada_na_janela_DECLARADA(client, monkeypatch):
 @pytest.mark.parametrize("url,falha", [("gs://b/sumido", False), ("gs://b/2", True)])
 def test_scan_sem_transcricao_segue_no_pool_como_marca(client, monkeypatch, url, falha):
     """PDF indisponivel ou Vision quebrado NAO derruba a pergunta: o candidato vai sem
-    conteudo, e o C5 julga os demais."""
+    conteudo, e o C5 julga os demais. ⛔ MUTANTE: esconder do caller que o scan foi julgado sem
+    conteudo — o `garantis_shared` o daria por JULGADO e o terminal da peticao soltaria um
+    afirmativo que ninguem leu."""
     _vision_fake(monkeypatch, falha=falha)
     fake = _mock_provider(monkeypatch, _veredito(1))
     req = _req()
@@ -123,6 +126,7 @@ def test_scan_sem_transcricao_segue_no_pool_como_marca(client, monkeypatch, url,
     resp = client.post(ROTA, json=req)
     assert resp.status_code == 200 and fake.n_chamadas == 1
     assert agent_mod._MARCA_SEM_PDF in fake.chamadas[0]["prompt"]
+    assert resp.json()["nao_transcritos"] == ["esc-2"], "so o scan sem leitura, nao o texto"
 
 
 def test_inicio_do_pdf_corta_so_o_COMECO():
