@@ -126,8 +126,8 @@ def test_a_capa_com_flag_CHEGA_ao_Gemini_e_sem_flag_nao():
 
 
 def test_par_de_2_elementos_continua_funcionando():
-    """⛔ Mudar a aridade de `docs_text` quebraria o caller `day` e o fallback por
-    `documentos_anexados` — os dois mandam par, e nenhum sabe o que é `so_capa`."""
+    """⛔ Mudar a aridade de `docs_text` quebraria o fallback por
+    `documentos_anexados` — ele manda par, e não sabe o que é `so_capa`."""
     from src.agents.mov_factsheet.agent import classify_mov_factsheet  # noqa: F401
     gate, _ = _roda([("Trata-se de acao anulatoria. " * 30, "gs://b/x.pdf")],
                     _pdf_texto())

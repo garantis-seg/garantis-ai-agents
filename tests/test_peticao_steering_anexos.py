@@ -130,7 +130,7 @@ def test_o_ramo_vision_usa_o_prompt_COM_steering():
 
 
 def test_sem_prompt_vision_o_comportamento_e_o_de_antes():
-    """Caller legado (mov/day) não passa o campo — a rota dele não pode mudar."""
+    """Caller sem steering não passa o campo — a rota dele não pode mudar."""
     vision, _ = _roda(None)
     assert vision == "PROMPT_TEXTO"
 
