@@ -1,5 +1,5 @@
-"""Helper Vision L1 — chamadas multimodais (PDF→Gemini Vision) do
-mov_factsheet (day_factsheet usava tambem, ate o teardown 2026-06-13).
+"""Helper Vision L1 — chamadas multimodais (PDF→Gemini Vision) do mov_factsheet (e do
+ramo petição dele); `fetch_pdfs_from_gcs` também serve o confirmador C5 e o doc_indexer.
 
 Acionado quando flag VISION_L1_ENABLED=true E o caller fornece pelo menos 1
 gcs_url no input. Todo payload sobe INLINE (`types.Blob`), sob dois caps
@@ -7,19 +7,12 @@ gcs_url no input. Todo payload sobe INLINE (`types.Blob`), sob dois caps
 margem pro envelope — o limite do Gemini é ~20MB por request, e o SDK manda os
 bytes em BASE64 (x4/3). Ver `_build_pdf_parts`.
 
-⚠️ Até 2026-08-14 o que não cabia nesses caps ia pela Files API
-(`client.aio.files.upload`). Esse ramo está MORTO em prod desde o flip pro
-Vertex (2026-07-18): o SDK levanta `ValueError('This method is only supported
-in the Gemini Developer client.')` quando `vertexai=True`, e a
-`GEMINI_API_KEY` foi removida em 07/26 — não há configuração deployável hoje
-em que ele funcione. O ValueError acontecia ANTES do `generate_content`, o
-`except` de `call_l1_with_vision_fallback` engolia, e o payload INTEIRO
-degradava pra text-only sem deixar rastro no card: 355 eventos em 30d.
-Agora o excedente é DROPADO e CONTADO (`n_nao_enviados_cap` + log
-`VISION_INLINE_CAP_DROP`). Quem quiser ler o que não cabe precisa de
-`Part.from_uri(gs://)` (bloqueado por IAM/região não resolvidos) ou de
-encolher o PDF por páginas (muda o que o modelo lê) — as duas coisas são
-decisão, não este helper.
+⛔ Não há ramo Files API (`client.aio.files.upload`): com `vertexai=True` o SDK o recusa
+(`ValueError`), e ele degradava o payload INTEIRO pra text-only sem rastro. O que não cabe
+nos caps é DROPADO e CONTADO (`n_nao_enviados_cap` + log `VISION_INLINE_CAP_DROP`). Quem
+quiser ler o excedente precisa de `Part.from_uri(gs://)` (bloqueado por IAM/região não
+resolvidos) ou de encolher o PDF por páginas (muda o que o modelo lê) — as duas coisas
+são decisão, não este helper.
 """
 from __future__ import annotations
 
@@ -96,14 +89,13 @@ async def _fetch_pdf_bytes(storage_client, gcs_url: str) -> Optional[bytes]:
         return None
 
 
-# Stub "acesso restrito" da jusbrasil — byte-idêntico, ~46% dos PDFs baixados num
-# proc trabalhista real (498/1076). LibreOffice 1-pág "Documento não existe ou possui
-# acesso restrito". Vision só devolveria "ilegível", então dropamos ANTES da call →
-# cai no fallback text-only (mais barato) em vez de gastar tokens de PDF.
-# (PDF 0-página/corrompido NÃO entra aqui: é raro e, desde 2026-08-17, quem o
-# resolve é o `ocr_gate._reserializa` — recompõe o PDF antes da call, então o 400
-# do Gemini virou último recurso e não a defesa. Mantém este filtro stdlib-only e
-# trivial de testar.)
+# Stub "acesso restrito" da jusbrasil — byte-idêntico, LibreOffice 1-pág "Documento não
+# existe ou possui acesso restrito" (em proc trabalhista chega a ser metade dos PDFs
+# baixados). Vision só devolveria "ilegível", então dropamos ANTES da call → cai no
+# fallback text-only (mais barato) em vez de gastar tokens de PDF.
+# (PDF 0-página/corrompido NÃO entra aqui: quem o resolve é o `ocr_gate._reserializa` —
+# recompõe o PDF antes da call, então o 400 do Gemini é último recurso e não a defesa.
+# Mantém este filtro stdlib-only e trivial de testar.)
 # ponytail: hash-set de stubs conhecidos; cresce se a jusbrasil trocar o placeholder
 # (sniff pelo texto "acesso restrito" seria o upgrade se virar zoo de variantes).
 _KNOWN_UNREADABLE_PDF_SHA256 = {
@@ -317,7 +309,6 @@ async def call_l1_with_vision_fallback(
     prompt: str,
     gcs_urls: list[str],
     response_schema,
-    vision_flag_name: str = "VISION_L1_ENABLED",
     log_label: str = "",
     thinking_budget: int = 0,
     docs_text: Optional[list[tuple[Optional[str], Optional[str]]]] = None,
@@ -326,10 +317,10 @@ async def call_l1_with_vision_fallback(
     prompt_vision: Optional[str] = None,
     seed: int | None = None,
 ) -> Any:
-    """High-level helper pros agents L1 (mov/day).
+    """High-level helper do L1 (mov_factsheet, inclusive o ramo petição).
 
     Roteia entre Vision e Text:
-    - `vision_flag_name` ON + ≥1 gcs_url + ≥1 PDF fetchável → Vision path
+    - `VISION_L1_ENABLED` ON + ≥1 gcs_url + ≥1 PDF fetchável → Vision path
     - else → `provider.agenerate(prompt, model, ...)` text-only fallback
 
     Caller monta o prompt — esse helper só roteia + fetcha PDFs. Single
@@ -338,8 +329,9 @@ async def call_l1_with_vision_fallback(
     GATE DE OCR (L1 v7): se `docs_text` (lista de (text_content, gcs_url[, so_capa]))
     for passado, aplica o gate por documento (ocr_gate.precisa_vision) — só os docs com
     texto-lixo OU página-imagem vão pro Vision; os demais ficam no texto do prompt.
-    Sem `docs_text` (callers legados como day), mantém o comportamento atual (todos
-    os gcs_urls fetchados vão pro Vision). Fallback seguro em qualquer falha do gate.
+    Sem `docs_text`, todo gcs_url baixado vai pro Vision, sem gate — o caller de produção
+    sempre manda `docs_text` junto com `gcs_urls`; a forma sem gate é a que os testes do
+    ramo Vision usam. Fallback seguro em qualquer falha do gate.
 
     O 3º elemento `so_capa` (opcional, default False) diz que o caller JÁ identificou
     a peça e que o texto extraído é a CAPA dela — o doc fura o piso de teor e o ramo
@@ -365,7 +357,7 @@ async def call_l1_with_vision_fallback(
     monta sabendo que PODE haver anexo, e este helper decide se ele vale. Existe
     porque o gate só sabe se há PDF DEPOIS de baixar e julgar, e o prompt é montado
     ANTES: sem isto, ou o steering dos anexos entraria em toda chamada (mentindo no
-    caminho texto, 99,7% do volume) ou o helper teria que remontar prompt, o que é
+    caminho texto, o grosso do volume) ou o helper teria que remontar prompt, o que é
     conhecimento do agent. Ausente ⇒ `prompt` nos dois ramos, como sempre.
     ⚠️ O fallback text-only usa SEMPRE `prompt`: se a Vision call falhar, não há
     anexo nenhum na chamada e o steering viraria instrução sobre PDF inexistente.
@@ -381,7 +373,7 @@ async def call_l1_with_vision_fallback(
                          "n_nao_enviados_cap": 0, "motivo": None})
     pdf_bytes_list: list[bytes] = []
     motivos: list[str] = []
-    if gcs_urls and flag_enabled(vision_flag_name):
+    if gcs_urls and flag_enabled("VISION_L1_ENABLED"):
         if docs_text:
             # GATE por documento: baixa e filtra só os que o gate aprova.
             from .ocr_gate import precisa_vision, texto_decide_sozinho
@@ -397,7 +389,7 @@ async def call_l1_with_vision_fallback(
                 if len(pdf_bytes_list) >= _MAX_PDFS_PER_CALL:
                     # O cap de `fetch_pdfs_from_gcs` NÃO alcança este ramo: aqui o
                     # fetch é 1 URL por vez, então a lista cresceria sem teto (o
-                    # conjunto multi-doc da petição vai até 25). Corta aqui.
+                    # conjunto multi-doc da petição passa de 20). Corta aqui.
                     # WARNING, não info: no ramo de petição os documentos chegam
                     # com a PETIÇÃO NA FRENTE (o materializer ordena assim de
                     # propósito), então bater este cap significa que sobrou parte de
@@ -409,19 +401,17 @@ async def call_l1_with_vision_fallback(
                         " restantes ficam no texto",
                     )
                     break
-                # route-by-has_text (núcleo OCR per-doc 2026-06-13): doc com texto
-                # USÁVEL fica no texto do prompt SEM baixar o PDF — o ingest já extraiu
-                # o text-layer (born-digital). Só doc-imagem/texto-lixo (vazio ou
-                # garbage) baixa + passa pelo gate. Assim o custo do Vision ON é ∝ nº de
-                # docs-imagem (~5%), não ao total de docs (antes baixava TODOS pra gate).
-                # ⚠️ O teste era `not texto_lixo(...)`, e isso deixava o Sinal 1 (área de
-                # imagem) INALCANÇÁVEL justamente pro caso que ele foi escrito pra pegar:
-                # scan cujo único texto é o carimbo do PJe / rodapé do ESAJ — limpo pro
-                # rmgarbage, e com a peça presa na imagem. 8.597 docs assim em prod
-                # (2026-08-10). `texto_decide_sozinho` soma o piso de TEOR.
+                # route-by-has_text: doc com texto USÁVEL fica no texto do prompt SEM
+                # baixar o PDF — o ingest já extraiu o text-layer (born-digital). Só
+                # doc-imagem/texto-lixo (vazio ou garbage) baixa + passa pelo gate. Assim o
+                # custo do Vision ON é ∝ nº de docs-imagem, não ao total de docs.
+                # ⚠️ `not texto_lixo(...)` sozinho deixaria o Sinal 1 (área de imagem)
+                # INALCANÇÁVEL justamente pro caso que ele foi escrito pra pegar: scan cujo
+                # único texto é o carimbo do PJe / rodapé do ESAJ — limpo pro rmgarbage, e
+                # com a peça presa na imagem. `texto_decide_sozinho` soma o piso de TEOR.
                 # ⛔ `so_capa` FURA este corte, e sem isso a regra da peça-identificada
-                # é NO-OP: o cohort dela tem 403-1.995 chars de teor (medido em prod
-                # 2026-08-25), passa folgado no piso de 400 e o PDF nem seria baixado.
+                # é NO-OP: o cohort dela tem teor de capa (entre o piso de 400 e 2.000
+                # chars), passa folgado no piso e o PDF nem seria baixado.
                 # O piso pergunta "dá pra confiar no texto?"; quando o caller já sabe
                 # que o texto é a CAPA de uma peça que ele identificou pelo TÍTULO, a
                 # resposta veio de fora e não é o tamanho que a dá.
@@ -457,12 +447,12 @@ async def call_l1_with_vision_fallback(
 
     if pdf_bytes_list:
         # ⭐ O POR QUE, no unico lugar que TODO caller alcanca — o `gate_out` e devolvido
-        # "pro caller PERSISTIR" e so o materializer de PETICAO persiste (o do mov tem 0
-        # ocorrencias de `vision_gate`). Contexto e numeros: card 869eqbpyk.
+        # "pro caller PERSISTIR" e so o materializer de PETICAO persiste (o do mov nao
+        # grava `vision_gate`). Contexto: card 869eqbpyk.
         # ⛔ Log, nao coluna: `mov_factsheet` nao tem JSONB e a pergunta e DIAGNOSTICA —
         # coluna custaria migration + bump de pin em 2 repos por um dado que 30 dias de
         # retencao respondem. Historico maior que isso, ai sim vira coluna.
-        # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (zero neste projeto desde 12/08).
+        # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (devolve zero neste projeto).
         logger.info(
             "[VisionL1] GATE %s: enviando %d de %d docs · motivo=%s",
             log_label or "-", len(pdf_bytes_list),
@@ -496,9 +486,9 @@ async def call_l1_with_vision_fallback(
             # Guard: Gemini 400 (ex: "document has no pages" em PDF corrompido) ou
             # qualquer falha da Vision call NÃO pode derrubar a cascade — cai no
             # text-only abaixo. ponytail: fallback existente cobre; sem reraise.
-            # ⛔ Degradar é o certo; degradar MUDO é o defeito. Até 2026-08-17 este
-            # ramo não tocava o `gate_out`: o card saía com `n_enviados=0` e
-            # `errors=0`, indistinguível de "o gate não aprovou nada".
+            # ⛔ Degradar é o certo; degradar MUDO é o defeito: sem o carimbo no
+            # `gate_out`, o card sairia com `n_enviados=0` e `errors=0`, indistinguível
+            # de "o gate não aprovou nada".
             if gate_out is not None:
                 gate_out["n_falha_vision"] = len(pdf_bytes_list)
                 gate_out["erro_vision"] = f"{type(exc).__name__}: {exc}"[:300]
@@ -508,7 +498,7 @@ async def call_l1_with_vision_fallback(
                 log_label, len(pdf_bytes_list),
                 (gate_out or {}).get("n_nao_enviados_cap"), exc,
             )
-    elif gcs_urls and flag_enabled(vision_flag_name):
+    elif gcs_urls and flag_enabled("VISION_L1_ENABLED"):
         logger.warning(
             f"[VisionL1] {log_label}: flag ON mas 0 PDFs fetchados; fallback pra text-only",
         )

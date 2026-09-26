@@ -152,7 +152,7 @@ def test_cap_de_pdfs_por_chamada_vale_no_gate_per_doc():
 
 
 def test_sem_gate_out_o_comportamento_e_o_de_antes():
-    """`gate_out` é opcional — caller legado (o path de mov/day) não passa nada."""
+    """`gate_out` é opcional — caller que não persiste o veredito não passa nada."""
     vetor = _pdf_vetor()
     enviados: list[bytes] = []
 
