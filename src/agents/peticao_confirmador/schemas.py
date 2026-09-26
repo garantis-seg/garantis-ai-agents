@@ -172,3 +172,8 @@ class ConfirmadorResponse(BaseModel):
     llm_raw_prompt: Optional[str] = None
     prompt_version: Optional[str] = None
     usage: Optional[dict[str, Any]] = None
+    nao_transcritos: list[str] = Field(
+        default_factory=list,
+        description=("`doc_key` dos candidatos SCAN que o Vision nao transcreveu (PDF indisponivel "
+                     "ou erro): foram julgados SEM conteudo. ⭐ Aditivo: caller antigo ignora."),
+    )

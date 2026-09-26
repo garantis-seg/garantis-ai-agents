@@ -151,6 +151,7 @@ async def confirmar_peticao_endpoint(request: ConfirmadorRequest):
             llm_raw_prompt=result.get("llm_raw_prompt"),
             prompt_version=result.get("prompt_version"),
             usage=result.get("usage", {}),
+            nao_transcritos=result.get("nao_transcritos") or [],
         )
     except HTTPException:
         raise
