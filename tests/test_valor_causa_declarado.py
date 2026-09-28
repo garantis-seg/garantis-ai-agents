@@ -9,10 +9,12 @@ garantis-shared (`peticao_sink.valor_causa_ok`). Aqui trava-se o que dá pra tra
     e o 1X, e campo que a prompt não explica, sob constrained decoding, é pior que campo
     ausente;
   · o 1X, que lê QUALQUER documento, restringe o campo à petição inicial;
-  · os 2 campos são OPCIONAIS: o card cacheado de antes deles continua válido.
+  · os 2 campos são OPCIONAIS: o card cacheado de antes deles continua válido;
+  · a peça CHUNKADA (>180k) não perde o par no `reduce_peca_cards`.
 """
 import pytest
 
+from src.agents.mov_factsheet.chunking import reduce_peca_cards
 from src.agents.mov_factsheet.prompts_v4 import (
     _build_doc_incerto_prompt_v4,
     build_mov_factsheet_prompt_v4,
@@ -61,3 +63,18 @@ def test_os_campos_sao_OPCIONAIS_e_o_card_antigo_segue_valido():
     for campo in ("valor_causa_declarado", "valor_causa_evidencia"):
         f = PeticaoExtractCardV4.model_fields[campo]
         assert not f.is_required() and f.default is None
+
+
+def test_a_peca_CHUNKADA_leva_o_par_do_ULTIMO_chunk_que_declarou():
+    """⛔ MUTANTE: tirar o par do `reduce_peca_cards` — review adversarial de 28/09.
+
+    O reduce monta o card com lista FECHADA de campos, e já tinha perdido os admin refs assim
+    (medido 2026-08-05). A declaração mora no FIM da peça, e a emenda vem depois da inicial."""
+    base = {"cdas": [], "processos_citados": [], "tipo_doc": "peticao_inicial"}
+    out = reduce_peca_cards([
+        {**base, "valor_causa_declarado": 125000.0, "valor_causa_evidencia": "da inicial"},
+        dict(base),
+        {**base, "valor_causa_declarado": 5782831.97, "valor_causa_evidencia": "da emenda"},
+    ])
+    assert (out["valor_causa_declarado"], out["valor_causa_evidencia"]) == (5782831.97, "da emenda")
+    assert reduce_peca_cards([dict(base), dict(base)])["valor_causa_declarado"] is None

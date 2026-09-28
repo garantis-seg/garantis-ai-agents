@@ -74,7 +74,8 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
       relevancia = max; tipo_doc = do chunk mais relevante (evita 'outros');
       decisao = chunk com sinal mais forte (transito > natureza > tem_decisao);
       evento_garantia = 1o chunk com evento != nenhum; valores = max não-null/campo;
-      resumo = concat não-ruido (dedup); cdas/citados = union.
+      resumo = concat não-ruido (dedup); cdas/citados = union;
+      valor_causa_declarado/evidencia = o PAR do último chunk que declarou.
     Derivados (categoria/status/...) NÃO são reduzidos — re-derive no caller.
     """
     assert cards, "reduce sem cards"
@@ -136,4 +137,12 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
         out["processos_administrativos_citados"] = _union(
             cards, "processos_administrativos_citados", "numero",
         )
+        # 869f4gupy (2026-09-28): o MESMO furo do bloco acima, pego na review adversarial antes
+        # do merge — sem estas linhas a peça chunkada perde o valor da causa em SILÊNCIO, e a
+        # declaração mora justamente no FIM da peça (último chunk). O par sai de UM chunk só, o
+        # ÚLTIMO que declarou: o conjunto chega em ordem cronológica (a emenda depois da
+        # inicial), e a evidência tem de ser do mesmo trecho que o valor.
+        vc = next((c for c in reversed(cards) if c.get("valor_causa_declarado") is not None), {})
+        out["valor_causa_declarado"] = vc.get("valor_causa_declarado")
+        out["valor_causa_evidencia"] = vc.get("valor_causa_evidencia")
     return out
