@@ -426,6 +426,12 @@ PARTE 1 — FactSheet da peça (campos do card):
 - evento_garantia: SÓ se a petição OFERECE garantia (seguro garantia/fiança/depósito) —
   tipo='apresentacao' + subtipo. Senão 'nenhum'.
 - valores: valor_debito_executado/valor_garantia quando explícitos.
+- valor_causa_declarado: o VALOR DA CAUSA que a própria petição DECLARA ('Dá-se à causa o
+  valor de R$ X', 'Valor da causa: R$ X'). Se uma EMENDA o retifica, use o da EMENDA. É o
+  valor atribuído à CAUSA — NÃO o débito executado, NÃO a garantia, NÃO o valor de uma CDA.
+  Quando preencher, copie em `valor_causa_evidencia` o trecho LITERAL (~120 chars) onde o
+  valor é declarado, com o número como está escrito — valor sem esse trecho é DESCARTADO
+  pela integração. Se a peça não declara, os dois null.
 
 PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
 - cdas[]: TODOS os números de CDA/inscrição em dívida ativa que ESTE processo executa ou
@@ -566,6 +572,11 @@ PARTE 1 — CLASSIFICAR e produzir o FactSheet:
 - evento_garantia: SÓ se o documento OFERECE/JUNTA garantia (seguro garantia/fiança/
   depósito) — tipo + subtipo. Senão 'nenhum'.
 - valores: valor_debito_executado/valor_garantia quando explícitos.
+- valor_causa_declarado: SÓ se o documento for a PETIÇÃO INICIAL (ou a emenda dela) e
+  DECLARAR o valor da causa ('Dá-se à causa o valor de R$ X'); havendo emenda, o da EMENDA.
+  Em QUALQUER outro tipo, null — sentença e decisão CITAM o valor da causa, não o declaram.
+  Quando preencher, copie em `valor_causa_evidencia` o trecho LITERAL (~120 chars), com o
+  número como está escrito — sem ele o valor é DESCARTADO pela integração.
 
 PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
 - cdas[]: TODOS os números de CDA/inscrição em dívida ativa que ESTE processo executa ou
