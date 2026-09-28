@@ -461,6 +461,14 @@ class MovFactSheetCardV4(BaseModel):
 # COMPARTILHADO, entao os 2 campos novos chegam no ramo 1X querendo ou nao, e campo que o
 # prompt nao explica sob constrained decoding e pior que campo ausente. As DUAS prompts
 # (`prompts_v4.py`, blocos admin do 1P e do 1X) e as DUAS versoes mudam no mesmo PR.
+# 2026-09-28 (card 869f4gupy, decisao do Elton): `valor_causa_declarado` +
+# `valor_causa_evidencia` no schema e nas DUAS prompts — e ⛔ SEM bump de nenhuma das 2
+# versoes, DE PROPOSITO. O bump ARMA a onda do `reextract_stale` (~3 mil pns relidos, e o
+# SWAP-POR-PN do sink mexe no grafo de conexos), e o consumidor so precisa das SEMENTES sem
+# valor, que vao por releitura DIRIGIDA (`force_reextract` no `/materialize-peticao`).
+# O card continua IDENTIFICAVEL sem o bump: as 2 chaves so existem em card deste schema, e
+# nenhuma instrucao dos campos antigos mudou. Card sem elas = "nao medido", nunca "a peca
+# nao declara". O proximo bump, por outra razao, popula o acervo de graca.
 
 
 class CdaPeticao(BaseModel):
@@ -601,5 +609,24 @@ class PeticaoExtractCardV4(MovFactSheetCardV4):
             "Confiança na EXTRAÇÃO dos conectores (0-1): texto limpo e citações claras "
             "= alta; OCR ruidoso/citações ambíguas = baixa. (Escopo: só cdas/processos_"
             "citados — não os demais campos do card.)"
+        ),
+    )
+    # 869f4gupy (2026-09-28): consumidos por NOME de chave no sink do garantis-shared
+    # (`peticao_sink.valor_causa_ok`) — renomear aqui cala o ramo lá sem erro nenhum.
+    valor_causa_declarado: Optional[float] = Field(
+        default=None,
+        description=(
+            "VALOR DA CAUSA que a própria petição DECLARA ('Dá-se à causa o valor de R$ X', "
+            "'Valor da causa: R$ X'). Se uma EMENDA o retifica, o da EMENDA. É o valor "
+            "atribuído à CAUSA — não o débito executado, não a garantia, não o valor de "
+            "uma CDA. null se a peça não declara."
+        ),
+    )
+    valor_causa_evidencia: Optional[str] = Field(
+        default=None,
+        description=(
+            "Snippet ~120 chars copiado LITERALMENTE do texto onde o valor da causa é "
+            "declarado, com o número como está escrito. Obrigatório sempre que "
+            "`valor_causa_declarado` for preenchido. null quando ele for null."
         ),
     )
