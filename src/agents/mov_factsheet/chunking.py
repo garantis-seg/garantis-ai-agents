@@ -19,6 +19,10 @@ from __future__ import annotations
 # FICAM aqui. Re-export (alias redundante = re-export intencional, ruff não dropa) pra
 # callers/tests existentes seguirem importando daqui: _split_text é usado internamente,
 # sum_usage é só re-export.
+from garantis_shared.engine_v6.persistence.peticao_contract import (
+    CHAVE_PAPEL_ADMIN,
+    resolve_admin_papel,
+)
 from garantis_shared.llm_chunking import split_text as _split_text
 from garantis_shared.llm_chunking import sum_usage as sum_usage
 
@@ -67,6 +71,30 @@ def _union(cards: list[dict], field: str, key: str) -> list[dict]:
     return out
 
 
+def _union_admin(cards: list[dict]) -> list[dict]:
+    """O `_union` dos PAs citados, com o PAPEL consolidado sobre TODOS os chunks (869fay0p0).
+
+    O `_union` guarda o item do 1º chunk que trouxe o número, e o papel iria junto: chunk 1
+    `precedente` + chunk 2 `discutido` do MESMO número dava `precedente` — o PA sairia do
+    conexo por depender de onde o corte caiu. O papel é o do CONJUNTO das menções, pela regra
+    ÚNICA do contrato (`resolve_admin_papel`, o mais inclusivo vence), a mesma que o sink
+    aplica dentro de uma leitura. O resto do item (tipo/uf/contexto/par) segue o do 1º chunk,
+    como antes.
+    ⚠️ Só sobrescreve quando há claim válida: sem nenhuma, o item fica como veio — e um papel
+    fora do domínio continua chegando ao sink, que conta o drift."""
+    papeis: dict = {}
+    for c in cards:
+        for item in (c.get("processos_administrativos_citados") or []):
+            k = (item or {}).get("numero")
+            if k:
+                papeis.setdefault(k, []).append(item.get(CHAVE_PAPEL_ADMIN))
+    out = []
+    for item in _union(cards, "processos_administrativos_citados", "numero"):
+        papel = resolve_admin_papel(papeis.get(item.get("numero"), ()))
+        out.append({**item, CHAVE_PAPEL_ADMIN: papel} if papel is not None else item)
+    return out
+
+
 def reduce_peca_cards(cards: list[dict]) -> dict:
     """Combina N cards (built MovFactSheetCardV4 dicts) de chunks de UM doc → 1 card base.
 
@@ -75,6 +103,7 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
       decisao = chunk com sinal mais forte (transito > natureza > tem_decisao);
       evento_garantia = 1o chunk com evento != nenhum; valores = max não-null/campo;
       resumo = concat não-ruido (dedup); cdas/citados = union;
+      admin citados = union com o PAPEL consolidado sobre os chunks (`_union_admin`);
       valor_causa_declarado/evidencia = o PAR do último chunk que declarou.
     Derivados (categoria/status/...) NÃO são reduzidos — re-derive no caller.
     """
@@ -134,9 +163,8 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
         # normal, referência faltando. Medido em prod 2026-08-05: das 10 petições
         # giants (>180k) com card ativo, 0% tem admin_item, contra 46,1% das 466
         # não-giants; as CDAs sobrevivem (34%) justamente porque já estavam no union.
-        out["processos_administrativos_citados"] = _union(
-            cards, "processos_administrativos_citados", "numero",
-        )
+        # 869fay0p0: com o PAPEL de cada PA consolidado sobre os chunks — ver `_union_admin`.
+        out["processos_administrativos_citados"] = _union_admin(cards)
         # 869f4gupy (2026-09-28): o MESMO furo do bloco acima, pego na review adversarial antes
         # do merge — sem estas linhas a peça chunkada perde o valor da causa em SILÊNCIO, e a
         # declaração mora justamente no FIM da peça (último chunk). O par sai de UM chunk só, o

@@ -469,6 +469,23 @@ class MovFactSheetCardV4(BaseModel):
 # O card continua IDENTIFICAVEL sem o bump: as 2 chaves so existem em card deste schema, e
 # nenhuma instrucao dos campos antigos mudou. Card sem elas = "nao medido", nunca "a peca
 # nao declara". O proximo bump, por outra razao, popula o acervo de graca.
+# 2026-10-02 (card 869fay0p0): `papel` no `ProcessoAdminCitado` (discutido/precedente/
+# incerto) + instrucao nas DUAS prompts, e ⛔ SEM bump de nenhuma das 2 versoes, pelo MESMO
+# motivo do 869f4gupy acima. Card sem a chave = "nao medido" e segue virando vizinho, como
+# hoje; o estoque so ganha papel por releitura DIRIGIDA (`force_reextract`) — o sink do
+# shared refresca a aresta que ja existia.
+# ⚠️ DIFERENTE do 869f4gupy em UM ponto, e ele e o preco aceito do sem-bump: a regra "numero
+# de ACORDAO nao e numero de PA" (2 de 12 amostras gravaram o acordao como PA) muda o que
+# entra num campo ANTIGO (`processos_administrativos_citados`). O card novo segue
+# identificavel pela chave `papel` nos itens admin — mas card SEM item admin nao separa
+# "antes" de "depois". Ninguem le essa diferenca hoje; se alguem passar a ler, e o caso de
+# bumpar (e o bump arma a onda).
+# ⛔ E o ESTOQUE gravado como numero de acordao NAO se corrige por releitura: o prompt novo nao
+# re-emite o numero (o sink nunca mais toca aquela referencia) e a releitura na MESMA versao
+# nao faz swap — ela fica "nao medida" = vizinho, ponte possivel. Desanexar a mao volta no
+# proximo resolve (anexo de orfao e livre). A limpeza e a do recibo da Receita (fe-api, mig
+# `20260814_2200`): DELETE da membership E da referencia, com backup `zz_`; o cinto `rejected`
+# sozinho nao segura (e direcional, pelo merito da semente).
 
 
 class CdaPeticao(BaseModel):
@@ -525,6 +542,12 @@ class ProcessoAdminCitado(BaseModel):
     (53,5%) estão fora da própria máscara AIIM e 98 em tribunal estadual de OUTRO estado.
     ⛔ E não se cria rótulo por estado (`tit_mg`, ...): a lista de 9 `item_type` é
     contrato com o parceiro (decisão Elton). O estado é ATRIBUTO, não rótulo.
+
+    ⚠️ Nem todo PA citado é conector da disputa (card 869fay0p0, 2026-10-02): o acórdão do
+    CARF/CSRF/TIT citado como PRECEDENTE é jurisprudência — o caso que abriu isto foi o PA
+    de outro contribuinte que virou membro da Grendene e ponte de fusão com a WestRock. Por
+    isso o `papel` abaixo: o sink do shared grava todos, e o gather do conexo (fe-api)
+    deixa de fora os de `peticao_contract.PAPEIS_ADMIN_NAO_VIZINHO`. Ausente = não medido.
     """
 
     numero: str = Field(description="Número LITERAL do processo administrativo como aparece no texto.")
@@ -577,6 +600,28 @@ class ProcessoAdminCitado(BaseModel):
             "Quando o texto apresenta o PAR 'Processo Administrativo nº X (AIIM nº Y)', o "
             "número LITERAL do OUTRO item do par. Emita os DOIS como itens separados, cada "
             "um com par_numero apontando pro outro. null quando o número aparece sozinho."
+        ),
+    )
+    # 869fay0p0 (2026-10-02): consumido por NOME de chave no sink do garantis-shared
+    # (`peticao_sink._papel_por_numero`) e cruzado com o contrato em
+    # `tests/test_enum_contrato_sink.py`. Optional e default None DE PROPÓSITO: None = "não
+    # medido", o mesmo que o card de antes do campo é — e segue virando vizinho, como hoje.
+    # ⚠️ ÚLTIMO campo de propósito: a ordem dos campos é a ordem da saída sob constrained
+    # decoding, então os campos antigos saem como antes e o papel é decidido DEPOIS do
+    # `contexto` que o audita.
+    papel: Optional[Literal["discutido", "precedente", "incerto"]] = Field(
+        default=None,
+        description=(
+            "O PAPEL deste processo administrativo NESTA ação, pelo CONTEXTO da citação. "
+            "'discutido'=o PA que esta ação discute ou de que depende (o auto de infração/"
+            "lançamento impugnado, a compensação/PER-DCOMP, o pedido de restituição/crédito, "
+            "a cobrança da CDA executada), inclusive quando a peça cita o acórdão proferido "
+            "NESSE PA. 'precedente'=PA citado como JURISPRUDÊNCIA: a decisão de OUTRO processo "
+            "trazida pra sustentar a tese, em geral de outro contribuinte — SÓ com assinatura "
+            "de jurisprudência na citação (Acórdão nº, Relator/Conselheiro, ementa, Turma/"
+            "Câmara, sessão de julgamento). 'incerto'=sem ligação explícita com esta ação e "
+            "sem essa assinatura, ou o texto não deixa dizer — nunca 'precedente' por falta de "
+            "sinal. null só se não houver contexto nenhum."
         ),
     )
 

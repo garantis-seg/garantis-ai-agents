@@ -29,8 +29,12 @@ from garantis_shared.engine_v6.layer1_policy_factsheet.gatekeeper_contract impor
 )
 from garantis_shared.engine_v6.persistence.peticao_contract import (
     ADMIN_TIPO_TO_NO,
+    CHAVE_PAPEL_ADMIN,
     ENTE_TO_CDA,
+    PAPEIS_ADMIN,
+    PAPEIS_ADMIN_NAO_VIZINHO,
     PAPEIS_ARESTA,
+    resolve_admin_papel,
 )
 
 from src.agents.mov_factsheet.schemas import CDABlock          # v3.1 — ramo ainda vivo
@@ -199,6 +203,48 @@ def test_papel_da_aresta_e_exclusao_NOMEADA_nao_esquecimento():
         f"papel novo no miner: {sorted(enum - PAPEIS_ARESTA - fora_por_design)}. Decida "
         "explicitamente se ele vira aresta (PAPEIS_ARESTA) ou entra nesta lista."
     )
+
+
+def test_papel_do_admin_cobertura_total_e_exclusao_NOMEADA():
+    """O QUINTO enum (card 869fay0p0, 2026-10-02) — o `papel` do PA citado.
+
+    Polaridade INVERTIDA em relação ao `papel` do judicial, e de propósito (o porquê mora
+    no shared, ao lado de `PAPEIS_ADMIN_NAO_VIZINHO`): aqui a lista diz quem NÃO vira
+    vizinho, porque todo admin citado sempre virou membro e o estoque não tem papel.
+    Três travas, cada uma pra um esquecimento diferente:
+      · enum == PAPEIS_ADMIN — valor novo no miner que o sink não conhece cai no
+        `admin_papel_nao_mapeado` e NÃO vota (a citação segue "não medida");
+      · quem fica DE FORA do conexo é nomeado aqui — papel novo não entra mudo na
+        exclusão, nem sai dela;
+      · quem FICA também é nomeado — se o `precedente` saísse da exclusão, ou um papel
+        novo entrasse no enum sem decisão, a assercão de baixo reprova.
+    O campo é lido pela CHAVE do contrato (`CHAVE_PAPEL_ADMIN`), a mesma que o sink lê no
+    card: renomear o campo aqui sem mexer lá vira KeyError, não um sink mudo."""
+    enum = _enum_values(ProcessoAdminCitado, CHAVE_PAPEL_ADMIN)
+    fica_por_design = {"discutido", "incerto"}
+
+    assert enum == set(PAPEIS_ADMIN), (
+        f"miner x contrato divergem: so no miner {sorted(enum - set(PAPEIS_ADMIN))}, "
+        f"so no contrato {sorted(set(PAPEIS_ADMIN) - enum)}. Papel que o contrato não "
+        "conhece NÃO VOTA no sink — decida e ponha em PAPEIS_ADMIN (garantis-shared)."
+    )
+    assert PAPEIS_ADMIN_NAO_VIZINHO == {"precedente"}
+    assert enum - PAPEIS_ADMIN_NAO_VIZINHO == fica_por_design, (
+        f"papel novo no miner: {sorted(enum - PAPEIS_ADMIN_NAO_VIZINHO - fica_por_design)}. "
+        "Decida explicitamente se ele vira vizinho (entra nesta lista) ou não "
+        "(PAPEIS_ADMIN_NAO_VIZINHO)."
+    )
+
+
+def test_o_DEFAULT_do_papel_e_NAO_MEDIDO():
+    """⛔ MUTANTE: dar default afirmativo ao `papel` (`'discutido'` ou `'precedente'`).
+
+    O card de antes do campo não tem papel e segue virando vizinho, como hoje; o default
+    do miner tem de ser o MESMO estado — "não medido" —, senão omissão e afirmação gravam
+    o mesmo byte (a lição do `paf` default, logo acima)."""
+    padrao = ProcessoAdminCitado(numero="10680.015558/2002-10").papel
+    assert padrao is None
+    assert resolve_admin_papel([padrao]) is None
 
 
 def test_evento_da_garantia_e_exclusao_NOMEADA_nao_esquecimento():

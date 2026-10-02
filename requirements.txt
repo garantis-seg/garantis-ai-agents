@@ -96,7 +96,13 @@ pypdf>=4.0.0
 # `_familia_key` passou a depender. Versao lida do LOG do build de publish
 # (`[version] computed 1.537.0`, build 9486e455), nao do `versions list`.
 # ⚠️ Bump ATOMICO com o codigo deste PR: sem a wheel nova o `prompts_v4.py` nem importa.
-garantis-shared==1.697.0
+# 1.705.0 (2026-10-02, card 869fay0p0): traz `peticao_contract.PAPEIS_ADMIN`,
+# `PAPEIS_ADMIN_NAO_VIZINHO`, `CHAVE_PAPEL_ADMIN` e `resolve_admin_papel`, sem os quais o
+# `chunking.py` e o `tests/test_enum_contrato_sink.py` nem importam. Versao lida do LOG do
+# build de publish (`[version] computed 1.705.0`, build cab6f02c), nao do `versions list`.
+# Wheel verificada por CONTEUDO (as 4 existem em `peticao_contract.py`).
+# ⚠️ Bump ATOMICO com o `papel` do `ProcessoAdminCitado` deste PR.
+garantis-shared==1.705.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
