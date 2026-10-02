@@ -480,6 +480,12 @@ class MovFactSheetCardV4(BaseModel):
 # identificavel pela chave `papel` nos itens admin — mas card SEM item admin nao separa
 # "antes" de "depois". Ninguem le essa diferenca hoje; se alguem passar a ler, e o caso de
 # bumpar (e o bump arma a onda).
+# ⛔ E o ESTOQUE gravado como numero de acordao NAO se corrige por releitura: o prompt novo nao
+# re-emite o numero (o sink nunca mais toca aquela referencia) e a releitura na MESMA versao
+# nao faz swap — ela fica "nao medida" = vizinho, ponte possivel. Desanexar a mao volta no
+# proximo resolve (anexo de orfao e livre). A limpeza e a do recibo da Receita (fe-api, mig
+# `20260814_2200`): DELETE da membership E da referencia, com backup `zz_`; o cinto `rejected`
+# sozinho nao segura (e direcional, pelo merito da semente).
 
 
 class CdaPeticao(BaseModel):
@@ -611,9 +617,11 @@ class ProcessoAdminCitado(BaseModel):
             "lançamento impugnado, a compensação/PER-DCOMP, o pedido de restituição/crédito, "
             "a cobrança da CDA executada), inclusive quando a peça cita o acórdão proferido "
             "NESSE PA. 'precedente'=PA citado como JURISPRUDÊNCIA: a decisão de OUTRO processo "
-            "trazida pra sustentar a tese (Acórdão nº, Relator, Conselheiro, Turma, Câmara, "
-            "data de julgamento, ementa, nota de rodapé) — em geral de outro contribuinte. "
-            "'incerto'=o texto não deixa dizer. null só se não houver contexto nenhum."
+            "trazida pra sustentar a tese, em geral de outro contribuinte — SÓ com assinatura "
+            "de jurisprudência na citação (Acórdão nº, Relator/Conselheiro, ementa, Turma/"
+            "Câmara, sessão de julgamento). 'incerto'=sem ligação explícita com esta ação e "
+            "sem essa assinatura, ou o texto não deixa dizer — nunca 'precedente' por falta de "
+            "sinal. null só se não houver contexto nenhum."
         ),
     )
 

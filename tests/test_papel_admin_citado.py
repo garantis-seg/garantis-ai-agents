@@ -84,11 +84,36 @@ def test_as_DUAS_prompts_dizem_que_ACORDAO_nao_e_PA(_ctx, _doc, build):
     assert "extraia só esse" in bloco
 
 
-def test_o_1X_nao_promove_PA_de_peca_DECISORIA_a_discutido(_ctx, _doc):
-    """Decisão e sentença citam acórdão do CARF o tempo todo — o mesmo cuidado do `papel`
-    dos CNJs no ramo 1X."""
-    assert ("em peça DECISÓRIA, PA citado sem ligação\n  explícita com a parte é "
-            "'precedente' ou 'incerto' — nunca 'discutido'") in _prompt_1x(_ctx, _doc)
+def test_o_1X_manda_o_PA_SEM_SINAL_de_peca_DECISORIA_para_INCERTO(_ctx, _doc):
+    """⛔ MUTANTE (o BLOCKER da review adversarial de 02/10): herdar do CNJ "sem ligação é
+    'precedente' ou 'incerto'". Lá os dois têm o MESMO efeito (nenhum vira aresta); aqui
+    `precedente` SAI do gather e `incerto` FICA — a falta de sinal viraria EXCLUSÃO. A
+    sentença da EF que diz "crédito constituído no PA nº X" sem dizer "da executada" seria
+    tirada do conexo."""
+    bloco = _bloco_admin(_prompt_1x(_ctx, _doc))
+    assert ("sem ligação explícita com ESTE processo e SEM assinatura de jurisprudência é "
+            "'incerto' —\n  nunca 'precedente' por falta de sinal") in bloco
+    assert "'precedente' ou 'incerto'" not in bloco
+
+
+@pytest.mark.parametrize("build", [_prompt_1p, _prompt_1x], ids=["1P", "1X"])
+def test_precedente_SO_com_ASSINATURA_de_jurisprudencia(_ctx, _doc, build):
+    """`precedente` tira o PA do conexo, então ele exige o sinal POSITIVO — a assinatura de
+    jurisprudência NA citação. ⛔ "Nota de rodapé" NÃO é assinatura: a petição cita o PRÓPRIO
+    PA em rodapé ("Doc. 3 – cópia do PA nº X"), e ali ele é o mais `discutido` de todos."""
+    bloco = _bloco_admin(build(_ctx, _doc))
+    assert "SÓ com ASSINATURA de jurisprudência" in bloco
+    assert "nunca 'precedente' por falta de sinal" in bloco
+    assert "rodapé" not in bloco
+
+
+def test_a_description_do_schema_segue_a_MESMA_regra():
+    """A description viaja no `response_schema` (constrained decoding): ela e as prompts têm
+    de dizer o mesmo, senão o modelo recebe duas regras."""
+    d = ProcessoAdminCitado.model_fields["papel"].description
+    assert "SÓ com assinatura de jurisprudência" in d
+    assert "nunca 'precedente' por falta de sinal" in d
+    assert "rodapé" not in d
 
 
 def test_o_papel_e_OPCIONAL_e_o_ULTIMO_campo():
@@ -127,3 +152,27 @@ def test_a_peca_CHUNKADA_leva_o_papel_de_cada_PA():
     ])
     papeis = {i["numero"]: i.get("papel") for i in out["processos_administrativos_citados"]}
     assert papeis == {"10680.015558/2002-10": "precedente", "16643.000337/2010-71": "discutido"}
+
+
+@pytest.mark.parametrize("ordem", [("precedente", "discutido"), ("discutido", "precedente")])
+def test_o_MESMO_numero_em_2_chunks_fica_com_o_papel_MAIS_inclusivo(ordem):
+    """⛔ MUTANTE: voltar ao `_union` cru — o item do 1º chunk vence, e o papel iria junto:
+    `precedente` no chunk 1 + `discutido` no chunk 2 tiraria o PA do conexo só por causa de
+    onde o corte da peça caiu. É a regra do contrato (`resolve_admin_papel`), a MESMA que o
+    sink aplica dentro de uma leitura; o resto do item segue o do 1º chunk."""
+    base = {"cdas": [], "processos_citados": [], "tipo_doc": "peticao_inicial"}
+    num = "10680.015558/2002-10"
+    out = reduce_peca_cards([
+        {**base, "processos_administrativos_citados": [
+            {"numero": num, "tipo": "paf", "papel": ordem[0], "contexto": "chunk 1"}]},
+        {**base, "processos_administrativos_citados": [
+            {"numero": num, "tipo": "pa", "papel": ordem[1], "contexto": "chunk 2"}]},
+    ])
+    itens = out["processos_administrativos_citados"]
+    assert len(itens) == 1
+    assert itens[0]["papel"] == "discutido"
+    assert (itens[0]["tipo"], itens[0]["contexto"]) == ("paf", "chunk 1")   # o resto: 1º chunk
+    # sem claim nenhuma, o item fica como veio (papel ausente, não `None` inventado)
+    sem = reduce_peca_cards([{**base, "processos_administrativos_citados": [
+        {"numero": num, "tipo": "pa"}]}, dict(base)])
+    assert "papel" not in sem["processos_administrativos_citados"][0]

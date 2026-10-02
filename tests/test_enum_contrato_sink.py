@@ -29,6 +29,7 @@ from garantis_shared.engine_v6.layer1_policy_factsheet.gatekeeper_contract impor
 )
 from garantis_shared.engine_v6.persistence.peticao_contract import (
     ADMIN_TIPO_TO_NO,
+    CHAVE_PAPEL_ADMIN,
     ENTE_TO_CDA,
     PAPEIS_ADMIN,
     PAPEIS_ADMIN_NAO_VIZINHO,
@@ -216,8 +217,10 @@ def test_papel_do_admin_cobertura_total_e_exclusao_NOMEADA():
       · quem fica DE FORA do conexo é nomeado aqui — papel novo não entra mudo na
         exclusão, nem sai dela;
       · quem FICA também é nomeado — se o `precedente` saísse da exclusão, ou um papel
-        novo entrasse no enum sem decisão, a assercão de baixo reprova."""
-    enum = _enum_values(ProcessoAdminCitado, "papel")
+        novo entrasse no enum sem decisão, a assercão de baixo reprova.
+    O campo é lido pela CHAVE do contrato (`CHAVE_PAPEL_ADMIN`), a mesma que o sink lê no
+    card: renomear o campo aqui sem mexer lá vira KeyError, não um sink mudo."""
+    enum = _enum_values(ProcessoAdminCitado, CHAVE_PAPEL_ADMIN)
     fica_por_design = {"discutido", "incerto"}
 
     assert enum == set(PAPEIS_ADMIN), (

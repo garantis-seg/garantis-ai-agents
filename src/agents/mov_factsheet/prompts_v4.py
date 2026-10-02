@@ -503,12 +503,13 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
     ressarcimento/habilitação de crédito, o processo administrativo de cobrança da CDA
     executada. Vale também quando a petição cita o acórdão do CARF/TIT proferido NESSE PA.
   · 'precedente' — PA citado como JURISPRUDÊNCIA: a decisão de OUTRO processo
-    administrativo, trazida pra sustentar a tese (assinaturas: 'Acórdão nº', 'Relator(a)',
-    'Conselheiro(a)', 'Turma', 'Câmara', 'Sessão de', 'julgado em', ementa, nota de
-    rodapé). Em geral é de OUTRO contribuinte; outro processo da própria parte citado só
-    pela decisão também é 'precedente'. Mesmo tributo ou mesma tese NÃO o tornam
-    'discutido'.
-  · 'incerto' — o texto não deixa dizer (na dúvida, prefira 'incerto' a chutar).
+    administrativo, trazida pra sustentar a tese. SÓ com ASSINATURA de jurisprudência na
+    própria citação: 'Acórdão nº', Relator(a)/Conselheiro(a), ementa, Turma/Câmara, sessão
+    de julgamento. Em geral é de OUTRO contribuinte; outro processo da própria parte citado
+    só pela decisão também é 'precedente'.
+  · 'incerto' — o texto não deixa dizer. PA sem ligação explícita com ESTA ação E sem
+    assinatura de jurisprudência é 'incerto' — nunca 'precedente' por falta de sinal. Mesmo
+    tributo ou mesma tese, sozinhos, não decidem o papel.
 - NÃO deduza direção do par (quem é mais novo/velho) — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores (texto limpo=alta; OCR
   ruidoso/citações ambíguas=baixa).
@@ -637,10 +638,12 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
   discute ou de que depende (auto de infração/lançamento impugnado, compensação/PER-DCOMP,
   pedido de crédito, cobrança da CDA executada — inclusive o acórdão proferido NESSE PA);
   'precedente'=PA citado como JURISPRUDÊNCIA, a decisão de OUTRO processo trazida pra
-  sustentar a tese ('Acórdão nº', 'Relator(a)', 'Conselheiro(a)', 'Turma', 'Câmara',
-  'Sessão de', ementa, nota de rodapé), em geral de outro contribuinte; 'incerto'=na dúvida.
-  ATENÇÃO REDOBRADA, como no `papel` dos CNJs: em peça DECISÓRIA, PA citado sem ligação
-  explícita com a parte é 'precedente' ou 'incerto' — nunca 'discutido'.
+  sustentar a tese, em geral de outro contribuinte — e SÓ com ASSINATURA de jurisprudência
+  na própria citação ('Acórdão nº', Relator(a)/Conselheiro(a), ementa, Turma/Câmara, sessão
+  de julgamento); 'incerto'=na dúvida.
+  ATENÇÃO REDOBRADA em peça DECISÓRIA (sentença e decisão citam PA o tempo todo): PA citado
+  sem ligação explícita com ESTE processo e SEM assinatura de jurisprudência é 'incerto' —
+  nunca 'precedente' por falta de sinal, e nunca 'discutido' sem a ligação.
   NÃO é admin: CDA (=> cdas[]), CNJ judicial (=> processos_citados[]), artigo de lei, número
   de ACÓRDÃO ('Acórdão nº NNNN-NNN.NNN' é a DECISÃO, não o processo — se a citação traz o
   'Processo nº', extraia só esse).
