@@ -486,7 +486,9 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
     administrativo estadual). É o PROCESSO, não o auto — se o número que você está extraindo
     é o do AIIM PAULISTA, ele é 'tit_sp'.
   NÃO são processo administrativo: CDA/inscrição em dívida ativa (=> cdas[]), processo
-  JUDICIAL/CNJ (=> processos_citados[]), artigo de lei. Só o que ESTÁ escrito no documento.
+  JUDICIAL/CNJ (=> processos_citados[]), artigo de lei, e o número de ACÓRDÃO — 'Acórdão nº
+  NNNN-NNN.NNN' identifica a DECISÃO, não o processo: se a citação traz também o 'Processo
+  nº ...', extraia só esse. Só o que ESTÁ escrito no documento.
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
   `uf` — a sigla do ESTADO do órgão que instaurou/lavrou o processo, e SÓ quando o texto
   NOMEIA o estado ou o órgão estadual ('SEF/MG', 'SEFAZ-SP', 'Secretaria de Estado de
@@ -495,6 +497,18 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
   ⛔ NUNCA derive a `uf` do tribunal onde o processo JUDICIAL tramita, nem do `tipo` que
   você escolheu: onde o auto está sendo discutido não diz de que fisco ele É. Na dúvida,
   uf=null e uf_evidencia=null — que é o caso normal.
+  `papel` — o PAPEL deste processo administrativo NESTA ação, pelo CONTEXTO da citação:
+  · 'discutido' — o PA que ESTA ação discute ou de que depende: o auto de infração/
+    lançamento impugnado, a compensação/PER-DCOMP não homologada, o pedido de restituição/
+    ressarcimento/habilitação de crédito, o processo administrativo de cobrança da CDA
+    executada. Vale também quando a petição cita o acórdão do CARF/TIT proferido NESSE PA.
+  · 'precedente' — PA citado como JURISPRUDÊNCIA: a decisão de OUTRO processo
+    administrativo, trazida pra sustentar a tese (assinaturas: 'Acórdão nº', 'Relator(a)',
+    'Conselheiro(a)', 'Turma', 'Câmara', 'Sessão de', 'julgado em', ementa, nota de
+    rodapé). Em geral é de OUTRO contribuinte; outro processo da própria parte citado só
+    pela decisão também é 'precedente'. Mesmo tributo ou mesma tese NÃO o tornam
+    'discutido'.
+  · 'incerto' — o texto não deixa dizer (na dúvida, prefira 'incerto' a chutar).
 - NÃO deduza direção do par (quem é mais novo/velho) — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores (texto limpo=alta; OCR
   ruidoso/citações ambíguas=baixa).
@@ -619,7 +633,17 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
   o órgão estadual ('SEF/MG', 'SEFAZ-SP'); copie em `uf_evidencia` o trecho (~120 chars) que
   o nomeia — uf sem esse trecho é DESCARTADA. ⛔ NUNCA derive a uf do tribunal onde o
   processo JUDICIAL tramita nem do `tipo` escolhido. Na dúvida, uf=null.
-  NÃO é admin: CDA (=> cdas[]), CNJ judicial (=> processos_citados[]), artigo de lei.
+  `papel` — o PAPEL do PA NESTE processo, pelo contexto: 'discutido'=o PA que este processo
+  discute ou de que depende (auto de infração/lançamento impugnado, compensação/PER-DCOMP,
+  pedido de crédito, cobrança da CDA executada — inclusive o acórdão proferido NESSE PA);
+  'precedente'=PA citado como JURISPRUDÊNCIA, a decisão de OUTRO processo trazida pra
+  sustentar a tese ('Acórdão nº', 'Relator(a)', 'Conselheiro(a)', 'Turma', 'Câmara',
+  'Sessão de', ementa, nota de rodapé), em geral de outro contribuinte; 'incerto'=na dúvida.
+  ATENÇÃO REDOBRADA, como no `papel` dos CNJs: em peça DECISÓRIA, PA citado sem ligação
+  explícita com a parte é 'precedente' ou 'incerto' — nunca 'discutido'.
+  NÃO é admin: CDA (=> cdas[]), CNJ judicial (=> processos_citados[]), artigo de lei, número
+  de ACÓRDÃO ('Acórdão nº NNNN-NNN.NNN' é a DECISÃO, não o processo — se a citação traz o
+  'Processo nº', extraia só esse).
 - NÃO deduza direção do par — a integração resolve por data.
 - confianca_extracao: 0-1 sobre a EXTRAÇÃO dos conectores. Documento de tipo incerto
   ou OCR ruidoso => comece de 0.7 pra baixo.
