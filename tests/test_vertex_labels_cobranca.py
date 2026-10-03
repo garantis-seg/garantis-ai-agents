@@ -2,10 +2,10 @@
 simulado.
 
 Assere o JSON que SAI pro `generateContent`, nao o dict que o provider monta: quem
-serializa `labels` no corpo (e quem o RECUSA no AI Studio) e o SDK. Os 3 call sites
-que chamam o Gemini: `GeminiProvider` (generate/agenerate, via `_build_config_params`),
-`vision.call_vision_l1` e `pdf_ocr.convert_pdf_to_markdown` — os dois ultimos montam o
-config A MAO, entao cada um tem teste proprio.
+serializa `labels` no corpo (e quem o RECUSA no AI Studio) e o SDK. Os 2 call sites
+que chamam o Gemini: `GeminiProvider` (generate/agenerate, via `_build_config_params`)
+e `vision.call_vision_l1` — o ultimo monta o config A MAO, entao tem teste proprio.
+(⚰️ O 3o, `pdf_ocr.convert_pdf_to_markdown`, saiu em 2026-10-03 com a rota `/pdf/ocr`.)
 
 ⛔ A `rota` e assertada no corpo capturado DENTRO da request, nunca lendo o ContextVar
 de fora do TestClient (fora, ele e None nos dois lados e o teste passa cego).
@@ -23,7 +23,6 @@ from google.oauth2.credentials import Credentials
 
 from garantis_shared.gemini_backend import make_genai_client
 from src.api.middleware import GeminiCallTimeoutMiddleware
-from src.providers import LLMFactory
 from src.providers.gemini import GeminiProvider, gemini_rota_cv
 
 _MODELO = "gemini-3.1-flash-lite"
@@ -139,36 +138,20 @@ async def test_vision_l1_leva_labels(monkeypatch):
     assert corpo["labels"] == {**_PRODUTOR, "rota": "mov-factsheet_classify"}
 
 
-async def test_pdf_ocr_leva_labels(monkeypatch):
-    from src.agents.pdf_ocr.agent import convert_pdf_to_markdown
-
-    prov, cap = _provider(monkeypatch, "vertex")
-    monkeypatch.setitem(LLMFactory._instances, "gemini", prov)
-
-    r = await convert_pdf_to_markdown(_PDF, provider_name="gemini")
-
-    assert r.success, r.error
-    assert cap.corpo()["labels"] == _PRODUTOR
-
-
 async def test_aistudio_nao_leva_labels_em_nenhum_call_site(monkeypatch):
     """O SDK LEVANTA ValueError com `labels` no AI Studio — label vazado ali nao fica
-    so feio: derruba a chamada. Por isso os 4 caminhos rodam aqui."""
+    so feio: derruba a chamada. Por isso os 3 caminhos rodam aqui."""
     from src.agents._utils.vision import call_vision_l1
-    from src.agents.pdf_ocr.agent import convert_pdf_to_markdown
 
     prov, cap = _provider(monkeypatch, "aistudio")
-    monkeypatch.setitem(LLMFactory._instances, "gemini", prov)
     tok = gemini_rota_cv.set("mov-factsheet_classify")
     try:
         await prov.agenerate("oi", model=_MODELO)
         prov.generate("oi", model=_MODELO)
         await call_vision_l1(prov, model=_MODELO, prompt="leia", pdf_bytes_list=[_PDF])
-        r = await convert_pdf_to_markdown(_PDF, provider_name="gemini")
-        assert r.success, r.error  # o pdf_ocr engole a excecao; o sinal e o success
     finally:
         gemini_rota_cv.reset(tok)
 
-    assert len(cap.requests) == 4
+    assert len(cap.requests) == 3
     assert all("generativelanguage" in r.url.host for r in cap.requests)
     assert all("labels" not in json.loads(r.content) for r in cap.requests)

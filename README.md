@@ -4,11 +4,9 @@ Repositório centralizado de AI Agents com suporte a múltiplos LLM providers.
 
 ## Agentes Disponíveis
 
-| Agente | Descrição | Endpoint |
-|--------|-----------|----------|
-| **Text Processor** | Extração de info-chave | `/text/extract` |
+Os agentes vivos (engine v6 L1/L2/L3 — mov_factsheet, processo_synthesis, merito_synthesis, apolice_lifecycle — e os do Agente Investigador) são montados via `src/api/main.py`: a lista viva é o `include_router` de lá.
 
-> Nota: os agentes vivos do engine v6 (L1/L2/L3: mov_factsheet, processo_synthesis, merito_synthesis, apolice_lifecycle, mov_summarizer, pdf/ocr) são montados via `src/api/main.py` — esta tabela cobre só utilitários. Timing Analysis foi REMOVIDO (pré-engine-v6, 2026-07-08). `court_state_classifier` foi REMOVIDO em 2026-08-10 (decisão do Elton): a flag `USE_LLM_COURT_STATE_CLASSIFIER` do frontend-api nasceu `false` e não há registro de `true` em ambiente nenhum (medido 2026-08-10: 0 requests à rota nos logs de prod e staging na janela inteira de log disponível — ⚠️ retenção é 30d, então esse é o teto da prova) e o classificador de estado é o **regex** em `execucao-fiscal/frontend-api/services/court_presentation_inference_service.py` — LLM para derivar fato estrutural do processo (tribunal, estado) é para ser evitado; o fato vem do provider ou de derivação determinística.
+> Nota: `/pdf/ocr`, `/text/extract` e `/mov-summarizer/classify` foram REMOVIDOS em 2026-10-03 (card 869fb8j4r), com os 3 agentes que só elas usavam (`pdf_ocr`, `text_processor`, `mov_summarizer`): zero chamador nos repos da org e zero request em 30d de log, com `/mov-factsheet/classify` como controle positivo no mesmo filtro. Timing Analysis foi REMOVIDO (pré-engine-v6, 2026-07-08). `court_state_classifier` foi REMOVIDO em 2026-08-10 (decisão do Elton): a flag `USE_LLM_COURT_STATE_CLASSIFIER` do frontend-api nasceu `false` e não há registro de `true` em ambiente nenhum (medido 2026-08-10: 0 requests à rota nos logs de prod e staging na janela inteira de log disponível — ⚠️ retenção é 30d, então esse é o teto da prova) e o classificador de estado é o **regex** em `execucao-fiscal/frontend-api/services/court_presentation_inference_service.py` — LLM para derivar fato estrutural do processo (tribunal, estado) é para ser evitado; o fato vem do provider ou de derivação determinística.
 
 ## Provider
 
@@ -40,7 +38,6 @@ uvicorn src.api.main:app --reload
 ## API Endpoints
 
 - `GET /health` - Health check
-- `POST /text/extract` - Extração de info-chave
 - `GET /prompts/engine-v6/raw-templates` - Templates de prompt do engine v6
 - `GET /providers` - List providers
 

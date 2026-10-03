@@ -1,4 +1,4 @@
-"""Vision L1 e PDF-OCR cobram pelo MESMO calculo do caminho texto.
+"""Vision L1 cobra pelo MESMO calculo do caminho texto.
 
 Ate 2026-09-17 `_utils/vision.py::call_vision_l1` e `pdf_ocr/agent.py` tinham uma
 formula LOCAL de custo, flat: `prompt_token_count` inteiro a preco de input e so
@@ -6,8 +6,9 @@ formula LOCAL de custo, flat: `prompt_token_count` inteiro a preco de input e so
 ja cobrava o cacheado no `cached_per_1m` (`test_cached_no_custo.py`) e somava o
 thinking ao output (`test_gemini_determinism.py::test_usage_tokens_poe_thinking_no_output`)
 — os dois ramos de PDF ficaram de fora dos dois consertos.
+(⚰️ O ramo do `pdf_ocr` saiu em 2026-10-03 com a rota `/pdf/ocr`, card 869fb8j4r.)
 
-Aqui: um usage com cache + thinking, e o custo que sai de cada ramo tem de ser o do
+Aqui: um usage com cache + thinking, e o custo que sai do ramo tem de ser o do
 `BaseLLMProvider.calculate_cost` sobre `_usage_tokens` — e DIFERENTE da formula flat
 (senao o teste nao distingue o conserto do defeito).
 """
@@ -19,7 +20,6 @@ import pytest
 from google.genai import types as gtypes
 
 from src.agents._utils import vision as V
-from src.agents.pdf_ocr import agent as ocr_agent
 from src.providers.gemini import GEMINI_PRICING, GeminiProvider
 
 _MODELO = "gemini-3.1-flash-lite"
@@ -94,17 +94,3 @@ def test_vision_l1_cobra_cacheado_e_thinking_pelo_base():
     assert resp.output_tokens == _CANDIDATES + _THOUGHTS
     assert resp.metadata["cost_usd"] == pytest.approx(_esperado())
     assert resp.metadata["cost_usd"] != pytest.approx(_formula_flat_antiga())
-
-
-def test_pdf_ocr_cobra_cacheado_e_thinking_pelo_base(monkeypatch):
-    monkeypatch.setattr(
-        ocr_agent.LLMFactory, "create_provider", staticmethod(lambda *_a, **_k: _provider())
-    )
-
-    out = asyncio.run(ocr_agent.convert_pdf_to_markdown(b"%PDF-1.4 x", model=_MODELO))
-
-    assert out.success, out.error
-    assert out.total_input_tokens == _PROMPT
-    assert out.total_output_tokens == _CANDIDATES + _THOUGHTS
-    assert out.cost_usd == pytest.approx(_esperado())
-    assert out.cost_usd != pytest.approx(_formula_flat_antiga())
