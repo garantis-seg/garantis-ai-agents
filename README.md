@@ -1,23 +1,24 @@
 # Garantis AI Agents
 
-Repositório centralizado de AI Agents com suporte a múltiplos LLM providers.
+Repositório centralizado dos AI Agents da Garantis, servidos por uma API FastAPI.
 
 ## Agentes Disponíveis
 
 Os agentes vivos (engine v6 L1/L2/L3 — mov_factsheet, processo_synthesis, merito_synthesis, apolice_lifecycle — e os do Agente Investigador) são montados via `src/api/main.py`: a lista viva é o `include_router` de lá.
 
-> Nota: `/pdf/ocr`, `/text/extract` e `/mov-summarizer/classify` foram REMOVIDOS em 2026-10-03 (card 869fb8j4r), com os 3 agentes que só elas usavam (`pdf_ocr`, `text_processor`, `mov_summarizer`): zero chamador nos repos da org e zero request em 30d de log, com `/mov-factsheet/classify` como controle positivo no mesmo filtro. Timing Analysis foi REMOVIDO (pré-engine-v6, 2026-07-08). `court_state_classifier` foi REMOVIDO em 2026-08-10 (decisão do Elton): a flag `USE_LLM_COURT_STATE_CLASSIFIER` do frontend-api nasceu `false` e não há registro de `true` em ambiente nenhum (medido 2026-08-10: 0 requests à rota nos logs de prod e staging na janela inteira de log disponível — ⚠️ retenção é 30d, então esse é o teto da prova) e o classificador de estado é o **regex** em `execucao-fiscal/frontend-api/services/court_presentation_inference_service.py` — LLM para derivar fato estrutural do processo (tribunal, estado) é para ser evitado; o fato vem do provider ou de derivação determinística.
+⛔ Caminho de LLM para derivar fato estrutural do processo (tribunal, estado) é para ser evitado: o fato vem do provider ou de derivação determinística (posição do Elton).
 
 ## Provider
 
-Só **Gemini** (Google) — é o único registrado em `src/providers/factory.py`. Preço por
-modelo vem de `garantis_shared.llm_models` (catálogo com preço de fatura); o custo de
-cada chamada, inclusive a parte servida do cache implícito, é `BaseLLMProvider.calculate_cost`.
+Só **Gemini** (Google) — é o único registrado em `src/providers/factory.py`. Preço por modelo vem de `garantis_shared.llm_models` (catálogo com preço de fatura); o custo de cada chamada, inclusive a parte servida do cache implícito, é `BaseLLMProvider.calculate_cost`.
+
+O backend do Gemini é o Vertex AI, com auth por ADC e sem key: com `GEMINI_BACKEND` ausente ou inválida, vale o Vertex (`garantis_shared.gemini_backend`). O AI Studio é o modo legado, só com `GEMINI_BACKEND=aistudio` explícito e uma key.
 
 ## Instalação
 
 ```bash
-# As deps de runtime moram só no requirements.txt (é o que o Dockerfile e o gate instalam)
+# As deps de runtime moram só no requirements.txt (é o que o Dockerfile e o gate instalam).
+# O garantis-shared vem do Artifact Registry: o índice e o keyring estão no Dockerfile.
 pip install -r requirements.txt
 
 # Ferramentas de teste/lint
@@ -27,28 +28,26 @@ pip install ".[dev]"
 ## Uso Local
 
 ```bash
-# Configurar variáveis de ambiente
-# (prod roda GEMINI_BACKEND=vertex via ADC — a key é o fallback aistudio)
-export GOOGLE_API_KEY=your-api-key
+# Gemini pelo Vertex (o default): ADC da sua conta
+gcloud auth application-default login
 
 # Rodar servidor
 uvicorn src.api.main:app --reload
 ```
 
-## API Endpoints
+## API
 
-- `GET /health` - Health check
-- `GET /prompts/engine-v6/raw-templates` - Templates de prompt do engine v6
-- `GET /providers` - List providers
+`GET /health` é o health check. As demais rotas estão no OpenAPI do serviço (`/docs`), montado pelos `include_router` de `src/api/main.py`.
 
 ## Variáveis de Ambiente
 
-| Variável | Descrição | Default |
-|----------|-----------|---------|
-| `GOOGLE_API_KEY` | Chave API do Gemini (fallback aistudio; em prod use `GEMINI_BACKEND=vertex` com ADC, sem key) | - |
-| `GEMINI_BACKEND` | Backend Gemini: `vertex` (prod, auth ADC) ou `aistudio` (key) | `aistudio` |
-| `DEFAULT_PROVIDER` | Provider padrão | `gemini` |
-| `DEFAULT_MODEL` | Modelo padrão | `gemini-2.5-flash-lite` |
+| Variável | Descrição |
+|----------|-----------|
+| `GEMINI_BACKEND` | `vertex` (o default, auth por ADC) ou `aistudio` (modo legado, exige key) |
+| `GEMINI_API_KEY` (ou `GOOGLE_API_KEY`) | Chave do AI Studio; só vale com `GEMINI_BACKEND=aistudio` |
+| `DEFAULT_PROVIDER` | Provider padrão; só `gemini` está registrado |
+| `<AGENTE>_MODEL` | Modelo de cada agente (por exemplo, `MERITO_SYNTHESIS_MODEL`): a env e o default moram no código do agente, em geral o `agent.py` |
+| `DEFAULT_MODEL` | Fallback de modelo só nos agentes cujo código o lê; os do engine v6 não o leem |
 
 ## License
 
