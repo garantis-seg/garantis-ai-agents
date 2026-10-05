@@ -1,4 +1,4 @@
-"""L2 PROSA — passe de redacao da justificativa (engine v6, 2026-06-28).
+"""L2 PROSA — passe de redacao da justificativa (engine v6).
 
 "Codigo decide o risco, LLM redige." O risco JA foi decidido (holistico +
 guards determ.) e entra FIXO em RedacaoRequest.risco_final; este passe so
@@ -283,7 +283,7 @@ async def redact_merito_synthesis(
 
     # Garante que TODO campo de prosa owned tem valor definido (template preenche
     # vazios do LLM) — pro materializer sobrescrever sem deixar prosa STALE do risco
-    # antigo sobreviver (finding review: campo vazio -> fallback stale).
+    # antigo sobreviver (campo vazio -> o materializer cai na prosa stale).
     card = _ensure_complete(card, request)
 
     usage = {

@@ -2,9 +2,8 @@
 
 Substitui o per-processo→merge do L3 legado por UMA síntese que vê os N processos
 JUNTOS sobre um dossiê coerente (valência + doc-text dos rulings + suspensão/garantia/
-exposição). Semente = a CONVENTION do oráculo da redução (gate-0 provou em gemini-3.5-flash:
-14/19 consensus-miss recuperados, net consenso 57%→77%, resíduo controlável pelos 3 gates).
-Report: ~/.claude/plans/report-gate0-flash-B1-2026-07-11.md.
+exposição). Semente = a CONVENTION do oráculo da redução (validada no gate-0 em
+gemini-3.5-flash, com o resíduo controlável pelos 3 gates).
 """
 from .agent import classify_merito_reducao_v2
 

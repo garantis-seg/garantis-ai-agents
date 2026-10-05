@@ -3,7 +3,7 @@
 Duas coisas moram aqui, e elas sao DIFERENTES de proposito:
 
   1. `CONFIRMADOR_RESPONSE_SCHEMA` -- o `response_schema` que vai pro provider.
-     ⛔ VERBATIM do arnes de medicao (`d2_prompt.py::SCHEMA`), e e um **dict**, nao
+     ⛔ VERBATIM do arnes de medicao, e e um **dict**, nao
      um modelo Pydantic: o schema que o modelo ve faz parte do que foi medido, e o
      JSON Schema que o Pydantic gera nao e o mesmo (ordem, `title`, `anyOf`). ⭐ E
      structured output do provider -- ⛔ NUNCA parse de prosa.
@@ -37,7 +37,7 @@ __all__ = [
 ]
 
 
-# ⛔ VERBATIM do arnes de medicao (`d2_prompt.py::SCHEMA`). NAO EDITE.
+# ⛔ VERBATIM do arnes de medicao. NAO EDITE.
 CONFIRMADOR_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -121,11 +121,9 @@ class ConfirmadorRequest(BaseModel):
                      "`garantis_shared` (`_CONFIRMADOR_HEAD_PAGINAS`)."),
     )
     #: ⛔⛔ **`min_length=1`: pool VAZIO nao e uma pergunta, e nao se paga por ele.**
-    #: Ate 2026-09-09 este campo era `default_factory=list`, entao `POST {}` montava um
-    #: request valido com ZERO candidatos, o agente chamava `agenerate` sem
-    #: curto-circuito, e a rota devolvia **200 pagando** por um prompt que dizia
-    #: *"CANDIDATOS (0 documentos)"* e *"Escolha entre os candidatos [1] a [0]"*.
-    #: Achado sondando a rota recem-deployada com `{}` (esperava-se 422; veio 200).
+    #: Sem o piso, `POST {}` seria um request valido com ZERO candidatos: o agente
+    #: chamaria `agenerate` sem curto-circuito e a rota devolveria **200 pagando** por um
+    #: prompt que diz *"CANDIDATOS (0 documentos)"*.
     #: ⭐ O caller de producao nunca manda vazio -- o `garantis_shared` curto-circuita em
     #: `if not candidatos`. Justamente por isso o vazamento seria **invisivel**: so
     #: chegaria aqui por bug de caller, retry malformado ou sonda, e cada um paga calado.

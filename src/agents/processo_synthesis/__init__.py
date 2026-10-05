@@ -2,10 +2,9 @@
 
 Sintetiza N L1 cards (mov_factsheet) + apolice context em 1 card de
 processo. Full-RAG: SO cards estruturados, nunca raw. Output cabe em
-leads.dossier_artifacts com kind='processo_synthesis'.
-(day_factsheet saiu do input no teardown do tier por-dia 2026-06-13.)
+leitura_conexos.dossier_artifacts com kind='processo_synthesis'.
 
-Default model: gemini-2.5-flash (mais robusto que Lite pra sintese).
+Default model: `agent.DEFAULT_MODEL`.
 """
 from .agent import classify_processo_synthesis
 from .schemas import (

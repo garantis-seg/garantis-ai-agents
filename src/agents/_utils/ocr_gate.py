@@ -1,6 +1,6 @@
 """Gate de OCR/Vision — decide POR DOCUMENTO se vale mandar o PDF pro Gemini.
 
-Porte do POC (prompt_monit_reader/l1_vision.py). 2 sinais determinísticos, sem LLM:
+2 sinais determinísticos, sem LLM:
 
   SINAL 1 — PÁGINA INALCANÇÁVEL (PyMuPDF): página sem texto extraível, OU cujo
      texto ocupa <AREA_TEXTO_MAX da área E o conteúdo está preso em algo que
@@ -9,9 +9,9 @@ Porte do POC (prompt_monit_reader/l1_vision.py). 2 sinais determinísticos, sem 
   SINAL 2 — TEXTO-LIXO (rmgarbage, Taghva et al. ISRI/UNLV 2001): fração de tokens
      "garbage" no text_content do provedor > GARBAGE_RATIO_MAX → texto corrompido.
 
-Diferença vs POC: o ai-agents JÁ baixa o PDF via google-cloud-storage (vision.py),
-então este módulo opera sobre BYTES (não baixa via gsutil). Fallback seguro: qualquer
-falha → trata como "não precisa Vision" (fica no texto), nunca quebra.
+Quem baixa o PDF é o `vision.py` (google-cloud-storage), então este módulo opera sobre
+BYTES. Fallback seguro: qualquer falha → trata como "não precisa Vision" (fica no texto),
+nunca quebra.
 """
 from __future__ import annotations
 
@@ -24,21 +24,20 @@ from typing import Optional
 # do shared já é dependência declarada deste repo (requirements.txt).
 from garantis_shared.texto_util import texto_util_len
 
-# Sinal 1 (página-imagem) — thresholds calibrados em banco real (memory l1-ocr-gating)
+# Sinal 1 (página-imagem) — thresholds calibrados em banco real
 COBERTURA_IMG_MIN = 0.50
 AREA_TEXTO_MAX = 0.15
-# Sinal 1, ramo VETOR (2026-08-12): texto convertido em CURVAS. Nenhum extrator
-# alcança, e `get_images()` não vê nada (não é raster) — a página passava por
-# born-digital. Medido em 91 páginas de 12 PDFs reais do caso Steel:
+# Sinal 1, ramo VETOR: texto convertido em CURVAS. Nenhum extrator alcança, e
+# `get_images()` não vê nada (não é raster) — sem este ramo a página passa por
+# born-digital. Medido em 91 páginas de 12 PDFs reais:
 #
 #   página VETOR  : 220 – 1.665 paths, 339-340 chars (só o carimbo), área 0,03
 #   página TABELA : 217 – 413 paths, 1.531 – 2.625 chars, área 0,26 – 0,71
 #
-# ⚠️ A margem em PATHS é 220-vs-217, não 879-vs-11 (esse número saiu de medir UM
-# documento). Por isso o corte NÃO é o path sozinho: quem carrega a decisão é o
-# `area_texto < AREA_TEXTO_MAX` (as 3 páginas-armadilha de tabela ficam em
-# 0,26-0,71), e o `chars < VETOR_CHARS_MAX` fecha a outra margem — página de
-# vetor só tem carimbo, página de formulário tem 1,5k+ de texto de verdade.
+# ⚠️ A margem em PATHS é estreita (220 vs 217). Por isso o corte NÃO é o path
+# sozinho: quem carrega a decisão é o `area_texto < AREA_TEXTO_MAX` (as páginas de
+# tabela ficam em 0,26-0,71), e o `chars < VETOR_CHARS_MAX` fecha a outra margem —
+# página de vetor só tem carimbo, página de formulário tem 1,5k+ de texto de verdade.
 VETOR_PATHS_MIN = 200
 VETOR_CHARS_MAX = 600
 # Sinal 2 (rmgarbage)
@@ -97,19 +96,18 @@ def texto_lixo(txt: Optional[str]) -> bool:
 def texto_decide_sozinho(txt: Optional[str]) -> bool:
     """True = dá pra confiar SÓ no texto e nem baixar o PDF pro Sinal 1.
 
-    ⚠️ `not texto_lixo(txt)` NÃO basta, e era exatamente esse o curto-circuito do
-    caller. rmgarbage (Sinal 2) mede CORRUPÇÃO DE CARACTERE — é cego pra texto
-    limpo e vazio de conteúdo, que é a forma mais comum de scan no acervo:
+    ⚠️ `not texto_lixo(txt)` NÃO basta. rmgarbage (Sinal 2) mede CORRUPÇÃO DE
+    CARACTERE — é cego pra texto limpo e vazio de conteúdo, que é a forma mais comum
+    de scan no acervo:
 
-      - "Para conferir o original, acesse o site https://esaj.tjsp.jus.br…" (5.339
-        docs em prod) — só o rodapé de autenticação do ESAJ;
-      - "Num. 123456789 - Pág. 1\\nAssinado eletronicamente por: TRIBUNAL…" (3.258)
-        — só o carimbo de assinatura do PJe.
+      - "Para conferir o original, acesse o site https://esaj.tjsp.jus.br…" — só o
+        rodapé de autenticação do ESAJ;
+      - "Num. 123456789 - Pág. 1\\nAssinado eletronicamente por: TRIBUNAL…" — só o
+        carimbo de assinatura do PJe.
 
     Nos dois casos o texto é português impecável, `garbage_ratio` ≈ 0, e a PEÇA
-    está presa na imagem. O Sinal 1 (área de imagem por página) foi escrito
-    literalmente pra "scan com carimbo/rodapé" — e nunca rodava neles, porque o
-    caller desistia antes de baixar o PDF. Medido 2026-08-10.
+    está presa na imagem. O Sinal 1 (área de imagem por página) existe pra "scan com
+    carimbo/rodapé" — e só roda se o caller baixar o PDF.
 
     Abaixo de TEOR_MIN_CHARS, então, quem decide é o PDF: baixa e deixa o Sinal 1
     olhar a área. Doc curto e legítimo (despacho de 1 linha) custa 1 fetch do GCS
@@ -117,11 +115,9 @@ def texto_decide_sozinho(txt: Optional[str]) -> bool:
 
     🚨 E o piso é sobre o teor ÚTIL, não sobre `len()` — senão o próprio carimbo
     que este docstring descreve o derrota por MULTIPLICAÇÃO DE PÁGINAS: ele repete
-    1× por página, e 6 × 340 = 2.044 ≥ 400. Foi exatamente o que aconteceu com a
-    petição em vetor do MS 1012150-95.2026.8.26.0224 (Steel, 2026-08-12): o gate
-    de Sinal 1 continuou inalcançável mesmo depois do fix de 08-10, um andar acima.
+    1× por página, e 6 × 340 = 2.044 ≥ 400 (a petição em vetor fica inalcançável).
     A régua é `garantis_shared.texto_util` — MESMA função que o piso de admissão
-    do `fetch_peticao_doc` usa (era esse o defeito: 5 pisos, nenhuma régua comum).
+    do `fetch_peticao_doc` usa: uma régua comum, não um piso por caller.
     """
     return not texto_lixo(txt) and texto_util_len(txt) >= TEOR_MIN_CHARS
 
@@ -169,7 +165,7 @@ def _pagina_motivo(page, pymupdf) -> Optional[str]:
 
 def _pagina_eh_imagem(page, pymupdf) -> bool:
     """Wrapper booleano — o nome pelo qual harnesses de investigação chamam o
-    Sinal 1 desde 2026-06. 'imagem' aqui = inalcançável por texto (inclui vetor)."""
+    Sinal 1. 'imagem' aqui = inalcançável por texto (inclui vetor)."""
     return _pagina_motivo(page, pymupdf) is not None
 
 
@@ -178,36 +174,25 @@ def _reserializa(doc, pdf_bytes: bytes) -> bytes:
     e de I/O ZERO (o parse foi pago acima).
 
     `pymupdf.open` REPARA na abertura o que um parser estrito recusa, e o Gemini é
-    estrito: ele respondia `400 The document has no pages`, o `except` de
-    `call_l1_with_vision_fallback` engolia, e o card ia gravado com `errors=0` e o
-    PDF nunca lido — 85 cards cegos, 19 de 22 (86,4%) dos que têm veredito de gate
-    no código de hoje.
-
-    Medido 2026-08-17: PDF de 3 páginas truncado antes do xref — o pypdf levanta
-    `PdfStreamError`, o PyMuPDF lê as 3 e o `tobytes()` devolve 1.683B que o pypdf
-    lê inteiro. Onde não há o que reparar o tamanho não se mexe (3.245.132B →
-    3.245.132B num PDF de 6 páginas-imagem): o default `deflate=0` copia os streams
-    já comprimidos como estão.
+    estrito: ele responde `400 The document has no pages`, o `except` de
+    `call_l1_with_vision_fallback` engole, e o card sai gravado com o PDF nunca lido.
+    Onde não há o que reparar o tamanho não se mexe: o default `deflate=0` copia os
+    streams já comprimidos como estão.
 
     🚨 **O CASO DOMINANTE NÃO É PDF CORROMPIDO — É HTML SERVIDO COMO PDF, e é por
-    isso que `tobytes()` sozinho era NO-OP.** Medido em prod 2026-08-17 sobre os 85
-    cards cegos: **71 (83,5%) têm `file_format='html'`**, e nos 19 do cohort ATIVO
-    (os com `n_nao_enviados_cap`) são **19 de 19**. Os 4 que baixei abrem com
-    `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN">`.
-    ⛔ `pymupdf.open(stream=..., filetype="pdf")` **NÃO levanta** neles — `filetype`
-    é DICA, não imposição (a mesma armadilha do memory `autos-html-filetype-e-dica`,
-    2026-08-11). Ele abre como XHTML: `is_pdf=False`, `metadata['format']='XHTML'`.
-    Daí `paginas_imagem=0` e `motivos={}` — que é literalmente o `motivo: null`
-    gravado nos 19 cards em prod.
+    isso que `tobytes()` sozinho não basta.**
+    ⛔ `pymupdf.open(stream=..., filetype="pdf")` **NÃO levanta** nele — `filetype`
+    é DICA, não imposição (a mesma armadilha do memory `autos-html-filetype-e-dica`).
+    Ele abre como XHTML: `is_pdf=False`, `metadata['format']='XHTML'`; daí
+    `paginas_imagem=0` e `motivos={}`.
     E `doc.tobytes()` sobre doc não-PDF levanta `AssertionError` NUA: o `except`
-    devolvia o MESMO OBJETO (medido `out is raw` → True, magic `b'<!DOCTYP'`), o
-    Gemini recebia XHTML rotulado `mime_type='application/pdf'` e respondia o mesmo
-    `400 The document has no pages`. Zero cards mudavam de estado.
-    ⇒ Por isso o ramo `convert_to_pdf()`: nos MESMOS 4 arquivos ele devolve
-    `%PDF-1.7` de verdade, 2 páginas, lido pelo pypdf sem levantar.
+    devolve os bytes originais, e o Gemini receberia XHTML rotulado
+    `mime_type='application/pdf'` e responderia o mesmo `400 The document has no pages`.
+    ⇒ Por isso o ramo `convert_to_pdf()`, que devolve um `%PDF` de verdade, lido pelo
+    pypdf sem levantar.
     ⚠️ E a classe "PyMuPDF repara o que o parser estrito recusa" quase não existe no
-    acervo: **18 de 18 PDFs reais** da amostra passam no `pypdf(strict=False)` sem
-    erro. O valor deste helper está no ramo do HTML, não no do reparo.
+    acervo (PDF real passa no `pypdf(strict=False)`). O valor deste helper está no
+    ramo do HTML, não no do reparo.
 
     ⛔ Sem `garbage`/`deflate` de propósito. Encolher o blob mudaria QUANTO passa
     pelos caps inline do `vision.py` — é outra decisão, e pede medição própria.
@@ -255,9 +240,9 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
     no texto). ⚠️ O `pdf_bytes` que sai NÃO é o que entrou: é o blob recomposto
     por `_reserializa` — quem manda ao Gemini tem que usar ESTE.
 
-    ⚠️ O `None` de fallback NÃO é teórico: 6 de 20 "PDFs" de uma amostra do cohort
-    do gate são HTML ou RTF servidos sob nome `.pdf` (42-946 bytes começando com
-    `<p>` ou `{\\rtf1`) — `pymupdf.open` levanta, e o certo é o documento ficar no
+    ⚠️ O `None` de fallback NÃO é teórico: parte dos "PDFs" do cohort do gate são
+    HTML ou RTF curtos servidos sob nome `.pdf` (começando com `<p>` ou
+    `{\\rtf1`) — `pymupdf.open` levanta, e o certo é o documento ficar no
     caminho texto, de graça. Há teste prendendo que a exceção não vaza: se ela
     vazar, ela sobe pelo gate e derruba a cascade inteira."""
     try:
@@ -269,11 +254,10 @@ def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
         n = len(doc)
         motivos: dict[str, int] = {}
         # 🚨 Monstro: o Sinal 1 mede SÓ as páginas que vão subir (a amostra do recorte
-        # abaixo). Medir as N custava ~55ms/pág — 71s local, ~150s no Cloud Run, nos
-        # autos de 1.289 págs do 30031394020138260296 — contra o timeout de 45s do
-        # caller: ReadTimeout nas 6 tentativas, TODA passada, com o C5 já pago (card
-        # 869equgwd). E página-imagem FORA da amostra nunca chega ao Gemini: contá-la
-        # só mandava 60 páginas textuais pro Vision, que é o uso vetado.
+        # abaixo). Medir as N custa ~55ms/pág — em autos de 1.000+ págs isso passa do
+        # timeout do caller, e TODA passada cai em ReadTimeout com o C5 já pago. E
+        # página-imagem FORA da amostra nunca chega ao Gemini: contá-la só mandaria
+        # páginas textuais pro Vision, que é o uso vetado.
         # ⚠️ Exceção: se o `_recorta` abaixo levantar, sobe o doc inteiro, e aí imagem
         # só no miolo passa a ficar no texto. Aceito: recorte quebrado + scan só no
         # miolo + pontas textuais, e 1.000+ págs inline estourariam de qualquer jeito.
@@ -319,8 +303,8 @@ def precisa_vision(text_content: Optional[str], pdf_bytes: Optional[bytes],
     texto, e a resposta já veio de fora. Sem isto, uma petição cuja capa o extrator
     pegou limpa (rmgarbage ≈ 0, páginas com texto nativo) sairia por
     "texto OK + PDF tem texto nativo" e o corpo dela nunca seria lido.
-    ⛔ NÃO é "PDF textual vai pro Vision" — aquele benchmark (2026-05-28) mediu lift
-    ZERO e continua vetado. O que muda aqui é que o texto extraído não é o documento.
+    ⛔ NÃO é "PDF textual vai pro Vision" — o benchmark disso mediu lift ZERO, e segue
+    vetado. O que muda aqui é que o texto extraído não é o documento.
     ⚠️ Os fallbacks NEGATIVOS ficam acima deste ramo de propósito: sem PDF e PDF
     ilegível continuam voltando (False, …) — é o fail-open, e ele não tem exceção."""
     lixo = texto_lixo(text_content)

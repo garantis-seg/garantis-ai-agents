@@ -17,12 +17,9 @@ from google.genai import types
 # Com SO_KEEPALIVE o OS sonda conexoes idle e DERRUBA as mortas -> o reuse vira
 # ConnectError rapido (transport retries=2 reabsorve) em vez de ReadTimeout no
 # vazio. Linux-only opts via getattr (Cloud Run = Linux; no-op no dev box).
-# 2026-06-28 UPDATE: keepalive NAO era a causa do stall de L2. Provado por teste:
-# conexao fresca (keepalive=0) E baixa concorrencia (sem=2) deram o MESMO ~79% stall;
-# e o stall reproduz em ISOLAMENTO num proc especifico. A causa REAL era o
-# gemini-2.5-flash PENDURANDO deterministico em certos prompts (fix = trocar o modelo
-# pro 3.1, ver agents/*/agent.py). Este keepalive fica como higiene geral do hop
-# (nao prejudica), nao como fix do stall.
+# ⚠️ Higiene geral do hop, NAO cura de stall: conexao fresca e baixa concorrencia
+# reproduziram o stall do L2 do mesmo jeito — a causa era o modelo (gemini-2.5-flash
+# pendurando em certos prompts), resolvida trocando o modelo, nao o transporte.
 _GENAI_SOCKET_OPTIONS: list = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)]
 for _opt_name, _opt_val in (("TCP_KEEPIDLE", 10), ("TCP_KEEPINTVL", 5), ("TCP_KEEPCNT", 3)):
     _opt = getattr(socket, _opt_name, None)
@@ -30,9 +27,8 @@ for _opt_name, _opt_val in (("TCP_KEEPIDLE", 10), ("TCP_KEEPINTVL", 5), ("TCP_KE
         _GENAI_SOCKET_OPTIONS.append((socket.IPPROTO_TCP, _opt, _opt_val))
 
 # ⛔ O `limits` MORA NO TRANSPORT (abaixo), nunca ao lado dele: quando o client
-# recebe `transport=`, o httpx IGNORA o `limits` passado junto, em silencio. Ate
-# 2026-09-23 ele ia no client_args e os pools sync/async rodavam no DEFAULT
-# (100 / keepalive 20 / expiry 5s) — mesmo defeito do garantis-shared#576.
+# recebe `transport=`, o httpx IGNORA o `limits` passado junto, em silencio, e o
+# pool roda no DEFAULT (100 / keepalive 20 / expiry 5s).
 # O que o 40/15s compra e so menos handshake TLS com o Gemini; ⚠️ NAO e cura de
 # conexao morta (expiry MAIOR alarga a janela de reuso). `tests/test_genai_pool_limits.py`
 # le o pool EFETIVO.
@@ -43,7 +39,7 @@ _GENAI_LIMITS = httpx.Limits(
 # HttpOptions.timeout (MILISSEGUNDOS) e a UNICA forma de dar timeout ao httpx do
 # genai: timeout dentro de *_client_args e sobrescrito por-request pra None
 # (=desabilitado) pelo SDK. 600s = backstop (>= o maior layer legitimo, L3); o
-# asyncio.wait_for do GeminiProvider.agenerate (TIER 2) e o guard real e mais
+# asyncio.wait_for do GeminiProvider.agenerate e o guard real e mais
 # apertado por-camada via header X-Gemini-Timeout-Ms, entao dispara antes.
 _GENAI_TIMEOUT_MS = 600_000
 

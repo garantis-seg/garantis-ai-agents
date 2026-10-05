@@ -13,22 +13,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from garantis_shared.logging_setup import setup_logging
 
 from .middleware import GeminiCallTimeoutMiddleware
-# (court_state_classifier REMOVIDO 2026-08-10 por decisao do Elton: a flag
-#  USE_LLM_COURT_STATE_CLASSIFIER do frontend-api nasceu "false" e nao ha registro
-#  de "true" em ambiente nenhum. Medido 2026-08-10: 0 requests a /court-state-
-#  classifier/ nos logs DESTE servico, em prod e em staging, na janela inteira
-#  disponivel (entrada mais antiga 2026-07-12; controle positivo: /mov-factsheet/
-#  classify aparece no mesmo filtro). ⚠️ A retencao de log de app no neqsti e 30
-#  dias — "0 em 30d" e o TETO do que o log prova, nao "nunca". O classificador de estado de
-#  court_presentation e o REGEX em
-#  execucao-fiscal/frontend-api/services/court_presentation_inference_service.py.
-#  Posicao mais ampla do Elton na mesma decisao: caminho de LLM para derivar FATO
-#  ESTRUTURAL do processo (tribunal, estado) e para ser EVITADO — o fato deve vir do
-#  provider ou de derivacao deterministica.)
-# (⚰️ `/pdf/ocr`, `/text/extract` e `/mov-summarizer/classify` sairam em 2026-10-03,
-#  card 869fb8j4r, com os 3 agentes que so elas usavam: zero chamador nos repos da
-#  org e zero request em 30d de log, com `/mov-factsheet/classify` como controle
-#  positivo no mesmo filtro.)
+# Nao ha classificador de estado por LLM aqui: o estado de court_presentation e o REGEX
+# de execucao-fiscal/frontend-api/services/court_presentation_inference_service.py.
+# Decisao do Elton: caminho de LLM para derivar FATO ESTRUTURAL do processo (tribunal,
+# estado) e para ser EVITADO — o fato vem do provider ou de derivacao deterministica.
 from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, doc_indexer, doc_reader, ficha_writer, health, merito_reducao_v2, merito_synthesis, mov_factsheet, processo_synthesis, prompts, providers, verificador
 
 # Carregar variáveis de ambiente
@@ -81,20 +69,15 @@ app.include_router(mov_factsheet.router)
 app.include_router(processo_synthesis.router)
 app.include_router(merito_synthesis.router)
 app.include_router(merito_reducao_v2.router)
-# ⚰️ `celula_base_classifier.router` (POST /celula-base/classify) saiu em 2026-08-19
-# com o piso celula-base do L3 (decisao Elton, garantis-shared#392). O unico caller
-# era `classify_celula_base` do shared, gateado por `CELULA_BASE_CLASSIFIER_ENABLED`,
-# que nasceu OFF em 2026-07-11 e nunca ligou -- 0 chamadas, sempre.
 app.include_router(ficha_writer.router)
 # S6 — auditor de ficha. Mesmo prefixo `/ficha` do writer (escrever e auditar
 # sao o mesmo recurso em dois momentos); registrado DEPOIS dele so por ordem de
 # leitura, os paths nao colidem (`/write-fields` x `/auditar`).
 app.include_router(auditor_ficha.router)
 app.include_router(calculo_ficha.router)
-# Onda 9 do Agente Investigador: o VERIFICADOR CEGO (`/verificar-par`). Mesmo
-# prefixo `/calculo-ficha` do auditor, em ROUTER separado — os dois modos
-# convivem (o cego e aditivo; o `/auditar-evidencias` serve o harness de hoje e
-# so morre na onda 6) e nenhum dos dois PRs precisa tocar no arquivo do outro.
+# O VERIFICADOR CEGO do Agente Investigador (`/verificar-par`): mesmo prefixo
+# `/calculo-ficha` do `/auditar-evidencias`, em ROUTER separado — os dois modos
+# convivem (o cego e aditivo).
 app.include_router(verificador.router)
 # Camada P do Agente Investigador: PDF -> DocumentoIndexado. Prefixo PROPRIO
 # (`/doc-indexer`), separado do `/calculo-ficha`, porque nao e um agente do C4 —
@@ -105,8 +88,8 @@ app.include_router(doc_indexer.router)
 # depois do indexador porque consome o que ele produz, e tem prefixo proprio
 # (`/doc-reader`) pela mesma razao: o Leitor serve ao Investigador, mas nao e o
 # C4 — quem o chama e a ferramenta `perguntar_ao_documento`, nao a rota do
-# calculo. Sem flag: as rotas so respondem a quem as chama, e ninguem as chama
-# ate o Investigador da onda 8 existir.
+# calculo. Sem flag: as rotas so respondem a quem as chama, e o Investigador
+# (`agents/calculo_ficha/investigador.py`) usa o Leitor em processo, nao pela rota.
 app.include_router(doc_reader.router)
 
 

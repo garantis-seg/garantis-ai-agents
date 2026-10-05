@@ -1,40 +1,25 @@
 """Prompt pro processo_synthesis agent (engine v6_meritos camada 2).
 
-REV2 2026-05-20 PM: aceita autos_raw_excerpt (primeiras 10 + ultimas 50 pgs do
-autos.zip) pra 207/237 procs Monit com extraction_completed. DD6 do plano.
-
-REV3 2026-05-25 (P1+P2 do prompt-engineering FINDINGS — v2.1):
-- Removido bloco "=== FORMATO DE SAIDA ===" dos 2 prompts (~80 linhas
-  duplicando shape JSON). Output enforced via response_schema=
+A forma do prompt, e o que muda o que se faz ao edita-lo:
+- Sem bloco "=== FORMATO DE SAIDA ===": o output e enforced via response_schema=
   ProcessoSynthesisCard / ProbabilidadeExito em agent.py.
-- REGRA DE LEITURA DE POLOS movida do meio (era linha 618-651) pro TOPO
-  em bloco <regras_criticas> XML. Combate Lost-in-the-Middle.
-- <lembrete_final> no fim como recency anchor.
-- Tipo-specific blocks (FISCAL/TRABALHISTA/CIVEL) mantidos no meio — sao
-  contextuais por bucket, nao competem com regras universais.
-
-REV4 2026-06-12 (v2.3 — SEM CAP de dados, decisao Elton "nao pode ter cap de
-dados em nenhum lugar"):
-- _MAX_MOVS_INLINE=50 REMOVIDO dos 2 builders. Cortava as movs mais ANTIGAS
-  — inclusive o card de PETICAO INICIAL (1P), que e a entrada mais antiga
-  (censo 2026-06-12: 2/2 procs com card 1P tinham >50 movs = peticao nunca
-  chegava ao LLM). Censo de tamanho: p99=max=2026 movs ~ 530k chars — cabe
-  no contexto 1M tokens. Guard fail-loud _log_prompt_size no lugar do cap
-  (loga sempre; WARN L2_PROMPT_OVERSIZE >3M chars; NUNCA trunca).
-- Truncagens de render removidas (resumo_ato[:200], motivos[:80],
-  resumo_dia[:200], descricao[:80], eventos[:5]).
-- Instrucoes mortas de "autos raw" removidas (campos 7/8/9 + ex-REGRA F):
-  o request nunca teve autos_raw_excerpt no caminho vivo — REV2 morreu
-  upstream (materializer shared nao envia; schema dropa via extra-ignore).
-- Instrucoes novas de leitura: PETICAO INICIAL (mov_id 'peticao-<pn>') +
-  split por documento (mov_id '<id>:<doc>', regra 1-doc-maximo shared#68).
+- REGRA DE LEITURA DE POLOS no TOPO, em bloco <regras_criticas> XML (combate
+  Lost-in-the-Middle), e <lembrete_final> no fim como recency anchor.
+- Tipo-specific blocks (FISCAL/TRABALHISTA/CIVEL) no meio — sao contextuais por
+  bucket, nao competem com regras universais.
+- SEM CAP de dados (decisao do Elton: "nao pode ter cap de dados em nenhum lugar"):
+  nenhum corte por posicao — a PETICAO INICIAL (1P) e a entrada mais ANTIGA, e um cap
+  de movs a tirava do prompt. No lugar do cap, o guard fail-loud _log_prompt_size (loga
+  sempre; WARN L2_PROMPT_OVERSIZE; NUNCA trunca). Processo GIGANTE passa pelo filtro de
+  relevancia (_filtered_cards), que nunca corta sinal e declara os omitidos.
+- Leitura da PETICAO INICIAL (mov_id 'peticao-<pn>') + split por documento
+  (mov_id '<id>:<doc>').
 """
 
 import logging
 
-# Matriz Daycoval (Probabilidade de Exito): extraida em 2026-05-31 (PR2 Architecture D)
-# pra garantis_shared.engine_v6.matrices.daycoval. Sobrou so o alias do builder; os
-# `_DAYCOVAL_*`/`_SCORE_BY_CLASS` nao tinham leitor e sairam em 2026-09-17.
+# Matriz Daycoval (Probabilidade de Exito): mora em
+# garantis_shared.engine_v6.matrices.daycoval; aqui fica so o alias do builder.
 from garantis_shared.engine_v6.matrices.daycoval import (
     build_matriz_block_compat as _build_matriz_block,
 )
@@ -42,16 +27,9 @@ from garantis_shared.engine_v6.matrices.daycoval import (
 from .schemas import ApoliceContextMin, MovFactSheetMin, ProcessoSynthesisRequest
 
 
-# PR7.3 (2026-05-31): _flag_enabled wrapper removido — unico caller era
-# JURISPRUDENCIA_BLOCK_ENABLED do bloco interno (dropado em PR7.2).
-# Provider externo jurisprudencias.ai eh single source jurisprudencial agora.
-
 logger = logging.getLogger(__name__)
 
-# v2.3: _MAX_MOVS_INLINE / _AUTOS_TEXT_CAP_CHARS / _DOC_TEXT_CAP_CHARS /
-# _MAX_DOCS_INLINE REMOVIDOS (os 3 ultimos eram dead code desde que o
-# autos_raw_excerpt morreu upstream). Sem cap de dados — ver REV4 no header.
-_MOV_ID_DISPLAY_CHARS = 8       # UUID prefix na exibicao (Bug 3 handoff)
+_MOV_ID_DISPLAY_CHARS = 8       # UUID prefix na exibicao
 
 # ~Limite fisico do contexto (1M tokens ~ 4M chars) com folga pro output.
 # NAO e um cap: acima disso a call falha VISIVEL no cascade (sem truncar).
@@ -85,34 +63,31 @@ def _short_mov_id(mov_id: str | None) -> str:
     return s
 
 
-# ── Filtro de relevância p/ processo GIGANTE (2026-06-20) ──────────────────────
-# L2 renderiza TODOS os cards (REV4 "sem cap"). Processo gigante (449+ cards num prompt
-# só) estoura o TIMEOUT_LAYER2 de 180s — méritos 680075/680008/680046. Insight do Elton:
-# o L1 JÁ classificou cada mov (relevancia_merito); o L2 não precisa RE-LER os milhares de
-# movs procedurais que o L1 marcou ruido/baixa (penhora/intimação/conclusão) — não mudam
-# decisao_vigente/estado/garantia. Mantém TODO sinal onde quer que esteja (NÃO é head+tail
-# cego) + a cauda recente (estado corrente) + a petição inicial (não repete o bug REV4 de
-# cortar a petição antiga). Só liga ACIMA do threshold → processo normal fica byte-idêntico.
-# ponytail: threshold conserva o caminho quente (99% dos procs) intocado; sobe se algum
-# proc de ~150-200 movs ainda estourar.
-# GIANT-FILTER v2 (2026-06-25): os 2 stragglers (633163/1409966 = L2 ReadTimeout em
-# giant) provaram que o filtro v1 "não reduz o bastante" — kept ainda dava centenas de
-# media -> prompt enorme -> 180s. Fix (handoff giant-readtimeout + adendo): TETO DURO de
-# cards renderizados (_L2_MAX_KEPT) + tail menor. Tier: HARD (nunca cortável) = decisão/
-# garantia/peça-pivô/petição/suspensão/alta + cauda; SOFT = media (só preenche até o teto).
-# Guardrail (adendo): o teto NUNCA evicta sinal em favor de media — hard entra inteiro
-# mesmo acima do teto; media só ocupa o que sobrar. ≤200 cards continua byte-idêntico.
+# ── Filtro de relevância p/ processo GIGANTE ───────────────────────────────────
+# L2 renderiza TODOS os cards (sem cap — ver o docstring do módulo). Processo gigante num
+# prompt só estoura o TIMEOUT_LAYER2 do worker. O L1 JÁ classificou cada mov
+# (relevancia_merito); o L2 não precisa RE-LER os milhares de movs procedurais que o L1
+# marcou ruido/baixa (penhora/intimação/conclusão) — não mudam decisao_vigente/estado/
+# garantia. Mantém TODO sinal onde quer que esteja (NÃO é head+tail cego) + a cauda recente
+# (estado corrente) + a petição inicial (a entrada mais antiga, que um corte por posição
+# perderia). Só liga ACIMA do threshold → processo normal fica byte-idêntico.
+# ponytail: threshold conserva o caminho quente intocado; sobe se algum proc de ~150-200
+# movs ainda estourar.
+# TETO DURO de cards renderizados (_L2_MAX_KEPT): sem ele os `media` mantidos ainda davam
+# centenas de cards e o prompt seguia estourando o timeout. Tier: HARD (nunca cortável) =
+# decisão/garantia/peça-pivô/petição/suspensão/alta + cauda; SOFT = media (só preenche até
+# o teto). Guardrail: o teto NUNCA evicta sinal em favor de media — hard entra inteiro
+# mesmo acima do teto; media só ocupa o que sobrar. Até o threshold, byte-idêntico.
 _L2_CARD_FILTER_THRESHOLD = 200   # <= isto: render tudo (caminho quente, sem mudança)
-_L2_TAIL_KEEP = 12                # cauda recente (era 30 — reduzido no giant-filter v2)
-_L2_MAX_KEPT = 50                 # teto de cards renderizados em giant (anti-180s)
-_L2_HARD_REL = {"alta"}           # media saiu do hard -> vira SOFT (cortável sob o teto)
+_L2_TAIL_KEEP = 12                # cauda recente
+_L2_MAX_KEPT = 50                 # teto de cards renderizados em giant (anti-timeout)
+_L2_HARD_REL = {"alta"}           # media fica fora do hard -> e SOFT (cortável sob o teto)
 
 
 def _carrega_sinal_hard(f, is_tail: bool) -> bool:
     """Sinal que NUNCA pode ser cortado (nem pelo teto): cauda recente, decisão, evento de
     garantia, peça-pivô, petição inicial, alta relevância, OU sinal de suspensão
-    (instrumento_cautelar/efeito_suspensivo — preserva o mov pra quando a suspensão
-    derivada determinística aterrissar, condição A 2026-06-25)."""
+    (instrumento_cautelar/efeito_suspensivo)."""
     d = f.decisao or {}
     return bool(
         is_tail
@@ -148,7 +123,7 @@ def _filtered_cards(factsheets_sorted: list) -> tuple[list, int]:
 
 
 def _render_timeline(factsheets_sorted: list, empty: str) -> str:
-    """Timeline pro prompt L2. Processo normal (<= threshold): render TUDO (REV4 intacto).
+    """Timeline pro prompt L2. Processo normal (<= threshold): render TUDO (sem cap).
     Processo gigante: filtra pelo sinal que o L1 já computou + marcador dos omitidos (no
     silent cap). Bound determinístico que evita o TIMEOUT_LAYER2 sem cortar sinal."""
     kept, n_omit = _filtered_cards(factsheets_sorted)
@@ -168,15 +143,15 @@ def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
 
     Sem ruido das outras partes (estado_processual, decisao_vigente, etc.) —
     LLM concentra atencao na matriz e produz output mais consistente.
-    Empirico v1: combinado com synthesis no mesmo prompt, gemini-2.5-flash
-    omitia prob_exito em 100% das tentativas (smoke 1-merito 12151 + 50).
+    Empirico: combinado com synthesis no mesmo prompt, gemini-2.5-flash
+    omitia prob_exito em 100% das tentativas.
     """
     factsheets = req.mov_factsheets or []
     # MESMA chave (data ASC, mov_id ASC) do build_processo_synthesis_prompt e do
-    # split_movs_chronological — as 3 ordens batem (determinismo; review 2026-06-22).
+    # split_movs_chronological — as 3 ordens batem (determinismo).
     factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or "", f.mov_id or ""))
 
-    # Render tudo p/ processo normal (REV4); filtra ruido/baixa só p/ processo gigante.
+    # Render tudo p/ processo normal (sem cap); filtra ruido/baixa só p/ processo gigante.
     timeline_block = _render_timeline(factsheets_sorted, "(sem movimentacoes)")
 
     matriz_block = _build_matriz_block(req.tipo_judicial)
@@ -234,19 +209,16 @@ response_schema do Gemini — nao precisa formato textual no prompt).
 def _summarize_factsheet(fs: MovFactSheetMin) -> str:
     """1 linha compacta por factsheet pro timeline do prompt.
 
-    mov_id renderizado como prefix de 8 chars (UUID estavel pos-Fase 2
-    canonical layer — antes era canonical_event.id BIGINT volatil entre
-    re-materializes, causava drift do prompt L2 entre cascades).
+    mov_id renderizado como prefix de 8 chars (UUID estavel — id volatil entre
+    re-materializes causaria drift do prompt L2 entre cascades).
     """
     parts = []
-    # ⭐ A AUSENCIA e DECLARADA, nao omitida. Sem o `else` a linha entrava no bloco
+    # ⭐ A AUSENCIA e DECLARADA, nao omitida. Sem o `else` a linha entraria no bloco
     # sem colchete nenhum, num bloco cujo cabecalho diz "ordenados por data ASC" — e o
-    # LLM nao tinha como separar "a mais antiga" de "desconhecida". Medido 2026-09-01:
-    # 4.065 unidades renderizadas assim em 93 processos, 1.873 delas COM decisao e 98
-    # com transito certificado; todas classe 1D (documento orfao sem `juntada_at`).
+    # LLM nao teria como separar "a mais antiga" de "desconhecida" (o caso tipico e a
+    # classe 1D, documento orfao sem `juntada_at`).
     # ⛔ Isto NAO afirma nada sobre QUANDO o ato aconteceu — so que nao se sabe. Preencher
-    # a data com a inferencia do LLM foi VETADO pela decisao G.2 (2026-06-11), e as
-    # colunas correspondentes foram dropadas em 2026-09-01 (card 869etg201).
+    # a data com a inferencia do LLM foi VETADO (decisao G.2 da revisao do prompt).
     if fs.data:
         parts.append(f"[{fs.data}]")
     else:
@@ -268,26 +240,21 @@ def _summarize_factsheet(fs: MovFactSheetMin) -> str:
             d_parts.append(decisao["sentido"])
         if decisao.get("transito_certificado"):
             d_parts.append("(TRANSITO)")
-        # O SUJEITO da decisão (RAIZ 869ep4gp1). Sai SÓ quando a decisão é de OUTRA ação
-        # — o G6 do shared já anulou formato inválido e auto-ponteiro, então a presença
-        # do token, sozinha, JÁ significa "outra ação": ninguém aqui compara CNJs.
-        # ⭐ Sem o token a linha é BYTE-IDÊNTICA à de antes ⇒ `_est_render_chars` e o
-        # `split_movs_chronological` (chunking.py) ficam inalterados nos 395.241 cards
-        # de hoje, que é onde o PR #180 se machucou.
+        # O SUJEITO da decisão. Sai SÓ quando a decisão é de OUTRA ação — o G6 do shared
+        # (`layer1_mov_factsheet/derivacoes.py`) já anulou formato inválido e auto-ponteiro,
+        # então a presença do token, sozinha, JÁ significa "outra ação": ninguém aqui
+        # compara CNJs.
+        # ⭐ Sem o token a linha é BYTE-IDÊNTICA ⇒ `_est_render_chars` e o
+        # `split_movs_chronological` (chunking.py) não mudam pros cards sem ele.
         if decisao.get("acao_julgada_cnj"):
             d_parts.append(f"acao_julgada={decisao['acao_julgada_cnj']}")
-        # A ÂNCORA da RAIZ 869enpem7 (OK Elton 2026-09-02, card 869ep4gp1). O `dispositivo`
-        # existia no banco e atravessava `card_to_row`/`_row_to_card` até o `MovFactSheetMin`,
-        # mas morria AQUI: nunca chegava ao prompt do L2. A RAIZ entregou a âncora que torna o
-        # veredito verificável e ninguém a consumia.
-        # ⭐ Condicional, como o `acao_julgada_cnj` logo acima, e pelo mesmo motivo: medido em
-        # 2026-09-02, `dispositivo` é não-nulo em 3.112 de 395.241 linhas (0,79%) e TODAS as
-        # 3.112 já têm `tem_decisao=TRUE` ⇒ o `if` que envolve este bloco já as cobre, e as
-        # outras 392.129 (99,21%) saem BYTE-IDÊNTICAS. Não é o "muda todos os 395.241" que o
-        # card supunha.
-        # ⚠️ O clip de 300 chars não é estético: o pior processo do acervo ganha ~29k chars, e
-        # `_L2_CHUNK_DETECT_CHARS` é 800.000 (chunking.py) ⇒ 3,6% de um limiar dormente. Sem o
-        # clip um dispositivo longo sozinho pode dominar o chunk.
+        # A ÂNCORA do veredito: o `dispositivo` atravessa `card_to_row`/`_row_to_card` até o
+        # `MovFactSheetMin` e tem de chegar ao prompt do L2 — é o que torna o veredito
+        # verificável.
+        # ⭐ Condicional, como o `acao_julgada_cnj` logo acima, e pelo mesmo motivo: card sem
+        # `dispositivo` sai BYTE-IDÊNTICO.
+        # ⚠️ O clip de 300 chars não é estético: sem ele um dispositivo longo sozinho pode
+        # dominar o chunk (`_L2_CHUNK_DETECT_CHARS`, chunking.py).
         # ⭐ `_est_render_chars` CHAMA esta mesma função (chunking.py), então detector e render
         # não podem divergir por construção — não há um 2º lugar pra atualizar.
         if decisao.get("dispositivo"):
@@ -345,12 +312,6 @@ def _summarize_apolice(ap: ApoliceContextMin) -> str:
     if ap.is_central_for_merito:
         parts.append("(central no merito)")
     return " | ".join(parts)
-
-
-# _summarize_day_factsheet REMOVIDO em 2026-06-13 (onda 2 do teardown do
-# tier por-dia): day_factsheets sairam do payload/prompt do L2. Sem bump de
-# PROMPT_VERSION de proposito — pra todo proc o bloco ja renderizava o
-# placeholder vazio (cards day 100% supersedidos antes deste deploy).
 
 
 _TIPO_RULES_FISCAL = """=== REGRAS TIPO-SPECIFIC (FISCAL) ===
@@ -461,17 +422,12 @@ def _build_tipo_specific_block(tipo: str | None) -> str:
     return _TIPO_RULES_CIVEL
 
 
-# PR7.2 (2026-05-31): _build_tese_juris_block REMOVIDO. Bloco juris interno
-# (curadoria ref.tese_jurisprudencia) dropado em favor do provider externo
-# jurisprudencias.ai. Substituido por _build_juris_externa_block (abaixo).
-
-
 def _clip_head_tail(text: str, *, head: int, tail: int) -> str:
     """Clip preservando inicio (materia/tese) + fim (dispositivo) da ementa.
 
     O dispositivo (provido/improvido/nega-se) — o sinal de QUEM GANHOU — costuma
-    vir no FIM da ementa. Truncar so o head (bug pre-2026-06-21: cap 300 chars no
-    head) jogava o resultado fora. Se cabe inteiro (<= head+tail) retorna intacto.
+    vir no FIM da ementa: truncar so o head joga o resultado fora. Se cabe inteiro
+    (<= head+tail) retorna intacto.
     """
     text = text or ""
     if len(text) <= head + tail:
@@ -480,10 +436,10 @@ def _clip_head_tail(text: str, *, head: int, tail: int) -> str:
 
 
 def _build_juris_externa_block(je) -> str:
-    """Renderiza jurisprudencia externa (provider jurisprudencias.ai) (PR3).
+    """Renderiza jurisprudencia externa (provider jurisprudencias.ai), a fonte
+    jurisprudencial unica do L2.
 
-    Architecture D — bloco PARALELO ao tese_jurisprudencia interno. Quando
-    JURISPRUDENCE_PATH_ENABLED=off, este field eh None upstream e este
+    Quando JURISPRUDENCE_PATH_ENABLED=off, este field eh None upstream e este
     helper nao eh chamado (caller short-circuita). Quando present:
     header + tally + top 3 ementas (process_number + publication_date +
     excerpt curto + url). LLM deve emit risco_jurisprudencial baseado nele.
@@ -525,10 +481,9 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     """Build prompt que agrega mov_factsheets + apolice context.
 
     Sort do timeline e DETERMINISTICO: (data ASC, mov_id ASC). mov_id e
-    cluster_id UUID estavel pos-Fase 2 (Bug 3 handoff). Mesmo input
-    produz mesmo prompt entre cascades — drift L2 eliminado.
+    cluster_id UUID estavel. Mesmo input produz mesmo prompt entre cascades.
 
-    v2.3: SEM CAP de movs (REV4 no header) — a peticao 1P (entrada mais
+    SEM CAP de movs (ver o docstring do modulo) — a peticao 1P (entrada mais
     antiga) e movs historicas sempre entram. Guard fail-loud no retorno.
     """
     factsheets = req.mov_factsheets or []
@@ -555,22 +510,17 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     header_block = "\n  ".join(header_lines)
 
     tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
-    # PR7.2 (2026-05-31): tese_juris_section (bloco JURISPRUDENCIA DA TESE
-    # interno) REMOVIDO. Provider externo jurisprudencias.ai (jurisprudencia_externa)
-    # eh unica fonte. Curadoria interna ref.tese_jurisprudencia DROPPED.
-    # §3.2 (2026-06-21): o bloco <regra_jurisprudencia> (glossario 6-valores
-    # pro_contribuinte_firmado/.../nao_classificada + regras J/J.1/J.2/J.3) tambem
-    # foi removido das <regras_criticas> — operava no MESMO campo morto
-    # tese_jurisprudencia e empurrava o LEGACY risco_processo_intermediario. A juris
-    # VIVA entra so via risk_decomposition_section (risco_jurisprudencial, 4 valores
-    # do provider). Sistema unico, sem double-count nem glossario fantasma.
+    # Jurisprudencia: fonte UNICA = provider externo jurisprudencias.ai
+    # (jurisprudencia_externa), e a juris VIVA entra SO via risk_decomposition_section
+    # (risco_jurisprudencial, 4 valores do provider). `tese_juris_section` fica vazio:
+    # ⛔ bloco juris interno ou glossario em <regras_criticas> duplicaria a contagem e
+    # empurraria o LEGACY risco_processo_intermediario.
     tese_juris_section = ""
 
-    # PR6 Architecture D: bloco "Decomposicao Orthogonal" SEMPRE renderizado
-    # (independente da flag JURISPRUDENCE_PATH_ENABLED). Forca o LLM a emit
-    # risco_factual + risco_jurisprudencial separados em TODOS cascades.
-    # PR7.2 (2026-05-31): em flag=off, juris vem APENAS de jurisprudencia_externa
-    # (provider). Quando provider unavailable, LLM emit Indeterminado.
+    # Bloco "Decomposicao Orthogonal" SEMPRE renderizado (independente da flag
+    # JURISPRUDENCE_PATH_ENABLED): forca o LLM a emitir risco_factual +
+    # risco_jurisprudencial separados em TODOS os cascades. Sem provider disponivel,
+    # o LLM emite Indeterminado.
     juris_externa_header = ""
     if req.jurisprudencia_externa is not None:
         juris_externa_header = (

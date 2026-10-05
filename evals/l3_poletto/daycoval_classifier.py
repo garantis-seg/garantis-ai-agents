@@ -1,6 +1,6 @@
 """Classificador DETERMINISTICO do risco de acionamento — matriz Daycoval canonica.
 
-Ground-truth OFICIAL (decisao Elton 2026-06-14): a regra e 100% Daycoval; Poletto
+Ground-truth OFICIAL (decisao do Elton): a regra e 100% Daycoval; Poletto
 e so validacao de sucesso. Este classificador (a) e a REFERENCIA que mede o engine
 atual, e (b) e o candidato a risco#2 do engine (LLM so extrai features; a matriz
 decide o nivel).

@@ -1,15 +1,15 @@
-"""Prompt do VERIFICADOR CEGO (onda 9) — adversarial, por par, sem contexto.
+"""Prompt do VERIFICADOR CEGO — adversarial, por par, sem contexto.
 
 Tres coisas que este prompt faz e o do auditor antigo nao faz:
 
 1. **Nao entrega contexto nenhum** alem do par. Sem grafo, sem documento, sem
    quem escreveu, sem rodada anterior. O HALLMARK mediu que contexto e
-   ferramenta no verificador inflam FP ~5x (pesquisa §4.5): ver a construcao e
-   herdar a hipotese de quem construiu.
+   ferramenta no verificador inflam FP ~5x: ver a construcao e herdar a
+   hipotese de quem construiu.
 2. **Diz explicitamente que `partial` e `irrelevant` EXISTEM.** Sem isso o
    modelo colapsa tudo em supported/contradicted — e o colapso e caro, porque
    os quatro rotulos tem DONOS diferentes (refinamento, extracao, retrieval).
-3. **Pede confianca em CAMPO com o objeto declarado** (§5.3), e diz ao modelo
+3. **Pede confianca em CAMPO com o objeto declarado**, e diz ao modelo
    qual e o objeto: "de que ESTE TRECHO sustenta ESTA AFIRMACAO" — nao "de que
    li certo", nao "de que a ficha esta boa".
 
@@ -208,7 +208,7 @@ def build_confianca_variante_prompt(
     """Prompt de UM voto DINCO — a variante apresentada como se fosse a unica.
 
     O ponto inteiro do DINCO e matar a SUGESTIONABILIDADE: verbalized cru satura
-    em 0,9/0,95 porque o modelo da confianca alta a alegacao que lhe foi
+    em 0,9-0,95 porque o modelo da confianca alta a alegacao que lhe foi
     apresentada. Entao cada variante e perguntada numa chamada INDEPENDENTE, sem
     saber que existem outras e sem saber qual e a original. Se este prompt
     dissesse "esta e uma variante", o metodo nao valeria nada.

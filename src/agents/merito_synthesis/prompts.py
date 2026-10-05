@@ -16,12 +16,7 @@ from typing import Literal
 
 from .schemas import (
     CDACardMin,
-    # v2.5 (2026-06-12): JurisprudenciaMin removido (dead code desde v2.2 —
-    # campo saiu do request; o summarizer morto saiu junto).
     MeritoSynthesisRequest,
-    # PR7.2 (2026-05-31): ParadigmaMin removido (paradigmas Poletto curados drop).
-    # v2.7.3 (2026-07-02): PreviousSnapshot removido do import (render do bloco
-    # SNAPSHOT ANTERIOR deletado; o campo segue Optional no request schema).
     ProcessoSynthesisMin,
     RedacaoRequest,
     TomadorCardMin,
@@ -32,155 +27,47 @@ from .._utils import flag_enabled as _flag_enabled_shared
 
 
 def _flag_enabled(name: str, default: str = "true") -> bool:
-    """Wrapper backward-compat com default ON pros flags E4-E7.
+    """Wrapper com default ON pras flags de prompt deste modulo.
 
-    Helper canonical é `agents._utils.flag_enabled` (default OFF). Este wrapper
-    preserva o default ON usado nos flags Sprint 2 P&P.
+    Helper canonical é `agents._utils.flag_enabled` (default OFF).
     """
     return _flag_enabled_shared(name, default=default)
 
 
 # Bump quando alterar build_merito_synthesis_prompt OU MeritoSynthesisCard
 # schema. Sufixo `-{tipo}` via _prompt_version_for() rastreia variant em
-# leads.engine_llm_calls.
-#
-# v2.1 (2026-05-25, P1+P2 do prompt-engineering FINDINGS):
-#   - Reativado response_schema=MeritoSynthesisCard em agent.py (depois que
-#     schema foi reformatado pra eliminar dict[str, Any] que causava
-#     additionalProperties bug). BreakdownProcesso + CardsIndexCount substituem
-#     legacy dict.
-#   - Optional[str] enum apertados pra Literal[...] strict (lição L2 v2.1 —
-#     evita loop infinito do decoder Gemini com response_schema).
-#   - Removido bloco _build_output_schema (=== FORMATO DE SAIDA ===) — Output
-#     enforced via response_schema nativo. Enriquecidas Field(description) em
-#     schemas.py com semantica que vivia no prompt (risco, justificativa, etc).
-#   - L3 ja tinha _build_glossary_roles + _build_consistency_check NO TOPO —
-#     ordem ja seguia a metodologia P2. Adicionado _build_lembrete_final como
-#     recency anchor pras 3 regras criticas.
-#
-# v2.2 (2026-05-25, proposta L2-only jurisprudencia):
-#   - Jurisprudencia MIGRADA pra L2 (Opcao A: single source of truth).
-#   - Removido bloco _build_jurisprudencia_block do prompt.
-#   - Regras G/G.1/G.2 (que aplicavam juris hard) REMOVIDAS dos 4 variants
-#     _build_regras_ouro_{fiscal,trab,civel,misto}. L3 confia 100% em
-#     risco_processo_intermediario do L2 (que ja absorveu juris via
-#     regras J/J.1/J.2 do L2 prompt v2.2).
-#   - Removido `jurisprudencia` do MeritoSynthesisRequest (schema).
-#   - PR7.2 (2026-05-31): paradigmas REMOVIDOS tambem (curadoria interna
-#     ref.tese_decisao_individual DROPPED). Architecture D promote (mode=new)
-#     assume papel jurisprudencial via matriz determ + provider externo.
-#   - Elimina double-counting: jurisprudencia pesava 2x (Matriz Daycoval
-#     implicito em L2 + regras G em L3).
-#
-# v2.5 (2026-06-12, SEM CAP de dados — decisao Elton, revisao L2/L3):
-#   - Truncagens de render removidas: justificativa prob_exito [:140],
-#     criterios [:2]+[:160], peca_pivo motivo [:120], lifecycle [:5],
-#     cda.notes [:120], aiim.contexto_snippet [:200],
-#     decisao_anterior [:200] (este truncava json.dumps no meio = JSON
-#     quebrado no prompt). classified_at [:10] FICA (data-only, Bug 4 —
-#     estabilidade de prompt_hash, nao e cap de dado).
-#   - Limpeza stale v2.2: intro nao promete mais "jurisprudencia da tese"
-#     (promessa falsa em toda call desde 2026-05-25); _summarize_jurisprudencia
-#     (dead code) + JurisprudenciaMin deletados; docstrings atualizadas.
-#   - Rollback: revert do PR (regen COLD na versao anterior).
-#
-# v2.6 (2026-06-16, FILTRO DE REDACAO — bastidores fora da tela do advogado):
-#   - Estudo de 100 outputs L3 reais (multi-agente) achou 13 categorias de
-#     vazamento de jargao interno na prosa visivel ao advogado; 4 criticas
-#     (termo "merito"=cluster + merito_id; Poletto/templates T-X; Daycoval/
-#     Architecture D/matriz determ; scores 0.xxxx).
-#   - Novo bloco _build_filtro_redacao() (recency anchor, antes do lembrete):
-#     separa raciocinio interno (pode usar jargao) dos campos de PROSA (limpos).
-#     Constraint negativa especifica + substituto positivo (best practices
-#     Gemini). NAO simplifica — torna acessivel pro advogado SEM omitir tecnica
-#     juridica.
-#   - Ajustes pontuais que MANDAVAM vazar: _build_templates_poletto (parou de
-#     pedir "cite Poletto T-X na justificativa") + derived_only bucket (trocou
-#     o texto-modelo "matriz determ Architecture D, sem nuance LLM").
-#   - lembrete_final ganhou item 4 (prosa limpa).
-#   - Rollback: revert do PR (regen COLD na v2.5).
-#
-# v2.7 (2026-06-20, SEPARACAO DAS 2 MATRIZES DAYCOVAL — calibragem L2/L3):
-#   - A MATRIZ DE RISCO (estagio processual) volta a ser o UNICO decisor do nivel;
-#     a probabilidade_exito (chance de vencer a causa) vira CONTEXTO de apoio.
-#     Removido o "floor" prob_exito->risco (protocolo + bloqueio + Regra F + gatilho
-#     prob no consistency-check) que misturava as duas matrizes Daycoval e causava
-#     over-rating sistematico. Injetado bloco <matriz_risco> (criterios BMG Dez/2024)
-#     como regra de decisao; prob_exito por processo fica como contexto rotulado.
-#   - A/B vs Poletto (eval l3_poletto, LLM decide sem override): exact 37->46%,
-#     within1 80->88%, miss-perigoso (Poletto>=Alto->Baixo) 7->3, Altissimo 0->14.
-#   - Pareado com flip do override no worker: JURISPRUDENCE_PATH_ENABLED
-#     prob_base->shadow (o veredito do LLM passa a valer; matriz fica dormente).
-#   - Rollback: revert do PR (regen COLD na v2.6) + flag de volta pra prob_base.
-#
-# v2.7.1 (2026-06-23, TOMADOR-FATO — unico win da busca de simplificacao L3):
-#   - GLOSSARIO ROLES + REGRA DURA 3-step "grosseira" (tomador==vencedor->Baixo
-#     senao->Alto, que contradizia a matriz) REMOVIDOS. O Tomador entra como FATO
-#     (razao_social/CNPJ via _build_glossary_roles(req), nome mantido p/ compat) +
-#     1 linha anti-inversao. Ref do lembrete GLOSSARIO->O TOMADOR.
-#   - Validado no harness (evals/l3_poletto, 234 r3 denoised, --no-override), 3 runs:
-#     false_baixo (miss-perigoso) 12.4%->11.1% ESTAVEL (3/3); exact ~neutro; within1
-#     leve queda ~ruido; mean_signed +0.03 (~ruido). Trade na direcao certa p/ seguro
-#     (-miss-perigoso por +over-rating minimo) + simplifica.
-#   - Os outros 4 candidatos de simplificacao (prob-por-processo, comprimir
-#     consistency, comprimir filtro, remover templates) REGREDIRAM/borderline-neg e
-#     foram DESCARTADOS — v2.7 e otimo-local exceto pela REGRA DURA. Detalhe: memory
-#     l3-consolidacao-2026-06-23.
-#   - Rollback: revert do PR (regen COLD na v2.7).
-#
-# v2.7.2 (2026-06-29, extracao-sinais-merito-level):
-#   - SCHEMA do card OUT: decisao_atual vira DecisaoAtualRich (motivo_extincao/
-#     instrumento_cautelar/efeito_suspensivo + suspensao_processual/vigente/data),
-#     PROJETADOS em codigo pos-LLM do decisao_vigente do processo governante
-#     (_project_merito_decisao_facts). Fecha o "satisfacao=0/86" (o sinal morria na
-#     borda L2->L3). PROMPT + response_schema do LLM (DecisaoAtual LEAN) INTOCADOS.
-#   - Bump = provenance do schema novo; o lift real exige re-cascade COLD. Memory:
-#     extracao-sinais-merito-level-2026-06-29.
-#
-# v2.7.3 (2026-07-02, frescor/convergencia): bloco SNAPSHOT ANTERIOR REMOVIDO do
-#   prompt. Duplo dano do bloco: (a) ancora o LLM no risco anterior (o proprio
-#   header dizia "engine v6 nao usa hoje pra trajetoria; informativo" — input pago
-#   sem consumidor); (b) QUEBRAVA o seed deterministico entre cascades — o seed_for
-#   inclui o prompt, e o snapshot anterior muda a cada cascade -> prompt muda ->
-#   seed muda -> a convergencia so valia com input congelado. O schema
-#   previous_snapshot fica Optional (compat com worker antigo); so o RENDER morreu.
-#
-# v2.8 (2026-06-30, CITACOES INLINE — feedback do socio, fim do string-match).
-#   Rebase pos-v2.7.3: mantem a remocao do bloco SNAPSHOT ANTERIOR (acima) E
-#   adiciona as tags inline; numero > v2.7.3 mas branch e anterior (por isso a
-#   data e menor). Conteudo:
-#   - O evento decisivo agora e marcado INLINE na justificativa como link markdown
-#     `[frase](CNJ)` (instrucao 12 reescrita), em vez do array `citacoes` separado
-#     casado por substring no front. Motivo: o casamento falhava ~24% da carteira
-#     (LLM parafraseava o trecho -> nao batia caractere-a-caractere -> link sumia)
-#     e era ambiguo em trecho duplicado. A tag inline esta no lugar por construcao.
-#   - O campo `citacoes` continua no schema mas e DERIVADO em codigo (materializer
-#     garantis-shared parseia as tags + resolve mov_id pelo peca_pivo) — telemetria
-#     e back-compat preservados. Schema Citacao/justificativa/citacoes atualizados.
-#   - Front (garantis-app citacao-tags.ts) parseia a tag e renderiza in-place;
-#     back-compat: snapshot V2b (sem tag) cai no string-match antigo.
-#   - Rollback: revert do PR (regen COLD na v2.7.1); materializer + front auto-detectam
-#     o formato (sem tag -> caminho antigo), entao a ordem de deploy e tolerante.
-# v2.9 (2026-07-14): remove residuo textual 'aiim' do texto do prompt (intro,
-#   lista de kinds de evidence_artifacts, regra C, campos de prosa). O card AIIM
-#   saiu do payload no teardown autos-wide (v2.8, #90/#91) e o texto ficou
-#   incoerente com o payload servido. Muda prompt_hash (esperado). OK Elton
-#   2026-07-14; efeito diferido ate proximo deploy deliberado do ai-agents.
+# telemetria.engine_llm_calls. O que cada versao mudou esta no git; ficam aqui os
+# invariantes que elas firmaram:
+#   - Output enforced pelo response_schema nativo (MeritoSynthesisCard): o schema nao
+#     tem dict[str, Any] e os enums sao Literal[...] strict (ver agent.py).
+#   - Jurisprudencia NAO entra no L3: vive no L2 (regras J/J.1/J.2), e o L3 confia no
+#     risco_processo_intermediario dele — contar de novo aqui e double-counting.
+#   - A MATRIZ DE RISCO (estagio processual) e o UNICO decisor do nivel; a
+#     probabilidade_exito (chance de vencer a causa) e CONTEXTO de apoio. Misturar as
+#     duas matrizes Daycoval causa over-rating sistematico.
+#   - O Tomador entra como FATO (razao_social/CNPJ via _build_glossary_roles) + 1 linha
+#     anti-inversao, sem a regra dura tomador==vencedor (que contradiz a matriz).
+#   - ⛔ O snapshot anterior NAO e renderizado: ancora o LLM no risco anterior e quebra o
+#     seed deterministico (o seed_for inclui o prompt, e o snapshot muda a cada
+#     cascade). O campo previous_snapshot segue Optional no request (compat).
+#   - O evento decisivo e marcado INLINE na justificativa como link markdown
+#     `[frase](CNJ)` (instrucao 12); o campo `citacoes` e DERIVADO em codigo pelo
+#     materializer do garantis-shared, e o front (garantis-app citacao-tags.ts)
+#     renderiza a tag no lugar.
+#   - A prosa visivel ao advogado sai sem jargao interno: _build_filtro_redacao() e a
+#     ultima coisa do prompt.
+#   - Sem truncagem de dado no render (decisao do Elton); a excecao e o bound
+#     head+tail do lifecycle_garantia (abaixo).
 PROMPT_VERSION_BASE = "merito_synthesis.v2.9"
 
 
 def _prompt_version_for(tipo: str) -> str:
     """Concatena base + tipo dominante p/ telemetria.
 
-    Strings produzidas:
-      merito_synthesis.v1.1-fiscal
-      merito_synthesis.v1.1-trabalhista
-      merito_synthesis.v1.1-civel
-      merito_synthesis.v1.1-misto
+    Strings produzidas: `<PROMPT_VERSION_BASE>-fiscal`, `-trabalhista`, `-civel` e
+    `-misto` (+ `__ab_<bucket>` quando ha bucket).
 
-    Backward-compat queries:
-      WHERE prompt_version LIKE 'merito_synthesis.v1.1-%'  (apenas split)
-      WHERE prompt_version LIKE 'merito_synthesis.v1.%'    (todas versoes)
+    Query pela familia: WHERE prompt_version LIKE 'merito_synthesis.v%'
     """
     return f"{PROMPT_VERSION_BASE}-{tipo}"
 
@@ -188,11 +75,10 @@ def _prompt_version_for(tipo: str) -> str:
 # ─── Card summarizers (input cards → string fragments) ─────────────────────
 
 
-# Bound do lifecycle_garantia no prompt do L3 (2026-06-19): processo gigante (ex 1940
-# movs) gera ~280 eventos de lifecycle. Renderizá-los inteiros despejava ~22KB no prompt
-# → o L3 ecoava+amplificava em ciclo_garantia (145KB / 5312 linhas) → JSON malformado →
-# parse fail → indeterminado. head+tail preserva origem (apresentação/aceitação) + estado
-# atual; o miolo repetido é omitido.
+# Bound do lifecycle_garantia no prompt do L3: processo gigante gera centenas de eventos
+# de lifecycle, e renderizá-los inteiros faz o L3 ecoar+amplificar em ciclo_garantia →
+# JSON malformado → parse fail → indeterminado. head+tail preserva origem
+# (apresentação/aceitação) + estado atual; o miolo repetido é omitido.
 _LIFECYCLE_HEAD = 20
 _LIFECYCLE_TAIL = 20
 _LIFECYCLE_MAX = _LIFECYCLE_HEAD + _LIFECYCLE_TAIL  # acima disso → head+tail
@@ -280,14 +166,14 @@ def _summarize_cda(cda: CDACardMin) -> str:
 def _summarize_tomador(tom: TomadorCardMin) -> str:
     """Renderiza summary tomador pro prompt L3.
 
-    PR7.7 P0f (2026-06-02): REMOVED 4 signals selection-biased:
+    NAO entram 4 sinais selection-biased:
       - total_processos_vivos (so vemos processos monitorados Garantis)
       - total_apolices_ativas (so apolices Garantis, nao outras seguradoras)
       - taxa_apolice_recusada (so recusas que registramos)
       - taxa_descumprimento_acordo (so descumprimentos que vimos)
-    User policy: nao usar esses signals pq nao temos visao 100% do mercado.
-    Engine deve confiar em jurisprudencia externa (provider) + state
-    processual + Matriz Daycoval — Architecture D core.
+    Politica: nao usar esses sinais, porque nao temos visao 100% do mercado. O
+    risco vem do estado processual + Matriz Daycoval (a jurisprudencia externa
+    entra pelo L2).
 
     Signals mantidos (info externa legitima OR identity):
       - nome / cnpj_basico (identity)
@@ -301,15 +187,6 @@ def _summarize_tomador(tom: TomadorCardMin) -> str:
     if tom.alertas:
         parts.append("ALERTAS: " + ", ".join(tom.alertas))
     return " | ".join(parts)
-
-
-# v2.5 (2026-06-12): _summarize_jurisprudencia DELETADO — dead code desde a
-# v2.2 (campo jurisprudencia saiu do MeritoSynthesisRequest; juris vive no L2
-# via regras J/J.1/J.2). Nenhum call site em nenhum repo (grep 2026-06-12).
-
-
-# v2.7.3 (2026-07-02): _summarize_previous DELETADO junto com o bloco SNAPSHOT
-# ANTERIOR (ancora + quebrava o seed entre cascades; ver changelog no topo).
 
 
 # ─── Routing (axis: tipo_judicial dominante) ───────────────────────────────
@@ -363,9 +240,8 @@ def _build_intro() -> str:
 
 
 def _build_glossary_roles(req: MeritoSynthesisRequest) -> str:
-    """#2 (2026-06-23): Tomador injetado como FATO (substitui glossario + REGRA
-    DURA 3-step "grosseira"). Validado no harness: exact/within1 = v2.7,
-    false_baixo -1,3% (miss-perigoso melhor), recall +3,4%. Nome mantido p/ compat."""
+    """Tomador injetado como FATO (sem glossario de papeis nem a regra dura
+    tomador==vencedor, que contradiz a matriz). Nome mantido p/ compat."""
     nome = req.razao_social or req.cnpj_principal or "(titular do merito)"
     cnpj = f" (CNPJ {req.cnpj_principal})" if req.cnpj_principal else ""
     return (
@@ -383,7 +259,7 @@ def _build_glossary_roles(req: MeritoSynthesisRequest) -> str:
 
 
 def _build_consistency_check() -> str:
-    """Bug 5c handoff: check obrigatorio pro-Alto/pro-Baixo. Comum a todos."""
+    """Check obrigatorio pro-Alto/pro-Baixo. Comum a todos."""
     return """=== CONSISTENCY CHECK (obrigatorio antes de emitir output) ===
 
 1. Releia o que voce escreveu em `probabilidade_exito_merito.contribuicao_no_risco`,
@@ -460,11 +336,8 @@ def _build_cdas_block(req: MeritoSynthesisRequest) -> str:
     return f"=== CDA / DIVIDAS ATIVAS ===\n{cdas_block}"
 
 
-# v2.8 (2026-07-14): _build_aiims_block + _summarize_aiim REMOVIDOS (decisao
-# Elton, teardown autos-wide): a fonte (leads.admin_processes_extracted) foi
-# dropada e a regra C ja limitava o bloco a magnitude ("nao mudam o risco
-# diretamente"). PAs relevantes chegam como MEMBROS do conexo (role list,
-# 1.A Kelveng + 1.B peticao). Cards 'aiim' historicos nao sao renderizados.
+# Sem bloco de AIIM: PA relevante chega como MEMBRO do conexo (role list), e card
+# 'aiim' historico nao e renderizado.
 
 
 def _build_tomador_block_section(req: MeritoSynthesisRequest) -> str:
@@ -472,34 +345,10 @@ def _build_tomador_block_section(req: MeritoSynthesisRequest) -> str:
     return f"=== TOMADOR (historico CNPJ basico) ===\n{tomador_block}"
 
 
-# v2.5 (2026-06-12): _build_jurisprudencia_block DELETADO (era stub vazio
-# DEPRECATED v2.2 "pra backward-compat de imports" — zero importers em
-# qualquer repo, grep 2026-06-12).
-
-
-# v2.7.3 (2026-07-02): _build_snapshot_anterior_block DELETADO (ver changelog).
-
-
-# PR7.2 (2026-05-31): _format_paradigma + _build_paradigmas_block REMOVIDOS.
-# Curadoria interna de paradigmas Poletto (ref.tese_decisao_individual)
-# dropada — Architecture D promote (mode=new) usa matriz determ + LLM prompt
-# rescrito (PR7.1 H1+H2). Bloco <DECISOES PARADIGMA> nao mais injetado
-# no prompt L3.
-
-
 def _build_protocolo_postura_default() -> str:
-    """POSTURA + FLOOR MINIMO derivado de probabilidade_exito_merito + Architecture D.
+    """COMO DECIDIR O RISCO: a MATRIZ DE RISCO (estagio processual) decide o nivel.
 
-    PR7.1 (2026-05-31) reescrita radical. Versao anterior tinha DEFAULT=Baixo
-    agressivo com "sem gatilho concreto, NAO HA risco imediato". Workflow deep
-    analysis 8 meritos divergentes do REVISAO_MANUAL identificou esse override
-    como CAUSA RAIZ de 4-5/8 mismatches: LLM via probabilidade_exito=poucas_chances
-    e EXPLICITAMENTE descartava o sinal pra emit Baixo, invocando "ausencia de
-    gatilho" / "fase pre-decisao".
-
-    Nova regra: floor minimo POR probabilidade_exito_merito.classificacao_agregada.
-    "Ausencia de decisao" NAO eh mais sinal de Baixo — eh sinal NEUTRO; floor
-    minimo do prob_exito agregado domina."""
+    A probabilidade_exito e CONTEXTO de apoio, nunca floor do nivel."""
     return """=== COMO DECIDIR O RISCO — A MATRIZ DE RISCO MANDA ===
 
 O `risco` do MERITO e o risco de ACIONAMENTO DA APOLICE — decidido pela MATRIZ
@@ -552,47 +401,16 @@ recurso, extincao SEM merito) NAO sobem risco — ver regras abaixo.
 (sem decisao de merito E sem estado de garantia legivel nos cards)."""
 
 
-# D-e (2026-08-15, decisao Elton): `_build_templates_poletto` (E4, ~200 linhas
-# de prompt por chamada L3) foi REMOVIDO. A medicao que sustentou: flip OFF<->ON
-# com controle de ruido deu 20 de 20 campos byte-identicos na saida servida —
-# o bloco nao movia nada. A flag TEMPLATES_POLETTO_ENABLED saiu do cloudbuild
-# e do services.yaml no mesmo trem. (A ablation de 05-26 que dizia "remover
-# templates regride" media o prompt v2.3 de entao; a medicao de 15/08 e sobre
-# a saida SERVIDA de hoje e a superseded.)
-
-
 def _build_bloqueio_prob_exito() -> str:
-    """REGRA v2.4: bloqueia `probabilidade_exito` da L2 como sinal de risco.
+    """Reforca que a `probabilidade_exito` da L2 e CONTEXTO e nao decide o nivel
+    (quem decide e a MATRIZ DE RISCO).
 
-    Cards L3 v2.3 mostraram L3 citando "prob_exito=remota / score 0.0001"
-    pra subir risco pra Alto em casos que Poletto classificou Baixo
-    (m=90 ENERGISA, m=122 ATACADAO). Esse sinal vem da L2 que computa
-    com base na MATRIZ DAYCOVAL (corretora atual, conservadora por design).
-
-    Poletto eh corretora NOVA, com criterio diferente. Usar prob_exito
-    Daycoval como input ao classificar vs Poletto = viesar TODA classificacao
-    pra ser-mais-Daycoval. Bloquear esse sinal recupera autonomia do L3 pra
-    seguir templates + regras processuais explicitas.
-
-    (Ate 2026-08-15 vinha "pluggada ANTES de _build_templates_poletto" — o
-    lookup morreu com o D-e e a restricao de ordem morreu junto.)
-
-    Flag E5 BLOQUEIO_PROB_EXITO_ENABLED (default ON): set false pra reverter
-    v2.4 em A/B test sem code change.
+    Flag BLOQUEIO_PROB_EXITO_ENABLED (default ON pelo `_flag_enabled` deste modulo):
+    false tira o bloco sem code change. O nome (de quando o bloco BLOQUEAVA o sinal)
+    fica por compat com a env var.
     """
     if not _flag_enabled("BLOQUEIO_PROB_EXITO_ENABLED"):
         return ""
-    # PR7.1 (2026-05-31) — REVERSAO da v2.4. Bloco antigo mandava IGNORAR
-    # COMPLETAMENTE probabilidade_exito + score Daycoval, classificando SO
-    # via fase processual + decisao explicita + sinais processuais. Workflow
-    # deep analysis 8 meritos divergentes identificou esse bloqueio como
-    # COMPLICE direto do override Baixo (engine ignorava poucas_chances/remota
-    # como motivo e caia em default Baixo via Protocolo).
-    #
-    # Nova regra: probabilidade_exito EH input valido + define FLOOR MINIMO
-    # (alinhado com PROTOCOLO DE RISCO BASE PR7.1). Architecture D matriz
-    # determ promote (mode=new) usa derived_aggregate como fonte oficial
-    # quando disponivel. Block name preservado pra compat env var.
     return """=== PROBABILIDADE_EXITO = CONTEXTO, NAO DECIDE O NIVEL ===
 
 A probabilidade_exito de cada processo (Matriz Daycoval de chance de VENCER a
@@ -602,38 +420,13 @@ converta 'poucas_chances'/'remota' direto em Medio/Alto: exija o estagio
 correspondente (decisao de merito desfavoravel exigivel, transito, intimacao)."""
 
 
-# PR7.6 FIX (2026-05-31): _REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO DELETADA.
-# Regra antiga instruia LLM a procurar "paradigmas" em payload + override risco
-# baseado em paradigma.sentido='desfavoravel'. ParadigmaMin foi DROPADO em PR7.2
-# (curadoria interna ref.tese_decisao_individual substituida por provider externo
-# jurisprudencias.ai). LLM ficaria procurando dado que nao chega mais no payload
-# -> overrides confusos / decisoes incoerentes em PROD.
-#
-# Sinal pre-transito agora vem da matriz determ Architecture D PR7.1:
-# risco_factual + risco_jurisprudencial combinados em derived_aggregate (matriz
-# 5x5 leads.jurisprudencia_externa_cache). L3 substitui card.risco pelo derived
-# quando mode=new + derived != Indeterminado. Override pre-transito implicit.
-#
-# Flag PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED dropada do services.yaml +
-# cloudbuild no proximo deploy (mesmo PR). (O `= ""` vestigial, sem leitor, saiu em
-# 2026-09-17.)
-
-
 def _build_regras_anti_falso_alto() -> str:
-    """REGRAS DURAS contra falsos-positivos de subida de risco.
-
-    Adicionado 2026-05-25 apos mass cascade re-run regredir 62.4% -> 57.1%.
-    Diagnostico: 4 padroes principais empurrando risco pra cima sem motivo
-    real. Esta funcao cobre 2 dos 4 (extincao sem merito + termo de penhora).
+    """REGRAS DURAS contra falsos-positivos de subida de risco: extincao sem
+    merito e termo de penhora, 2 dos padroes que empurram risco pra cima sem motivo
+    real.
 
     Pluggada APOS _build_protocolo_postura_default + ANTES de _build_rules.
     Aplica a TODOS os tipos (fiscal/trab/civel/misto).
-
-    2026-05-29: adicionada REGRA paradigma_override_pre_transito (flag E8
-    PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED, default ON). Cobre underpenalty
-    Alto->Baixo identificado na revalidacao 2026-05-29 (m=680006 BANCO
-    MERCANTIL IRPJ Stock Options sample). Memory:
-    revalidation-2026-05-29-gemini-burst-bottleneck.
     """
     base = """=== REGRAS DURAS ANTI FALSO-POSITIVO (CRITICA) ===
 
@@ -686,10 +479,6 @@ REGRA DURA: bullet "[ALTISSIMO] penhora online deferida" no escala
 fiscal/civel/trab exige EVIDENCIA EXPLICITA de efetivacao (valor
 bloqueado documentado, BACENJUD positivo, etc). Sem evidencia
 explicita, default Baixo."""
-    # PR7.6 (2026-05-31): _REGRA_PARADIGMA_OVERRIDE_PRE_TRANSITO removida
-    # pos-PR7.2 drop de ParadigmaMin. flag PARADIGMA_OVERRIDE_PRE_TRANSITO_ENABLED
-    # ficou orfa (mesmo se ON, base += '' = no-op). Drop persistido em
-    # services.yaml + cloudbuilds no mesmo PR.
     return base
 
 
@@ -801,10 +590,10 @@ def _build_field_instructions() -> str:
 
 
 def _build_filtro_redacao() -> str:
-    """FILTRO DE REDACAO dos campos de PROSA (v2.6) — separa raciocinio interno
+    """FILTRO DE REDACAO dos campos de PROSA — separa raciocinio interno
     do texto que vai pra TELA DO ADVOGADO.
 
-    Motivacao (estudo 2026-06-16, 100 outputs reais): a prosa do L3 vaza
+    Motivacao (medida em outputs reais do L3): a prosa do L3 vaza
     sistematicamente a maquinaria interna que a produziu — o pior caso e a
     palavra "merito" no sentido de cluster de processos (colide com merito da
     causa), alem de nomes do motor de risco (Poletto, templates T-X, Daycoval,
@@ -930,12 +719,10 @@ e mais importante do prompt.
 def _build_lembrete_final(req: MeritoSynthesisRequest) -> str:
     """Recency anchor no fim do prompt — combate Lost-in-the-Middle.
 
-    v2.1: substitui _build_output_schema legacy (FORMATO DE SAIDA duplicava
-    o que response_schema=MeritoSynthesisCard ja enforça nativamente).
-    Reforça as 3 regras criticas que devem governar a decisao final.
-
-    v2.6: adiciona item 4 (filtro de redacao) ao checklist final — recency
-    anchor pro <filtro_redacao_advogado> plugado logo acima.
+    Reforça as 3 regras criticas que devem governar a decisao final (o formato de
+    saida e do response_schema=MeritoSynthesisCard, nao de um bloco do prompt). O
+    item 4 remete ao <filtro_redacao_advogado>, que o build_prompt_and_version poe
+    DEPOIS deste bloco, como a ultima coisa do prompt.
     """
     return f"""<lembrete_final>
 Antes de emitir risco final, confirme:
@@ -1555,11 +1342,9 @@ def _build_rules(tipo: str) -> str:
 # ─── Main prompt builder ───────────────────────────────────────────────────
 
 
-# PR6 Architecture D — A/B test buckets do L3.
-# Cada bucket eh um experimento independente: roda L3 N vezes em paralelo,
-# cada call usa instrucao especifica de qual sinal priorizar. Resultados
-# persistidos em card['l3_ab_test'][bucket] pra comparacao com Poletto
-# ground truth + selecao do vencedor.
+# A/B test buckets do L3. Cada bucket e um experimento independente: cada call usa
+# instrucao especifica de qual sinal priorizar. O caminho de producao roda sem
+# bucket (o A/B por bucket saiu do materializer L3 do garantis-shared).
 AB_TEST_BUCKETS = ("factual_only", "juris_only", "mixed", "derived_only")
 
 
@@ -1567,17 +1352,15 @@ def _build_ab_test_bucket_block(
     bucket: str | None,
     derived_aggregate_hint: str | None = None,
 ) -> str:
-    """Bloco com instrucao por bucket A/B test (PR6 Architecture D).
+    """Bloco com instrucao por bucket A/B test.
 
-    Quando bucket=None: retorna string vazia (legacy single-prompt cascade).
+    Quando bucket=None: retorna string vazia (single-prompt).
     Quando bucket presente: injeta instrucao explicita de qual sinal usar/
     ignorar pro card['risco'] final.
 
-    PR6 bugfix 2026-05-31: `derived_only` requer renderizacao explicita do
-    `derived_aggregate_hint` no texto do prompt — antes citava apenas o
-    NOME do campo (`derived_aggregate_hint`), nao o VALOR. LLM nao tinha
-    acesso ao valor injetado em outra parte do payload, entao calculava
-    proprio veredito (efetivamente == mixed).
+    ⚠️ `derived_only` renderiza o VALOR do `derived_aggregate_hint` no texto do
+    prompt: citar so o NOME do campo deixa o LLM sem o valor (ele nao o ve em outra
+    parte do payload) e ele calcula o proprio veredito (efetivamente == mixed).
     """
     if not bucket:
         return ""
@@ -1631,8 +1414,7 @@ def _build_ab_test_bucket_block(
             "</ab_test_bucket>\n"
         )
     if bucket == "derived_only":
-        # PR6 bugfix: render o VALOR do hint inline (antes citava apenas nome
-        # do campo, LLM nao via valor real -> calculava proprio veredito).
+        # O VALOR do hint vai inline (so o nome do campo deixa o LLM sem o valor).
         hint = (derived_aggregate_hint or "Indeterminado").strip()
         return (
             "\n<ab_test_bucket name=\"derived_only\">\n"
@@ -1666,17 +1448,16 @@ def build_prompt_and_version(
     """Computa (prompt, prompt_version) compartilhando o mesmo tipo dominante.
 
     Single source of truth pro dispatch — garante que `prompt_version` em
-    `leads.engine_llm_calls` reflete a variant que efetivamente rodou
+    `telemetria.engine_llm_calls` reflete a variant que efetivamente rodou
     (sem drift risk se alguem mudar o router no futuro).
 
-    PR6: `bucket` opcional injeta bloco <ab_test_bucket> com instrucao
-    especifica (factual_only / juris_only / mixed / derived_only). Quando
-    None, comportamento legacy single-prompt.
+    `bucket` opcional injeta bloco <ab_test_bucket> com instrucao especifica
+    (factual_only / juris_only / mixed / derived_only). Quando None,
+    single-prompt.
     """
     tipo = _determine_tipo_dominante(req.processo_syntheses)
-    # PR6 bugfix: passa derived_aggregate_hint do request pro builder do bloco
-    # (antes o nome do campo era citado mas o valor nao era renderizado no
-    # texto — LLM nao tinha como respeitar o hint).
+    # O derived_aggregate_hint do request vai pro builder do bloco: sem o VALOR
+    # renderizado no texto, o LLM nao tem como respeitar o hint.
     ab_test_block = _build_ab_test_bucket_block(
         bucket,
         derived_aggregate_hint=getattr(req, "derived_aggregate_hint", None),
@@ -1689,21 +1470,15 @@ def build_prompt_and_version(
         _build_processos_block(req),
         _build_cdas_block(req),
         _build_tomador_block_section(req),
-        # v2.2: _build_jurisprudencia_block dropado (juris vive em L2 agora).
-        # PR7.2 (2026-05-31): _build_paradigmas_block REMOVIDO. Curadoria
-        # interna ref.tese_decisao_individual dropada. Architecture D promote
-        # (mode=new) + LLM prompt rescrito assume papel jurisprudencial.
-        # v2.7.3 (2026-07-02): _build_snapshot_anterior_block REMOVIDO (ancora
-        # + quebrava o seed deterministico entre cascades; ver changelog).
+        # Sem bloco de jurisprudencia (vive no L2) nem de snapshot anterior (ancora +
+        # quebra o seed deterministico — ver o topo do modulo).
         _build_protocolo_postura_default(),
         _build_bloqueio_prob_exito(),
-        # D-e (2026-08-15): _build_templates_poletto() saiu daqui — ver a
-        # lapide no lugar da funcao.
         _build_regras_anti_falso_alto(),
         _build_rules(tipo),
-        ab_test_block,  # PR6 — injetado quando bucket != None
+        ab_test_block,  # injetado quando bucket != None
         _build_lembrete_final(req),
-        # v2.6: filtro de redacao e a ULTIMA coisa do prompt (recency absoluto).
+        # O filtro de redacao e a ULTIMA coisa do prompt (recency absoluto).
         # Best practice oficial Gemini 3 (docs.cloud.google.com/.../gemini-3-prompting-guide):
         # "the model may drop negative constraints if they appear too early" +
         # "place your most critical restrictions as the final line". Constraint
@@ -1717,19 +1492,15 @@ def build_prompt_and_version(
     return "\n\n".join(p for p in parts if p) + "\n", version
 
 
-# ─── L2 PROSA — passe de redacao (2026-06-28) ──────────────────────────────
+# ─── L2 PROSA — passe de redacao ───────────────────────────────────────────
 # "Codigo decide o risco, LLM redige." O risco entra FIXO; este prompt so
 # verbaliza a prosa. Reusa os _build_*_block de FATOS do L3 (NAO os blocos de
 # DECISAO: matriz, escala, protocolo, consistency — o passe nao re-decide) +
 # _build_filtro_redacao() VERBATIM como ultima coisa (recency anchor).
-# v1.1 (2026-06-30): justificativa pede tags inline `[frase](CNJ)` (V2c, igual ao L3).
-# v1.2 (2026-07-27): a tag inline ganha instrucao NEGATIVA + par CERTO/ERRADO.
-#   Medido: 69,7% das tags saiam com o CNJ DENTRO do colchete -> o front linkava o
-#   proprio numero do processo no meio da frase (redundante: o leitor ja esta nesse
-#   processo) em vez de linkar o FATO que sustenta a banda. Causa: "Cite o CNJ dos
-#   processos relevantes." estava colada em "[frase do evento](CNJ)" na MESMA
-#   sentenca, e o passe nao tinha exemplo nenhum (o item 12 do L3 principal, que TEM
-#   exemplo, vaza 48,3% — 21 pontos a menos).
+# A justificativa pede tags inline `[frase](CNJ)` (igual ao L3), com instrucao
+# NEGATIVA + par CERTO/ERRADO: sem eles a tag sai com o CNJ DENTRO do colchete e o
+# front linka o proprio numero do processo (o leitor ja esta nele) em vez do FATO que
+# sustenta a banda.
 #   ⚠️ Este passe NAO decide risco e NAO entra no seed (risco_final chega fixo) —
 #   mexer aqui e score-neutro. O item 12 do prompt PRINCIPAL tem o mesmo defeito, mas
 #   la o prompt entra no seed (agent.py: seed_for(..., prompt)) e mudar muda a banda:
@@ -1819,9 +1590,8 @@ def build_merito_synthesis_prompt(
     bucket: str | None = None,
 ) -> str:
     """Prompt da camada 3 - agrega 1 ou N processo_syntheses + tomador + cda
-    pra computar risco do MERITO (juris vive no L2 desde v2.2; previous_snapshot
-    NAO e mais renderizado desde v2.7.3 — anti-ancora + seed estavel; aiims
-    saiu do payload na v2.8, 2026-07-14 — teardown autos-wide).
+    pra computar risco do MERITO (juris vive no L2; previous_snapshot NAO e
+    renderizado — anti-ancora + seed estavel).
 
     Dispatch determ.:
     - >=80% fiscal -> vocab EF, Anulatoria, Tema 372/1226/DIFAL
@@ -1829,7 +1599,7 @@ def build_merito_synthesis_prompt(
     - >=80% civel -> vocab Cumprimento de Sentenca, REsp, Tema repetitivo STJ
     - resto -> 'misto' (vocab abstrato + confidence -0.10)
 
-    PR6 `bucket`: ver `_build_ab_test_bucket_block` doc.
+    `bucket`: ver `_build_ab_test_bucket_block` doc.
 
     Pra telemetria com prompt_version use `build_prompt_and_version()`."""
     prompt, _ = build_prompt_and_version(req, bucket=bucket)

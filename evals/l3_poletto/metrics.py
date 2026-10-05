@@ -4,7 +4,7 @@ Dominio dos labels: Baixo < Medio < Alto < Altissimo (ordinal 1..4).
 `Indeterminado` / None = engine nao opinou (nao entra no calculo de erro;
 conta so na cobertura).
 
-4 metricas (decisao Elton/diagnostico 2026-06-13):
+4 metricas (decisao do Elton):
 - exact     : engine == poletto (4x4). Metrica de tuning.
 - within1   : |engine - poletto| <= 1. Saude geral.
 - false_alto: engine > poletto. Caro = infla priorizacao/alarme falso.
@@ -12,7 +12,7 @@ conta so na cobertura).
 Otimizar: minimizar false_baixo (<=15%), depois false_alto, mantendo within1>=85%.
 
 Reportar SEMPRE separando subset-resolvido de universo-total (indeterminado
-distorce o denominador — foi como nasceu o falso "ceiling 26.7%").
+distorce o denominador).
 """
 from __future__ import annotations
 
@@ -31,13 +31,13 @@ def _ord(label: Optional[str]) -> Optional[int]:
 @dataclass
 class Pair:
     merito_id: int
-    engine: Optional[str]    # risco final do engine (apos promote mode=new)
+    engine: Optional[str]    # risco final do engine (depois do override da matriz)
     poletto: Optional[str]   # ground truth
     # contexto opcional pro relatorio/decomposicao de erro
     llm_verdict: Optional[str] = None       # card['risco'] do LLM ANTES do promote
     factual_agg: Optional[str] = None
     juris_agg: Optional[str] = None
-    derived: Optional[str] = None           # matriz 5x5 (o que promove)
+    derived: Optional[str] = None           # banda da matriz (o que promove)
     apolice_aceita: Optional[str] = None
     prob_exito: Optional[str] = None
     promoted: Optional[bool] = None         # matriz substituiu o LLM?

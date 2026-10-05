@@ -6,21 +6,20 @@ uma resposta certa e esperada.
 
 ## Por que ele existe
 
-Ate agora a afirmacao *"este documento e a peticao inicial"* era DEDUZIDA DO
-PREFIXO DA CAMADA que achou o documento, e ninguem LIA o documento pra decidir.
-Com o C5 as 5 camadas (C1..C4, X1) viram GERADORAS DE CANDIDATOS e quem AFIRMA e
-esta leitura paga e comparativa, com abstencao explicita. ⛔ Nenhuma camada e
+A afirmacao *"este documento e a peticao inicial"* nao se DEDUZ DO PREFIXO DA
+CAMADA que achou o documento: alguem tem de LER o documento pra decidir. Com o C5
+as 5 camadas (C1..C4, X1) sao GERADORAS DE CANDIDATOS e quem AFIRMA e esta
+leitura paga e comparativa, com abstencao explicita. ⛔ Nenhuma camada e
 deletada -- elas sao REBAIXADAS; o degrau continua sendo o que acha o material.
 
-## O FRAME e tudo
+## O FRAME e tudo (o placar medido: docstring de `prompts.py`)
 
-  · frame INDUTOR (1 doc isolado, "isto e a inicial? s/n") -- medido 4.228x em
-    producao: responde `peticao_inicial` em 49,2% dos C4 quando a verdade e ~3%.
-    Foi ele que fabricou os 411 cards errados que este pacote existe pra desfazer.
-  · frame COMPARATIVO (este) -- medido no gold adjudicado N=22: afirma e ACERTA
-    21/22; no CONTROLE NEGATIVO (o doc do gold REMOVIDO do conjunto) afirma 1/22.
-    Fisher exato 1-cauda p = 2,19e-11 ⇒ a abstencao e condicionada ao CONTEUDO,
-    nao e retorica do prompt.
+  · frame INDUTOR (1 doc isolado, "isto e a inicial? s/n") -- em producao afirma
+    `peticao_inicial` muito acima da verdade, e fabricou os cards errados que este
+    pacote existe pra desfazer.
+  · frame COMPARATIVO (este) -- no gold adjudicado afirma e ACERTA; no CONTROLE
+    NEGATIVO (o doc do gold REMOVIDO do conjunto) se abstem ⇒ a abstencao e
+    condicionada ao CONTEUDO, nao e retorica do prompt.
 
 ⛔ **Nao troque esta UMA chamada por N chamadas de 1 documento.** Isso e trocar o
 frame comparativo pelo indutor, e o resto do pacote (o `garantis_shared` promove a
@@ -38,14 +37,14 @@ do lado do `garantis_shared` qualquer erro (404, 5xx, timeout, JSON fora do
 contrato) vira ABSTENCAO, que e o estado de HOJE -- o pn fica exatamente onde ja
 esta e volta na proxima passada.
 
-## O candidato SCAN (fatia 2 da cabeca dos autos, card 869equgwd)
+## O candidato SCAN
 
 Doc da cabeca sem teor chega com `head` vazio + `gcs_url`. O Vision **so TRANSCREVE** as N
 primeiras paginas dele, e a transcricao vira o `head` — o julgamento continua sendo a MESMA
-chamada de texto, com o frame medido. ⛔⛔ Nao ponha o PDF na chamada que JULGA (decisao
-Elton 15/09, gold scan): misturado, o PDF quebrou o determinismo e contaminou o julgamento do
-texto (FP 1 em 3 no mesmo pool); numa chamada so de scans, o modelo perdeu o contraste e
-afirmou inicial de OUTRO processo em 3/22. Vision extrai; quem afirma e o C5 de texto.
+chamada de texto, com o frame medido. ⛔⛔ Nao ponha o PDF na chamada que JULGA (decisao do
+Elton, medida no gold scan): misturado, o PDF quebrou o determinismo e contaminou o
+julgamento do texto; numa chamada so de scans, o modelo perdeu o contraste e afirmou inicial
+de OUTRO processo. Vision extrai; quem afirma e o C5 de texto.
 """
 
 from __future__ import annotations
@@ -72,7 +71,7 @@ logger = logging.getLogger(__name__)
 # aqui e nao `model_for("engine_layer1")`. O papel `engine_layer1` aponta pro MESMO
 # modelo hoje, mas ele existe pra ser trocado por decisao de custo/qualidade do L1;
 # amarrar o confirmador nele faria um bump do L1 trocar o modelo desta camada em
-# silencio, e o 21/22 deixaria de descrever o que roda. As 4 varreduras (POS_A/B/C +
+# silencio, e o placar medido deixaria de descrever o que roda. As 4 varreduras (POS_A/B/C +
 # os 2 controles negativos) rodaram em `gemini-3.1-flash-lite`.
 # ⛔ NUNCA usar `gemini-3.1-flash` NAO-lite -- nao existe no Vertex (404).
 # ⚠️ Se um dia isto virar papel, o lugar e `garantis_shared.llm_models.ROLES`.
@@ -112,7 +111,7 @@ async def _transcreve_scans(llm_provider, cands: list[dict], head_paginas: int,
     """`head` vazio + `gcs_url` -> a transcricao das `head_paginas` primeiras paginas.
 
     1 chamada POR documento, de proposito: com varios PDFs numa chamada so, o modelo casou
-    "candidato 3" com "o 3o PDF" (gold scan 15/09). Falha de fetch/corte/Vision vira a marca
+    "candidato 3" com "o 3o PDF" (no gold scan). Falha de fetch/corte/Vision vira a marca
     `_MARCA_SEM_PDF` — o candidato segue no pool, sem conteudo, e o C5 nao o afirma."""
     async def _um(c: dict) -> LLMResponse | None:
         try:
@@ -132,7 +131,7 @@ async def _transcreve_scans(llm_provider, cands: list[dict], head_paginas: int,
         c["head"] = (r.text or "").strip() or _MARCA_SEM_PDF
         return r
 
-    # ⭐ EM PARALELO (review 15/09): em serie, 4 scans lentos estouravam o timeout do caller, e
+    # ⭐ EM PARALELO: em serie, 4 scans lentos estouravam o timeout do caller, e
     # o retry dele re-pagava todas as transcricoes. Cada uma escreve so no PROPRIO candidato.
     scans = [c for c in cands if not c.get("head") and c.get("gcs_url")]
     respostas = await asyncio.gather(*(_um(c) for c in scans))

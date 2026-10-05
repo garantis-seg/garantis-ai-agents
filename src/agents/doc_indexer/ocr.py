@@ -1,28 +1,27 @@
 """A ÚNICA chamada de LLM do pipeline de indexação — OCR das páginas que o gate acusou.
 
-ONDA 2 do desenho (DESENHO-INVESTIGADOR-2026-08-13, §1.4 passo 4). *"O
-pré-processamento é código determinístico + no máximo 1 chamada de OCR; não é
-agente"* (LIÇÃO 5). Este módulo é essa uma chamada, e nada mais: ele não julga,
-não resume, não decide o que ler. Recebe uma lista de páginas, devolve o texto
-delas.
+Peça do desenho do Agente Investigador (§1.4 passo 4). *"O pré-processamento é
+código determinístico + no máximo 1 chamada de OCR; não é agente"*. Este módulo é
+essa uma chamada, e nada mais: ele não julga, não resume, não decide o que ler.
+Recebe uma lista de páginas, devolve o texto delas.
 
 ## O padrão vision da casa, reusado inteiro
 
     call_vision_l1(provider, model=…, prompt=…, pdf_bytes_list=[…])
 
-`vision.py` já resolve o que importa e o RECON-ocr é explícito em mandar reusar:
-roteador **inline vs Files API** por tamanho (14MiB total / 5MiB por PDF, o 1o isento),
-`types.Blob` com `bytes()` explícito, `_MAX_PDFS_PER_CALL`, `usage_metadata` →
-`cost_usd` no envelope, e — o detalhe que mais importa aqui — **os PDFs ANTES
-do prompt** nas `contents`. A ordem não é estilo: com o PDF depois da
-instrução, a instrução vira contexto de um documento que o modelo ainda não
-viu, e a taxa de "não consigo ler" sobe.
+`vision.py` já resolve o que importa, e a regra é reusar: payload inline sob os caps
+de `_build_pdf_parts` (o que não cabe é dropado e contado), `types.Blob` com
+`bytes()` explícito, `_MAX_PDFS_PER_CALL`, `usage_metadata` → `cost_usd` no
+envelope, e — o detalhe que mais importa aqui — **os PDFs ANTES do prompt** nas
+`contents`. A ordem não é estilo: com o PDF depois da instrução, a instrução vira
+contexto de um documento que o modelo ainda não viu, e a taxa de "não consigo
+ler" sobe.
 
-Dois débitos do `pdf_text.py` que esta frente NÃO herda (§1.4):
-`_DEFAULT_GEMINI_MODEL = "gemini-2.5-flash-lite"` (família que aposenta em
-16/10/2026) e `genai.Client(api_key=…)` direto, ignorando o kill-switch
-`GEMINI_BACKEND`. Aqui o modelo vem do **ROLES** (`vision_fallback`) e o cliente
-vem do `provider` do factory da casa, que honra o backend.
+O débito do `garantis_shared/extraction/pdf_text.py` que esta frente NÃO herda: o
+`_DEFAULT_GEMINI_MODEL` fixo na família 2.5 (que aposenta em
+`garantis_shared.llm_models.RETIRE_2_5_FAMILY`). Aqui o modelo vem do **ROLES**
+(`vision_fallback`) e o cliente vem do `provider` do factory da casa, que honra o
+`GEMINI_BACKEND`.
 
 ## Por que o OCR recebe um PDF RECORTADO
 
@@ -61,12 +60,10 @@ __all__ = [
     "ocr_paginas",
 ]
 
-#: Papel do ROLES. `vision_fallback` já existe no catálogo do shared e é o mesmo
-#: papel que o L1 usa para doc-imagem — o desenho (§8.4) registra `ficha_ocr`
-#: como *proposta* apontando para o mesmo modelo, e trocar modelo de papel é
-#: decisão do Elton (memory `engine-owns-model-control`). Enquanto `ficha_ocr`
-#: não existir no ROLES, apontar para `vision_fallback` é o mesmo modelo com
-#: uma decisão a menos tomada por conta própria.
+#: Papel do ROLES: `vision_fallback`, o mesmo que o L1 usa para doc-imagem. O
+#: `ROLES` do shared REUSA esse papel para ler documento-imagem das fichas, em vez
+#: de criar um papel de OCR próprio, e trocar modelo de papel é decisão do Elton
+#: (memory `engine-owns-model-control`).
 PAPEL_OCR = "vision_fallback"
 
 #: Versão do prompt de OCR. Entra na `extractor_version`? **Não** — entra na
@@ -75,8 +72,7 @@ PAPEL_OCR = "vision_fallback"
 #: gesto que orfana as âncoras antigas de propósito.
 PROMPT_VERSION = "doc-indexer-ocr/v1"
 
-#: Env override do modelo, no padrão da casa (`DEFAULT_MODEL` → papel → env
-#: específica). O desenho (§8.4) nomeia `DOC_INDEXER_OCR_MODEL`.
+#: Env override do modelo: precede o papel do ROLES (ver `modelo_ocr`).
 _ENV_MODELO = "DOC_INDEXER_OCR_MODEL"
 
 #: Marcador de página na resposta. Escolhido para não colidir com texto de
@@ -233,13 +229,12 @@ async def ocr_paginas(
     Nunca levanta: qualquer falha devolve `({}, {...erro})` e o caller segue com
     o texto nativo, declarando a lacuna no `gate_ocr`. É o mesmo contrato do
     `call_l1_with_vision_fallback` (*"try/except → fallback text-only sem
-    reraise"*, checklist do RECON-ocr) — o OCR é uma melhoria da leitura, não uma
-    pré-condição dela, e derrubar a indexação de um PDF majoritariamente nativo
-    porque 2 folhas anexadas não foram lidas seria trocar um número por nada.
+    reraise"*) — o OCR é uma melhoria da leitura, não uma pré-condição dela, e
+    derrubar a indexação de um PDF majoritariamente nativo porque 2 folhas
+    anexadas não foram lidas seria trocar um número por nada.
 
     A telemetria (`model`, `cost_usd`, `paginas_pedidas`, `paginas_lidas`) sobe
-    ao envelope da rota: custo invisível é o mecanismo que já escondeu US$ 97,61
-    em 39.309 calls e reincidiu duas vezes.
+    ao envelope da rota: custo invisível é o mecanismo que esconde gasto.
     """
     tele: dict[str, Any] = {
         "model": None, "cost_usd": 0.0, "prompt_version": PROMPT_VERSION,

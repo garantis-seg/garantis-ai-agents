@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Chunk map-reduce de PEÇA grande no L1 (2026-06-19).
+"""Chunk map-reduce de PEÇA grande no L1.
 
 Peça (petição/sentença/acórdão...) > ~200k chars estoura o L1 (Gemini >60s →
-TIMEOUT_LAYER1_S). Elton: peça = ler COMPLETO (não head+tail como evidência).
-Solução: split em chunks de ~180k → classifica cada um em PARALELO → reduz por
-semântica de campo. ~300 peças >500k no corpus (115 de 500-800k + 185 >800k).
+TIMEOUT_LAYER1_S). Decisão do Elton: peça = ler COMPLETO (não head+tail como
+evidência). Solução: split em chunks de CHUNK_SIZE → classifica cada um em PARALELO
+→ reduz por semântica de campo.
 
 Aqui só split + reduce (puros, testáveis). A orquestração (gather das N calls)
 fica no agent.py — `_classify_chunked` recursa em classify_mov_factsheet com
@@ -13,10 +13,10 @@ construídos e RE-DERIVA (categoria/status/...) pra consistência.
 """
 from __future__ import annotations
 
-# split_text/sum_usage genéricos + a orquestração map_reduce_classify moraram aqui;
-# extraídos pro garantis_shared.llm_chunking (PR chunking shared 2026-06-22) pra L2/L3
-# reusarem. split/reduce POR-LAYER do L1 (split_large_peca_variants/reduce_peca_cards)
-# FICAM aqui. Re-export (alias redundante = re-export intencional, ruff não dropa) pra
+# split_text/sum_usage genéricos + a orquestração map_reduce_classify moram no
+# garantis_shared.llm_chunking (L2/L3 reusam). split/reduce POR-LAYER do L1
+# (split_large_peca_variants/reduce_peca_cards) ficam aqui. Re-export (alias
+# redundante = re-export intencional, ruff não dropa) pra
 # callers/tests existentes seguirem importando daqui: _split_text é usado internamente,
 # sum_usage é só re-export.
 from garantis_shared.engine_v6.persistence.peticao_contract import (
@@ -72,14 +72,13 @@ def _union(cards: list[dict], field: str, key: str) -> list[dict]:
 
 
 def _union_admin(cards: list[dict]) -> list[dict]:
-    """O `_union` dos PAs citados, com o PAPEL consolidado sobre TODOS os chunks (869fay0p0).
+    """O `_union` dos PAs citados, com o PAPEL consolidado sobre TODOS os chunks.
 
     O `_union` guarda o item do 1º chunk que trouxe o número, e o papel iria junto: chunk 1
     `precedente` + chunk 2 `discutido` do MESMO número dava `precedente` — o PA sairia do
     conexo por depender de onde o corte caiu. O papel é o do CONJUNTO das menções, pela regra
     ÚNICA do contrato (`resolve_admin_papel`, o mais inclusivo vence), a mesma que o sink
-    aplica dentro de uma leitura. O resto do item (tipo/uf/contexto/par) segue o do 1º chunk,
-    como antes.
+    aplica dentro de uma leitura. O resto do item (tipo/uf/contexto/par) segue o do 1º chunk.
     ⚠️ Só sobrescreve quando há claim válida: sem nenhuma, o item fica como veio — e um papel
     fora do domínio continua chegando ao sink, que conta o drift."""
     papeis: dict = {}
@@ -157,19 +156,14 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
     if any(("cdas" in c or "processos_citados" in c) for c in cards):  # ramo petição
         out["cdas"] = _union(cards, "cdas", "numero")
         out["processos_citados"] = _union(cards, "processos_citados", "cnj")
-        # processos_administrativos_citados NÃO estava aqui: o campo entrou no schema
-        # com o v1.3 (WS-D admin refs) e o reduce não acompanhou, então TODA peça
-        # chunkada (>180k) perdia os admin_item EM SILÊNCIO — card normal, custo
-        # normal, referência faltando. Medido em prod 2026-08-05: das 10 petições
-        # giants (>180k) com card ativo, 0% tem admin_item, contra 46,1% das 466
-        # não-giants; as CDAs sobrevivem (34%) justamente porque já estavam no union.
-        # 869fay0p0: com o PAPEL de cada PA consolidado sobre os chunks — ver `_union_admin`.
+        # ⚠️ processos_administrativos_citados tem de entrar no reduce: fora dele, toda peça
+        # chunkada perde os admin_item EM SILÊNCIO — card normal, custo normal, referência
+        # faltando. Vai com o PAPEL consolidado sobre os chunks — ver `_union_admin`.
         out["processos_administrativos_citados"] = _union_admin(cards)
-        # 869f4gupy (2026-09-28): o MESMO furo do bloco acima, pego na review adversarial antes
-        # do merge — sem estas linhas a peça chunkada perde o valor da causa em SILÊNCIO, e a
-        # declaração mora justamente no FIM da peça (último chunk). O par sai de UM chunk só, o
-        # ÚLTIMO que declarou: o conjunto chega em ordem cronológica (a emenda depois da
-        # inicial), e a evidência tem de ser do mesmo trecho que o valor.
+        # O MESMO furo vale pro valor da causa: sem estas linhas a peça chunkada o perde em
+        # SILÊNCIO, e a declaração mora justamente no FIM da peça (último chunk). O par sai
+        # de UM chunk só, o ÚLTIMO que declarou: o conjunto chega em ordem cronológica (a
+        # emenda depois da inicial), e a evidência tem de ser do mesmo trecho que o valor.
         vc = next((c for c in reversed(cards) if c.get("valor_causa_declarado") is not None), {})
         out["valor_causa_declarado"] = vc.get("valor_causa_declarado")
         out["valor_causa_evidencia"] = vc.get("valor_causa_evidencia")

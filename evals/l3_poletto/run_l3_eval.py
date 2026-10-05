@@ -2,19 +2,19 @@
 
 DOIS modos:
 
-  --from-snapshot   (default, sem LLM): usa o risco de PRODUCAO ja gravado nos
-                    fixtures como output do engine. Valida o harness reproduzindo
-                    o diagnostico (exact ~45% nos 46 resolvidos) + audita quanto
-                    a matriz 5x5 (mode=new) substituiu o LLM. NAO chama Gemini.
+  from-snapshot     (default, sem `--live`; sem LLM): usa o risco de PRODUCAO ja
+                    gravado nos fixtures como output do engine. Valida o harness
+                    contra o risco gravado + audita quanto a matriz (`derived`)
+                    substituiu o LLM. NAO chama Gemini.
 
   --live            re-roda o L3 LOCAL (src.agents.merito_synthesis) sobre os
-                    cards congelados dos fixtures, 3-run majority, aplica o
-                    risk_decomposition mode=new (FIEL a producao: a matriz
+                    cards congelados dos fixtures, 3-run majority, aplica a
+                    matriz `resolve_banda_matriz` (FIEL a producao: a matriz
                     substitui o LLM quando derived != Indeterminado), e compara
                     com Poletto. Backend default = vertex/ADC, sem key
                     (`gcloud auth application-default login`); aistudio legacy =
                     GEMINI_BACKEND=aistudio explicito + GEMINI_API_KEY manual
-                    (NUNCA a de prod; a _EVAL foi aposentada 2026-07-21).
+                    (NUNCA a de prod).
 
 A/B (3-run majority contra baseline salvo): rodar --live com o prompt ATUAL e `--save base.json`;
 trocar o prompt (outra branch) e rodar `--compare-to base.json` -> imprime o DELTA
@@ -77,20 +77,19 @@ def _pairs_from_snapshot(fixtures: list[dict]) -> list[Pair]:
 
 # ── modo live (re-roda L3 local) ───────────────────────────────────────────
 async def _classify_one(payload: dict, runs: int, no_override: bool = False) -> dict:
-    """Roda o L3 local `runs` vezes; aplica risk_decomposition mode=new fiel
+    """Roda o L3 local `runs` vezes; aplica a matriz (`resolve_banda_matriz`) fiel
     a producao; majority do risco FINAL. Retorna campos pro Pair.
 
-    no_override=True: final = veredito do LLM puro (sem override da matriz/prob_base).
+    no_override=True: final = veredito do LLM puro (sem override da matriz).
     Testa o desenho "LLM decide com as regras injetadas" (a Matriz de Risco no prompt).
     """
     from src.agents.merito_synthesis import classify_merito_synthesis  # local agent
     from garantis_shared.engine_v6.matrices import resolve_banda_matriz
 
     ps_cards = payload["processo_syntheses"]
-    # R1/C (2026-07-05): build_risk_decomposition/derive_aggregated_risk (matriz-5x5) foram
-    # DELETADOS na grande poda; o decisor agora e resolve_banda_matriz (leitura de 3 eixos).
-    # FIEL a producao: ambiguous (needs_review/acumulacao) => o LLM decide => Indeterminado
-    # (nao promovido). O split factual/jurisprudencial da matriz-5x5 nao existe mais -> None.
+    # O decisor e resolve_banda_matriz (leitura de 3 eixos). FIEL a producao: ambiguous
+    # (needs_review/acumulacao) => o LLM decide => Indeterminado (nao promovido). Ele nao
+    # separa factual de jurisprudencial -> factual_agg/juris_agg saem None.
     agg = resolve_banda_matriz(ps_cards, tipo_principal=payload.get("tipo_principal"))
     derived = "Indeterminado" if agg.get("ambiguous") else agg["banda"]
     finals, llms = [], []
@@ -99,7 +98,7 @@ async def _classify_one(payload: dict, runs: int, no_override: bool = False) -> 
         card = (res or {}).get("card") or {}
         llm = card.get("risco")
         llms.append(llm)
-        # mode=new: matriz substitui o LLM quando derived != Indeterminado.
+        # a matriz substitui o LLM quando derived != Indeterminado.
         # no_override: o LLM decide sozinho (desenho LLM-decide com Matriz de Risco no prompt).
         final = llm if no_override else (derived if derived in _LEVELS else llm)
         finals.append(final)
@@ -109,7 +108,7 @@ async def _classify_one(payload: dict, runs: int, no_override: bool = False) -> 
         "final": final_majority[0][0] if final_majority else None,
         "llm": llm_majority[0][0] if llm_majority else None,
         "derived": derived,
-        "factual_agg": None,   # split factual/juris da matriz-5x5 deletado no R1/C (poda)
+        "factual_agg": None,   # a matriz de 3 eixos nao separa factual/juris
         "juris_agg": None,
         "promoted": derived in _LEVELS,
         "runs_final": finals,

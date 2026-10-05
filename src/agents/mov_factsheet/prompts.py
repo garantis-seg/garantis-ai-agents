@@ -1,28 +1,19 @@
-"""Prompt pro mov_factsheet agent (engine v6_meritos camada 1).
+"""Prompt pro mov_factsheet agent (engine v6_meritos camada 1), caminho v3.1.
 
-REV2 2026-05-20 PM: doc-text first-class. Quando documentos_anexados nao
-vazio, LLM le o texto do doc junto. Quando vazio, fallback formal com
-processo summary + mov anterior.
+Doc-text first-class: com documentos_anexados, o LLM le o texto do doc junto; sem
+eles, fallback formal com processo summary + mov anterior.
 
-REV3 2026-05-25 (piloto sequencial L1): fb_ctx pode ser passado SEMPRE
-quando caller esta em modo cadenciado, mesmo com docs. Nesse caso o
-prompt acrescenta bloco CONTEXTO ANTERIOR com instrucoes narrowadas
-(uso so pra resolver pronouns/refs, docs prevalecem sobre contexto).
-Memory: engine-v6-piloto-sequencial-l1-2026-05-25.
+fb_ctx pode vir SEMPRE quando o caller esta em modo cadenciado, mesmo com docs: o
+prompt acrescenta o bloco CONTEXTO ANTERIOR com instrucoes estreitas (so pra resolver
+pronomes/referencias; os docs prevalecem sobre o contexto).
 
-REV4 2026-05-25 (P1 do prompt-engineering FINDINGS):
-Removido bloco "=== FORMATO DE SAIDA ===" (~50 linhas duplicando shape JSON).
-Output JSON ja eh enforced via response_schema=MovFactSheetCard em agent.py
-(Gemini structured output nativo). Semantica de cada campo agora vive em
-Field(description=...) no schemas.py. PROMPT_VERSION bumped pra v2.0.
+O formato do output e do response_schema=MovFactSheetCard (structured output nativo
+do Gemini); a semantica de cada campo vive em Field(description=...) no schemas.py.
 
-REV5 2026-05-25 (P2 do prompt-engineering FINDINGS):
-REGRA DE LEITURA DE POLOS + REGRA RECURSOS + REGRA EXTINCAO SEM MERITO movidas
-do meio do prompt pro TOPO em bloco <regras_criticas>...</regras_criticas>.
-Motivacao: Lost-in-the-Middle (Liu 2023 + MIT 2025) — info critica no meio do
-prompt eh ignorada >30% das vezes. Google recomenda regras no topo + restate
-no fim. <lembrete_final> adicionado no fim como recency anchor. PROMPT_VERSION
-bumped pra v2.1.
+As regras criticas (LEITURA DE POLOS, RECURSOS, EXTINCAO SEM MERITO) ficam no TOPO em
+<regras_criticas>...</regras_criticas>, com o <lembrete_final> no fim como recency
+anchor: Lost-in-the-Middle (Liu 2023) — info critica no meio do prompt e ignorada, e
+o Google recomenda regras no topo + restate no fim.
 """
 
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
@@ -198,24 +189,24 @@ def build_mov_factsheet_prompt(
     has_docs = len(documentos_anexados) > 0
 
     # RAMO 1D — DOCUMENTO ÓRFÃO (doc sem ato processual vinculado). Schema de
-    # saída continua MovFactSheetCard (decisão l1-schema-unico: tudo vira MOV_SCHEMA;
-    # NÃO criar OrphanDocCard). natureza de_fluxo/acessorio entra como RACIOCÍNIO
+    # saída continua MovFactSheetCard (schema único: tudo vira MOV_SCHEMA; NÃO criar
+    # OrphanDocCard). natureza de_fluxo/acessorio entra como RACIOCÍNIO
     # (afeta data/tratamento), não como campo. resumo vai em resumo_ato.
     if classe == "1D":
         return _build_orfao_prompt(processo, mov, documentos_anexados)
 
     # FUNDACAO RESOLVIDA (L1 v7): em vez de polos crus, entrega o lado do Tomador
     # ja resolvido (ou instrucao de inferir grupo economico — caso Casas Bahia/
-    # Via S.A) + a familia por materia. Ver fundacao.py + memory l1-invariante-fundacao.
+    # Via S.A) + a familia por materia. Ver fundacao.py.
     proc_block = (
         "=== CONTEXTO DA GARANTIA ===\n"
         + bloco_fundacao(processo)
         + familia_block(processo)
     )
 
-    # CIRURGIAS do POC (l1_prompt_v2) — as melhorias COMPROVADAS sobre o v2.3 puro
-    # (que reprovou; ver memory l1-teste-reprova). Injetadas no FIM de <regras_criticas>
-    # (recência). Trabalhista só quando a matéria/classe indica (viés a injetar).
+    # CIRURGIAS do POC (l1_prompt_v2) — as melhorias COMPROVADAS sobre o v2.3 puro.
+    # Injetadas no FIM de <regras_criticas> (recência). Trabalhista só quando a
+    # matéria/classe indica (viés a injetar).
     _cirurgias = TRAVA_DECISAO + REGRA_TITULARIDADE
     if eh_trabalhista(processo):
         _cirurgias += MODULO_TRABALHISTA

@@ -1,4 +1,4 @@
-"""Templates CRUS dos prompts engine v6 (L1 mov/day + L2 + L3).
+"""Templates CRUS dos prompts engine v6 (L1 mov + L2 + L3).
 
 Objetivo: expor o ESQUELETO de cada prompt — instrucoes/regras estaticas —
 SEM os dados do caso, com `{{campo}}` no lugar de cada injecao. Consumido pela
@@ -18,8 +18,8 @@ Limitacoes conhecidas (cosmeticas, nao afetam a parte estatica):
   (civel pra L2, misto pra L3). A UI avisa que fiscal/trabalhista trocam esse
   bloco. As instrucoes universais (90% do prompt) nao variam.
 
-Chaves do dict = `layer` canonico de `leads.engine_llm_calls` (espelha as
-constantes LAYER_* do MeritoDebugTab no front).
+Chaves do dict = `layer` canonico de `telemetria.engine_llm_calls` (espelha as
+constantes LAYER_* do ConexoDebugTab no front).
 """
 from __future__ import annotations
 
@@ -70,9 +70,8 @@ def _mov_factsheet_template() -> str:
     return build_mov_factsheet_prompt(processo, mov, docs, fb)
 
 
-# _day_factsheet_template REMOVIDO em 2026-06-13 (teardown do tier por-dia,
-# decisao Elton): agent day_factsheet aposentou; o registry nao pode manter
-# a entry (lazy import quebraria a rota GET /prompts em runtime).
+# Agent aposentado sai tambem do registry `_BUILDERS`: o lazy import dele falharia em
+# runtime, e o layer viraria a string de erro de `get_raw_prompt_templates`.
 
 
 def _processo_synthesis_template() -> str:

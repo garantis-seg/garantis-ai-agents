@@ -5,8 +5,8 @@
 no materializer do engine (lê `verify.band_supported`). O engine monta o dossiê (DB) e injeta
 aqui como texto — este agent é stateless (não toca DB).
 
-CONVENTION é VERBATIM do `oracle-artifacts/oracle_wf.js` (a redução que o gate-0 validou). Ao
-apertar as regras, edite AQUI e re-valide na escada do gate-0.
+A CONVENTION nasceu da redução que o gate-0 validou (o oráculo), com as regras 4 e 5
+apertadas depois (ver o bloco dela). Ao apertar as regras, edite AQUI e re-valide na escada do gate-0.
 """
 from __future__ import annotations
 
@@ -23,23 +23,13 @@ from .._utils.prompt_identity import versao_com_identidade
 
 logger = logging.getLogger(__name__)
 
-# ⭐ DERIVADA, nao mantida a mao — razao e medicoes em `_utils/prompt_identity.py`.
-# Card RAIZ [869enrt3w]. Medido 2026-09-01 (claude-db-tools `/api/query`, `error IS NULL`,
-# 30d): este emissor e `gemini-3.5-flash` + `prompt_version` NULL = 347 chamadas e
-# **US$44,93 de US$48,76 do L3 inteiro (92,1% do dolar)** — e ele decide a banda
-# AUTORITATIVA. Era a camada mais cara da casa sem nenhuma proveniencia:
-#   SELECT model, coalesce(prompt_version,'(NULL)'), count(*), round(sum(cost_usd)::numeric,2)
-#   FROM telemetria.engine_llm_calls WHERE layer='layer3_merito_synthesis'
-#     AND error IS NULL AND created_at > now() - interval '30 days' GROUP BY 1,2
-#
-# ⭐ UM arquivo basta, e por medicao: o pacote so tem `agent.py` + `__init__.py`, e a
-# CONVENTION (o prompt), os schemas `BandOut`/`VerifyOut` e o `DEFAULT_MODEL` moram TODOS
-# aqui. `git log --no-merges master -- src/agents/merito_reducao_v2/agent.py` -> 4 commits
-# em toda a historia, 4 blobs distintos ⇒ 4 baldes: nao e MUDO (o defeito que quase afundou
-# o #190) e esta muito dentro da regua de 25.
+# ⭐ DERIVADA, nao mantida a mao — razao em `_utils/prompt_identity.py`. Este emissor decide
+# a banda AUTORITATIVA e e a camada mais cara do L3: sem proveniencia, "isto piorou depois de
+# qual prompt?" nao tem resposta.
+# ⭐ UM arquivo basta: o pacote so tem `agent.py` + `__init__.py`, e a CONVENTION (o prompt),
+# os schemas `BandOut`/`VerifyOut` e o `DEFAULT_MODEL` moram TODOS aqui.
 # ⛔ NAO incluir o `__init__.py`: e re-export, nao molda saida nenhuma — peso mudo.
-# ⭐ Ninguem casa este valor por LITERAL (o unico leitor e o badge do painel de debug, que
-# casa `/__ab_(.+)$/` no FIM da string; o rotulo+hash vem ANTES do sufixo `__ab_`).
+# ⭐ Ninguem casa este valor por LITERAL.
 PROMPT_VERSION = versao_com_identidade("merito_reducao.v2", __file__)
 
 # gemini-3.5-flash: o alvo L2 de acurácia (não-lite; 3.5-flash-lite não existe). Gate-0
@@ -47,18 +37,16 @@ PROMPT_VERSION = versao_com_identidade("merito_reducao.v2", __file__)
 # (SSOT ENGINE_LAYER3_V2_MODEL); este default é só fallback.
 DEFAULT_MODEL = "gemini-3.5-flash"
 # thinking DINÂMICO de propósito: este agent não passa thinking_budget, então vale o
-# default do modelo (3.5-flash pensa). Não é acidente do gate `"2.5"` (removido
-# 2026-07-26) — é a config MEDIDA: A/B 86 dossiês do gold x N=3, desligar o thinking
-# custa 4 casos da zona-consenso (35->31) e cria 2 danger-under NOVOS. O gate-0 já
-# tinha rodado com thinking-default e não truncou. max alto cobre thinking+JSON de méritos GIGANTES.
+# default do modelo (3.5-flash pensa). Não é acidente — é a config MEDIDA no gold: desligar
+# o thinking perde casos da zona-consenso e cria danger-under NOVO. max alto cobre
+# thinking+JSON de méritos GIGANTES.
 _MAX_TOKENS = 32768
 
-# ── CONVENTION — semente = oracle_wf.js + R5 sharpening (2026-07-11, decisao Elton) ───────
-# Rules 4/5 apertadas pra fechar os 2 danger-unders do E2E (680048 RE-sobrestado, 680136 agravo-
-# interno residual): sobrestamento != exigibilidade; recurso residual/sobrestado apos merito ja
-# rejeitado -> a derrota governa. + carve supersessao (parcelamento pos-transito -> Medio). Medido
-# offline (report-R5-calibration-B1-2026-07-11.md): 680048->Alto, danger-unders eliminados, erro
-# todo surety-safe. Ao apertar mais, edite AQUI e re-valide na escada do gate-0/r5cal.
+# ── CONVENTION — semente = o oráculo + as regras 4 e 5 apertadas (decisao do Elton) ─────
+# Rules 4 e 5 fecham os danger-unders de RE sobrestado e agravo interno residual:
+# sobrestamento != exigibilidade; recurso residual/sobrestado apos merito ja rejeitado -> a
+# derrota governa. + carve supersessao (parcelamento pos-transito -> Medio). Ao apertar mais,
+# edite AQUI e re-valide na escada do gate-0/r5cal.
 CONVENTION = """
 Voce e o passo de SINTESE/REDUCAO de um motor de risco de SEGURO-GARANTIA JUDICIAL (Garantis).
 Um "merito" e um CLUSTER de processos conexos sobre UMA divida/disputa de UM Tomador (o segurado da apolice).

@@ -22,12 +22,12 @@ router = APIRouter(prefix="/merito-synthesis", tags=["merito-synthesis"])
 @router.post("/classify", response_model=MeritoSynthesisResponse)
 async def classify_merito_synthesis_endpoint(request: MeritoSynthesisRequest):
     """Output primario da engine v6_meritos. Recebe processo_syntheses + tomador
-    + cda + jurisprudencia + previous_snapshot. Retorna risco + justificativa
-    + trajetoria + peca_pivo do merito. (Aiims saiu do payload na v2.8,
-    2026-07-14 — teardown autos-wide; requests com aiims sao ignorados via
-    extra='ignore'.)
+    + cdas + previous_snapshot. Retorna risco + justificativa + trajetoria +
+    peca_pivo do merito. Campo fora do schema (aiims, jurisprudencia) e ignorado
+    via extra='ignore'.
 
-    Persiste em monitoramento.risk_snapshots via orchestrator no frontend-api.
+    Quem persiste em monitoramento.risk_snapshots e o materializer do L3 no
+    garantis-shared (`engine_v6/layer3_merito_synthesis/materializer.py`).
     """
     try:
         result = await classify_merito_synthesis(

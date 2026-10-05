@@ -17,8 +17,8 @@ _start_time = datetime.now()
 def check_gemini_api() -> bool:
     """Check if Gemini is callable (backend-aware).
 
-    Sob GEMINI_BACKEND=vertex a auth é ADC do service account — healthy sem key.
-    Sob aistudio (default), exige GEMINI_API_KEY/GOOGLE_API_KEY no ambiente.
+    Sob GEMINI_BACKEND=vertex (o default) a auth é ADC do service account — healthy
+    sem key. Sob aistudio (legacy explícito), exige GEMINI_API_KEY/GOOGLE_API_KEY.
     """
     from garantis_shared.gemini_backend import gemini_available
 
@@ -37,7 +37,6 @@ async def health_check():
         "status": "healthy",
         "service": "garantis-ai-agents",
         "version": "0.5.0",
-        # Trilha A (2026-07-21): display default 2.5-flash-lite -> 3.1-flash-lite.
         "model_default": os.getenv("DEFAULT_MODEL", "gemini-3.1-flash-lite"),
         "prompt_default": os.getenv("DEFAULT_PROMPT_VERSION", "v3"),
         "timestamp": datetime.now().isoformat(),
@@ -51,7 +50,7 @@ async def readiness_check(response: Response):
     Readiness check - verifies service can handle requests.
 
     Checks:
-    - Gemini API key is configured
+    - Gemini is callable (`check_gemini_api`: ADC no vertex, key no aistudio)
     - Model configuration is valid
 
     Returns 503 if not ready (for load balancer integration).
@@ -67,7 +66,6 @@ async def readiness_check(response: Response):
         logger.warning("Gemini API key not configured")
 
     # Check model configuration
-    # Trilha A (2026-07-21): display default 2.5-flash-lite -> 3.1-flash-lite.
     default_model = os.getenv("DEFAULT_MODEL", "gemini-3.1-flash-lite")
     checks["model_config"] = {"ready": True, "model": default_model, "status": "ready"}
 

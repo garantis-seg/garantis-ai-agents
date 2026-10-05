@@ -1,9 +1,7 @@
 """Pydantic schemas pro mov_factsheet agent (engine v6_meritos).
 
-Output rico que substitui o mov_summarizer simples. Cabe em
-leads.dossier_artifacts com kind='mov_factsheet'.
-
-Spec canonica do plano: c:/Users/Eltonxp/.claude/plans/risk-engine-v6-meritos.md
+Output rico do L1 por movimentacao. Cabe em leitura_conexos.dossier_artifacts com
+kind='mov_factsheet'.
 """
 
 from typing import Any, Literal, Optional
@@ -317,7 +315,7 @@ class MovInput(BaseModel):
     texto: str
     # Quantos documentos EXISTEM pra esta mov e NAO passaram no filtro de admissao
     # do loader (sem texto E sem gcs_url). Lido so pela trava de corpo, em
-    # `agent.py::_sem_corpo` — ver 869enu94n. >0 significa "ha peca, nao conseguimos
+    # `agent.py::_sem_corpo`. >0 significa "ha peca, nao conseguimos
     # ler", que NAO e a mesma coisa que "nao ha peca": no 1o caso o rotulo do
     # provider e ponteiro pra um documento real, e apagar a decisao perderia um fato
     # provavelmente verdadeiro (sub-rating quando adverso).
@@ -344,10 +342,9 @@ class ProcessoContext(BaseModel):
     materia: Optional[str] = None
     nm_tomador: Optional[str] = None
     cnpj_tomador: Optional[str] = None
-    # MESMA armadilha do fix acima, e ela mordeu de novo (card 869edc6u7): o shared
-    # SEMPRE mandou `assunto`, e pydantic o DESCARTAVA por não estar declarado —
-    # então o L1 escolhia a família de leitura sem nunca ver o assunto do processo.
-    # Medido: 204 de 5.857 pns viravam `civel` só por isso.
+    # ⛔ MESMA armadilha do docstring acima: o shared manda `assunto`, e pydantic o
+    # DESCARTA se não estiver declarado — o L1 escolheria a família de leitura sem
+    # nunca ver o assunto do processo.
     assunto: Optional[str] = None
     # Família já RESOLVIDA pelo shared (garantis_shared.materia). Vem pronta porque
     # o degrau da curadoria lê ref.cnj_classes e este serviço não tem banco

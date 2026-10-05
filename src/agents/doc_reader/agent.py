@@ -1,7 +1,7 @@
 """O LEITOR — um documento inteiro, uma missão estreita, citação por ID.
 
-ONDA 4 do desenho do Agente Investigador (DESENHO-INVESTIGADOR-2026-08-13, §2,
-§2.2, §5.3, §8.3). O papel de janela ISOLADA: recebe o `DocumentoIndexado`
+Peça do desenho do Agente Investigador (§2, §2.2, §5.3, §8.3). O papel de janela
+ISOLADA: recebe o `DocumentoIndexado`
 inteiro daquele documento e **nada mais** — nada do grafo, nada dos outros
 documentos, nada da rodada anterior. Devolve um envelope ≤2K tokens em que toda
 afirmação carrega `[sid]`.
@@ -19,20 +19,19 @@ lição: `confianca` e `objeto_da_confianca` são obrigatórios, e o segundo tem
 ser uma proposição LITERAL — *"de que este é o IRPJ principal mantido, e não o
 consolidado"*, nunca *"alta"*. Envelope sem os dois vai a retry uma vez e depois
 vira erro tipado. **Nunca passa adiante**, porque confiança em prosa é
-*confidence laundering* (§2.7 da pesquisa): ruído com aparência de rigor.
+*confidence laundering*: ruído com aparência de rigor.
 
 **3. Nunca deixa passar citação inventada.** Todo `sid` devolvido é conferido
-contra o `_por_sid` do documento — lookup O(1), o que a onda 1 comprou. Um ID
-que não existe é citação forjada, e o gate rejeita antes de a resposta virar
-âncora de célula.
+contra o `_por_sid` do documento — lookup O(1). Um ID que não existe é citação
+forjada, e o gate rejeita antes de a resposta virar âncora de célula.
 
 ## Por que a validação é aqui, e não no prompt
 
 Prompt não é enforcement. É a doutrina que já pôs a regra do junho e o banimento
-do fato gerador em código (`harness.py:22-31`), e vale igual aqui: o prompt
-**pede** os campos e os IDs; quem os **exige** é este módulo, com retry e erro
-tipado. A taxa de tags válidas medida do formato XML do sui-1 é 95,2% — os 4,8%
-restantes são exatamente o que a validação existe para pegar.
+do fato gerador em código (`garantis_shared/calculo_fichas/harness.py::normalizar_celulas`),
+e vale igual aqui: o prompt **pede** os campos e os IDs; quem os **exige** é este
+módulo, com retry e erro tipado. Nem o formato de tags mais disciplinado sai 100%
+válido — o que escapa é exatamente o que a validação existe para pegar.
 
 ## O retry é UM, e ele muda o prompt
 
@@ -89,20 +88,17 @@ __all__ = [
     "resumir",
 ]
 
-#: Papel do ROLES (§8.4). O desenho propõe `ficha_leitor → gemini-3.1-flash-lite`
-#: — volume alto, resposta curta, e `cached`=0,025 faz o context caching pagar
-#: muito bem em doc-QA repetido. Mas **trocar modelo de papel é decisão do
-#: Elton** (memory `engine-owns-model-control`) e `ficha_leitor` ainda não existe
-#: no catálogo; a proposta formal de ROLES é a onda 12. Enquanto isso,
-#: `leitor_autos_monolith` é o papel já registrado que faz **esta mesma coisa** —
-#: ler documento processual longo e devolver extração citada — e resolve para o
-#: mesmo `gemini-3.1-flash-lite` que o desenho propõe. Apontar para ele é o
-#: mesmo modelo com uma decisão a menos tomada por conta própria, exatamente
-#: como o `doc_indexer` fez com `vision_fallback`.
+#: Papel do ROLES (§8.4). O `ROLES` do shared não tem papel próprio de Leitor de
+#: ficha, e **trocar modelo de papel é decisão do Elton** (memory
+#: `engine-owns-model-control`). `leitor_autos_monolith` é o papel registrado que
+#: faz **esta mesma coisa** — ler documento processual longo e devolver extração
+#: citada — com o modelo barato de volume alto que o desenho propõe (resposta
+#: curta, context caching em doc-QA repetido). Apontar para ele é o mesmo modelo
+#: com uma decisão a menos tomada por conta própria, exatamente como o
+#: `doc_indexer` fez com `vision_fallback`.
 PAPEL_LEITOR = "leitor_autos_monolith"
 
-#: Env override, no padrão da casa (env específica → papel do ROLES). O desenho
-#: (§8.4) nomeia `DOC_READER_MODEL`.
+#: Env override, no padrão da casa (env específica → papel do ROLES).
 _ENV_MODELO = "DOC_READER_MODEL"
 
 #: Tetos de saída do §2.2, em tokens, convertidos para o `max_tokens` do
@@ -122,8 +118,8 @@ ERRO_ENVELOPE_SEM_CONFIANCA = "envelope_sem_objeto_da_confianca"
 ERRO_CITACAO_INEXISTENTE = "citacao_de_sid_inexistente"
 ERRO_SEM_CITACAO = "afirmacao_sem_citacao"
 
-#: O N de self-consistency que esta onda de fato roda. Ver `_n_dinco`: o campo
-#: viaja no envelope desde já, a chamada N-vezes é a onda 7.
+#: O N de self-consistency que o Leitor de fato roda. Ver `_n_dinco`: o campo
+#: viaja no envelope, mas a chamada N-vezes não roda aqui.
 N_DINCO_EFETIVO = 1
 
 #: Quantas vezes se tenta de novo depois de um envelope reprovado. UM: o retry
@@ -340,10 +336,10 @@ async def _rodar(
 ) -> tuple[Optional[dict[str, Any]], Optional[str], float, Optional[str]]:
     """Chama o modelo, valida, e tenta UMA vez de novo nomeando o que faltou.
 
-    Devolve `(envelope, erro, custo_acumulado, modelo_usado)`. O custo é
+    Devolve `(envelope, erro, custo_total, modelo_usado)`. O custo é
     **acumulado** entre as tentativas de propósito: as duas chamadas
     aconteceram e as duas foram faturadas, e um ledger que só registra a última
-    é o mesmo mecanismo que já escondeu US$ 97,61 em 39.309 calls.
+    é o mesmo mecanismo que esconde gasto.
     """
     llm = create_provider(provider or os.getenv("DEFAULT_PROVIDER", "gemini"))
 
@@ -419,9 +415,9 @@ def _prompt_com_correcao(prompt_base: str, erro: str, detalhe: str) -> str:
 def _validar_confianca(parsed: dict) -> tuple[Optional[tuple[float, str]], Optional[str], str]:
     """`confianca` + `objeto_da_confianca`, os dois OBRIGATÓRIOS (§5.3).
 
-    Este é o gate que o §9.1 nomeia (`test_envelope_confianca.py`: *"envelope sem
-    `objeto_da_confianca` → rejeitado. Confiança em prosa → rejeitada"*), e é o
-    que impede o *confidence laundering*: um número sem o objeto dele é ruído
+    Este é o gate que o §9.1 nomeia (*"envelope sem `objeto_da_confianca` →
+    rejeitado. Confiança em prosa → rejeitada"*; preso em `tests/test_doc_reader.py`),
+    e é o que impede o *confidence laundering*: um número sem o objeto dele é ruído
     com aparência de rigor, porque *"85% confiante de que li o número certo"* e
     *"85% confiante de que este é o número que se pediu"* são afirmações
     diferentes e multiplicá-las não significa nada (arXiv:2604.23505).
@@ -459,7 +455,7 @@ def _validar_confianca(parsed: dict) -> tuple[Optional[tuple[float, str]], Optio
 def _validar_citacoes(
     brutas: Any, doc: DocumentoIndexado, campo: str
 ) -> tuple[Optional[list[str]], Optional[str], str]:
-    """Cada `sid` tem que existir NESTE documento. Lookup O(1) — o que a onda 1 comprou.
+    """Cada `sid` tem que existir NESTE documento. Lookup O(1).
 
     Aceita objeto `{"sid": …}` além da string porque o modelo às vezes devolve a
     forma rica mesmo quando o schema pede só o ID; extrair o `sid` de um dict é
@@ -697,21 +693,21 @@ def _carregar_documento(
 
 
 def _n_dinco(bruto: Optional[int]) -> int:
-    """O N efetivo desta onda. Aceita o campo, devolve o que de fato rodou.
+    """O N efetivo do Leitor. Aceita o campo, devolve o que de fato rodou.
 
-    O campo **viaja** desde já (o envelope o declara como `self_consistency_n`)
-    porque mudar o shape do envelope depois é o que quebra o consumidor — mesma
-    razão pela qual o `doc_indexer` já devolve `cache_hit` sem ter cache. Mas a
-    chamada N-vezes em si é a onda 7: o normalizador DINCO vive no shared
-    (`confianca.py`) e é ele que sabe gerar os distractors e normalizar os
-    votos. Fazer aqui uma média de N chamadas seria inventar um segundo
-    normalizador — e o §5.2 é explícito em que quorum-N puro é caro, pior, e em
-    problema difícil pode PIORAR (arXiv:2608.11403).
+    O campo **viaja** (o envelope o declara como `self_consistency_n`) porque
+    mudar o shape do envelope depois é o que quebra o consumidor — mesma razão
+    pela qual o `doc_indexer` já devolve `cache_hit` sem ter cache. Mas a chamada
+    N-vezes não roda aqui: o normalizador DINCO vive no shared (`confianca.py`) e
+    é ele que sabe gerar os distractors e normalizar os votos. Fazer aqui uma
+    média de N chamadas seria inventar um segundo normalizador — e o §5.2 é
+    explícito em que quorum-N puro é caro, pior, e em problema difícil pode
+    PIORAR (arXiv:2608.11403).
 
     Por isso o N efetivo é 1 **sempre**, inclusive quando o request pede 10, e é
     reportado como 1: declarar 3 quando rodou 1 seria mentir exatamente no campo
-    que o §5.2 manda gravar para permitir a recalibração depois. Quando a onda 7
-    entrar, é esta função que passa a devolver o N de verdade — o envelope e os
-    callers não mudam.
+    que o §5.2 manda gravar para permitir a recalibração depois. Quando a chamada
+    N-vezes entrar, é esta função que passa a devolver o N de verdade — o envelope
+    e os callers não mudam.
     """
     return N_DINCO_EFETIVO
