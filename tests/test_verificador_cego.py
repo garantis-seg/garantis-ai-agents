@@ -635,22 +635,6 @@ def test_verificador_usa_modelo_diferente_do_calculador():
     assert model_for("ficha_auditoria_evidencias") != model_for("ficha_calculo")
 
 
-def test_default_do_verificador_sai_do_papel_e_nao_de_literal(monkeypatch):
-    """Literal duplicado envelhece calado — foi assim que o calculador ficou
-    apontando para um modelo fora do catalogo (preco 0/0, custo invisivel)."""
-    import importlib
-
-    from garantis_shared.llm_models import model_for
-    for var in ("AUDITOR_EVIDENCIAS_MODEL", "DEFAULT_MODEL"):
-        monkeypatch.delenv(var, raising=False)
-    try:
-        recarregado = importlib.reload(verif_mod)
-        assert recarregado.DEFAULT_MODEL == model_for("ficha_auditoria_evidencias")
-    finally:
-        monkeypatch.undo()
-        importlib.reload(verif_mod)
-
-
 def test_modelo_do_verificador_esta_no_catalogo_e_nao_e_preview():
     """Fora de `MODELS` o preco sai 0/0 e o gasto some do ledger EM SILENCIO —
     o mecanismo que ja escondeu US$ 97,61 em 39.309 calls. E `-preview` 404a no

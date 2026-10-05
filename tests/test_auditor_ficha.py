@@ -25,16 +25,14 @@ import asyncio
 import copy
 import json
 import re
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import yaml
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.agents.auditor_ficha.agent as agent_mod
-from src.agents.auditor_ficha import auditar_ficha, resolver_modelo
+from src.agents.auditor_ficha import auditar_ficha
 from src.agents.auditor_ficha.agent import REGRAS_CONHECIDAS, _normalizar_reprovacoes
 from src.agents.auditor_ficha.prompts import (
     build_auditar_ficha_prompt,
@@ -490,144 +488,6 @@ def test_agente_usa_temperatura_zero_e_json_mode(monkeypatch):
     _rodar(auditar_ficha(_req()))
     assert prov.last_kwargs["temperature"] == 0.0
     assert prov.last_kwargs["response_mime_type"] == "application/json"
-
-
-# ── Modelo: env -> ROLES -> literal, e NUNCA DEFAULT_MODEL ─────────────────
-
-
-def test_env_explicita_vence(monkeypatch):
-    monkeypatch.setenv("FICHA_AUDITORIA_TEXTO_MODEL", "gemini-9-turbo")
-    assert resolver_modelo() == "gemini-9-turbo"
-
-
-def test_sem_env_e_sem_papel_cai_no_literal(monkeypatch):
-    """Enquanto o garantis-shared#345 nao mergear, o literal e quem responde."""
-    monkeypatch.delenv("FICHA_AUDITORIA_TEXTO_MODEL", raising=False)
-    monkeypatch.setattr(agent_mod, "_modelo_do_papel", lambda: None)
-    assert resolver_modelo() == "gemini-3.1-flash-lite"
-
-
-def test_papel_do_ROLES_vence_o_literal(monkeypatch):
-    """Quando o #345 mergear, o ROLES passa a mandar sem mudanca de codigo."""
-    monkeypatch.delenv("FICHA_AUDITORIA_TEXTO_MODEL", raising=False)
-    monkeypatch.setattr(agent_mod, "_modelo_do_papel", lambda: "gemini-do-papel")
-    assert resolver_modelo() == "gemini-do-papel"
-
-
-def test_auditor_NAO_herda_DEFAULT_MODEL(monkeypatch):
-    """A defesa de codigo contra o achado A-1.
-
-    Se o auditor lesse DEFAULT_MODEL, ele resolveria pro mesmo modelo do
-    redator (que o le) e o S6 viraria o redator revisando a propria prosa.
-    """
-    monkeypatch.delenv("FICHA_AUDITORIA_TEXTO_MODEL", raising=False)
-    monkeypatch.setenv("DEFAULT_MODEL", "gemini-3.1-flash-lite")
-    monkeypatch.setattr(agent_mod, "_modelo_do_papel", lambda: None)
-    assert resolver_modelo() == "gemini-3.1-flash-lite"  # literal, nao heranca
-    monkeypatch.setenv("DEFAULT_MODEL", "modelo-do-redator-qualquer")
-    assert resolver_modelo() != "modelo-do-redator-qualquer"
-
-
-def test_modelo_do_papel_no_wheel_pinado_e_None_ou_string():
-    """Contra o wheel REAL: a leitura do ROLES nao levanta e tem tipo previsivel.
-
-    Hoje (garantis-shared==1.459.0) o papel `ficha_auditoria_texto` nao existe e
-    isto devolve None. Quando o #345 mergear e o pin subir, passa a devolver a
-    string do papel — nos dois estados o agente segue de pe, que e o que importa.
-    """
-    valor = agent_mod._modelo_do_papel()
-    assert valor is None or (isinstance(valor, str) and valor.strip())
-
-
-@pytest.mark.parametrize("roles_quebrado", [
-    {},                                       # papel ausente (o caso de hoje)
-    {"ficha_auditoria_texto": None},          # papel presente e nulo
-    {"ficha_auditoria_texto": ""},            # string vazia
-    {"ficha_auditoria_texto": 42},            # tipo inesperado
-    {"ficha_auditoria_texto": {}},            # dict sem chave de modelo
-    {"ficha_auditoria_texto": {"outra": "x"}},  # dict com chave desconhecida
-])
-def test_ROLES_malformado_cai_no_literal_sem_levantar(monkeypatch, roles_quebrado):
-    """Registro estranho nunca derruba o agente — cai no literal.
-
-    Simula o modulo `garantis_shared.llm_models` com ROLES quebrado, pra este
-    caminho ser exercido de verdade (contra o wheel real so daria pra ver o
-    caso "papel ausente").
-    """
-    import sys
-    from types import ModuleType
-
-    fake = ModuleType("garantis_shared.llm_models")
-    fake.ROLES = roles_quebrado
-    monkeypatch.setitem(sys.modules, "garantis_shared.llm_models", fake)
-    monkeypatch.delenv("FICHA_AUDITORIA_TEXTO_MODEL", raising=False)
-
-    assert agent_mod._modelo_do_papel() is None
-    assert resolver_modelo() == "gemini-3.1-flash-lite"
-
-
-def test_ROLES_com_papel_string_e_com_papel_dict_sao_lidos(monkeypatch):
-    """As duas formas plausiveis do registro do #345 funcionam."""
-    import sys
-    from types import ModuleType
-
-    for roles, esperado in (
-        ({"ficha_auditoria_texto": "gemini-x"}, "gemini-x"),
-        ({"ficha_auditoria_texto": {"model": "gemini-y"}}, "gemini-y"),
-    ):
-        fake = ModuleType("garantis_shared.llm_models")
-        fake.ROLES = roles
-        monkeypatch.setitem(sys.modules, "garantis_shared.llm_models", fake)
-        assert agent_mod._modelo_do_papel() == esperado
-
-
-# ── Cloudbuild: a env explicita nos dois ambientes (padrao do fix A-1) ─────
-
-_REPO_ROOT = Path(__file__).resolve().parent.parent
-_CLOUDBUILDS = {
-    "prod": (_REPO_ROOT / "cloudbuild-deploy.yaml", "--set-env-vars"),
-    "staging": (_REPO_ROOT / "cloudbuild-staging-build.yaml", "--update-env-vars"),
-}
-
-
-def _envs_do_cloudbuild(path: Path) -> dict[str, str]:
-    """Le o YAML de verdade (nao regex no texto) — comentario nao deploya nada."""
-    steps = yaml.safe_load(path.read_text(encoding="utf-8"))["steps"]
-    envs: dict[str, str] = {}
-    for step in steps:
-        args = [str(a) for a in (step.get("args") or [])]
-        for i, arg in enumerate(args):
-            crus = ""
-            if arg in ("--set-env-vars", "--update-env-vars") and i + 1 < len(args):
-                crus = args[i + 1]
-            elif arg.startswith(("--set-env-vars=", "--update-env-vars=")):
-                crus = arg.split("=", 1)[1]
-            for kv in crus.split(","):
-                if "=" in kv:
-                    k, v = kv.split("=", 1)
-                    envs[k.strip()] = v.strip()
-    return envs
-
-
-@pytest.mark.parametrize("alvo", list(_CLOUDBUILDS))
-def test_cloudbuild_seta_o_modelo_do_auditor_de_ficha(alvo):
-    """FICHA_AUDITORIA_TEXTO_MODEL explicita, e DIFERENTE da do redator.
-
-    Mesma doutrina do achado A-1: sem a env, o par redator x auditor colapsa e
-    o S6 vira o redator conferindo a propria prosa — em silencio.
-    """
-    path, flag = _CLOUDBUILDS[alvo]
-    envs = _envs_do_cloudbuild(path)
-
-    # Guarda de FORMA: parse virado no-op passaria por "esta tudo certo".
-    assert flag in path.read_text(encoding="utf-8"), f"{path.name}: {flag} sumiu"
-    assert len(envs) >= 2, f"{path.name}: parse achou {len(envs)} envs — check virou no-op"
-
-    aud = envs.get("FICHA_AUDITORIA_TEXTO_MODEL")
-    wri = envs.get("FICHA_WRITER_MODEL")
-    assert aud, f"{path.name}: FICHA_AUDITORIA_TEXTO_MODEL ausente"
-    assert wri, f"{path.name}: FICHA_WRITER_MODEL ausente — o redator colapsa no DEFAULT_MODEL"
-    assert aud != wri, f"{path.name}: redator e auditor no MESMO modelo ({aud})"
 
 
 # ── Rota ───────────────────────────────────────────────────────────────────

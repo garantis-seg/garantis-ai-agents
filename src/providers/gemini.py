@@ -13,7 +13,7 @@ import re
 import time
 from typing import Any, Dict, List, Optional, Type
 
-from garantis_shared.llm_models import cached_price_for, gemini_pricing_pairs
+from garantis_shared.llm_models import cached_price_for, gemini_pricing_pairs, model_for
 from garantis_shared.rate_limit import TokenBucketRateLimiter
 
 from .base import BaseLLMProvider, LLMResponse
@@ -172,7 +172,9 @@ GEMINI_PRICING = {
     for model, (inp, out) in gemini_pricing_pairs().items()
 }
 
-DEFAULT_MODEL = "gemini-2.5-flash-lite"
+# So alcancado por quem nao passa modelo (test_connection, /providers): todo agent
+# passa o do seu papel. Por isso nao ganha papel proprio — e o do L1, o mais barato.
+DEFAULT_MODEL = model_for("engine_layer1")
 
 
 # Terminações NORMAIS do Gemini. STOP = ok; MAX_TOKENS = corte legítimo de tamanho

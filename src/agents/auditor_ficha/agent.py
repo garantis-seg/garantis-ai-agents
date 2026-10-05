@@ -26,6 +26,8 @@ import logging
 import os
 from typing import Any, Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -36,52 +38,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-#: Papel deste agente no registro de modelos do shared.
-_ROLE = "ficha_auditoria_texto"
-
-#: Default LITERAL: o ultimo fallback, usado so se o wheel instalado nao tiver o
-#: papel em `garantis_shared.llm_models.ROLES` — a resolucao abaixo prefere o ROLES.
-_DEFAULT_MODEL_LITERAL = "gemini-3.1-flash-lite"
-
-
-def _modelo_do_papel() -> Optional[str]:
-    """Modelo do papel `ficha_auditoria_texto` no ROLES do shared, se existir.
-
-    Tolerante de proposito: um wheel antigo pode nao ter o registro, e a forma do
-    valor pode ser string ou dict — ler o registro nao pode derrubar o agente.
-    Qualquer surpresa devolve None e cai no literal.
-    """
-    try:
-        from garantis_shared.llm_models import ROLES  # import local: opcional
-    except Exception:  # noqa: BLE001 — wheel antigo/sem o modulo
-        return None
-    try:
-        entrada = ROLES.get(_ROLE)
-    except Exception:  # noqa: BLE001
-        return None
-    if isinstance(entrada, str) and entrada.strip():
-        return entrada.strip()
-    if isinstance(entrada, dict):
-        for chave in ("model", "modelo", "default", "id"):
-            val = entrada.get(chave)
-            if isinstance(val, str) and val.strip():
-                return val.strip()
-    return None
-
-
-def resolver_modelo() -> str:
-    """Precedencia: env explicita -> papel do ROLES -> literal.
-
-    `FICHA_AUDITORIA_TEXTO_MODEL` vem PRIMEIRO e NAO cai em `DEFAULT_MODEL`
-    (diferente dos agentes antigos) — o `X or DEFAULT_MODEL` colapsa calculador e
-    auditor no mesmo modelo. Herdar o DEFAULT_MODEL aqui reintroduziria o mesmo
-    silencio: o redator tambem o herda, e os dois voltariam a ser o mesmo modelo
-    sem ninguem perceber.
-    """
-    env = os.getenv("FICHA_AUDITORIA_TEXTO_MODEL")
-    if env and env.strip():
-        return env.strip()
-    return _modelo_do_papel() or _DEFAULT_MODEL_LITERAL
+#: O papel no registro do shared, que o mantem de familia diferente do redator
+#: (`ficha_redacao`). Sem env: uma 2a fonte diverge do papel.
+DEFAULT_MODEL = model_for("ficha_auditoria_texto")
 
 
 #: IDs de regra aceitos no campo `regra`. Um ID fora desta lista denuncia
@@ -174,7 +133,7 @@ async def auditar_ficha(
         request = AuditarFichaRequest(**request)
 
     provider = provider or request.provider or DEFAULT_PROVIDER
-    model = model or request.model or resolver_modelo()
+    model = model or request.model or DEFAULT_MODEL
 
     if not request.ficha_json:
         return _falha("nenhuma ficha para auditar", model)
@@ -230,4 +189,4 @@ async def auditar_ficha(
     )
 
 
-__all__ = ["auditar_ficha", "resolver_modelo", "REGRAS_CONHECIDAS"]
+__all__ = ["auditar_ficha", "DEFAULT_MODEL", "REGRAS_CONHECIDAS"]

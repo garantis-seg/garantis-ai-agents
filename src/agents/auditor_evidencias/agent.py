@@ -1,8 +1,8 @@
 """Agente AUDITOR DE EVIDENCIAS (C4) — julga se cada trecho sustenta o valor.
 
-Stateless. Modelo DIFERENTE do calculador por default (configuravel): auditar
-com o mesmo modelo que calculou e pedir a alguem que revise o proprio trabalho
-— os erros sao correlacionados e se confirmam mutuamente.
+Stateless. Modelo DIFERENTE do calculador: auditar com o mesmo modelo que
+calculou e pedir a alguem que revise o proprio trabalho — os erros sao
+correlacionados e se confirmam mutuamente.
 
 Duas travas de fail-safe, ambas na direcao de REPROVAR:
 
@@ -18,6 +18,8 @@ import logging
 import os
 from typing import Any, Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -28,12 +30,9 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-#: Modelo do AUDITOR — deliberadamente distinto do CALCULO_FICHA_MODEL.
-#: Configuravel para que a casa possa cruzar familias de modelo (o ideal e
-#: provider diferente, nao so versao diferente).
-DEFAULT_MODEL = os.getenv(
-    "AUDITOR_EVIDENCIAS_MODEL", os.getenv("DEFAULT_MODEL", "gemini-2.5-flash")
-)
+#: Modelo do AUDITOR: o papel no registro do shared, que o mantem de familia
+#: diferente do calculador (`ficha_calculo`). Sem env: uma 2a fonte diverge do papel.
+DEFAULT_MODEL = model_for("ficha_auditoria_evidencias")
 
 _MOTIVO_OMISSO = (
     "auditor nao emitiu veredicto para esta evidencia — reprovada por omissao "

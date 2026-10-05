@@ -23,6 +23,8 @@ import math
 import os
 from typing import Any, Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -33,26 +35,13 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-#: Modelo do CALCULADOR. Um calculo que vira garantia bilionaria nao roda em
-#: flash-lite — foi exatamente o default do V3 (`optimize_cost`) e a economia
-#: apareceu como erro de 3x. O auditor usa modelo DIFERENTE (ver
-#: auditor_evidencias.agent): dois erros correlacionados do mesmo modelo se
-#: confirmariam mutuamente.
-#:
-#: ⛔ O id tem de existir no Vertex (a casa roda `GEMINI_BACKEND=vertex`; id
-#: `-preview` como o `gemini-3.1-pro-preview` da 404) E no catalogo
-#: `garantis_shared.llm_models.MODELS` — fora dele `get_model_pricing()` devolve
-#: preco zero e o custo sai ZERADO do ledger (so com o log
-#: `GEMINI_PRICING_MODEL_UNKNOWN`).
-#: E segue DIFERENTE do auditor (`AUDITOR_EVIDENCIAS_MODEL`, anti-conluio).
-#: ⚠️ Auditor na familia 2.5 precisa de um id novo antes de
-#: `garantis_shared.llm_models.RETIRE_2_5_FAMILY`, e trocar os dois pro mesmo modelo
-#: mata a premissa do desenho.
-#: O `ROLES` do shared ja tem o par (`ficha_calculo` x `ficha_auditoria_evidencias`);
-#: este default ainda nao le de la — o wire e `model_for("ficha_calculo")`.
-DEFAULT_MODEL = os.getenv(
-    "CALCULO_FICHA_MODEL", os.getenv("DEFAULT_MODEL", "gemini-3.5-flash")
-)
+#: Modelo do CALCULADOR: o papel no registro do shared. Um calculo que vira
+#: garantia bilionaria nao roda em flash-lite — foi o default do V3
+#: (`optimize_cost`) e a economia apareceu como erro de 3x. O registro mantem o
+#: auditor (`ficha_auditoria_evidencias`) de familia DIFERENTE: dois erros
+#: correlacionados do mesmo modelo se confirmariam mutuamente. Sem env: uma 2a
+#: fonte diverge do papel.
+DEFAULT_MODEL = model_for("ficha_calculo")
 
 #: Grafo grande e sinal de caso mal decomposto, e o custo de validar explode.
 MAX_CELULAS = 120

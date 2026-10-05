@@ -80,10 +80,7 @@ def test_todo_modelo_que_este_repo_pode_servir_tem_preco():
 
     from src.providers.gemini import DEFAULT_MODEL
 
-    servidos = {DEFAULT_MODEL} | {
-        ROLES[r] for r in ("engine_layer1", "engine_layer2", "engine_layer3",
-                           "engine_layer3_v2", "engine_l1_escalate", "vision_fallback")
-    }
+    servidos = {DEFAULT_MODEL} | set(ROLES.values())
     faltando = sorted(m for m in servidos if m not in GEMINI_PRICING)
     assert faltando == [], f"modelos servidos sem preco no catalogo: {faltando}"
 

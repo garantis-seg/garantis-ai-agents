@@ -14,7 +14,7 @@ Reprovacao e TIPADA e ancorada num ID do Livro — nunca nota ou score.
 Ver agent.auditar_ficha + api.routes.auditor_ficha.
 """
 
-from .agent import auditar_ficha, resolver_modelo
+from .agent import auditar_ficha
 from .schemas import (
     AuditarFichaRequest,
     AuditarFichaResponse,
@@ -23,7 +23,6 @@ from .schemas import (
 
 __all__ = [
     "auditar_ficha",
-    "resolver_modelo",
     "AuditarFichaRequest",
     "AuditarFichaResponse",
     "Reprovacao",
