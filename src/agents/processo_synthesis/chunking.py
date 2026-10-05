@@ -1,29 +1,24 @@
 # -*- coding: utf-8 -*-
-"""Chunk map-reduce de processo GIGANTE no L2 (2026-06-22).
+"""Chunk map-reduce de processo GIGANTE no L2.
 
-Processo com muito SINAL vira 1 prompt único que o Gemini leva 250s+ → estoura
-TIMEOUT_LAYER2_S=180s no worker → retry → loop. O filtro de relevância (2026-06-20) já
-encolhe os procedural-giants (dropa ruido/baixa → 84s); o chunking é o 2º eixo, pro caso
-em que até o SINAL filtrado é grande demais: split em lotes CRONOLÓGICOS → classifica cada
-lote em PARALELO (cada um < timeout) → reduz por semântica de campo.
+Processo com muito SINAL vira 1 prompt único lento demais → estoura o TIMEOUT_LAYER2_S
+do worker → retry → loop. O filtro de relevância já encolhe os procedural-giants (dropa
+ruido/baixa); o chunking é o 2º eixo, pro caso em que até o SINAL filtrado é grande
+demais: split em lotes CRONOLÓGICOS → classifica cada lote em PARALELO (cada um <
+timeout) → reduz por semântica de campo.
 
-⭐ COMPÕE com o filtro (fix 2026-06-22): detector + split operam sobre o conjunto FILTRADO
-(`_filtered_cards`), NÃO sobre todos os movs. Chunkar os brutos relia os procedurais que o
-filtro dropa = 6× mais trabalho → regrediu procedural-giants (680046 timeout vs 84s
-filtrado). Agora processo procedural-giant não chunka (via filtrada); só chunka quando o
-sinal filtrado passa de 120k. Ver split_movs_chronological.
-
-Aqui só o split (por-layer) + reduce (por-layer), puros e testáveis. A orquestração
-genérica (gather paralelo → filtra OK → reduce → soma usage) é
-`garantis_shared.llm_chunking.map_reduce_classify`, chamada no agent.py. ESPELHA o
-padrão do L1 (mov_factsheet/chunking.py).
+⭐ COMPÕE com o filtro: detector + split operam sobre o conjunto FILTRADO
+(`_filtered_cards`), NÃO sobre todos os movs — chunkar os brutos relê os procedurais que o
+filtro dropa (várias vezes mais trabalho, e regride os procedural-giants). Processo
+procedural-giant não chunka (via filtrada); só chunka quando o sinal filtrado passa de
+`_L2_CHUNK_DETECT_CHARS`. Ver split_movs_chronological.
 
 Aqui só o split (por-layer) + reduce (por-layer), puros e testáveis. A orquestração
 genérica (gather paralelo → filtra OK → reduce → soma usage) é
 `garantis_shared.llm_chunking.map_reduce_classify`, chamada no agent.py. ESPELHA o
 padrão do L1 (mov_factsheet/chunking.py).
 
-Reduce — semântica por campo (ANCHOR no lote da decisão que governa; review 2026-06-22):
+Reduce — semântica por campo (ANCHOR no lote da decisão que governa):
   decisao_vigente : HIERARQUIA load-bearing (transito > instância > mérito > recência) —
                     define o ANCHOR. NÃO é "último lote" cego. transito/recorrida OR-merged
                     de todas as janelas (a certidão de trânsito cai num lote sem a sentença).
@@ -41,16 +36,14 @@ n_ok/n_variants), nunca silencioso.
 
 ponytail: SEM marcador "[PARTE j/N]" no prompt do lote (de propósito) — ele não é
 necessário: o reduce faz o raciocínio cross-janela, e o LLM só sintetiza cada janela.
-⚠️ CORRIGIDO em 2026-09-01: até aqui esta linha dizia que adicioná-lo "forçaria bump de
-PROMPT_VERSION = re-cascade de TODOS os procs". Isso CADUCOU. O HIT de cache do L2 é
-"card ATIVO?" (superseded_at IS NULL) + scope_key + frescor — NÃO "existe synthesis na
-versão X?"; ver o corpo de `_ja_existe` em layer2_processo_synthesis/materializer.py, que
-diz "a gravação continua carimbando summary_prompt_version (proveniência), só a leitura
-mudou". Quem supersede é `enroll_processo`, pela versão do PROCESSO (allowlist v6/v7),
-não pelo PROMPT_VERSION. ⇒ editar prompts.py NÃO re-cascateia nada.
-⛔ A consequência inversa é o limite real, e é ela que precisa estar escrita: sem
-invalidação, card L2 já gerado MANTÉM a saída do prompt antigo até ser superseded por
-outro motivo. Mudança de prompt vale PRA FRENTE, nunca retroativamente. O reduce faz o raciocínio cross-janela; o LLM só sintetiza cada janela.
+Editar prompts.py NÃO re-cascateia nada: o HIT de cache do L2 é "card ATIVO?"
+(superseded_at IS NULL) + scope_key + frescor — NÃO "existe synthesis na versão X?" (ver
+`_exists_cached_processo_synthesis` em garantis-shared
+`engine_v6/layer2_processo_synthesis/materializer.py`). Quem supersede é `enroll_processo`,
+pela versão do PROCESSO, não pelo PROMPT_VERSION.
+⛔ A consequência inversa é o limite real: sem invalidação, card L2 já gerado MANTÉM a
+saída do prompt antigo até ser superseded por outro motivo. Mudança de prompt vale PRA
+FRENTE, nunca retroativamente.
 """
 from __future__ import annotations
 
@@ -63,17 +56,15 @@ from .schemas import ProcessoSynthesisRequest
 
 logger = logging.getLogger(__name__)
 
-# DOIS thresholds distintos (fix 2026-06-22 — antes era 1 só, e baixo demais):
+# DOIS thresholds distintos:
 #
-# DETECTOR (quando chunkar): o render FILTRADO precisa passar disto. Medido: o 680046
-# (pior gigante monit, ~530k de timeline filtrada) roda como CHAMADA ÚNICA em ~84s — bem
-# sob os 180s. Ou seja, a via filtrada única aguenta os gigantes conhecidos; chunkar eles
-# só ADICIONA carga na instância (foi o que death-spiralou). Então só chunka quando o sinal
-# filtrado é grande demais pro single call arriscar o timeout (~800k ≈ ~127s extrapolado).
-# Na prática: dormente pros monit atuais (filtro resolve), rede de segurança pros monstros.
+# DETECTOR (quando chunkar): o render FILTRADO precisa passar disto. A via filtrada única
+# e a preferida pros gigantes conhecidos; chunkar eles so ADICIONA carga na instancia (foi o
+# que death-spiralou). Entao so chunka quando o sinal filtrado e grande demais pro single
+# call arriscar o timeout: rede de seguranca pros monstros.
 _L2_CHUNK_DETECT_CHARS = int(os.getenv("L2_CHUNK_DETECT_CHARS", "800000"))
 # ORÇAMENTO POR LOTE (quando chunka): cada lote vira 1 prompt pequeno/rápido (~120k +
-# scaffolding < ~200k = teto dos ~60s/call). env-configurável (handoff §6.3).
+# scaffolding < ~200k = teto dos ~60s/call). env-configurável.
 L2_CHUNK_CHARS = int(os.getenv("L2_CHUNK_CHARS", "120000"))
 
 # Teto de movs por lote = o threshold do filtro de relevância (_render_timeline em
@@ -95,11 +86,10 @@ def split_movs_chronological(
 ) -> Optional[list[ProcessoSynthesisRequest]]:
     """Divide os cards em lotes CRONOLÓGICOS quando o SINAL filtrado é grande demais.
 
-    COMPÕE COM O FILTRO DE RELEVÂNCIA (fix 2026-06-22): detector e split operam sobre o
-    conjunto FILTRADO (`_filtered_cards` — só sinal + cauda, o MESMO que a chamada única
-    renderiza), NÃO sobre todos os movs. Chunkar os brutos relia milhares de procedurais que
-    o filtro dropa = 6× mais trabalho → regrediu procedural-giants (680046: filtro fazia 84s;
-    chunk-tudo dava timeout 180s).
+    COMPÕE COM O FILTRO DE RELEVÂNCIA: detector e split operam sobre o conjunto FILTRADO
+    (`_filtered_cards` — só sinal + cauda, o MESMO que a chamada única renderiza), NÃO
+    sobre todos os movs. Chunkar os brutos relê milhares de procedurais que o filtro dropa
+    (várias vezes mais trabalho → regride os procedural-giants).
 
     DOIS thresholds: `detect_chars` (quando chunkar — render filtrado precisa passar disto;
     default _L2_CHUNK_DETECT_CHARS alto → via filtrada única é preferida pros gigantes
@@ -188,13 +178,13 @@ def reduce_processo_synthesis_cards(cards: list[dict]) -> dict:
     instância > mérito > recência, mirror do dec_score do L1). Os campos derivados do
     ESTADO DECISÓRIO — decisao_vigente, risco_processo_intermediario, risco_factual,
     risco_jurisprudencial, probabilidade_exito — vêm DELE: coerentes entre si e com a
-    decisão que governa. NÃO é MAX cego entre lotes (MAX super-flagava de-escalação REAL:
-    acordo homologado / garantia aceita / extinção reduzem o risco — review 2026-06-22 §F1;
-    e prob_exito vinha do tail procedural fraco em vez da janela com a decisão — §F2).
+    decisão que governa. NÃO é MAX cego entre lotes (MAX super-flaga de-escalação REAL:
+    acordo homologado / garantia aceita / extinção reduzem o risco; e prob_exito viria do
+    tail procedural fraco em vez da janela com a decisão).
     estado_processual/trajetoria/peca_pivo vêm da janela mais RECENTE (estado corrente).
     transito_certificado/recorrida são OR-merged de TODAS as janelas: a certidão de trânsito
     costuma cair num lote SEM a sentença (natureza=null → fora do anchor), então o pick
-    sozinho perderia o flag e sub-flagava o pior caso (§F3). lifecycle=union, valores=max,
+    sozinho perderia o flag e sub-flagaria o pior caso. lifecycle=union, valores=max,
     movs=soma, confianca=min. Identidade (processo_numero/classe/.../tipo_judicial) do 1º lote.
     Estilo espelha reduce_peca_cards do L1: picks 1-caller são closures locais.
     """
@@ -217,7 +207,7 @@ def reduce_processo_synthesis_cards(cards: list[dict]) -> dict:
     anchor = max(withdec, key=dec_score) if withdec else cards[-1]
 
     decisao = dict(anchor.get("decisao_vigente") or {})
-    # §F3: trânsito/recurso certificado em QUALQUER janela vale pra decisão escolhida.
+    # Trânsito/recurso certificado em QUALQUER janela vale pra decisão escolhida.
     if any((c.get("decisao_vigente") or {}).get("transito_certificado") for c in cards):
         decisao["transito_certificado"] = True
     if any((c.get("decisao_vigente") or {}).get("recorrida") for c in cards):
@@ -250,7 +240,7 @@ def reduce_processo_synthesis_cards(cards: list[dict]) -> dict:
     out["confianca"] = min((c.get("confianca") or 0.7 for c in cards), default=0.7)
     out["evidence_artifacts"] = _merge_evidence(cards)
 
-    # ── DEFER em conflito de DIREÇÃO entre janelas (2026-07-09) ─────────────────
+    # ── DEFER em conflito de DIREÇÃO entre janelas ──────────────────────────────
     # "Qual decisão governa o processo" é julgamento GLOBAL; o reduce, vendo só resumos
     # por-janela, NÃO o reproduz — nenhuma dec_score mecânica reproduz o holístico (split mais
     # fino só piora, medido). Quando janelas de MÉRITO discordam de DIREÇÃO (favoravel E
@@ -262,8 +252,8 @@ def reduce_processo_synthesis_cards(cards: list[dict]) -> dict:
     # conjuntos (conflito = coexistência favoravel×desfavoravel). Monotônico: needs_review só
     # mantém/SOBE a banda (guard é piso), nunca rebaixa -> impossível introduzir under-rate.
     # Byte-idêntico quando janelas concordam (conflict=False -> nenhum campo novo). NÃO usar
-    # MAX_risk entre janelas (super-flaga de-escalação real; ver docstring do módulo). Dormente
-    # hoje (nada chunka); insurance p/ quando algum processo passar do teto de chunk.
+    # MAX_risk entre janelas (super-flaga de-escalação real; ver docstring do módulo).
+    # Insurance p/ quando algum processo passar do teto de chunk.
     merit_dirs = {
         (c.get("decisao_vigente") or {}).get("sentido")
         for c in cards

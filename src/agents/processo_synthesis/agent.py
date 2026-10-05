@@ -5,7 +5,7 @@ Faz 2 LLM calls em paralelo:
 - Call B: probabilidade_exito Daycoval (matriz per tipo_judicial).
 
 Merge no card final. Empirico: combinado num so prompt, gemini-2.5-flash
-omitia prob_exito em 100% das tentativas (smoke 1-merito 12151 + 50).
+omitia prob_exito em 100% das tentativas.
 """
 
 import asyncio
@@ -34,87 +34,20 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-# 2026-06-28: default 2.5-flash -> 3.1-flash-lite. O 2.5-flash PENDURA deterministico
-# em certos prompts de L2 (1 proc/merito, request no vazio 0-token ate o teto; isolation-
-# provado, NAO load/conn/size — keepalive/concorrencia descartados). O 3.1 (mesmo do L1)
-# nao tem o bug. CAVEAT: o lite e mais VOLATIL na sintese (validacao 29 vs Poletto:
-# extremos, alguns under-ratings Alto->Baixo) — alvo de qualidade real e o 3.1-flash
-# NAO-lite (sem quota GCP hoje). Decisao Elton: manter lite ate provisionar a quota.
-# 2026-06-28 (shared 1.232.0): o ENGINE agora manda `model` no payload (SSOT;
-# ENGINE_LAYER2_MODEL no worker) -> este default so vale como FALLBACK pra callers
-# nao-engine (curl/eval). O caller do engine sobrescreve via request.model.
+# ⛔ Nao volte pro 2.5-flash: ele PENDURA deterministico em certos prompts de L2 (request
+# no vazio 0-token ate o teto; provado em isolamento, NAO e load/conexao/tamanho). O 3.1
+# (mesmo do L1) nao tem o bug. CAVEAT: o lite e mais VOLATIL na sintese (extremos, alguns
+# under-ratings Alto->Baixo) — o alvo de qualidade e o 3.1-flash NAO-lite, que hoje da 404
+# no Vertex. Decisao do Elton: manter o lite ate o NAO-lite estar disponivel.
+# O ENGINE manda `model` no payload (SSOT: ENGINE_LAYER2_MODEL no garantis-shared) -> este
+# default so vale como FALLBACK pra callers nao-engine (curl/eval).
 DEFAULT_MODEL = os.getenv("PROCESSO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-# Bump quando alterar build_processo_synthesis_prompt, build_probabilidade_exito_prompt
-# OU ProcessoSynthesisCard schema. Usado em leads.engine_llm_calls.prompt_version.
-#
-# v2.1 (2026-05-25, P1+P2 do prompt-engineering FINDINGS):
-#   - Adicionado response_schema=ProcessoSynthesisCard / =ProbabilidadeExito nos
-#     2 LLM calls (synthesis + prob_exito). Antes so response_mime_type=json.
-#   - Removido bloco FORMATO DE SAIDA dos 2 prompts (~80 linhas duplicando shape).
-#   - Enriquecido Field(description=...) em schemas.py com semantica que vivia
-#     no prompt (decisao_vigente.sentido, risco_processo_intermediario,
-#     trajetoria_dentro_processo, peca_pivo_candidata, valores).
-#   - REGRA DE LEITURA DE POLOS movida do meio pro TOPO em <regras_criticas>
-#     XML. <lembrete_final> no fim como recency anchor.
-#   - Tipo-specific blocks (FISCAL/TRABALHISTA/CIVEL) mantidos no meio
-#     (sao contextuais por bucket, nao competem com regras universais).
-#   - REGRA G ESTABILIDADE TEMPORAL mantida em REGRAS DE OURO (mais tecnica,
-#     ligada ao campo decisao_vigente — nao precisa estar no topo).
-#
-# v2.2 (2026-05-25, proposta L2-only jurisprudencia):
-#   - Adicionado campo tese_jurisprudencia no Request (movido de L3 pra L2).
-#   - Prompt ganhou bloco <regra_jurisprudencia> dentro de <regras_criticas>
-#     no topo + glossario 6 valores resultado_majoritario + REGRAS J/J.1/J.2
-#     (adaptadas das G/G.1/G.2 de L3 pro contexto SINGLE processo, modulando
-#     risco_processo_intermediario em vez de risco merito agregado).
-#   - L3 perdeu juris no payload (Opcao A: single source of truth em L2).
-#   - Elimina double-counting: jurisprudencia pesava 2x antes (Matriz Daycoval
-#     implicito em L2 + regras G/G.1/G.2 explicitas em L3).
-#
-# v2.3 (2026-06-12, SEM CAP de dados — decisao Elton, revisao L2/L3):
-#   - _MAX_MOVS_INLINE=50 removido dos 2 builders (cortava a peticao 1P +
-#     movs antigas; censo: p99=2026 movs cabe no contexto 1M). Guard
-#     fail-loud L2_PROMPT_SIZE/OVERSIZE no lugar (nunca trunca).
-#   - Truncagens de render removidas (resumo_ato/motivos/resumo_dia/eventos).
-#   - Instrucoes mortas de "autos raw" removidas (ex-REGRA F; G ESTABILIDADE
-#     TEMPORAL renumerada pra F).
-#   - Instrucoes novas: leitura da PETICAO INICIAL (mov_id 'peticao-<pn>')
-#     + split por documento ('<id>:<doc>').
-#   - CAVEAT regra_polos atualizado pro sentido deterministico on-read (v4).
-#   - Rollback: revert do PR (regen COLD na versao anterior).
-#
-# v2.4 (2026-06-28, L0 DADO — fix do over-claim de transito_certificado):
-#   - PROMPT-ONLY: REGRA DE SUSPENSAO E TRANSITO (distincao MERITO-vs-EXECUCAO) +
-#     suspensao tirada da lista de "mero impulso" + carve-out na REGRA F +
-#     lembrete_final. Suspensao-de-merito (IRDR/Tema/sobrestamento/recurso
-#     pendente)/anulacao/reativacao -> transito=false; suspensao-de-execucao-
-#     pos-transito (Acao Rescisoria/RJ/parcelamento) -> mantem true.
-#   - SEM derivacao deterministica de transito: foi construida + MEDIDA (A/B) e
-#     quebra o trap Acao Rescisoria (movs de execucao tem natureza de merito) ->
-#     a distincao e text-only, fica no prompt + L1 GUARD. Ver _project_decisao_facts.
-#   - Bump invalida cache do L2 -> cards novos pegam o prompt; existentes limpam
-#     no re-cascade (handoff prompt-DADO-fix-transito-L2). Memory:
-#     l2-transito-overclaim-rootcause-2026-06-28.
-#
-# v2.5 (2026-06-29, extracao-sinais-merito-level):
-#   - SCHEMA: DecisaoVigenteRich ganha suspensao_processual/suspensao_vigente/
-#     suspensao_data (sinal #2) — marcador DETERMINISTICO injetado pelo materializer L2
-#     da timeline crua (suspensao_classifier), NAO do LLM. Resolve "suspensao vive so na
-#     timeline" -> destrava override T4 (sobrestamento) + R1 (parcelamento vs quitacao).
-#   - PRECISAO sinal #1: _project_decisao_facts agora GATEIA motivo_extincao em
-#     natureza='extinto_sem_merito' (matava ~50% de FP: motivo de mov-extincao colado em
-#     card procedente/interlocutoria). Ver _project_decisao_facts.
-#   - response_schema do LLM (ProcessoSynthesisCard, DecisaoVigente LEAN) INTOCADO — os
-#     campos novos sao out-of-band (materializer/projecao), preservam o byte-identico da
-#     chamada e a licao do canario (risco_factual drift). Memory:
-#     extracao-sinais-merito-level-2026-06-29.
 # ⭐ DERIVADA, nao mantida a mao. O rotulo `v2.5` continua legivel; o sufixo e
-# `sha256[:12]` de (prompt + schema) — o que de fato molda a saida do LLM.
-# 🚨 Medido: `processo_synthesis.v2.5` era IDENTICO antes, durante e depois do #180 (a
-# mudanca que abaixou banda), entao "quais cards vieram do prompt ruim?" era irrespondivel.
-# Razao completa, medicoes e a armadilha do `summary_prompt_version`: `_utils/prompt_identity.py`.
+# `sha256[:12]` de (prompt + schema) — o que de fato molda a saida do LLM — e vai em
+# telemetria.engine_llm_calls.prompt_version. Razao, medicoes e a armadilha do
+# `summary_prompt_version`: `_utils/prompt_identity.py`.
 PROMPT_VERSION = versao_com_identidade(
     "processo_synthesis.v2.5",
     str(pathlib.Path(__file__).with_name("prompts.py")),
@@ -145,11 +78,11 @@ async def classify_processo_synthesis(
     if model is None:
         model = DEFAULT_MODEL
 
-    # CHUNK GATE: processo GIGANTE (render dos movs > L2_CHUNK_CHARS) vira 1 prompt único de
-    # 250s+ → estoura TIMEOUT_LAYER2_S=180s no worker → retry/loop. Split em lotes
+    # CHUNK GATE: processo GIGANTE (render dos movs > L2_CHUNK_CHARS) vira 1 prompt único
+    # lento demais → estoura o TIMEOUT_LAYER2_S do worker → retry/loop. Split em lotes
     # CRONOLÓGICOS → classifica cada lote em PARALELO (_no_chunk=True → caminho normal de 2
-    # calls sobre <=200 movs, prompt pequeno/rápido) → reduce por campo. Lê COMPLETO sem
-    # timeout. Roda DENTRO do 1 HTTP do worker (o worker vê 1 resposta → step DBOS é 1 só →
+    # calls sobre <= _L2_BATCH_MAX_MOVS movs, prompt pequeno/rápido) → reduce por campo.
+    # Lê COMPLETO sem timeout. Roda DENTRO do 1 HTTP do worker (o worker vê 1 resposta → step DBOS é 1 só →
     # replay-safe). Processo normal: split retorna None → caminho quente byte-idêntico.
     if not _no_chunk:
         variants = split_movs_chronological(request)
@@ -162,7 +95,7 @@ async def classify_processo_synthesis(
                 reduce_cards=reduce_processo_synthesis_cards,
                 label="l2_chunk",
             )
-            # §F4/F6: lote(s) que falharam (parse/exception) são descartados pelo framework →
+            # Lote(s) que falharam (parse/exception) são descartados pelo framework →
             # o reduce rodou sobre janela PARCIAL (pode ter perdido a janela load-bearing).
             # Torna VISÍVEL (não silent-swallow): log estruturado + clampa confianca pelo
             # ratio de sobrevivência. NÃO fail-closed (gigante tem que completar); o sinal
@@ -194,14 +127,12 @@ async def classify_processo_synthesis(
 
     synthesis_task = _call_synthesis(llm_provider, request, model, provider)
 
-    # §3.1 exito-gate (flag EXITO_GATED_ON_JURIS, default OFF). A probabilidade de
-    # exito (Matriz Daycoval, call B) so agrega valor quando ha jurisprudencia REAL;
-    # sem sinal de juris ela vira ~redundante com o risco_factual. Com a flag ON e
-    # SEM sinal de juris, pulamos a call B -> card sai com probabilidade_exito vazio
-    # (L3 trata classificacao=null como sem-sinal -> decide pela Matriz de Risco/
-    # estagio). Default OFF = byte-identical ate flip + A/B: o engine ja bate Poletto
-    # com exito-como-contexto (validado 2026-06-21), entao a mudanca espera medicao.
-    # Ver memory l2-redesign-locked-2026-06-20 §3.1.
+    # Exito-gate (flag EXITO_GATED_ON_JURIS: default OFF no codigo, ligada em prod pelo
+    # `cloudbuild-deploy.yaml`). A probabilidade de exito (Matriz Daycoval, call B) so
+    # agrega valor quando ha jurisprudencia REAL; sem sinal de juris ela vira ~redundante
+    # com o risco_factual. Com a flag ON e SEM sinal de juris, pulamos a call B -> card
+    # sai com probabilidade_exito vazio (L3 trata classificacao=null como sem-sinal ->
+    # decide pela Matriz de Risco/estagio).
     n_calls = 2
     if _exito_gate_enabled() and not _juris_has_signal(request):
         synthesis_result = await synthesis_task
@@ -217,7 +148,7 @@ async def classify_processo_synthesis(
         )
     else:
         prob_exito_task = _call_probabilidade_exito(llm_provider, request, model, provider)
-        # §F5: return_exceptions=True — uma call que LEVANTA (TPM timeout/503 sob a saturação
+        # return_exceptions=True — uma call que LEVANTA (TPM timeout/503 sob a saturação
         # que o chunking enfrenta) não pode descartar o lote inteiro. synthesis é load-bearing
         # (re-raise como antes); call B que levanta degrada pra prob vazio (mesmo fallback do
         # exito-gate) preservando a synthesis boa — espelha a degradação graciosa do _parse_prob_exito.
@@ -264,23 +195,21 @@ async def classify_processo_synthesis(
     }
 
 
-# ── Condicao A deterministica (2026-06-25): projecao code-side dos fatos ECHO ──
-# O LLM (response_schema = DecisaoVigente v2.3 INTOCADA) NAO emite estes campos —
-# faze-lo rebaixava o risco_factual (canario: 6 quedas estaveis; e o SCHEMA, nao so o
-# prompt). Aqui copiamos do mov L1 que SUSTENTA a decisao vigente, SEM tocar a chamada
-# do LLM. Inerte ate o L3 ler. Memory: l2-propagar-fatos-canary-finding-2026-06-25.
+# ── Condicao A deterministica: projecao code-side dos fatos ECHO ─────────────
+# ⛔ O LLM (response_schema = DecisaoVigente) NAO emite estes campos — faze-lo rebaixava
+# o risco_factual (no canario; e o SCHEMA, nao so o prompt). Aqui copiamos do mov L1 que
+# SUSTENTA a decisao vigente, SEM tocar a chamada do LLM. Quem os le e o L3.
 _ECHO_FIELDS = ("motivo_extincao", "instrumento_cautelar", "efeito_suspensivo")
 
-# Por que NAO ha derivacao deterministica de transito aqui (L0 DADO 2026-06-28):
-# uma correcao "novo merito apos transito -> transito=false" FOI construida e MEDIDA
-# (LLM A/B nos 23 cards transito=true) e quebrou o trap Acao Rescisoria 00107231 —
-# movs de FASE DE EXECUCAO (excecao de pre-executividade, embargos a execucao,
-# impugnacao a liquidacao) carregam natureza procedente/improcedente IDENTICA a uma
-# re-adjudicacao real, entao nenhum marcador L1 estruturado separa
+# ⛔ Por que NAO ha derivacao deterministica de transito aqui: uma correcao "novo merito
+# apos transito -> transito=false" FOI construida e MEDIDA (A/B) e quebrou o trap da Acao
+# Rescisoria — movs de FASE DE EXECUCAO (excecao de pre-executividade, embargos a
+# execucao, impugnacao a liquidacao) carregam natureza procedente/improcedente IDENTICA a
+# uma re-adjudicacao real, entao nenhum marcador L1 estruturado separa
 # IRDR-de-merito de Acao-Rescisoria-de-execucao. A distincao vive em TEXTO LIVRE ->
-# fica com o PROMPT (REGRA DE SUSPENSAO E TRANSITO, v2.4) + com o L1 GUARD monotonico
-# (proposta L1, que so SOBE risco -> nao pode quebrar trap). Memory:
-# l2-transito-overclaim-rootcause-2026-06-28.
+# fica com o PROMPT (REGRA DE SUSPENSAO E TRANSITO) + com o L1 guard monotonico do L3
+# (garantis-shared `engine_v6/matrices/risk_aggregation.py`, que so SOBE risco -> nao
+# pode quebrar trap).
 
 
 def _decisao_of(mov) -> dict:
@@ -326,11 +255,11 @@ def _project_decisao_facts(card, mov_factsheets) -> None:
             return
         d = _decisao_of(mov)
         enriched = {**dv, **{f: d.get(f) for f in _ECHO_FIELDS}}
-        # Gate de precisao (sinal #1, 2026-06-29): motivo_extincao so e valido quando a
-        # decisao VIGENTE do card e EXTINCAO. _vigente_mov faz fallback pro mov decidido
-        # mais recente quando nenhum casa a natureza do card -> pode trazer o motivo de um
-        # mov de extincao enquanto a decisao vigente e procedente/interlocutoria (FP medido:
-        # ~50% precisao no satisfacao; 2 de 6 eram cards procedente). So sobrevive em extinto.
+        # Gate de precisao (sinal #1): motivo_extincao so e valido quando a decisao VIGENTE
+        # do card e EXTINCAO. _vigente_mov faz fallback pro mov decidido mais recente
+        # quando nenhum casa a natureza do card -> pode trazer o motivo de um mov de
+        # extincao enquanto a decisao vigente e procedente/interlocutoria. So sobrevive
+        # em extinto.
         if enriched.get("natureza") != "extinto_sem_merito":
             enriched["motivo_extincao"] = None
         card["decisao_vigente"] = DecisaoVigenteRich(**enriched).model_dump()
@@ -339,15 +268,15 @@ def _project_decisao_facts(card, mov_factsheets) -> None:
 
 
 def _exito_gate_enabled() -> bool:
-    """§3.1: flag EXITO_GATED_ON_JURIS (default OFF). ON => pula a call B de
-    probabilidade_exito quando NAO ha sinal de jurisprudencia (deixa a Matriz de
-    Risco/estagio decidir). Default OFF preserva comportamento byte-identical."""
+    """Flag EXITO_GATED_ON_JURIS (default OFF; prod liga no `cloudbuild-deploy.yaml`).
+    ON => pula a call B de probabilidade_exito quando NAO ha sinal de jurisprudencia
+    (deixa a Matriz de Risco/estagio decidir)."""
     return os.environ.get("EXITO_GATED_ON_JURIS", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 def _juris_has_signal(request: ProcessoSynthesisRequest) -> bool:
     """True se jurisprudencia_externa traz resultado DIRECIONAL (nao None/vazio/
-    'indeterminado'). E o gate de exito do §3.1 — sem sinal direcional, a
+    'indeterminado'). E o gate de exito — sem sinal direcional, a
     probabilidade_exito nao tem juris real pra agregar."""
     je = request.jurisprudencia_externa
     if je is None:
@@ -358,29 +287,26 @@ def _juris_has_signal(request: ProcessoSynthesisRequest) -> bool:
 async def _call_synthesis(llm_provider, request, model, provider) -> dict:
     """Call A — synthesis sem prob_exito.
 
-    v2.1: response_schema=ProcessoSynthesisCard enforcement (Gemini structured
-    output nativo). Antes era so response_mime_type=json. Schema atual tem
-    Optional[str] em campos enum (sentido/instancia/natureza) por decisao
-    historica — descriptions ricas em Field guiam o LLM.
+    response_schema=ProcessoSynthesisCard (Gemini structured output nativo). O schema
+    tem Optional[str] em campos enum (sentido/instancia/natureza) — descriptions ricas
+    em Field guiam o LLM.
 
-    Determinismo Bug 4 handoff: temperature=0.0 (era 0.1) + thinking_budget=0 (o
-    provider aplica pra QUALQUER modelo desde 2026-07-26 — antes só pra "2.5").
-    Provider aplica top_p=1.0, top_k=1 quando temp=0.
+    Determinismo: temperature=0.0 + thinking_budget=0 (o provider aplica pra QUALQUER
+    modelo). Provider aplica top_p=1.0, top_k=1 quando temp=0.
     """
     prompt = build_processo_synthesis_prompt(request)
     # seed determinístico (proc + prompt): re-síntese L2 reproduzível dado o input
-    # — fecha a fonte que faz o risco oscilar sob resynthesize/L1-congelado (memory
-    # volatilidade-L3-raiz-e-reextração). Gated (ENGINE_LLM_SEED_ENABLED).
+    # — fecha a fonte que faz o risco oscilar sob resynthesize/L1-congelado. Gated
+    # (ENGINE_LLM_SEED_ENABLED).
     seed = seed_for("processo_synthesis", request.processo_numero, prompt)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt, model=model, temperature=0.0,
         response_schema=ProcessoSynthesisCard,
         thinking_budget=0,
         seed=seed,
-        # max_tokens 16384(default)->65535 (2026-06-17): processos com MUITOS movs
-        # (ex 680067, 393) geravam card grande demais -> JSON truncado -> 0 L2 cards.
-        # 65535 (nao 65536): limite da familia 2.5 no Vertex — 65536 da 400
-        # INVALID_ARGUMENT (F0 2.5→3.1, 2026-07-21; GeminiProvider tambem clampa).
+        # max_tokens acima do default (16384): processo com MUITOS movs gera card grande
+        # demais -> JSON truncado -> 0 L2 cards. 65535 (nao 65536): limite da familia 2.5
+        # no Vertex — 65536 da 400 INVALID_ARGUMENT (o GeminiProvider tambem clampa).
         max_tokens=65535,
     )
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
@@ -389,10 +315,9 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
 async def _call_probabilidade_exito(llm_provider, request, model, provider) -> dict:
     """Call B — probabilidade_exito Daycoval focused.
 
-    v2.1: response_schema=ProbabilidadeExito enforcement (Gemini structured
-    output). Antes era so response_mime_type=json.
+    response_schema=ProbabilidadeExito (Gemini structured output).
 
-    Determinismo Bug 4: temperature=0.0 (era 0.1) + thinking_budget=0.
+    Determinismo: temperature=0.0 + thinking_budget=0.
     """
     prompt = build_probabilidade_exito_prompt(request)
     # seed determinístico (proc + prompt da call B) — mesma reprodutibilidade da call A.
@@ -484,7 +409,7 @@ def _merge_usage(
     usage_a: dict, usage_b: dict, model: str, provider: str, calls: int = 2,
 ) -> dict:
     """Soma os 2 calls + adiciona model/provider. `calls` reflete quantas LLM calls
-    rodaram de fato (1 quando o exito-gate §3.1 pula a call B)."""
+    rodaram de fato (1 quando o exito-gate pula a call B)."""
     return {
         "input_tokens": usage_a["input_tokens"] + usage_b["input_tokens"],
         "output_tokens": usage_a["output_tokens"] + usage_b["output_tokens"],
