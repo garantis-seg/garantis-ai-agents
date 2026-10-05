@@ -11,10 +11,9 @@ router = APIRouter(prefix="/prompts", tags=["prompts"])
 async def engine_v6_raw_templates():
     """Templates CRUS dos prompts engine v6 (L1 mov + L2 + L3).
 
-    Retorna `{layer: template}` onde `layer` espelha leads.engine_llm_calls
+    Retorna `{layer: template}` onde `layer` espelha telemetria.engine_llm_calls
     (layer1_mov_factsheet, layer2_processo_synthesis,
-    layer3_merito_synthesis). layer1_day_factsheet saiu em 2026-06-13
-    (teardown do tier por-dia).
+    layer3_merito_synthesis).
 
     Cada template eh o ESQUELETO do prompt — instrucoes/regras estaticas — sem
     dados do caso, com `{{campo}}` nas injecoes. Gerado reaproveitando os

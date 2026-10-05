@@ -1,8 +1,6 @@
 """Pydantic schemas pro processo_synthesis agent (engine v6_meritos camada 2).
 
-Output cabe em leads.dossier_artifacts com kind='processo_synthesis'.
-
-Spec canonica do plano: c:/Users/Eltonxp/.claude/plans/risk-engine-v6-meritos.md
+Output cabe em leitura_conexos.dossier_artifacts com kind='processo_synthesis'.
 """
 
 from typing import Any, Literal, Optional
@@ -93,7 +91,7 @@ class DecisaoVigenteRich(DecisaoVigente):
         default=None, description="ECHO do efeito_suspensivo do mov L1 vigente.",
     )
 
-    # Sinal #2 (suspensao_processual, 2026-06-29): marcador DETERMINISTICO derivado da
+    # Sinal #2 (suspensao_processual): marcador DETERMINISTICO derivado da
     # TIMELINE crua (leads.processos_movimentos) pelo materializer L2 — NAO do LLM nem do
     # mov L1. Injetado out-of-band pos-classify (igual pipeline_quality); upsert grava o
     # dict cru. Resolve o gap "suspensao vive so na timeline" + destrava override T4
@@ -118,11 +116,11 @@ class DecisaoVigenteRich(DecisaoVigente):
         default=None, description="YYYY-MM-DD da mov de suspensao governante.",
     )
 
-    # DEFER do reduce de chunk (2026-07-09): quando janelas cronológicas de MÉRITO discordam de
+    # DEFER do reduce de chunk: quando janelas cronológicas de MÉRITO discordam de
     # DIREÇÃO, o reduce (chunking.py) não crava a direção e marca isto -> reduce_decisao_vigente
     # OR-preserva -> resolve_banda_matriz lê -> ambiguous -> o L3 (guard+LLM) decide. Vive em
-    # DecisaoVigenteRich (NÃO no DecisaoVigente base = response_schema do LLM), então NÃO bumpa
-    # PROMPT_VERSION nem re-cascata; ride o MESMO canal Rich dos campos echo até a borda HTTP
+    # DecisaoVigenteRich (NÃO no DecisaoVigente base = response_schema do LLM), então NÃO muda
+    # a chamada do LLM nem re-cascata; ride o MESMO canal Rich dos campos echo até a borda HTTP
     # (sem field aqui, extra='ignore' o dropava em agent.py::_project_decisao_facts + na rota).
     needs_review: bool = Field(
         default=False,
@@ -151,14 +149,6 @@ class LifecycleGarantiaEvent(BaseModel):
         "apresentado", "aceito", "recusado", "levantado", "substituido", "nenhum",
     ]] = None
     motivo_recusa: Optional[str] = None
-
-
-# PR7.2 (2026-05-31): TeseJurisprudenciaMin REMOVIDO. Curadoria interna
-# (ref.tese_jurisprudencia base rate por tese×tribunal) substituida por
-# JurisprudenciaExternaMin (provider externo jurisprudencias.ai). Architecture
-# D modo new ja eh source-of-truth pro card.risco — L2 prompt nao injeta mais
-# bloco <jurisprudencia> interno (so o <jurisprudencia_externa> quando
-# JURISPRUDENCE_PATH_ENABLED != off).
 
 
 class JurisprudenciaExternaMin(BaseModel):
@@ -333,14 +323,14 @@ class ProcessoSynthesisCard(BaseModel):
 
     # Campo 4: risco intermediario do processo
     #
-    # DEPRECATED PR7.6 (2026-05-31) — comment-only marker, NAO em Field(description)
-    # pq description vai pro LLM via response_schema (Gemini) e tag de
-    # depreciacao podia ser interpretada como "nao emit" -> silent degradation.
+    # DEPRECATED — comment-only marker, NAO em Field(description), de proposito: a
+    # description vai pro LLM via response_schema (Gemini), e tag de depreciacao ali
+    # podia ser interpretada como "nao emit" -> silent degradation.
     # Substituido por orthogonal pair (risco_factual + risco_jurisprudencial)
-    # na Architecture D. Field mantido backward-compat indefinidamente — drop
-    # plan deferido ate L2 schema extendido OU backtest runner migrado pra
-    # L3 snapshots (ver ADR-L2-LEGACY-CLEANUP-PR7.6.md secao "Drop ainda nao
-    # seguro" + "Decisao revisada PR7.6 Item 4 F1 fix").
+    # na Architecture D. Field mantido backward-compat — drop deferido ate L2 schema
+    # extendido OU backtest runner migrado pra L3 snapshots; o porque esta na secao
+    # "Drop ainda nao seguro" do ADR-L2-LEGACY-CLEANUP-PR7.6:
+    # https://github.com/garantis-seg/execucao-fiscal/blob/133ac0d2142c1e5d29452323b83f419c97b78502/frontend-api/risk_engine_v6/ADR-L2-LEGACY-CLEANUP-PR7.6.md
     risco_processo_intermediario: Optional[Literal[
         "Baixo", "Medio", "Alto", "Altissimo",
     ]] = Field(
@@ -356,12 +346,10 @@ class ProcessoSynthesisCard(BaseModel):
         ),
     )
 
-    # Campos 4b/4c: Architecture D — orthogonal risk paths (PR3 shadow).
-    # Apenas populated quando flag JURISPRUDENCE_PATH_ENABLED != off + payload
-    # tem jurisprudencia_externa (graceful fallback null). L3 PR4 vai aplicar
-    # matriz determ pra agregar em `risco_processo_intermediario` (shadow) ou
-    # substituir (new). Default None pra ficar bovinamente claro no audit
-    # quando flag=off (sem incidente acidental).
+    # Campos 4b/4c: Architecture D — orthogonal risk paths. O prompt pede os dois SEMPRE
+    # (o bloco "Decomposicao Orthogonal" e renderizado independente da flag
+    # JURISPRUDENCE_PATH_ENABLED); sem jurisprudencia_externa, risco_jurisprudencial sai
+    # Indeterminado. Default None pra ficar claro no audit quando o LLM nao emitiu.
     risco_factual: Optional[Literal[
         "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
     ]] = Field(
@@ -426,7 +414,7 @@ class ProcessoSynthesisCard(BaseModel):
         description="Tipo do processo (echo do request). Define qual matriz Daycoval aplicar.",
     )
 
-    # Campo 9: probabilidade de exito (Matriz Daycoval 2026-05-21)
+    # Campo 9: probabilidade de exito (Matriz Daycoval)
     probabilidade_exito: ProbabilidadeExito = Field(
         default_factory=ProbabilidadeExito,
         description="Probabilidade do tomador ter exito. LLM aplica os criterios objetivos da matriz Daycoval correspondente ao tipo_judicial. Default vazio quando LLM nao retorna (audit no campo classificacao=null).",
@@ -468,11 +456,6 @@ class MovFactSheetMin(BaseModel):
     peca_pivo: Optional[dict[str, Any]] = None
 
     model_config = {"extra": "ignore"}
-
-
-# DayFactSheetMin REMOVIDO em 2026-06-13 (onda 2 do teardown do tier
-# por-dia): o shared parou de enviar day_factsheets no payload; o request
-# ignora a key se algum caller velho ainda mandar (extra='ignore').
 
 
 def _do_card(nome: str, *caminho: str) -> Any:
@@ -530,16 +513,11 @@ class ProcessoSynthesisRequest(BaseModel):
         description="Determinado upstream por garantis_shared.cnj_utils.classify_tipo_judicial(assunto, tribunal, classe_codigo). Caller resolve e passa.",
     )
     mov_factsheets: list[MovFactSheetMin] = Field(default_factory=list)
-    # day_factsheets REMOVIDO 2026-06-13 (teardown do tier por-dia). Payload
-    # antigo com a key eh ignorado (pydantic extra ignore).
     apolices: list[ApoliceContextMin] = Field(default_factory=list)
-    # PR7.2 (2026-05-31): tese_jurisprudencia: Optional[TeseJurisprudenciaMin]
-    # field REMOVIDO. Provider externo jurisprudencias.ai (jurisprudencia_externa
-    # abaixo) eh unica fonte.
-    # Architecture D PR3 (2026-05-31): jurisprudencia externa via provider
-    # jurisprudencias.ai. Populated quando flag JURISPRUDENCE_PATH_ENABLED != off
-    # + merito tem tese_canonica_id + tribunal cabe no provider. None em qualquer
-    # outro caso (graceful — prompt L2 nao injeta bloco extra, byte-identical).
+    # Jurisprudencia externa via provider jurisprudencias.ai — a fonte unica.
+    # Populated quando flag JURISPRUDENCE_PATH_ENABLED != off + merito tem
+    # tese_canonica_id + tribunal cabe no provider. None em qualquer outro caso
+    # (graceful — prompt L2 nao injeta bloco extra, byte-identical).
     jurisprudencia_externa: Optional[JurisprudenciaExternaMin] = Field(
         default=None,
         description=(
@@ -571,7 +549,7 @@ class ProcessoSynthesisCardRich(ProcessoSynthesisCard):
 
 class ProcessoSynthesisResponse(BaseModel):
     card: ProcessoSynthesisCardRich  # RICO: preserva os 3 campos echo na serializacao da rota
-    # dict[str,str] desde split em 2 LLM calls: {"synthesis": ..., "prob_exito": ...}
+    # dict[str,str], uma chave por LLM call: {"synthesis": ..., "prob_exito": ...}
     raw_response: Optional[dict[str, Any]] = None
     llm_raw_prompt: Optional[dict[str, Any]] = None
     prompt_version: Optional[str] = None

@@ -1,10 +1,9 @@
-"""Schema v4 — fatos NEUTROS do L1 (response_schema do Gemini). FASE 2 / shadow.
+"""Schema v4 — fatos NEUTROS do L1 (response_schema do Gemini).
 
-Porte do contrato congelado §1h (`~/.claude/plans/l1-fase1-contrato-2026-06-09.md`),
-validado end-to-end pelo piloto zero-deploy 2026-06-09 (`_l1_pilot/schema_v4.py` +
-cascata L1->L2->L3 vs Poletto). NÃO substitui o `MovFactSheetCard` v3.1 — coexiste
-sob `PROMPT_VERSION="mov_factsheet.v4"` + flag (default OFF). Reversível: deletar este
-módulo + o caminho v4 do agente volta a 100% v3.1.
+NÃO substitui o `MovFactSheetCard` v3.1 — coexiste com ele, escolhido pela flag
+`L1_NEUTRAL_ENABLED` (default OFF no código; ligada em prod pelo `cloudbuild-deploy.yaml`),
+sob `PROMPT_VERSION_V4`. Reversível: deletar este módulo + o caminho v4 do agente volta a
+100% v3.1.
 
 DIFERENÇA CENTRAL vs v3.1: a LLM emite SÓ fatos neutros + os julgamentos genuínos
 (`relevancia_merito`, `resumo_ato`). NÃO emite `sentido`/`delta_risco`/`categoria`/
@@ -24,7 +23,11 @@ instrumento_cautelar/motivo_extincao/resultado_interlocutorio) + `requerente_pol
 DESACOPLAM extração de julgamento: a LLM relata QUEM está em cada polo e O QUE
 aconteceu; o `derivar_*` decide favorável/desfavorável por `parte_seguravel`.
 
-DEFER (re-liga no Lote 3 / FASE 4, leitor-de-petição): `cda`, conexos.
+`cda` e conexos ficam FORA do card de mov: quem os extrai é o ramo PETIÇÃO
+(`PeticaoExtractCardV4`, abaixo).
+
+Regra de campo mora na description do campo (onde a LLM decide), não na persona; e a
+persona não repete o que o constrained decoding do Gemini já força (os Literals).
 """
 from __future__ import annotations
 
@@ -41,62 +44,9 @@ from garantis_shared.engine_v6.persistence.peticao_contract import (
 )
 from pydantic import BaseModel, Field, field_validator
 
-# v4.1 (2026-06-11, prompt-review Lote 1 — itens 1.1/1.2 do kickoff):
-#   1.1 persona/REGRA DE OURO reescritas: a tarefa real é resolver ator-do-texto →
-#       polo USANDO o CONTEXTO injetado (a composição dos polos não é descoberta).
-#   1.2 'ENUMs em ASCII' removida da persona (o response_schema/constrained decoding
-#       do Gemini já força os Literals — verificado: 0 enum inválido em 40 casos ×
-#       múltiplos runs sem a instrução); 'só resumo_ato leva acento' movida pra
-#       description do campo (regra de campo mora no campo).
-#   + 'Echo de mov_id' removido (instrução morta: o schema v4 não tem mov_id —
-#       identidade é injetada pós-parse).
-# Gate: gate_v4.py (3-run majority vs baseline master, casos _boundary ignorados).
-# v4.2 (2026-06-11, prompt-review parte 3 — decisões D + G aprovadas na sessão):
-#   D: bloco RESUMO DO PROCESSO removido do prompt (dependência resumo_ia/Escavador
-#      não garantida; era contexto de fundo). Se a qualidade dos 1A degradar,
-#      re-adicionar é a melhoria futura. lazy_gen upstream NÃO tocado.
-#   G: drops aprovados do schema — valor_excluido + percentual_mantido (0/10
-#      preenchidos quando aplicáveis E 0 leitores no código) e data_real_ato
-#      (73,8% redundante com `data`; 0 leitores reais — só passthrough/debug).
-#      Colunas da tabela tipada ficam (viram NULL em cards novos); shared lê via
-#      .get() tolerante — zero mudança fora deste módulo.
-# Gate: gate_v4.py 3-run majority vs baseline v4.1.
-# v4.3 (2026-06-11, prompt-review parte 4 — decisões #2/#6 aprovadas na sessão):
-#   - motivo_extincao OBRIGATÓRIO quando extinto_sem_merito (censo 4.2: 0/15 preenchidos
-#     — degradava SENTIDO_EXTINCAO on-read). Regra movida pra description de natureza
-#     (onde a LLM decide) + goldens de extinção novos (polo_regression 11-15).
-#   - data_inferida_ato: volta do data_real_ato RENOMEADO (decisão G.2 — é inferência,
-#     não dado autoritativo; emitir SÓ quando difere da publicação). Coluna tipada segue
-#     data_real_ato até follow-up no shared (0 leitores).
-#   - VOCAB fiscal: regra da EXCEÇÃO DE PRÉ-EXECUTIVIDADE (carimbo jurídico Alfredo
-#     2026-06-11): acolhida ≠ 'procedente' (evita inversão de sinal — o autor da EF é a
-#     Fazenda); escopo das regras de inexigibilidade restrito a Embargos/Anulatória/MS.
-#   - Ramo DOCUMENTO (ex-órfão) fechado: ganha VOCAB_FAMILIA + REGRAS_CRUS + metadata
-#     do doc (tipo|titulo|data|provider — censo: metadata jusbrasil 100% preenchida) +
-#     wording 'DOCUMENTO AVULSO'.
-# v4.4 (2026-06-11, prompt-review parte 5 — GO do "sem limite" / item J original):
-#   - Removidos os caps de exibição do ramo MOVIMENTO: 5 docs/mov e 8.000 chars/doc
-#     viram ORÇAMENTO por unidade (_V4_DOCS_BUDGET=2M chars, teto 1M/doc — guarda de
-#     janela, não economia). Excedente vira marcador explícito (no silent caps).
-#   - Snippet da mov: 3.000 -> 200.000 chars (publicação pode trazer inteiro teor).
-#   - Ramo DOCUMENTO (1D): 8.000 -> 1M chars.
-#   - Par com garantis-shared: fetch DOC_TEXT_CAP_CHARS 8k->1M + apply_docs_unit_budget
-#     na montagem do payload (efeito completo SÓ após publish do shared + bump dos pins
-#     em ai-agents/fe-api/worker; antes disso o texto chega capado a 8k do fetch).
-#   - v3.1 INTOCADO (cap próprio de 8k no render). day_factsheet (caps 20/8/6k SQL)
-#     fora do escopo — follow-up próprio (prompt agregado por dia, orçamento distinto).
-#   - Custo: censo 2026-06-10 mediu ~8,9x de input sem cap — decisão qualidade>custo.
-# v4.5 (2026-06-22, L1 misread triage sessão gabi/Poletto): _REGRAS_CRUS (prompts_v4)
-#   ganhou regra natureza/tem_decisao "classifique pelo ATO, não pelo que transcreve":
-#   (a) Embargos de Declaração (acolhidos/rejeitados) => natureza='interlocutoria' (NÃO
-#   copiar improcedente da decisão embargada) — conserta M1; (b) certidão de inteiro teor/
-#   relatório de andamento => tem_decisao=false — conserta M2. Validado offline v4 4/4 em
-#   ED + certidão, control (acórdão de mérito real) preservado improcedente/e_pivo=true.
-#   derivar_e_pivo já trata interlocutoria/tem_decisao=false => e_pivo=false (sem mudar
-#   derivacoes). Ver memory l1-misread-m1-load-m2-orfao.
 # ⭐ DERIVADA, nao mantida a mao — ver `_utils/prompt_identity.py` pra a razao e as medicoes.
-# ⚠️ Inclui ESTE arquivo (o schema molda a saida tanto quanto o prompt: o campo `dispositivo`
-# do PR #182 mudou o comportamento do L1 mexendo aqui).
+# ⚠️ Inclui ESTE arquivo: o schema molda a saida tanto quanto o prompt (o campo
+# `dispositivo` mudou o comportamento do L1 mexendo aqui).
 PROMPT_VERSION_V4 = versao_com_identidade(
     "mov_factsheet.v4.5",
     str(pathlib.Path(__file__).with_name("prompts_v4.py")),
@@ -335,8 +285,7 @@ class MovFactSheetCardV4(BaseModel):
         # O Gemini às vezes emite estes blocos aninhados como null EXPLÍCITO (chave
         # presente, valor None) em vez de omiti-los. `default_factory` só vale quando a
         # chave está AUSENTE — null vira "Input should be a valid dictionary or instance
-        # of <Block>" e o parse falha -> 500 -> retry storm do L1 (erro DOMINANTE do
-        # cascade: ~56% dos 500 do ai-agents em 2026-06-15). Semanticamente null ==
+        # of <Block>" e o parse falha -> 500 -> retry storm do L1. Semanticamente null ==
         # "sem decisão / sem evento de garantia / sem valores" == o bloco default vazio.
         return {} if v is None else v
 
@@ -346,139 +295,64 @@ class MovFactSheetCardV4(BaseModel):
         # Mesma família do _null_block_to_default: a LLM emite tipo_doc FORA da taxonomia
         # (ex 'relatorio_fiscal' em exec-fiscal — sem constrained-decoding no ramo não-
         # petição) -> literal_error -> 500 -> retry storm; em mérito de 1 mov isso é 100%
-        # de L1 fail -> l1_degraded -> indeterminado (raiz dos 9 méritos travados
-        # 2026-06-17). 'outros' é o catch-all do próprio enum ("não se encaixa em nenhum").
+        # de L1 fail -> l1_degraded -> indeterminado. 'outros' é o catch-all do próprio
+        # enum ("não se encaixa em nenhum").
         if isinstance(v, str) and v not in _TIPO_DOC_VALORES:
             return "outros"
         return v
 
 
-# ════ Ramo PETIÇÃO INICIAL (peticao_extract.v1) — FASE 4 conexos ════
-# Variação da L1 (decisão Elton/Alfredo 2026-06-11): mesmo card v4 + os campos do
-# CONTRATO do leitor-de-petição (prompts/fase4-alfredo-handoff-peticao-extraction.md).
+# ════ Ramo PETIÇÃO INICIAL (peticao_extract) — formacao de conexos ════
+# Variacao da L1: mesmo card v4 + os campos do CONTRATO do leitor-de-peticao.
 # Versionamento POR RAMO: bump daqui NÃO invalida cache do mov_factsheet (e vice-versa).
-# Caller opt-in via classe="peticao" — o materializer de prod NUNCA envia isso hoje;
-# zero mudança de comportamento até a integração ligar (sink FASE 4).
-
-# v1.1 (2026-06-11, 1a iteracao com dado real — review Casas Bahia/Alfredo): o v0
-# extraia QUALQUER numero juridico como processo (40/58 eram artigos de lei, incl.
-# vazados do proprio template: CPC 1.012/art.924/Lei 8.437 das descriptions; e 1 blend
-# alucinado de 2 CNJs). Fix: formato CNJ obrigatorio + "so o que esta NO DOCUMENTO" +
-# artigo de lei nao e CDA. Rede determininistica complementar no sink: digitos do cnj
-# devem existir no texto-fonte + len==20 + mod-97.
-# v1.2 (2026-06-12, 2a iteracao — auditoria Fable das 6 peticoes + decisao Alfredo):
-# 2 ocorrencias de papel relacional em precedente (paradigma trabalhista->originario;
-# Intermedium->derivado = unica aresta falsa do insumo da formacao). Fix por
-# ESPECIFICACAO da regra existente (nao regra nova): originario nega paradigma/prova
-# emprestada explicitamente; derivado/incidente exige MESMA empresa/parte privada
-# (parte publica varia: Fazenda/autoridade coatora — assimetria do MS apontada pelo
-# Alfredo); na duvida 'incerto' (a integracao decide com company-coherence). + anti-
-# esticamento (nao converter RE/AREsp/ADI pra 20 digitos). Enforcement real continua
-# DETERMINISTICO no sink/formacao (papel = hint, nunca cria aresta sozinho).
-# v1.3 (2026-06-27, WS-D): + processos_administrativos_citados[] (PAF/RFB federal + AIIM/TIT SP)
-# como conector cross-type J->A do 1.B. Bump invalida o cache v1.2 -> re-extrai 1x com admin.
-# v1.4 (2026-08-07, tasks 869efg29g + 869efg29k): (a) o PAR "Processo Administrativo n X
-# (AIIM n Y)" vira DOIS itens, cada um com `par_numero` apontando pro outro — ate aqui o
-# AIIM do parentese se perdia, e com ele a aresta que ligaria os conexos (elo que faltou no
-# QA do Kelveng, MS Steel Rol); (b) tipo='pa_estadual' pro PA de fisco ESTADUAL, que o enum
-# binario forcava a `paf` => esfera federal (caso vivo: 017.00100686/2026-51 instaurado
-# perante a SEFAZ-SP aparecia como "ADM. FED." no conexo 1477176). Bump invalida o cache
-# v1.3 -> re-extrai 1x; o SWAP-POR-PN do sink troca as rows da versao velha DESTE pn, entao
-# o legado se re-tipa sozinho conforme cada peticao e re-lida.
-# v1.5 (2026-08-13, card 869ehp0y9, decisao Elton "nao afirmar o que nao sabe"): (a) enum
-# ganha `pa` (PA de esfera INDETERMINADA) e ele vira o DEFAULT — `paf`/`tit_sp`/`pa_estadual`
-# passam a ser AFIRMACOES, so com sinal no texto (orgao nomeado ou mascara). Ate a v1.4 o
-# default era `paf`, entao "o modelo nao soube" e "o modelo afirmou federal" gravavam o MESMO
-# byte e a tela dizia "Adm. Fed." pra PA estadual sem orgao nomeado (residual medido: pn
-# 50019905320258130251 / MULTILASER, PTA de MG, obedeceu a regra e gravou paf). `pa` mapeia em
-# (esfera NULL, uf NULL) no ADMIN_TIPO_TO_NO e em `processo_administrativo_outro` no
-# conexos_engine => badge "A classificar", nao "Adm. Fed."; (b) STEERING dos anexos no prompt
-# (ver `_STEER_PDF_ANEXADOS` em prompts_v4) — SO quando o gate manda >=1 PDF. Bump invalida o
-# cache v1.4 -> re-extrai 1x pela onda (a onda e decisao a parte).
-# v1.6 (2026-08-19, card 869ekv7b9 / caso Ball, autopsia Alfredo): (a) `tit_sp` passa a EXIGIR
-# Sao Paulo NOMEADO no texto (Tribunal de Impostos e Taxas, SEFAZ-SP, DRT, Secretaria da
-# Fazenda do Estado de Sao Paulo); auto de infracao estadual sem SP nomeado vai pra
-# `pa_estadual` (fisco estadual nomeado) ou `pa`. E o espelho LITERAL da regra que ja
-# disciplina `pa_estadual` ("So marque quando o texto disser o ORGAO estadual").
-# ⭐ A RAZAO, MEDIDA — nao foi janela de contexto, foi DESENHO DE ROTULO: a LLM leu os
-# documentos INTEIROS (doc 898922 com 66.906 chars e "Minas Gerais" 33x; doc 893577 com
-# 100.710 chars e 20x, com "SEF/MG" a ~300 caracteres do numero) e AINDA ASSIM rotulou
-# `tit_sp`, porque `tit_sp` era o UNICO nome do enum para "auto de infracao estadual".
-# Censo em prod, RE-MEDIDO 2026-08-19 no review adversarial (a 1a versao deste bloco
-# publicava '150 pns / teto de 53 (35,3%)' e NAO reproduz — ver o 🚨 do metodo abaixo).
-# Sao **152** os pns que produziram claim `tit_sp`. Destes, **82 (53,9%)** tem texto
-# retido pra medir, e **25 deles (30,5%) nomeiam SP** por um dos 4 patterns.
-# => sob a regra nova o rotulo sobrevive em NO MAXIMO **25 dos 82 medibles (30,5%)**; o
-# piso da queda e 57 (69,5%). Os outros 70 dos 152 nao tem texto retido: nao sao "queda",
-# sao INVISIVEIS a esta sonda.
-# 🚨 METODO, e e aqui que a 1a versao errou: `telemetria.engine_llm_calls.prompt` **NAO
-# retem a peca do L1**. RE-MEDIDO 2026-08-19 na 2a rodada do review (a 1a versao deste
-# bloco publicava '4.222 linhas' e NAO reproduz): nas **4.764** linhas de
-# `layer1_policy_factsheet_per_doc` + `_monolith` desses 152 pns — join por `entity_id`
-# exato; por digitos da 4.768 — `length(prompt)` e **0 em 100%**. A CONCLUSAO nao muda,
-# so o denominador, que estava 12,8% menor que o real: quem re-medir pos-onda partindo
-# do numero velho le "o universo encolheu" onde so houve outra contagem.
-# O unico texto retido e o do
-# `layer2_processo_synthesis` (225 linhas, ate 311.531 chars), que agrega o conjunto de
-# documentos. Logo o censo mede o corpus do L2, nao o prompt que produziu a claim, e o
-# denominador honesto e "pns com prompt NAO-VAZIO", nao "pns com prompt NOT NULL" (que
-# devolve 142 e conta linha vazia como medicao).
-# ⚠️ Patterns ('Impostos e Taxas', 'SEFAZ-SP', 'SEFAZ/SP', 'Fazenda do Estado de S.o
-# Paulo') foram escolhidos por NAO existirem no TEMPLATE do prompt — ' SP ' e 'SEFAZ'
-# sozinhos existem e contaminariam a conta. 🚨 Esta versao POE 'Tribunal de Impostos e
-# Taxas' e 'SEFAZ-SP' no template: esses 2 patterns QUEIMARAM e a re-medicao pos-onda
-# precisa de outro discriminador.
-# (b) campos `uf` + `uf_evidencia` (ver `ProcessoAdminCitado`) — a UF vira ATRIBUTO do no
-# (`leads.admin_items.uf`, coluna que ja existia e estava 100% NULL: 0 nao-nulos em 33.162
-# linhas vivas), NUNCA rotulo novo por estado. Literal e nao `str` de proposito: da
+# Caller opt-in via classe="peticao" (o materializer da peticao no garantis-shared).
+#
+# ⛔ O enforcement real e DETERMINISTICO no sink/formacao do garantis-shared, nao aqui: o
+# CNJ so vale com os 20 digitos no texto-fonte + mod-97, e `papel` e HINT — nunca cria
+# aresta sozinho. O prompt so reduz o ruido (formato CNJ obrigatorio, "so o que esta NO
+# DOCUMENTO", artigo de lei nao e CDA, sem esticar RE/AREsp/ADI pra 20 digitos).
+# ⛔ Nao afirmar o que nao sabe (decisao do Elton): `pa` (esfera INDETERMINADA) e o DEFAULT;
+# `paf`/`tit_sp`/`pa_estadual` sao AFIRMACOES, so com sinal no texto (orgao nomeado ou
+# mascara). `pa` mapeia em (esfera NULL, uf NULL) no ADMIN_TIPO_TO_NO => badge "A
+# classificar", nao "Adm. Fed.".
+# ⭐ Rotulo sem nome pro caso FORCA o rotulo errado: com `tit_sp` como UNICO nome do enum pra
+# "auto de infracao estadual", a LLM o usava mesmo lendo outro estado no documento inteiro —
+# nao era janela de contexto, era DESENHO DE ROTULO. Por isso `tit_sp` EXIGE Sao Paulo
+# NOMEADO no texto (o espelho LITERAL da regra que ja disciplina `pa_estadual`).
+# ⛔ A UF e ATRIBUTO do no (`uf` + `uf_evidencia`, ver `ProcessoAdminCitado` ->
+# `leads.admin_items.uf`), NUNCA rotulo novo por estado. Literal e nao `str` de proposito: da
 # constrained decoding e mata 'SPO'/'S.P' na ORIGEM, que e o valor que o `varchar(2)`
 # rejeitaria com excecao dentro do savepoint do sink.
-# 🚨 O bump ARMA a onda: `backfill-peticao-daily` roda com `reextract_stale=true` (URI
-# verificada 2026-08-19), 500/dia sobre 2.963 pns => ~6 dias, ~US$14,7. E mudanca
-# deliberada em massa que altera saida de risco => PEDE OK do Elton.
-# ⚠️ ARMA, nao dispara (precisao exigida no review adversarial de 19/08): o filtro roda no
-# fe-api sobre `_CURRENT_PETICAO_VERSIONS`, que vem do wheel PINADO em
-# `frontend-api/requirements.txt`. Mergear/publicar o shared nao move card nenhum — quem
-# dispara e o **bump do pin do fe-api + deploy**. ⛔ E o inverso tambem: bumpar o pin
-# "so pra atualizar dependencia" DISPARA a onda.
-# ⚠️ Os 2 VALORES (`PETICAO_PROMPT_VERSION` = peticao_extract.v1.5 e
-# `DOC_INCERTO_PROMPT_VERSION` = doc_incerto_extract.v1.3) moram no garantis-shared
-# (`engine_v6.persistence.peticao_contract`) e sao IMPORTADOS no topo deste arquivo —
-# sao lidos por TRES processos e o fe-api nao importa este repo, entao literal aqui
-# vira drift la (ja custou 896 cards re-pagos + 1.039 nunca refrescados). Bump =
-# editar LA, re-publicar o wheel, e escrever o changelog AQUI, junto da prompt.
+# ⚠️ Pra medir o efeito: `telemetria.engine_llm_calls.prompt` NAO retem a peca do L1 (o unico
+# texto retido e o do `layer2_processo_synthesis`), e 'Tribunal de Impostos e Taxas'/
+# 'SEFAZ-SP' estao no TEMPLATE do prompt — nao servem de discriminador.
+# 🚨 O bump da versao ARMA a onda de releitura: `backfill-peticao-daily` roda com
+# `reextract_stale`, e o SWAP-POR-PN do sink troca as rows da versao velha de cada pn (mexe
+# no grafo de conexos). E mudanca deliberada em massa que altera saida de risco.
+# ⚠️ ARMA, nao dispara: o filtro roda no fe-api sobre `_CURRENT_PETICAO_VERSIONS`, que vem do
+# wheel PINADO em `frontend-api/requirements.txt`. Mergear/publicar o shared nao move card
+# nenhum — quem dispara e o **bump do pin do fe-api + deploy**. ⛔ E o inverso tambem: bumpar
+# o pin "so pra atualizar dependencia" DISPARA a onda.
+# ⚠️ Os 2 VALORES (`PETICAO_PROMPT_VERSION` e `DOC_INCERTO_PROMPT_VERSION`) moram no
+# garantis-shared (`engine_v6.persistence.peticao_contract`) e sao IMPORTADOS no topo deste
+# arquivo — sao lidos por TRES processos e o fe-api nao importa este repo, entao literal aqui
+# vira drift la. Bump = editar LA e re-publicar o wheel; o changelog vai no commit/PR.
 # Ramo 1X: doc de tipo NAO identificado (fallback L3 do identify) — mesmo
 # schema superset do 1P (tipo_doc classificado em vez de cravado). Versao por
 # ramo: bump do 1X nao invalida cache do 1P nem do mov, e vice-versa.
-# v1.2 (2026-08-07): mesma mudanca do 1P v1.4 (par PA/AIIM + pa_estadual) — o ramo 1X usa
-# o MESMO schema superset, entao um enum novo sem a instrucao correspondente aqui daria
-# constrained decoding com valor que o prompt nunca explica.
-# v1.3 (2026-08-13): mesma mudanca do 1P v1.5 (`pa` default + steering dos anexos), pelo
-# mesmo motivo — schema COMPARTILHADO: o enum novo chega no 1X querendo ou nao, entao a
-# instrucao tem que chegar junto.
-# v1.4 (2026-08-19): mesma mudanca do 1P v1.6 (`tit_sp` exige SP nomeado + campos `uf`/
-# `uf_evidencia`), pelo MESMO motivo estrutural de sempre — o schema e o `PeticaoExtractCardV4`
-# COMPARTILHADO, entao os 2 campos novos chegam no ramo 1X querendo ou nao, e campo que o
-# prompt nao explica sob constrained decoding e pior que campo ausente. As DUAS prompts
-# (`prompts_v4.py`, blocos admin do 1P e do 1X) e as DUAS versoes mudam no mesmo PR.
-# 2026-09-28 (card 869f4gupy, decisao do Elton): `valor_causa_declarado` +
-# `valor_causa_evidencia` no schema e nas DUAS prompts — e ⛔ SEM bump de nenhuma das 2
-# versoes, DE PROPOSITO. O bump ARMA a onda do `reextract_stale` (~3 mil pns relidos, e o
-# SWAP-POR-PN do sink mexe no grafo de conexos), e o consumidor so precisa das SEMENTES sem
-# valor, que vao por releitura DIRIGIDA (`force_reextract` no `/materialize-peticao`).
-# O card continua IDENTIFICAVEL sem o bump: as 2 chaves so existem em card deste schema, e
-# nenhuma instrucao dos campos antigos mudou. Card sem elas = "nao medido", nunca "a peca
-# nao declara". O proximo bump, por outra razao, popula o acervo de graca.
-# 2026-10-02 (card 869fay0p0): `papel` no `ProcessoAdminCitado` (discutido/precedente/
-# incerto) + instrucao nas DUAS prompts, e ⛔ SEM bump de nenhuma das 2 versoes, pelo MESMO
-# motivo do 869f4gupy acima. Card sem a chave = "nao medido" e segue virando vizinho, como
-# hoje; o estoque so ganha papel por releitura DIRIGIDA (`force_reextract`) — o sink do
-# shared refresca a aresta que ja existia.
-# ⚠️ DIFERENTE do 869f4gupy em UM ponto, e ele e o preco aceito do sem-bump: a regra "numero
-# de ACORDAO nao e numero de PA" (2 de 12 amostras gravaram o acordao como PA) muda o que
-# entra num campo ANTIGO (`processos_administrativos_citados`). O card novo segue
-# identificavel pela chave `papel` nos itens admin — mas card SEM item admin nao separa
-# "antes" de "depois". Ninguem le essa diferenca hoje; se alguem passar a ler, e o caso de
+# ⛔ O schema (`PeticaoExtractCardV4`) e COMPARTILHADO pelo 1P e pelo 1X: campo/enum novo
+# chega nos DOIS querendo ou nao, e campo que o prompt nao explica sob constrained decoding e
+# pior que campo ausente ⇒ as DUAS prompts (`prompts_v4.py`, blocos admin do 1P e do 1X)
+# mudam juntas.
+# Campo ADITIVO sem bump de versao, DE PROPOSITO (`valor_causa_declarado`/
+# `valor_causa_evidencia`; o `papel` dos itens admin): o bump arma a onda, e o estoque que
+# precisa do campo vai por releitura DIRIGIDA (`force_reextract` no `/materialize-peticao`).
+# O card segue IDENTIFICAVEL pela chave nova; card sem ela = "nao medido", nunca "a peca nao
+# declara" (item admin sem `papel` segue virando vizinho). O proximo bump, por outra razao,
+# popula o acervo de graca.
+# ⚠️ O `papel` tem um preco aceito do sem-bump: a regra "numero de ACORDAO nao e numero de PA"
+# muda o que entra num campo ANTIGO (`processos_administrativos_citados`), e card SEM item
+# admin nao separa "antes" de "depois". Se alguem passar a ler essa diferenca, e o caso de
 # bumpar (e o bump arma a onda).
 # ⛔ E o ESTOQUE gravado como numero de acordao NAO se corrige por releitura: o prompt novo nao
 # re-emite o numero (o sink nunca mais toca aquela referencia) e a releitura na MESMA versao
@@ -602,7 +476,7 @@ class ProcessoAdminCitado(BaseModel):
             "um com par_numero apontando pro outro. null quando o número aparece sozinho."
         ),
     )
-    # 869fay0p0 (2026-10-02): consumido por NOME de chave no sink do garantis-shared
+    # Consumido por NOME de chave no sink do garantis-shared
     # (`peticao_sink._papel_por_numero`) e cruzado com o contrato em
     # `tests/test_enum_contrato_sink.py`. Optional e default None DE PROPÓSITO: None = "não
     # medido", o mesmo que o card de antes do campo é — e segue virando vizinho, como hoje.
@@ -656,7 +530,7 @@ class PeticaoExtractCardV4(MovFactSheetCardV4):
             "citados — não os demais campos do card.)"
         ),
     )
-    # 869f4gupy (2026-09-28): consumidos por NOME de chave no sink do garantis-shared
+    # Consumidos por NOME de chave no sink do garantis-shared
     # (`peticao_sink.valor_causa_ok`) — renomear aqui cala o ramo lá sem erro nenhum.
     valor_causa_declarado: Optional[float] = Field(
         default=None,

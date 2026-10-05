@@ -3,8 +3,8 @@
 UMA chamada LLM barata que julga os N candidatos JUNTOS e responde o INDICE do que
 e a peca inaugural deste processo -- ou 0 (NENHUM), que e resposta certa e esperada.
 
-⛔ O texto do prompt e VERBATIM do arnes que mediu a camada (21/22 no gold, 1/22 no
-controle negativo, Fisher p = 2,19e-11). Ver `prompts.py`.
+⛔ O texto do prompt e VERBATIM do arnes que mediu a camada -- o placar e o porque
+estao no docstring de `prompts.py`.
 """
 
 from .agent import PROMPT_VERSION, confirmar_peticao

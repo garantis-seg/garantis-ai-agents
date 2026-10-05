@@ -1,8 +1,8 @@
 """O PROMPT do CONFIRMADOR COMPARATIVO da peticao inicial (C5).
 
 ⛔⛔ **O TEXTO ABAIXO E VERBATIM E NAO SE REESCREVE.** `SISTEMA`, `USUARIO` e
-`BLOCO` sao um PORTE byte-a-byte do arnes que MEDIU esta camada (o `d2_prompt.py`
-da sessao de 08-09/09/2026). O placar que sustenta o C5 -- 21/22 afirmando certo
+`BLOCO` sao um PORTE byte-a-byte do arnes que MEDIU esta camada. O placar que
+sustenta o C5 -- 21/22 afirmando certo
 no gold adjudicado, 1/22 no CONTROLE NEGATIVO (o doc do gold REMOVIDO do
 conjunto), Fisher exato 1-cauda p = 2,19e-11 -- foi medido com ESTE texto.
 Reescrever, "melhorar", traduzir, acentuar ou enxugar um paragrafo **invalida a
@@ -52,7 +52,7 @@ sozinho e de graca, e oferece-la ao modelo lhe da como responder SEM ler -- que 
 exatamente a diferenca entre o frame comparativo e o indutor. O bloco por
 candidato do arnes que produziu o 21/22 e `titulo` + inicio do texto, e mais nada.
 ⛔ **A JANELA (`head_chars`) NAO mora aqui.** Ela e a defesa ESTRUTURAL contra
-copia-integral e vive no `garantis_shared` (`_CONFIRMADOR_HEAD_CHARS = 3000`),
+copia-integral e vive no `garantis_shared` (`_CONFIRMADOR_HEAD_CHARS`),
 onde o guard dele a alcanca. Este modulo TRUNCA no valor que o request DECLARA --
 nao num literal local, que seria uma segunda fonte de verdade a divergir em
 silencio. O mecanismo esta medido: o unico falso-positivo do gold e do acervo e um
@@ -211,9 +211,8 @@ def build_confirmador_prompt(
 ) -> tuple[str, str]:
     """Monta `(sistema, usuario)` -- UMA chamada com os N candidatos JUNTOS.
 
-    ⛔ Nao troque por N chamadas de 1 documento: esse e o frame INDUTOR, e ele esta
-    medido em 4.228 chamadas de producao afirmando `peticao_inicial` em 49,2% dos
-    C4 quando a verdade e ~3%.
+    ⛔ Nao troque por N chamadas de 1 documento: esse e o frame INDUTOR, medido em
+    producao (o placar esta no docstring do modulo).
 
     A NUMERACAO e a POSICAO na lista (1..N), que e como o `garantis_shared` decodifica
     o veredito (`candidatos[escolhido - 1]`). O campo `n` que chega em cada candidato

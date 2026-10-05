@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 #   - flash-lite global: 30k RPM = 500 RPS
 #   - ai-agents max_instances=100 (worst case scaling)
 #   - per-process: 500 / 100 = 5 RPS sustained
-#   - burst 10: cobre L1 gather (mov + day) com Semaphore(5)
+#   - burst 10: cobre a rajada do gather do L1
 #
 # Override via env GEMINI_RATE_LIMIT_RPS / GEMINI_RATE_LIMIT_BURST se preciso
 # ajustar sem redeploy (e.g. degrade rapido em incident).
@@ -37,11 +37,11 @@ _GEMINI_RATE = float(os.getenv("GEMINI_RATE_LIMIT_RPS", "5.0"))
 _GEMINI_BURST = int(os.getenv("GEMINI_RATE_LIMIT_BURST", "10"))
 _GEMINI_ACQUIRE_TIMEOUT_S = float(os.getenv("GEMINI_RATE_LIMIT_TIMEOUT_S", "60.0"))
 
-# ── Per-call timeout do generate_content (TIER 2 do L2-hang, 2026-06-28) ──────
-# O generate_content NAO tinha timeout proprio: quando o Gemini stalla, a call
-# pendurava ate o teto de-facto do SDK (~230-250s observado nos logs) enquanto o
-# engine ja desistiu aos 45s (read-timeout) e gravou timeout 0-token -> slot de
-# worker + chamada Gemini PAGA desperdicados num orfao. O engine manda o header
+# ── Per-call timeout do generate_content ──────────────────────────────────────
+# O generate_content NAO tem timeout proprio: quando o Gemini stalla, a call
+# pendura ate o teto de-facto do SDK muito depois de o engine ter desistido
+# (read-timeout) e gravado timeout 0-token -> slot de worker + chamada Gemini PAGA
+# desperdicados num orfao. O engine manda o header
 # X-Gemini-Timeout-Ms (= seu read-timeout - buffer); o middleware ASGI poe no CV
 # abaixo; agenerate capa a call nesse teto via asyncio.wait_for -> falha rapido
 # (retryable no caller) e a cancelacao aborta a conexao orfa. Header ausente
@@ -51,9 +51,9 @@ gemini_call_timeout_cv: "contextvars.ContextVar[Optional[float]]" = (
 )
 _GEMINI_CALL_TIMEOUT_BACKSTOP_S = float(os.getenv("GEMINI_CALL_TIMEOUT_S", "600.0"))
 
-# ── Labels de cobranca do Vertex (2026-09-23, card 869f65eyv) ─────────────────
+# ── Labels de cobranca do Vertex ──────────────────────────────────────────────
 # A fatura (billing export) so agrupa gasto por label: sem eles, o gasto de Gemini
-# aparecia sem dono (dava QUANTO, nunca QUEM). `rota` = TEMPLATE da rota HTTP que
+# fica sem dono (da QUANTO, nunca QUEM). `rota` = TEMPLATE da rota HTTP que
 # originou a chamada, posto aqui pelo middleware (api/middleware.py) — mesmo
 # mecanismo do `gemini_call_timeout_cv`. None fora de request => sem label de rota.
 gemini_rota_cv: "contextvars.ContextVar[Optional[str]]" = (
@@ -93,12 +93,11 @@ _gemini_rate_limiter = TokenBucketRateLimiter(
     name="gemini",
 )
 
-# ── TPM limiter (2026-06-21) ──────────────────────────────────────────────────
+# ── TPM limiter ───────────────────────────────────────────────────────────────
 # O RPS acima só conta REQUESTS; bulk-cascade de prompts grandes passa no RPS mas
-# estoura o tokens/min do Gemini → trunca (l1_degraded; causa-raiz provada, memory
-# l1-truncation-load-induced). Este conta TOKENS. Default 3M tok/min/process: um
-# cascade limpo MEDIU pico ~1.42M TPM (não throttla 1-2 cascades); concorrência alta
-# (loop ~6× = >8M) throttla pra ficar sob o teto do Gemini. Tune via env.
+# estoura o tokens/min do Gemini → trunca (l1_degraded). Este conta TOKENS. Default
+# 3M tok/min/process: folga sobre o pico medido de um cascade limpo (não throttla
+# 1-2 cascades); concorrência alta throttla pra ficar sob o teto do Gemini. Tune via env.
 _GEMINI_TPM = float(os.getenv("GEMINI_RATE_LIMIT_TPM", "3000000"))
 
 
@@ -155,17 +154,15 @@ _gemini_tpm_limiter = _TokenRateLimiter(
 )
 
 # Model pricing (USD per 1M tokens) — derivado do catalogo UNICO
-# garantis_shared.llm_models.MODELS (fonte de verdade cross-repo). Antes era uma
-# copia hardcoded que driftava do cost_pricing.py do shared; agora e o MESMO valor
-# byte-a-byte + inclui gemini-3.5-flash (o modelo do B1). Sem a entry do 3.5-flash,
-# get_model_pricing devolvia 0/0 e engine_llm_calls gravava cost_usd=0 pro cascade
-# B1 (~US$25/semana invisivel — F2 2026-07-24).
+# garantis_shared.llm_models.MODELS (fonte de verdade cross-repo). ⛔ Copia local se
+# descola do catalogo em silencio, e modelo sem entry devolve 0/0 em
+# get_model_pricing (engine_llm_calls grava cost_usd=0); `tests/test_pricing_fail_loud.py`
+# pega a forma.
 
 # `cached_per_1m` = preco do input servido do CACHE (10% do input onde a fatura tem
 # SKU de caching; input CHEIO onde nao tem — o catalogo nunca inventa desconto).
-# Sem ele, `calculate_cost` cobrava input cheio por token cacheado: com o preco do
-# 2.5-flash corrigido pra 0.30 isso dava US$32,10 contra US$29,98 da fatura (~7% pra
-# CIMA) porque ~9,2M tokens da semana vieram do cache implicito.
+# Sem ele, `calculate_cost` cobraria input cheio por token cacheado e o ledger
+# ficaria ACIMA da fatura.
 GEMINI_PRICING = {
     model: {
         "input_per_1m": inp,
@@ -181,9 +178,8 @@ DEFAULT_MODEL = "gemini-2.5-flash-lite"
 # Terminações NORMAIS do Gemini. STOP = ok; MAX_TOKENS = corte legítimo de tamanho
 # (caller trata/chunka). QUALQUER outra (SAFETY / RECITATION / PROHIBITED_CONTENT /
 # OTHER / MALFORMED_FUNCTION_CALL...) deixa `response.text` PARCIAL → o parse
-# downstream falha com 'Unterminated string'. O provider Gemini IGNORAVA o
-# finish_reason (≠ providers OpenAI/OpenRouter, que já o expõem) — então a causa
-# real ficava invisível e o L1 só via 'JSONDecodeError char N'.
+# downstream falha com 'Unterminated string'. Sem expor o finish_reason a causa
+# real fica invisível e o L1 só vê 'JSONDecodeError char N'.
 _GEMINI_NORMAL_FINISH = {"STOP", "FINISH_REASON_STOP", "MAX_TOKENS"}
 
 
@@ -192,30 +188,21 @@ def _usage_tokens(usage: Any) -> tuple[int, int, int]:
 
     `thoughts_token_count` e campo SEPARADO e NAO entra em `candidates_token_count` —
     mas o vendor bilheta os dois como OUTPUT (llm_models.py: gemini-3.5-flash
-    "output 9.00 incl. thinking"). Contar so candidates subnotificava o ledger.
+    "output 9.00 incl. thinking"). Contar so candidates subnotifica o ledger, e
+    muito quando a saida visivel e curta (o perfil do B1).
 
-    Medido no A/B do B1 (86 dossies x 3 runs em gemini-3.5-flash, 2026-07-26):
-    471.729 thoughts contra 86.117 candidates => o ledger via **6,5x menos** output
-    do que o faturado no agregado, e **21x menos** na pior chamada (a razao explode
-    quando a saida visivel e curta, que e o perfil do B1).
-
-    Existe porque os 2 call sites (generate/agenerate) tinham a contagem duplicada
-    byte-a-byte — e foi a duplicacao que forcou um teste a assertar sobre o
-    texto-fonte.
+    Os 2 call sites (generate/agenerate) passam por aqui, nunca contam na mao —
+    `tests/test_gemini_determinism.py` confere isso no texto-fonte.
 
     Devolve tambem `cached_content_token_count` — o caching IMPLICITO do Vertex,
     automatico e gratuito quando o PREFIXO do prompt se repete. E SUBCONJUNTO de
-    prompt_token_count (nao soma, nao dobra o input), e desde 2026-07-27 vai pro
-    `calculate_cost`, que o cobra no `cached_per_1m` (10% do input) em vez de
-    input cheio.
+    prompt_token_count (nao soma, nao dobra o input), e vai pro `calculate_cost`,
+    que o cobra no `cached_per_1m` (10% do input) em vez de input cheio.
 
-    PROVADO no Vertex (gemini-3.1-flash-lite, prefixo de 8.409 tokens repetido):
-    `cachedContentTokenCount: 8161` = 97% de hit.
-    ⚠️ As 3 PRIMEIRAS chamadas devolveram 0 — o cache implicito tem WARM-UP.
-    Medir com poucas chamadas da FALSO-NEGATIVO (erro cometido na 1a leitura).
+    ⚠️ O cache implicito tem WARM-UP (as primeiras chamadas devolvem 0): medir com
+    poucas chamadas da FALSO-NEGATIVO.
 
-    Importa alem de custo: 96-98% da nossa carga e INPUT (mov_triage 2.921
-    tok/call x 15k calls/dia; mov_factsheet 16.322 x 9,4k) e cache hit alivia a
+    Importa alem de custo: quase toda a nossa carga e INPUT, e cache hit alivia a
     pressao de TPM que gera 429. O numero responde a pergunta que decide o proximo
     passo: os prompts estao com a parte estatica no INICIO? (condicao do hit).
     """
@@ -293,9 +280,9 @@ class GeminiProvider(BaseLLMProvider):
         """
         super().__init__()
 
-        # Guard backend-aware (garantis_shared): sob GEMINI_BACKEND=vertex a auth
-        # é ADC do service account — key é opcional. Sob aistudio (default),
-        # mantém o raise legado se não houver key.
+        # Guard backend-aware (garantis_shared): sob GEMINI_BACKEND=vertex (o default)
+        # a auth é ADC do service account — key é opcional. Sob aistudio (legacy
+        # explícito), mantém o raise legado se não houver key.
         from garantis_shared.gemini_backend import gemini_available
 
         self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -316,7 +303,7 @@ class GeminiProvider(BaseLLMProvider):
 
         # Initialize client via factory — transport httpx com TCP keepalive (sync+
         # async) pro hop ai-agents->Google nao pendurar em conexao half-open stale
-        # sob burst (hedge do stall L2; ver models/factory.py).
+        # sob burst (higiene do hop, nao cura do stall do L2; ver models/factory.py).
         from ..models.factory import create_genai_client
 
         self._client = create_genai_client(self.api_key)
@@ -337,11 +324,10 @@ class GeminiProvider(BaseLLMProvider):
 
         Determinismo: quando temperature=0, force top_p=1.0 + top_k=1 (greedy
         strict decoding). `thinking_budget=0` desliga o thinking mode; ausente =
-        default do modelo. MEDIDO 2026-07-26: 3.5-flash pensa por default (até em
-        "2+2"); 3.1-flash-lite NÃO pensa por default (mas suporta, via budget>0/-1).
+        default do modelo. MEDIDO: 3.5-flash pensa por default (até em "2+2");
+        3.1-flash-lite NÃO pensa por default (mas suporta, via budget>0/-1).
         """
-        # Clamp único (F0 2.5→3.1, 2026-07-21): teto da família Gemini 2.5 no
-        # Vertex é 65535 — max_output_tokens=65536 dá 400 INVALID_ARGUMENT.
+        # Clamp único: teto da família Gemini 2.5 no Vertex é 65535 — max_output_tokens=65536 dá 400 INVALID_ARGUMENT.
         # 3.1 aceita mais, mas 65535 não muda comportamento na prática (saídas
         # reais são ordens de magnitude menores). Clampar aqui cobre todo
         # caller (generate + agenerate) sem depender de literal por-agent.
@@ -359,12 +345,11 @@ class GeminiProvider(BaseLLMProvider):
             # (necessario quando schema tem dict[str, Any] que Gemini Developer API rejeita)
             config_params["response_mime_type"] = kwargs["response_mime_type"]
 
-        # System instruction (opcional). ADITIVO em 2026-09-09 pelo confirmador da
-        # peticao (C5): o arnes que MEDIU aquela camada mandou a persona/as regras
-        # como `system_instruction` e os candidatos como `contents`, e concatenar as
-        # duas metades num `prompt` so mudaria a chamada em relacao ao que foi medido.
-        # ⛔ Puramente opt-in: sem o kwarg, nada muda para nenhum caller existente
-        # (medido: zero callers passavam `system_instruction` antes deste).
+        # System instruction (opcional). Existe pelo confirmador da peticao (C5): o
+        # arnes que MEDIU aquela camada mandou a persona/as regras como
+        # `system_instruction` e os candidatos como `contents`, e concatenar as duas
+        # metades num `prompt` so mudaria a chamada em relacao ao que foi medido.
+        # ⛔ Puramente opt-in: sem o kwarg, nada muda para os outros callers.
         if kwargs.get("system_instruction"):
             config_params["system_instruction"] = kwargs["system_instruction"]
 
@@ -381,12 +366,10 @@ class GeminiProvider(BaseLLMProvider):
 
         # Thinking mode. `thinking_budget=0` desabilita; ausente = default do modelo.
         #
-        # O gate aqui era `and "2.5" in (model or "")` — whitelist da familia mais nova
-        # de 2026-05, que FALHA ABERTA: a partir de 2026-06-26 a cascade migrou pra 3.x
-        # e todo `thinking_budget` passou a ser DESCARTADO em silencio. O `try/except`
-        # logo abaixo ja e a protecao real contra SDK/modelo que rejeita ThinkingConfig
-        # — a whitelist so amarrava o provider a uma familia que APOSENTA em 2026-10-16
-        # (llm_models.py RETIRE_2_5_FAMILY).
+        # ⛔ Sem gate por NOME de modelo: whitelist de familia FALHA ABERTA quando a
+        # cascade troca de familia, e o `thinking_budget` passa a ser DESCARTADO em
+        # silencio. O `try/except` logo abaixo ja e a protecao real contra SDK/modelo
+        # que rejeita ThinkingConfig (`tests/test_gemini_determinism.py` pega a forma).
         #
         # A POLITICA de usar (ou nao) thinking e do CALLER, por papel, e e MEDIDA:
         #   L1 extracao -> budget=0. A/B 15 casos curados x N=3 em gemini-3.5-flash:
@@ -437,7 +420,7 @@ class GeminiProvider(BaseLLMProvider):
 
         Args:
             prompt: The text prompt.
-            model: Model to use (defaults to gemini-2.5-flash-lite).
+            model: Model to use (defaults to DEFAULT_MODEL).
             temperature: Sampling temperature.
             max_tokens: Maximum output tokens.
             response_schema: Pydantic model for structured JSON output.
@@ -526,15 +509,15 @@ class GeminiProvider(BaseLLMProvider):
         config = self._types.GenerateContentConfig(**config_params)
 
         # Rate limit ANTES da call — single chokepoint protege contra 503 storms.
-        # asyncio.TimeoutError propagada e tratada como retryable pelo caller
-        # (frontend-api ai_agents.call ja trata httpx.HTTPError + TimeoutError).
+        # asyncio.TimeoutError propagada sai como HTTP 500 da rota, que o client do
+        # engine (garantis_shared/engine_v6/clients/ai_agents.py) trata como retryable.
         await _gemini_rate_limiter.acquire(timeout=_GEMINI_ACQUIRE_TIMEOUT_S)
         # TPM: input (≈4 chars/token, conhecido) + reserva output. reconcile() abaixo
         # corrige com o uso REAL pós-call (output gigante debita o excedente).
         _est_tokens = (len(prompt) if isinstance(prompt, str) else 4096) // 4 + 2048
         await _gemini_tpm_limiter.acquire(_est_tokens, timeout=_GEMINI_ACQUIRE_TIMEOUT_S)
 
-        # Make async API call — BOUNDED (TIER 2): sem isto o generate_content pendura
+        # Make async API call — BOUNDED: sem isto o generate_content pendura
         # ate o teto do SDK (~230-250s) quando o Gemini stalla. O CV vem do header
         # X-Gemini-Timeout-Ms (engine read-timeout - buffer); ausente -> backstop.
         # wait_for cancela a coroutine no estouro -> aborta a chamada orfa.
@@ -610,12 +593,10 @@ class GeminiProvider(BaseLLMProvider):
     def get_model_pricing(self, model: str) -> Dict[str, float]:
         """Get pricing for a Gemini model.
 
-        Modelo fora do catalogo devolve 0/0 — mas AGORA GRITA. Esse retorno
-        silencioso e o mecanismo que esconde gasto: 39.309 calls em 2026-06-26..28
-        gravaram tokens com cost_usd=0 = US$97,61 fora do ledger, e reincidiu com o
-        gemini-3.5-flash (~US$25/semana, backfillado em 07-24) e com o gemini-3-flash
-        (US$10,93 na semana de 07-20..26, ZERO rows). Prefixo estruturado pra alert
-        policy, regra 5 do CLAUDE.md raiz.
+        Modelo fora do catalogo devolve 0/0 — e GRITA. O retorno silencioso e o
+        mecanismo que esconde gasto (tokens gravados com cost_usd=0, fora do ledger),
+        e ele reincide a cada modelo novo que entra sem entry no catalogo. Prefixo
+        estruturado (`GEMINI_PRICING_MODEL_UNKNOWN`) pra alert policy.
         """
         pricing = GEMINI_PRICING.get(model)
         if pricing is None:
