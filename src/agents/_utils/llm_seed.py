@@ -5,22 +5,17 @@ thinking_budget=0` (greedy strict). Mesmo assim o Gemini a temp=0 SEM seed tem
 micro-ruído entre runs (decode não-determinístico residual) — e a re-síntese do
 L2 oscila entre re-cascates (memory `volatilidade-L3-raiz-e-reextração-L1-cold`).
 Fixar o `seed` torna o call reproduzível DADO o input: mesmo prompt → mesma banda
-N×. Fecha o ~2% de ruído do L3 + a re-síntese não-determinística do L2, e torna o
-gate volatility-robust reproduzível.
+N×. Fecha o micro-ruído residual do L3 e a re-síntese não-determinística do L2.
 
-⚠️ O L1 (mov_factsheet) entrou em 2026-08-14 e a razão dele é OUTRA — não é
-qualidade de síntese, é IDENTIDADE. O `tipo` que o L1 emite é metade da chave de
-`leads.admin_items` (UNIQUE (tipo, numero_normalizado), write-once): duas leituras
-do MESMO documento que discordam do rótulo não se corrigem por UPDATE, elas FORKAM
-a entidade em dois nós permanentes. Medido em prod: 2 cards a 3 SEGUNDOS de
-distância, mesmo mov_id/doc_id/prompt_version, saíram `paf` e `pa`. Por isso mexer
-nesta flag hoje tem consequência ESTRUTURAL, não só de reprodutibilidade — desligar
-re-abre o fork. (A raiz — tirar o rótulo da chave — é o N3, à parte.)
+No L1 (mov_factsheet) o seed fixa também o `tipo` que ele emite: duas leituras do
+MESMO documento podem discordar do rótulo. Esse rótulo não é chave de
+`leads.admin_items` — a identidade do nó é o número (`uq_admin_items_identidade`), e o
+`tipo` é resolvido pelo writer do garantis-shared sobre as claims das arestas vivas.
 
-Gated em ENGINE_LLM_SEED_ENABLED (default OFF — ship inerte + flip explícito, igual
-aos #1/#4 e ao estilo da casa pra surety-change; é tightening de determinismo a temp=0,
-surety-neutro). Flip prod: `--update-env-vars ENGINE_LLM_SEED_ENABLED=true` (ou
-services.yaml+cloudbuild p/ persistir). O gate L3-only seta ON pra medir o spread~0.
+Gated em ENGINE_LLM_SEED_ENABLED (default OFF no código — ship inerte + flip explícito;
+é tightening de determinismo a temp=0, surety-neutro). O valor de prod mora no
+`cloudbuild-deploy.yaml` deste repo e no `config/services.yaml` do execucao-fiscal
+(env imperativa não sobrevive a deploy).
 """
 import hashlib
 

@@ -1,12 +1,12 @@
 """Merito Synthesis Agent - engine v6_meritos camada 3 (OUTPUT PRIMARIO).
 
 Single LLM call por MERITO. Recebe processo_syntheses de TODOS processos do
-merito + tomador + cda + snapshot anterior. Output:
+merito + tomador + cda (o `previous_snapshot` do request e aceito por compat e nao
+entra no prompt). Output:
 risco + justificativa + trajetoria + peca_pivo + proximos_passos.
-(Jurisprudencia saiu do payload na v2.2 — vive no L2, regras J/J.1/J.2.
-Aiims saiu na v2.8, 2026-07-14 — teardown autos-wide, card AIIM removido.)
+(Jurisprudencia nao entra no L3: vive no L2, regras J/J.1/J.2.)
 
-Persiste em monitoramento.risk_snapshots (orchestrator no frontend-api).
+Persiste em leitura_conexos.risk_snapshots (via o materializer L3 do garantis-shared).
 """
 
 import json
@@ -23,8 +23,8 @@ from .schemas import MeritoSynthesisCard, MeritoSynthesisCardOut, MeritoSynthesi
 
 logger = logging.getLogger(__name__)
 
-# extracao-sinais-merito-level (2026-06-29): fatos merito-level copiados do decisao_vigente
-# do processo GOVERNANTE pro decisao_atual do card. Os 3 primeiros sao echo do L2
+# Fatos merito-level copiados do decisao_vigente do processo GOVERNANTE pro
+# decisao_atual do card. Os 3 primeiros sao echo do L2
 # DecisaoVigenteRich; os 3 ultimos sao o sinal #2 (suspensao deterministica da timeline).
 _MERITO_ECHO_FIELDS = (
     "motivo_extincao", "instrumento_cautelar", "efeito_suspensivo",
@@ -41,7 +41,7 @@ def _norm_pn(s) -> str:
 def _project_merito_decisao_facts(card, processo_syntheses) -> None:
     """Copia os fatos merito-level (3 echo L2 + 3 suspensao) do decisao_vigente do processo
     GOVERNANTE (decisao_atual.processo_de_origem) pro decisao_atual do card. Sem isso o
-    merito read-model era 0/244 nos 3 echo (o sinal morria na borda L2->L3). NUNCA levanta
+    read-model do merito nao ve os 3 echo (o sinal morre na borda L2->L3). NUNCA levanta
     (best-effort — projecao nao pode derrubar a cascade)."""
     try:
         if not isinstance(card, dict) or "error" in card:
@@ -70,11 +70,8 @@ def _project_merito_decisao_facts(card, processo_syntheses) -> None:
     except Exception as e:  # noqa: BLE001 — projecao e best-effort
         logger.warning("L3_PROJECT_MERITO_FACTS_FAIL: %r", e)
 
-# 2026-06-28: default 2.5-flash -> 3.1-flash-lite, alinhado ao L2 (decisao Elton).
-# NOTA: o L3 NAO foi observado pendurando (so o L2 tinha o hang do 2.5-flash) — mover
-# o L3 e alinhamento, nao fix; como e a sintese FINAL (qualidade), o lite aqui e o que
-# mais preocupa. Alvo real = 3.1-flash NAO-lite quando a quota GCP existir. Override via env.
-# 2026-06-28 (shared 1.232.0): o ENGINE agora manda `model` no payload (SSOT;
+# Default alinhado ao L2 (decisao do Elton); como e a sintese FINAL (qualidade), o lite
+# aqui e o que mais preocupa. Override via env. O ENGINE manda `model` no payload (SSOT;
 # ENGINE_LAYER3_MODEL no worker) -> este default so vale como FALLBACK pra callers
 # nao-engine. O caller do engine sobrescreve via request.model.
 DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
@@ -84,8 +81,8 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 def _assemble_ciclo_garantia(processo_syntheses) -> list[dict]:
     """Monta o ciclo_garantia (timeline cross-processo da garantia) DETERMINISTICAMENTE
     dos lifecycle_garantia dos processos — em vez de pedir pro LLM re-listar, o que
-    fazia o L3 loopar numa lista runaway (680046: ~880 eventos / 145KB malformado →
-    indeterminado). Ordena por data + dedupa. Shape = CicloGarantiaEvent (schemas.py)."""
+    faz o L3 loopar numa lista runaway (JSON malformado → indeterminado). Ordena por
+    data + dedupa. Shape = CicloGarantiaEvent (schemas.py)."""
     def _g(ps, k):
         return ps.get(k) if isinstance(ps, dict) else getattr(ps, k, None)
 
@@ -122,9 +119,8 @@ async def classify_merito_synthesis(
 ) -> dict:
     """Synthesize a merito from its processo_syntheses + context cards.
 
-    PR6 Architecture D: `bucket` opcional dispatcha variant prompt L3
-    (factual_only / juris_only / mixed / derived_only). None = legacy
-    single-prompt — comportamento idêntico ao pré-PR6.
+    `bucket` opcional dispatcha variant prompt L3
+    (factual_only / juris_only / mixed / derived_only). None = single-prompt.
 
     Returns:
         {"card": MeritoSynthesisCard.model_dump() | error_dict,
@@ -142,19 +138,17 @@ async def classify_merito_synthesis(
     llm_provider = create_provider(provider)
     prompt, prompt_version = build_prompt_and_version(request, bucket=bucket)
 
-    # v2.1: response_schema=MeritoSynthesisCard reativado depois que schema
-    # foi reformatado pra eliminar dict[str, Any] (causa do additionalProperties
-    # bug que tinha levado o response_schema a ser dropado). BreakdownProcesso
-    # + CardsIndexCount substituem os dict legacy. Optional[str] enum
-    # apertados pra Literal[...] strict pra evitar loop infinito decoder Gemini
-    # (lição L2 v2.1).
-    # Determinismo Bug 4 handoff: temperature=0.0 + thinking_budget=0 (o provider
-    # aplica pra QUALQUER modelo desde 2026-07-26 — antes só pra "2.5"). Provider
-    # aplica top_p=1.0, top_k=1 quando temp=0. ⚠️ Este agent roda 3.1-flash-lite, que
-    # não pensa por default, então hoje o budget=0 é no-op; se algum dia trocar pro
-    # 3.5-flash, MEÇA antes (no B1 desligar thinking piorou).
-    # + seed determinístico (mérito + prompt): fecha o ~2% de micro-ruído residual
-    # do L3 a temp=0 → mesmo input, mesma banda N×. Gated (ENGINE_LLM_SEED_ENABLED).
+    # response_schema=MeritoSynthesisCard: o schema nao pode ter dict[str, Any] (o
+    # additionalProperties derruba o response_schema — por isso BreakdownProcesso e
+    # CardsIndexCount) e os enums sao Literal[...] strict (enum frouxo faz o decoder
+    # do Gemini entrar em loop).
+    # Determinismo: temperature=0.0 + thinking_budget=0 (o provider aplica pra
+    # QUALQUER modelo). Provider aplica top_p=1.0, top_k=1 quando temp=0. ⚠️ Este
+    # agent roda 3.1-flash-lite, que não pensa por default, então hoje o budget=0 é
+    # no-op; se algum dia trocar pro 3.5-flash, MEÇA antes (no B1 desligar thinking
+    # piorou).
+    # + seed determinístico (mérito + prompt): fecha o micro-ruído residual do L3 a
+    # temp=0 → mesmo input, mesma banda N×. Gated (ENGINE_LLM_SEED_ENABLED).
     seed = seed_for("merito_synthesis", request.merito_id, bucket, prompt)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt,
@@ -163,12 +157,10 @@ async def classify_merito_synthesis(
         response_schema=MeritoSynthesisCard,
         thinking_budget=0,
         seed=seed,
-        # max_tokens 16384(default)->65535 (teto Gemini 2.5 no Vertex; 65536 da
-        # 400 INVALID_ARGUMENT — F0 2.5→3.1, 2026-07-21), 2026-06-17: meritos
-        # GIGANTES (ex Petrobras 680195, 25 processos) geravam >16k tokens de output
-        # -> JSON truncado -> JSONDecodeError -> retryable_500 5x -> indeterminado.
-        # 65535 cabe folgado (so paga o output REAL gerado, nao o limite). Raiz, sem
-        # fallback. (o retry-aware do edital_summarizer saiu em 2026-08-11 — YAGNI aqui.)
+        # max_tokens 65535 (teto no Vertex; 65536 da 400 INVALID_ARGUMENT): merito
+        # GIGANTE gera >16k tokens de output, e com o default (16384) o JSON trunca
+        # -> JSONDecodeError -> retryable_500 5x -> indeterminado. 65535 cabe folgado
+        # (so paga o output REAL gerado, nao o limite).
         max_tokens=65535,
     )
 
@@ -179,15 +171,14 @@ async def classify_merito_synthesis(
         parsed.setdefault("merito_id", request.merito_id)
         parsed.setdefault("merito_context", request.merito_context)
         # Default cards_index aggregation if LLM didn't fill
-        # (campo `jurisprudencia` removido do request na v2.2 — referencia-lo
-        # aqui levantava AttributeError engolido pelo except amplo abaixo,
-        # convertendo card LLM VALIDO em parse-error sempre que cards_index
-        # vinha vazio. CardsIndexCount.jurisprudencia default=0 cobre.)
+        # (⛔ o request nao tem campo `jurisprudencia`: referencia-lo aqui levantaria
+        # AttributeError engolido pelo except amplo abaixo, convertendo card LLM
+        # VALIDO em parse-error. CardsIndexCount.jurisprudencia default=0 cobre.)
         if not parsed.get("cards_index"):
             parsed["cards_index"] = {
                 "processo_synthesis": len(request.processo_syntheses or []),
                 "cda": len(request.cdas or []),
-                "aiim": 0,  # v2.8: fonte autos-wide dropada
+                "aiim": 0,  # a fonte AIIM saiu do L3; o campo fica no shape
                 "tomador": 1 if request.tomador else 0,
             }
         card = MeritoSynthesisCardOut(**parsed)  # subclasse COM ciclo_garantia (response_model
@@ -197,8 +188,8 @@ async def classify_merito_synthesis(
         # loopava re-listando os eventos. Determinístico dos lifecycle_garantia do input.
         card_data["ciclo_garantia"] = _assemble_ciclo_garantia(request.processo_syntheses)
         # Projeta os fatos merito-level (echo L2 + suspensao) do processo governante pro
-        # decisao_atual — determinístico, pós-LLM (mesma mecânica do ciclo_garantia). Fecha
-        # o "satisfacao=0/86": sem isso o merito read-model perdia os sinais na borda L2->L3.
+        # decisao_atual — determinístico, pós-LLM (mesma mecânica do ciclo_garantia). Sem
+        # isso o read-model do merito perde os sinais na borda L2->L3.
         _project_merito_decisao_facts(card_data, request.processo_syntheses)
         logger.info(
             "ciclo_garantia assembled merito_id=%s n_eventos=%d lifecycle_lens=%s",
@@ -206,7 +197,7 @@ async def classify_merito_synthesis(
             [len(getattr(p, "lifecycle_garantia", None) or []) for p in (request.processo_syntheses or [])],
         )
     except (json.JSONDecodeError, Exception) as e:
-        # Diag (2026-06-19): L3 de mérito gigante gera JSON malformado/truncado.
+        # Diag: L3 de mérito gigante gera JSON malformado/truncado.
         # raw_len + head/tail revelam o tamanho real + se trunca no max_tokens (corte
         # mid-JSON no tail) + qual campo infla. Remover quando o bloat do L3 for fechado.
         logger.error(

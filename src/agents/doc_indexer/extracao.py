@@ -1,15 +1,14 @@
 """Extração NATIVA por página (PyMuPDF) + casamento de bbox por offset.
 
-ONDA 2 do desenho do Agente Investigador (DESENHO-INVESTIGADOR-2026-08-13, §1.4
-passos 2, 5 e 7). A onda 1 entregou o contrato puro no shared
-(`calculo_fichas/documento.py` + `segmentacao.py`); aqui mora a metade que
-**toca o PDF** — e é por isso que este módulo vive no ai-agents, junto de
-`ocr_gate.py` e `vision.py` (*"reuse, não reescreva"*, RECON-ocr).
+Peça do desenho do Agente Investigador (§1.4 passos 2, 5 e 7). O contrato puro
+mora no shared (`calculo_fichas/documento.py` + `segmentacao.py`); aqui mora a
+metade que **toca o PDF** — e é por isso que este módulo vive no ai-agents, junto
+de `ocr_gate.py` e `vision.py` (*"reuse, não reescreva"*).
 
 ## A divisão de trabalho, e por que ela é assim
 
     doc_indexer/extracao.py   → PDF  → {pagina: texto}  + spans com bbox
-    garantis_shared/segmentacao → texto → Sentenca/Paragrafo com sid/pid/offset
+    garantis_shared.calculo_fichas.segmentacao → texto → Sentenca/Paragrafo com sid/pid/offset
     doc_indexer/extracao.py   → offset → bbox            (casa de volta)
 
 A segmentação **não** pode receber bbox: ela é pura e testada por AST no shared,
@@ -54,7 +53,7 @@ EXTRATOR_NATIVO = "pymupdf"
 #:
 #: ⚑ Este número é metade da chave de cache do `DocumentoIndexado`
 #: (`(doc_hash, extractor_version)`, §7.2) e é o que invalida âncora quando a
-#: segmentação muda. Esquecer de bumpar aqui é o risco nº 1 da pesquisa —
+#: segmentação muda. Esquecer de bumpar aqui é o pior risco do cache —
 #: cache stale devolvendo IDs que apontam para outra frase — então ele NÃO é
 #: derivado da versão da wheel (que muda por qualquer motivo, inflacionando
 #: MISS) nem inferido: é declarado, e mudá-lo é decisão consciente.
@@ -69,8 +68,7 @@ def doc_hash_de(pdf_bytes: bytes) -> str:
     pergunta e deixaria passar troca de PDF que produz o mesmo texto.
 
     ⚑ `bytes()` explícito: `memoryview` vindo de coluna BYTEA do Postgres quebra
-    `hashlib.update` em algumas versões e é exatamente o bug que o checklist do
-    RECON-ocr lista primeiro (o mesmo que quebrava `types.Blob`).
+    `hashlib.update` em algumas versões (o mesmo bug que quebrava `types.Blob`).
     """
     return hashlib.sha256(bytes(pdf_bytes)).hexdigest()
 
@@ -133,9 +131,9 @@ class SpanPagina:
 def abrir_pdf(pdf_bytes: bytes) -> Optional[Any]:
     """`pymupdf.Document` ou `None` — nunca levanta.
 
-    O `None` não é teórico: 6 de 20 "PDFs" de uma amostra real do cohort do gate
-    são HTML ou RTF servidos sob nome `.pdf` (`ocr_gate.analisar_pdf_bytes`
-    documenta a medição). Quem chama trata o `None` como "documento ilegível" e
+    O `None` não é teórico: parte dos "PDFs" do cohort do gate são HTML ou RTF
+    servidos sob nome `.pdf` (ver `ocr_gate.analisar_pdf_bytes`). Quem chama trata
+    o `None` como "documento ilegível" e
     devolve `success=false` — nunca um documento indexado vazio, que pareceria
     um PDF em branco legítimo.
     """
@@ -152,7 +150,7 @@ def abrir_pdf(pdf_bytes: bytes) -> Optional[Any]:
 
 
 def texto_nativo_por_pagina(doc: Any) -> dict[int, str]:
-    """`{pagina_1based: texto_cru}` para todas as páginas do documento.
+    """`{pagina: texto_cru}` (pagina 1-based) para todas as páginas do documento.
 
     1-based porque é a numeração da FOLHA — a mesma de `Evidencia.pagina`, de
     `Sentenca.pagina` e do "confira fl. 5" que o analista recebe. Um 0-based
@@ -272,9 +270,7 @@ def atribuir_bboxes(
         # sentenças ("…R$ 723.810.827,57. Nos termos do art. 142…"). Avançar para
         # `i_ultimo + 1` faria a sentença seguinte — que começa na MESMA linha —
         # procurar a partir da linha de baixo e não achar nada: ela sairia com
-        # `bbox=None` mesmo estando perfeitamente localizável. Medido na
-        # construção: 3 de 6 sentenças de uma folha de prosa normal perdiam a
-        # coordenada por isso.
+        # `bbox=None` mesmo estando perfeitamente localizável.
         #
         # Ficar no último span é seguro contra o retrocesso que o
         # `test_MUTACAO_bbox_nunca_anda_para_TRAS_na_pagina` prende, porque a
@@ -335,13 +331,14 @@ def _casar_span(
     desde: int,
     consumos: Optional[dict[str, int]] = None,
 ) -> Optional[tuple[int, int, tuple[float, float, float, float]]]:
-    """`(indice_primeiro_span, indice_ULTIMO_span, bbox_uniao)` ou `None`.
+    """`(i_ini, i_ultimo, bbox)` ou `None`: o índice do primeiro span, o do ÚLTIMO span e
+    a união das caixas deles.
 
     O último índice é **inclusivo** — é o span que ainda contém texto desta
     sentença, e é onde o cursor do `atribuir_bboxes` para (ver o comentário lá:
     uma linha carrega várias sentenças).
 
-    `consumos` é `{palavra_ancora: vezes_já_casadas}` no span `desde`. Serve a um
+    `consumos` mapeia cada palavra-âncora às vezes que ela já casou no span `desde`. Serve a um
     caso só, e é o da folha com frase repetida: se a linha tem 4 cópias de
     "Consideracoes do relator." e as 4 já foram consumidas, a 5ª sentença
     pertence à linha SEGUINTE. Sem isso todas as cópias da página empilhariam na
@@ -351,8 +348,8 @@ def _casar_span(
     ⚑ A contagem é **por palavra**, não por sentença, e a diferença é o que
     separa este código de uma regressão: numa linha comum de acórdão as duas ou
     três sentenças têm âncoras DIFERENTES ("Fica…", "Nos…", "Recurso…"), e
-    contar sentenças empurraria a segunda para a linha de baixo — que foi
-    exatamente o bug medido (3 de 6 sentenças perdendo a coordenada).
+    contar sentenças empurraria a segunda para a linha de baixo — e ela perderia
+    a coordenada.
     """
     ancoras = _palavras_ancora(texto)
     if not ancoras:

@@ -1,9 +1,9 @@
 """O INDEXADOR — PDF → `DocumentoIndexado` serializado. **Não é agente.**
 
-ONDA 2 do desenho do Agente Investigador (DESENHO-INVESTIGADOR-2026-08-13, §1.4
-e §8.7). Mora em `src/agents/` pela topologia do repo, mas a LIÇÃO 5 é explícita
-e vale como contrato: *"o pré-processamento é código determinístico + no máximo
-1 chamada de OCR; não é agente"*. Não há loop, não há decisão de ferramenta, não
+Peça do desenho do Agente Investigador (§1.4 e §8.7). Mora em `src/agents/` pela
+topologia do repo, mas o desenho é explícito e vale como contrato: *"o
+pré-processamento é código determinístico + no máximo 1 chamada de OCR; não é
+agente"*. Não há loop, não há decisão de ferramenta, não
 há prompt que julgue nada. Há um pipeline de sete passos, dos quais exatamente
 um fala com um modelo — e só quando o gate determinístico acusa.
 
@@ -12,7 +12,7 @@ um fala com um modelo — e só quando o gate determinístico acusa.
     2. GATE por página (ocr_gate da casa, SEM LLM)        → páginas inalcançáveis
     3. [ÚNICA CHAMADA LLM] só as inalcançáveis vão ao Gemini (vision.py)
     4. costura: {pagina: texto}, na ordem, método por página
-    5. segmentação determinística (garantis_shared.segmentacao)
+    5. segmentação determinística (garantis_shared.calculo_fichas.segmentacao)
     6. bbox por sentença + extractor_version por página
     7. DocumentoIndexado
 
@@ -21,11 +21,11 @@ um fala com um modelo — e só quando o gate determinístico acusa.
 **Garante determinismo do texto.** Mesmo PDF, mesmo gate, sem OCR ⇒ o mesmo
 `DocumentoIndexado`, byte por byte, para sempre — porque tudo entre o passo 1 e
 o 7 é código puro (a segmentação do shared é travada por teste de AST). É o que
-o `test_determinismo` prende. Com OCR a garantia é a do §7: vem do **cache**,
-não do modelo, e a chave é `(doc_hash, extractor_version)`.
+o `test_mesmo_pdf_produz_hash_de_saida_identico` prende. Com OCR a garantia é a
+do §7: vem do **cache**, não do modelo, e a chave é `(doc_hash, extractor_version)`.
 
-**Não cacheia.** O cache do `DocumentoIndexado` é a onda 3 (`journal.py`, que
-ainda não está na wheel consumida aqui). A rota já devolve `cache_hit: false`
+**Não cacheia.** O cache do `DocumentoIndexado` é o do shared
+(`garantis_shared.calculo_fichas.journal`). A rota já devolve `cache_hit: false`
 para que o contrato de wire não mude quando a camada entrar — mudar o shape do
 envelope depois é o que quebra o consumidor.
 
@@ -61,7 +61,7 @@ __all__ = ["FLAG_DOC_INDEXER", "indexar", "montar_documento_indexado"]
 
 #: `FICHAS_DOC_INDEXER_ENABLED` (§8.5). Estilo da casa: **ship inerte + flip
 #: explícito**. Com a flag OFF a rota responde `success=false` sem tocar em GCS
-#: nem em modelo — o PR entra com comportamento byte-idêntico ao de hoje.
+#: nem em modelo.
 FLAG_DOC_INDEXER = "FICHAS_DOC_INDEXER_ENABLED"
 
 #: Teto de páginas que podem ir ao OCR num documento. Um PDF inteiramente
@@ -302,8 +302,8 @@ async def _obter_bytes(request: IndexarRequest) -> tuple[Optional[bytes], Option
         return None, ERRO_SEM_FONTE
 
     # Reusa o fetch da casa: semáforo 5, sanity cap de 100MB, e o drop do stub
-    # "acesso restrito" da jusbrasil (~46% dos PDFs de um processo real). Cada
-    # um desses é um bug já pago.
+    # "acesso restrito" da jusbrasil (em processo trabalhista chega a ser metade dos
+    # PDFs). Cada um desses é um bug já pago.
     from .._utils.vision import fetch_pdfs_from_gcs
 
     try:

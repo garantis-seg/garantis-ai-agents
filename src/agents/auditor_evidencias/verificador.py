@@ -1,22 +1,21 @@
-"""VERIFICADOR CEGO (onda 9) — `verificar_par`, um par por vez, sem contexto.
+"""VERIFICADOR CEGO — `verificar_par`, um par por vez, sem contexto.
 
 Modo ADITIVO: o `auditar_evidencias` deste mesmo pacote continua existindo,
-intacto e testado, porque o harness do shared o chama hoje. Este modulo e o
-caminho novo (DESENHO §2.3), e o antigo so morre na onda 6.
+intacto e testado, porque o harness do shared o chama (a chamada unica legada,
+com `FICHAS_VERIFICADOR_POR_PAR` desligada). Este modulo e o caminho novo.
 
 O que o verificador cego ve: `{afirmacao, ancora, trecho}`. Nada mais. Sem
 grafo, sem historico de construcao, sem os outros documentos, sem ferramenta de
 lookup. A privacao e o produto: o HALLMARK mediu FP ~5x maiores com verificador
-contextualizado (pesquisa §4.5).
+contextualizado.
 
 ## As tres travas de codigo (nenhuma e instrucao de prompt)
 
 1. **`numeros_divergentes` sai do CODIGO.** `_assinatura_numerica` compara
    afirmacao x trecho, com as confusoes de OCR ja canonizadas. Se o codigo
    achou divergencia e o modelo respondeu `supported`, o agente REBAIXA para
-   `contradicted` — prompt nao e enforcement. Alucinacao numerica de alta
-   confianca e o risco nº 3 da pesquisa, e nao se defende dela pedindo ao
-   modelo que se policie.
+   `contradicted` — prompt nao e enforcement. De alucinacao numerica de alta
+   confianca nao se defende pedindo ao modelo que se policie.
 2. **Vocabulario fechado.** Rotulo fora dos quatro, ou `motivo_tipado` fora do
    enum, invalida a resposta (`success=false`, `error_tipo="vocabulario"`) em
    vez de virar um balde novo que o QA nunca agrega.
@@ -73,10 +72,10 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-#: Modelo do VERIFICADOR — familia DIFERENTE do calculador (anti-conluio, §8.4).
+#: Modelo do VERIFICADOR — familia DIFERENTE do calculador (anti-conluio).
 #: O default sai do PAPEL (`llm_models.ROLES`), nunca de literal: papel tem UM
-#: endereco, e foi a duplicacao de literais que deixou o calculador apontando
-#: para um modelo fora do catalogo (preco 0/0 => custo invisivel no ledger).
+#: endereco, e literal duplicado deriva pra modelo fora do catalogo sem ninguem ver
+#: (preco zero => custo invisivel no ledger).
 DEFAULT_MODEL = os.getenv(
     "AUDITOR_EVIDENCIAS_MODEL",
     os.getenv("DEFAULT_MODEL") or model_for("ficha_auditoria_evidencias"),

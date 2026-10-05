@@ -22,7 +22,7 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 
-# Trilha A (2026-07-21, OK Elton): 2.5-flash-lite -> 3.1-flash-lite (gold staging 16/26 vs 15/26).
+# Default validado no gold de staging (decisao do Elton).
 # NUNCA usar gemini-3.1-flash NAO-lite — nao existe no Vertex (404).
 DEFAULT_MODEL = os.getenv("APOLICE_LIFECYCLE_MODEL", "gemini-3.1-flash-lite")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
@@ -41,7 +41,7 @@ async def classify_lifecycle(
         apolice: ApoliceContext or dict (numero_apolice, seguradora, valor_is, vigência)
         processo_numero: CNJ formatado do processo
         movimentacoes: lista cronológica (mais antigas primeiro). Cap aplicado no prompt.
-        model: override (default: gemini-2.5-flash-lite)
+        model: override (default: `DEFAULT_MODEL`)
         provider: override (default: gemini)
 
     Returns:

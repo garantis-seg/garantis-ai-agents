@@ -33,16 +33,15 @@ _GCS_FETCH_SEMAPHORE_LIMIT = 5
 # Cap de PDFs por chamada Gemini Vision — evita estouro de context window.
 _MAX_PDFS_PER_CALL = 20
 
-# Caps do payload inline. ⚠️ Desde a remoção do ramo Files API eles são o ÚNICO
-# teto: o que passa deles não é lido, é contado.
+# Caps do payload inline. ⚠️ Sem ramo Files API (ver o docstring do módulo), eles são o
+# ÚNICO teto: o que passa deles não é lido, é contado.
 # ⭐ O TOTAL e 14MiB, e nao 15: o SDK manda os bytes em BASE64, entao 14MiB viram
 # ~18,7MiB no fio — abaixo dos ~20MB do Gemini com folga pro prompt. 15MiB dava 20MiB
-# exatos (review do ai-agents#227).
-# ⭐ O POR PDF vale so do 2o em diante (25/09, card 869equgwd): 9 peticoes ativas estavam
-# CEGAS porque a PECA — que o materializer poe na frente — passava de 5MB (escaneada:
-# a de 6,7MB/13 paginas do 50335989620224036100 foi lida inline com ~7k tokens). Nos
-# anexos ele fica: sem ele, 1 anexo grande tomaria o orcamento dos pequenos, e um 400
-# vindo dele (PDF sem pagina) cegaria tambem a peca.
+# exatos.
+# ⭐ O POR PDF vale so do 2o em diante: a PECA — que o materializer poe na frente — passa
+# de 5MB quando escaneada, e com o cap ela ficava CEGA. Nos anexos ele fica: sem ele, 1
+# anexo grande tomaria o orcamento dos pequenos, e um 400 vindo dele (PDF sem pagina)
+# cegaria tambem a peca.
 _INLINE_TOTAL_BYTES_CAP = 14 * 1024 * 1024   # 14MiB
 _INLINE_PER_PDF_BYTES_CAP = 5 * 1024 * 1024  # 5MiB, do 2o PDF em diante
 
@@ -279,8 +278,8 @@ async def call_vision_l1(
 
     # Contagem e custo pelos MESMOS donos do caminho texto (GeminiProvider.agenerate):
     # `_usage_tokens` (cached + thinking no output) e `calculate_cost` do base.py,
-    # que cobra o cacheado no `cached_per_1m`. Ate 2026-09-17 isto era uma formula
-    # local flat que cobrava cacheado como input cheio e ignorava thoughts.
+    # que cobra o cacheado no `cached_per_1m`. ⛔ Formula local aqui diverge do ledger:
+    # cobra o cacheado como input cheio e ignora os thoughts.
     input_tokens, output_tokens, cached_tokens = _usage_tokens(
         getattr(response, "usage_metadata", None)
     )
@@ -448,7 +447,7 @@ async def call_l1_with_vision_fallback(
     if pdf_bytes_list:
         # ⭐ O POR QUE, no unico lugar que TODO caller alcanca — o `gate_out` e devolvido
         # "pro caller PERSISTIR" e so o materializer de PETICAO persiste (o do mov nao
-        # grava `vision_gate`). Contexto: card 869eqbpyk.
+        # grava `vision_gate`).
         # ⛔ Log, nao coluna: `mov_factsheet` nao tem JSONB e a pergunta e DIAGNOSTICA —
         # coluna custaria migration + bump de pin em 2 repos por um dado que 30 dias de
         # retencao respondem. Historico maior que isso, ai sim vira coluna.

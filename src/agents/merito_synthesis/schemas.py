@@ -1,9 +1,7 @@
 """Pydantic schemas pro merito_synthesis agent (engine v6_meritos camada 3).
 
 Output PRIMARIO da engine v6 - risco + justificativa + trajetoria por merito.
-Cabe em monitoramento.risk_snapshots + dossier_artifacts kind='merito_synthesis'.
-
-Spec canonica: c:/Users/Eltonxp/.claude/plans/risk-engine-v6-meritos.md
+Cabe em leitura_conexos.risk_snapshots + dossier_artifacts kind='merito_synthesis'.
 """
 
 from typing import Any, Literal, Optional
@@ -64,9 +62,8 @@ class DecisaoAtualRich(DecisaoAtual):
     # (garantis-shared P1.5, braco DEMOVE gated) INJETA no decisao_vigente do card L2
     # (parcelamento vigente sem instrumento -> materializa pro F-M2). O echo em codigo
     # (_project_merito_decisao_facts) copia pro decisao_atual; sem o valor no Literal a
-    # VALIDACAO do MeritoSynthesisCardOut estoura 500 e o merito inteiro cai (staging
-    # 2026-07-06: 680016/680021/680039/680057 sem banda em TODAS as runs do eval —
-    # exatamente a familia parcelamento, com L2_EXTRACTION_DEMOTE_ENABLED=true).
+    # VALIDACAO do MeritoSynthesisCardOut estoura 500 e o merito inteiro cai (a familia
+    # parcelamento fica sem banda).
     instrumento_cautelar: Optional[Literal[
         "suspensao_seguranca", "suspensao_exigibilidade_ctn",
         "suspensao_por_parcelamento", "nenhum",
@@ -267,16 +264,12 @@ class MeritoSynthesisCard(BaseModel):
     """
 
     merito_id: int
-    # Literal["monit_poletto","global"] pre-mig 20260528_2000; pos-merge so 'global'.
-    # Mantido o tipo composto pra aceitar valores legacy do worker durante deploy window.
+    # So 'global' e gravado hoje; o tipo composto aceita o valor legado do worker.
     merito_context: Literal["monit_poletto", "global"] = "global"
 
     # Output principal - risco + justificativa
-    # PR7.1 (2026-05-31): adicionou 'Indeterminado' ao Literal. Quando Architecture D
-    # mode=new + matriz determ retorna Indeterminado (factual + juris ambos null),
-    # promote logic mantem o veredito LLM como fallback ao inves de forcar 'Baixo'.
-    # Antes, schema rejeitava emit de Indeterminado mesmo quando matriz nao tem
-    # sinal — agora pode emit explicito.
+    # 'Indeterminado' faz parte do Literal: sem sinal (factual e juris ambos null), o
+    # LLM emite Indeterminado explicito em vez de ser forcado a 'Baixo'.
     risco: Optional[Literal["Baixo", "Medio", "Alto", "Altissimo", "Indeterminado"]] = Field(
         default="Baixo",
         description=(
@@ -313,11 +306,10 @@ class MeritoSynthesisCard(BaseModel):
 
     # Estado
     decisao_atual: DecisaoAtual = Field(default_factory=DecisaoAtual)
-    # ciclo_garantia REMOVIDO do output do LLM (2026-06-19): pedir pro LLM re-listar
-    # eventos que JÁ damos a ele (no lifecycle_garantia dos processo_syntheses) fazia
-    # o L3 LOOPAR numa lista runaway — 680046 gerava ~880 eventos / 145KB de JSON
-    # malformado → parse fail → indeterminado (não-determinístico). Agora é montado
-    # DETERMINISTICAMENTE em código (agent._assemble_ciclo_garantia) dos próprios
+    # ciclo_garantia NAO e output do LLM: pedir pro LLM re-listar eventos que JÁ damos a
+    # ele (no lifecycle_garantia dos processo_syntheses) faz o L3 LOOPAR numa lista
+    # runaway — JSON malformado → parse fail → indeterminado (não-determinístico). Ele é
+    # montado DETERMINISTICAMENTE em código (agent._assemble_ciclo_garantia) dos próprios
     # lifecycle_garantia do input → exato, bounded, sem degeneração. CicloGarantiaEvent
     # (acima) segue como contrato do shape persistido. Consumidor: snapshots.py usa
     # card.get("ciclo_garantia") (dict), não atributo tipado.
@@ -335,7 +327,7 @@ class MeritoSynthesisCard(BaseModel):
     # Peca-pivo
     peca_pivo_merito: PecaPivoMerito = Field(default_factory=PecaPivoMerito)
 
-    # Probabilidade de Exito agregada (Matriz Daycoval 2026-05-21)
+    # Probabilidade de Exito agregada (Matriz Daycoval)
     probabilidade_exito_merito: ProbabilidadeExitoMerito = Field(
         default_factory=ProbabilidadeExitoMerito,
         description="Agregacao das prob_exito dos processos do merito. Input forte pro risco final.",
@@ -344,8 +336,8 @@ class MeritoSynthesisCard(BaseModel):
     # Forward
     proximos_passos_provaveis: list[str] = Field(default_factory=list)
 
-    # Trajetoria - computada externamente baseada em snapshot anterior
-    # (LLM NAO preenche esses campos; orchestrator setta antes de persistir)
+    # Trajetoria - o LLM NAO preenche esses campos; o materializer L3 do shared os zera
+    # antes de persistir (trajetoria desligada).
     trajetoria: Optional[Literal[
         "estavel", "piorou", "melhorou", "primeira_classificacao",
     ]] = None
@@ -417,10 +409,9 @@ class ProcessoSynthesisMin(BaseModel):
         default=None,
         description="Card de probabilidade_exito do processo (Matriz Daycoval). Camada 3 agrega.",
     )
-    # PR6 Architecture D — orthogonal paths emitidos pelo L2 (PR3 schema).
-    # Camada 3 le esses pra rodar A/B test (factual_only / juris_only / mixed /
-    # derived_only). Default None quando card materializado pre-PR3 OU L2
-    # nao conseguiu derivar — L3 trata None como Indeterminado (fallback).
+    # Paths ortogonais emitidos pelo L2. A camada 3 os le no A/B por bucket
+    # (factual_only / juris_only / mixed / derived_only). None quando o card e antigo
+    # OU o L2 nao conseguiu derivar — L3 trata None como Indeterminado (fallback).
     risco_factual: Optional[Literal[
         "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
     ]] = Field(
@@ -463,16 +454,6 @@ class TomadorCardMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
-# v2.5 (2026-06-12): JurisprudenciaMin REMOVIDO — dead code desde a v2.2
-# (campo jurisprudencia saiu do MeritoSynthesisRequest; o unico consumidor
-# era _summarize_jurisprudencia, tambem dead, deletado junto).
-
-
-# PR7.2 (2026-05-31): ParadigmaMin REMOVIDO. Curadoria interna de paradigmas
-# Poletto (ref.tese_decisao_individual, 209 rows curadas) dropada. Architecture
-# D promote (mode=new) + LLM prompt rescrito assume papel jurisprudencial.
-
-
 class PreviousSnapshot(BaseModel):
     """Snapshot anterior de risco do mesmo merito (pra computar trajetoria)."""
 
@@ -483,8 +464,7 @@ class PreviousSnapshot(BaseModel):
 
 class MeritoSynthesisRequest(BaseModel):
     merito_id: int
-    # Literal["monit_poletto","global"] pre-mig 20260528_2000; pos-merge so 'global'.
-    # Mantido o tipo composto pra aceitar valores legacy do worker durante deploy window.
+    # So 'global' e gravado hoje; o tipo composto aceita o valor legado do worker.
     merito_context: Literal["monit_poletto", "global"] = "global"
     titulo: Optional[str] = None
     tipo_principal: Optional[str] = None
@@ -495,36 +475,32 @@ class MeritoSynthesisRequest(BaseModel):
     processo_syntheses: list[ProcessoSynthesisMin] = Field(default_factory=list)
     tomador: Optional[TomadorCardMin] = None
     cdas: list[CDACardMin] = Field(default_factory=list)
-    # v2.8: aiims REMOVIDO (teardown autos-wide 2026-07-14); extra='ignore'
-    # tolera payloads antigos que ainda mandem o campo.
-    # jurisprudencia removido — agora vive em L2 ps_card (regras J/J.1/J.2).
-    # PR7.2 (2026-05-31): paradigmas: list[ParadigmaMin] REMOVIDO
-    # (ref.tese_decisao_individual dropped).
+    # Sem `aiims`, `jurisprudencia` (vive no L2 ps_card, regras J/J.1/J.2) nem
+    # `paradigmas`: extra='ignore' tolera payload antigo que ainda mande o campo.
 
-    # Trajetoria (passado pelo orchestrator antes da call)
+    # Snapshot anterior: aceito por compat; o prompt nao o renderiza.
     previous_snapshot: Optional[PreviousSnapshot] = None
 
     model: Optional[str] = None
     provider: Optional[str] = None
 
-    # PR6 Architecture D — A/B test bucket. None = legacy single-prompt.
-    # Quando set, prompts.py injeta instrucao especifica por bucket pra
-    # forcar L3 LLM a usar SO um subset dos sinais. Permite avaliar qual
-    # arquitetura (factual_only / juris_only / mixed / derived_only)
-    # acerta mais Poletto ground truth.
+    # A/B test bucket. None = single-prompt (o caminho de producao: o A/B por bucket
+    # saiu do materializer L3 do shared). Quando set, prompts.py injeta instrucao
+    # especifica por bucket pra forcar L3 LLM a usar SO um subset dos sinais
+    # (factual_only / juris_only / mixed / derived_only).
     bucket: Optional[Literal[
         "factual_only", "juris_only", "mixed", "derived_only",
     ]] = None
 
-    # PR6 Architecture D — quando bucket="derived_only", o materializer L3
-    # pre-calcula derived_aggregate via matriz determ 5x5 e injeta aqui pro
-    # LLM justificar (NAO substituir). Ignorado em outros buckets.
+    # Banda que o bucket="derived_only" pede pro LLM justificar (NAO substituir).
+    # Ignorado em outros buckets; o materializer do shared nao a preenche mais (a
+    # matriz 5x5 que a calculava saiu de la).
     derived_aggregate_hint: Optional[Literal[
         "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
     ]] = None
 
-    # Defensive: extra fields ignored (cobre materializer legacy passando
-    # `jurisprudencia` antes deste commit; safe pra rollouts staggered).
+    # Defensive: extra fields ignored (payload antigo com campo que saiu nao quebra
+    # o request).
     model_config = {"extra": "ignore"}
 
 
@@ -539,7 +515,7 @@ class MeritoSynthesisCardOut(MeritoSynthesisCard):
     """
 
     # decisao_atual RICO: igual ao base MAS com os 6 campos merito-level projetados em
-    # codigo (extracao-sinais-merito-level 2026-06-29). O response_schema do LLM
+    # codigo (`agent._project_merito_decisao_facts`). O response_schema do LLM
     # (MeritoSynthesisCard base, DecisaoAtual LEAN) fica INTOCADO; este card OUT vive FORA
     # da chamada do LLM (parse + resposta HTTP + persistencia) pra os campos NAO serem
     # stripados na borda. Mesma mecanica do L2 ProcessoSynthesisCardRich.
@@ -561,12 +537,11 @@ class MeritoSynthesisResponse(BaseModel):
     llm_raw_prompt: Optional[str] = None
     prompt_version: Optional[str] = None
     usage: Optional[dict[str, Any]] = None
-    # PR6 Architecture D — echo do bucket que rodou (pro materializer L3
-    # persistir card['l3_ab_test'][bucket]).
+    # Echo do bucket que rodou (None no caminho de producao).
     bucket: Optional[str] = None
 
 
-# ── L2 PROSA — passe de redacao (2026-06-28) ──────────────────────────────
+# ── L2 PROSA — passe de redacao ───────────────────────────────────────────
 # "Codigo decide o risco, LLM redige." O risco JA foi decidido (holistico +
 # guards determ.) e entra FIXO; este passe so verbaliza a prosa aplicando o
 # <filtro_redacao_advogado> VERBATIM. Reusa todos os _build_*_block do prompt

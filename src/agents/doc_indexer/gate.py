@@ -1,6 +1,6 @@
 """Gate de OCR **por página** — quais folhas o texto nativo não alcança.
 
-ONDA 2 do desenho (DESENHO-INVESTIGADOR-2026-08-13, §1.4 passo 3).
+Peça do desenho do Agente Investigador (§1.4 passo 3).
 
 ## Este módulo NÃO é um gate novo
 
@@ -35,7 +35,7 @@ sozinho tem falso-positivo conhecido em folha de rosto e página de assinatura
 (pouco texto, muito desenho) — mandar essas ao OCR é gasto sem retorno. O Sinal
 2 sozinho é cego para scan limpo, que é a forma mais comum no acervo (o carimbo
 do PJe / rodapé do ESAJ: português impecável, `garbage_ratio` ≈ 0, e a peça
-presa na imagem — 8.597 documentos assim em prod).
+presa na imagem).
 """
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ MOTIVO_VETOR = "vetor"
 def paginas_inalcancaveis(
     doc: Any, textos: dict[int, str], *, teto_paginas: Optional[int] = None
 ) -> dict[int, str]:
-    """`{pagina_1based: motivo}` das folhas que o texto nativo não alcança.
+    """`{pagina: motivo}` (pagina 1-based) das folhas que o texto nativo não alcança.
 
     `doc` é o `pymupdf.Document` já aberto (o caller já pagou o `open`; reabrir
     aqui seria o segundo parse do mesmo PDF). `textos` é o que
@@ -79,7 +79,7 @@ def paginas_inalcancaveis(
     inteiramente escaneado de 300 páginas é o caso onde o custo explode sem
     aviso — o caller (agent.py) o usa como teto duro e registra o corte no
     `gate_ocr`. Cortar é pior que não cortar? Sim, mas o corte é VISÍVEL
-    (`truncado: true` + `paginas_nao_ocr`), enquanto a fatura não é.
+    (`truncado: true` no `gate_ocr`), enquanto a fatura não é.
 
     Falha em qualquer página ⇒ aquela página é considerada ALCANÇÁVEL (fica no
     nativo). É o fallback seguro do gate da casa: *"qualquer falha → trata como

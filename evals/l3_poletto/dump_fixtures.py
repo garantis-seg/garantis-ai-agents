@@ -3,10 +3,10 @@
 Para cada merito rotulado pelo Poletto (monitoramento.apolices_monitoradas):
   - label Poletto (risco_poletto + apolice_aceita)
   - risco de PRODUCAO atual + decomposicao (factual_agg/juris_agg/derived/llm_legacy)
-    do ultimo card merito_synthesis  -> baseline `--from-snapshot`
+    do ultimo card merito_synthesis  -> baseline do modo from-snapshot (o default do
+    `run_l3_eval.py`)
   - PAYLOAD de input do L3 (mesmas queries dos loaders do materializer L3) ->
     `processo_syntheses` (com role injetado) + tomador + cdas + previous
-    (v2.8, 2026-07-14: aiims REMOVIDO do payload — teardown autos-wide)
 
 Reproduz FIELMENTE garantis_shared.engine_v6.layer3_merito_synthesis.loaders +
 materializer._build_payload_and_context (SQL copiado de la). Read-only: usa o
@@ -161,7 +161,7 @@ def main() -> int:
             ps_by_pn[r["pn"]] = r["summary"]
     print(f"  {len(ps_by_pn)}/{len(all_pns)} processos com ps_card", file=sys.stderr)
 
-    # 4) cda cards — copia load_cdas (v2.8: kind='aiim' saiu do loader/payload).
+    # 4) cda cards — copia load_cdas.
     print("[4/6] cda cards...", file=sys.stderr)
     cda_by_pn: dict[str, list] = {}
     for ch in _chunks(all_pns, 60):

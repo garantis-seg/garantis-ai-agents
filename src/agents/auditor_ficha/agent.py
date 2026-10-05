@@ -7,7 +7,7 @@ contrato EXATO de `garantis_shared.fichas.runner.auditar`.
 Modelo DIFERENTE do redator, por desenho: auditar com o mesmo modelo que
 escreveu e pedir a alguem que revise o proprio trabalho — os erros sao
 correlacionados e se confirmam mutuamente (mesma razao do auditor_evidencias
-do C4, e o que o achado A-1 do QA-B1 mediu em prod).
+do C4).
 
 DIRECAO DO FAIL-SAFE — aqui ela e o OPOSTO da do auditor_evidencias, de
 proposito. La, falha do agente derruba a RODADA (o harness tenta de novo). Aqui,
@@ -18,9 +18,8 @@ S4 receberia um retry sem campo) e nao inventamos aprovacao (ninguem pode ler
 literalmente o estado "nao auditada", que o workflow ja sabe representar — e
 quem decide bloquear ou seguir e o runner do shared, nao este repo.
 
-Nao ha ferramenta aqui, de proposito: o verificador com ferramenta rendeu 5x
-mais falso-positivo (PESQUISA-AGENTE-INVESTIGADOR-2026-08 §4). O dossie inteiro
-vai no contexto e o modelo julga o que le.
+Nao ha ferramenta aqui, de proposito: o verificador com ferramenta rendeu muito
+mais falso-positivo. O dossie inteiro vai no contexto e o modelo julga o que le.
 """
 
 import logging
@@ -40,23 +39,17 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #: Papel deste agente no registro de modelos do shared.
 _ROLE = "ficha_auditoria_texto"
 
-#: Default LITERAL, usado enquanto o papel nao existir no wheel instalado.
-#: TODO(garantis-shared#345): quando o PR #345 (roles de fichas em
-#: `garantis_shared.llm_models.ROLES`) estiver mergeado e o pin do
-#: requirements.txt subir, este literal vira apenas o ultimo fallback — a
-#: resolucao abaixo ja prefere o ROLES automaticamente, sem mudanca de codigo.
-#: Medido em 13/08/2026 no pin vigente (garantis-shared==1.459.0): o papel
-#: `ficha_auditoria_texto` NAO existe (ROLES tem 7 papeis, todos de engine/
-#: leitor/vision), entao hoje quem responde e este literal.
+#: Default LITERAL: o ultimo fallback, usado so se o wheel instalado nao tiver o
+#: papel em `garantis_shared.llm_models.ROLES` — a resolucao abaixo prefere o ROLES.
 _DEFAULT_MODEL_LITERAL = "gemini-3.1-flash-lite"
 
 
 def _modelo_do_papel() -> Optional[str]:
     """Modelo do papel `ficha_auditoria_texto` no ROLES do shared, se existir.
 
-    Tolerante de proposito: o wheel pinado pode nao ter o registro (PR #345 nao
-    mergeado), e a forma do valor pode ser string ou dict — ler o registro nao
-    pode derrubar o agente. Qualquer surpresa devolve None e cai no literal.
+    Tolerante de proposito: um wheel antigo pode nao ter o registro, e a forma do
+    valor pode ser string ou dict — ler o registro nao pode derrubar o agente.
+    Qualquer surpresa devolve None e cai no literal.
     """
     try:
         from garantis_shared.llm_models import ROLES  # import local: opcional
@@ -80,10 +73,10 @@ def resolver_modelo() -> str:
     """Precedencia: env explicita -> papel do ROLES -> literal.
 
     `FICHA_AUDITORIA_TEXTO_MODEL` vem PRIMEIRO e NAO cai em `DEFAULT_MODEL`
-    (diferente dos agentes antigos) — foi exatamente o `X or DEFAULT_MODEL` que
-    colapsou calculador e auditor no mesmo modelo em prod (achado A-1). Herdar
-    o DEFAULT_MODEL aqui reintroduziria o mesmo silencio: o redator tambem o
-    herda, e os dois voltariam a ser o mesmo modelo sem ninguem perceber.
+    (diferente dos agentes antigos) — o `X or DEFAULT_MODEL` colapsa calculador e
+    auditor no mesmo modelo. Herdar o DEFAULT_MODEL aqui reintroduziria o mesmo
+    silencio: o redator tambem o herda, e os dois voltariam a ser o mesmo modelo
+    sem ninguem perceber.
     """
     env = os.getenv("FICHA_AUDITORIA_TEXTO_MODEL")
     if env and env.strip():

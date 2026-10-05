@@ -1,11 +1,11 @@
 """Prompts do LEITOR — ele lê UM documento e cita por ID, ou declara a lacuna.
 
-ONDA 4 do desenho (DESENHO-INVESTIGADOR-2026-08-13, §2, §2.2, §5.3). O Leitor é
-o papel de janela ISOLADA: recebe o `DocumentoIndexado` inteiro daquele
-documento e **nada do grafo**, nada dos outros documentos, nada da rodada. Essa
-cegueira é o produto, não uma limitação: é o que impede o *telephone game* que a
-pesquisa §4.1 nomeia como anti-padrão (3–10x tokens), e é o que faz a resposta
-dele ser sobre o que o documento DIZ, não sobre o que o cálculo PRECISA.
+Peça do desenho do Agente Investigador (§2, §2.2, §5.3). O Leitor é o papel de
+janela ISOLADA: recebe o `DocumentoIndexado` inteiro daquele documento e **nada
+do grafo**, nada dos outros documentos, nada da rodada. Essa cegueira é o
+produto, não uma limitação: é o que impede o *telephone game* (o anti-padrão que
+custa 3–10x tokens), e é o que faz a resposta dele ser sobre o que o documento
+DIZ, não sobre o que o cálculo PRECISA.
 
 ## O texto com IDs injetados — formato XML do sui-1
 
@@ -24,7 +24,7 @@ a leitura do número fica pior justamente onde ela mais importa.
 
 ## Anti prompt-injection
 
-Mesmo padrão do calculador e do `ficha_writer` (QA-B1 achado B-3): fence com
+Mesmo padrão do calculador e do `ficha_writer`: fence com
 boundary ALEATÓRIO por request e `neutralizar()` em todo texto de terceiro. Aqui
 o vetor é o mais largo do sistema inteiro — o corpo de um PDF de terceiro entra
 **inteiro** no prompt, que é literalmente a definição do papel. Um acórdão que

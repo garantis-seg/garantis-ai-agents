@@ -39,21 +39,17 @@ DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 #: auditor_evidencias.agent): dois erros correlacionados do mesmo modelo se
 #: confirmariam mutuamente.
 #:
-#: ⚠️ FIX 2026-08-13 (era `gemini-3.1-pro-preview`): aquele id da 404 no Vertex
-#: — e a casa roda GEMINI_BACKEND=vertex em TODOS os cloudbuilds, entao o
-#: calculador simplesmente nao respondia em prod. Pior que o 404: o id nao
-#: existe em `garantis_shared.llm_models.MODELS`, entao `get_model_pricing()`
-#: devolve 0/0 e o custo sai SILENCIOSAMENTE ZERADO do ledger — o mesmo
-#: mecanismo que ja escondeu US$ 97,61 em 39.309 calls e reincidiu duas vezes.
-#: `gemini-3.5-flash` esta no catalogo (1.50/9.00, preco confirmado na fatura),
-#: e nao-preview e segue DIFERENTE do auditor, que hoje roda `gemini-2.5-flash`
-#: (anti-conluio preservado). ⚠️ Mas 2.5-flash APOSENTA em 2026-10-16
-#: (RETIRE_2_5_FAMILY): antes disso o auditor precisa de um id novo, e trocar os
-#: dois pro mesmo modelo mata a premissa do desenho — ver PR #345.
-#: Isto e FIX DE BUG, nao escolha de papel: a proposta formal de ROLES para
-#: fichas (`ficha_investigador` etc.) vive no PR #345 do garantis-shared e
-#: continua sendo decisao do dono — quando ela entrar, este default vira
-#: `model_for("ficha_investigador")`.
+#: ⛔ O id tem de existir no Vertex (a casa roda `GEMINI_BACKEND=vertex`; id
+#: `-preview` como o `gemini-3.1-pro-preview` da 404) E no catalogo
+#: `garantis_shared.llm_models.MODELS` — fora dele `get_model_pricing()` devolve
+#: preco zero e o custo sai ZERADO do ledger (so com o log
+#: `GEMINI_PRICING_MODEL_UNKNOWN`).
+#: E segue DIFERENTE do auditor (`AUDITOR_EVIDENCIAS_MODEL`, anti-conluio).
+#: ⚠️ Auditor na familia 2.5 precisa de um id novo antes de
+#: `garantis_shared.llm_models.RETIRE_2_5_FAMILY`, e trocar os dois pro mesmo modelo
+#: mata a premissa do desenho.
+#: O `ROLES` do shared ja tem o par (`ficha_calculo` x `ficha_auditoria_evidencias`);
+#: este default ainda nao le de la — o wire e `model_for("ficha_calculo")`.
 DEFAULT_MODEL = os.getenv(
     "CALCULO_FICHA_MODEL", os.getenv("DEFAULT_MODEL", "gemini-3.5-flash")
 )
@@ -162,9 +158,9 @@ async def montar_grafo(
     if isinstance(request, dict):
         request = MontarGrafoRequest(**request)
 
-    # Onda 8: payload com documentos INDEXADOS ⇒ modo INVESTIGADOR (tool-use
-    # em 2 fases, §6). Sem eles, o caminho one-shot segue byte a byte — mesma
-    # rota, mesmo contrato de resposta.
+    # Payload com documentos INDEXADOS ⇒ modo INVESTIGADOR (tool-use em 2 fases,
+    # §6 do desenho do Agente Investigador). Sem eles, roda o caminho one-shot —
+    # mesma rota, mesmo contrato de resposta.
     if request.documentos_indexados:
         from .investigador import investigar
 

@@ -1,8 +1,8 @@
-"""Prompt v4 (G10) — a LLM extrai FATOS NEUTROS de uma movimentação. FASE 2 / shadow.
+"""Prompt v4 (G10) — a LLM extrai FATOS NEUTROS de uma movimentação.
 
-Porte do contrato congelado (`~/.claude/plans/l1-fase1-contrato-2026-06-09.md`) +
-`_l1_pilot/prompts_v4.py` (validado end-to-end pelo piloto zero-deploy 2026-06-09).
-Coexiste com o `build_mov_factsheet_prompt` v3.1 sob flag — NÃO o substitui.
+Porte do contrato congelado do redesign do L1, validado end-to-end por um piloto
+zero-deploy. Coexiste com o `build_mov_factsheet_prompt` v3.1 sob flag
+(`agent.L1_NEUTRAL_FLAG`) — NÃO o substitui.
 
 DIFERENÇA CENTRAL vs v3.1: SEM fundação-do-Tomador. A LLM não sabe (nem precisa) quem
 é o cliente — ela relata QUEM está em cada polo e O QUE aconteceu, de forma neutra. O
@@ -13,7 +13,7 @@ O que o prompt APOSENTA (mote — viraram código em `derivacoes`, NÃO re-intro
   - `<regra_recursos>` (metade-mapeamento) → `SENTIDO_RECURSO` (recorrente × provido).
   - `<regra_extincao_sem_merito>` → `SENTIDO_EXTINCAO` (lado × motivo_extincao).
   - `<regra_titularidade>` / fundação-do-Tomador (`bloco_fundacao`) → fora do passe.
-  - PR#5 Alfredo (suspensão de segurança) → `instrumento_cautelar` no `derivacoes`.
+  - a suspensão de segurança → `instrumento_cautelar` no `derivacoes`.
 
 O que FICA: framing neutro · injeção seletiva de vocab por família (fiscal/trab/cível) ·
 regras de EXTRAÇÃO dos 6 fatos crus novos · precisão Lei 8.437 (não rotular MS/liminar
@@ -21,10 +21,9 @@ genérica como suspensão de segurança) · taxonomia tipo_doc · rendering de d
 (reutilizado de `prompts.py` — comportamento único). Semântica por campo vive no
 response_schema (`schemas_v4` descriptions).
 
-Bloco MOV ANTERIOR: removido do caminho v4 (prompt-review Lote 1/1.3, 2026-06-10).
-Prod roda paralelo sempre (`sequential_l1=False` em todos os callers) → o bloco nunca
-renderizava aqui. O code-path segue vivo no v3.1 (`prompts._mov_anterior_block`) pra
-pilotos sequenciais futuros. Render de prod inalterado (1A/1D byte-idêntico).
+Bloco MOV ANTERIOR: fora do caminho v4. Prod roda paralelo (`sequential_l1=False`, o
+default do materializer do shared) → o bloco nunca renderizaria aqui. O code-path segue
+vivo no v3.1 (`prompts._mov_anterior_block`) pra pilotos sequenciais futuros.
 """
 from __future__ import annotations
 
@@ -35,18 +34,13 @@ from .fundacao import TAXONOMIA_TIPO_DOC
 from .prompts import _summarize_doc
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
 
-# ── Caps v4.4 (decisão "SEM LIMITE primeiro — qualidade > custo", 2026-06-11) ──
-# Não há mais cap de 5 docs/mov nem 8k/doc: TODOS os docs entram, governados por um
-# ORÇAMENTO por unidade (guarda de janela do modelo, não economia). Censo 2026-06-10:
-# sem cap o input multiplica ~8,9× — custo MEDIDO e aceito pela decisão.
-# TRAVA DE CORPO (869ent0g8) — FONTE ÚNICA do corte. Mora aqui, no módulo FOLHA, porque
-# os dois consumidores (este prompt e `agent.py::_sem_corpo`) precisam do MESMO valor:
-# duplicar o 60 é como um dos lados corta num ponto e o outro noutro, em silêncio.
-# `agent.py` importa isto lazy, no mesmo bloco de `schemas_v4`/`derivacoes`.
-# O racional completo (números, censo, por que 60) está em `agent.py`.
-# ⚰️ A flag `L1_DECISAO_EXIGE_CORPO` saiu em 2026-08-27 (card 869entgbc). Nasceu default
-# OFF, foi ligada em prod em 2026-08-23 com OK do Elton e não se moveu mais. ⛔ O
-# comportamento é o de HOJE — saiu a possibilidade de desligar, não a trava.
+# ── Caps v4.4 (decisão do Elton: "SEM LIMITE primeiro — qualidade > custo") ──
+# Sem cap de docs/mov nem por doc (o v3.1 tem): TODOS os docs entram, governados por um
+# ORÇAMENTO por unidade (guarda de janela do modelo, não economia). Sem cap o input
+# multiplica várias vezes — custo MEDIDO e aceito pela decisão.
+# TRAVA DE CORPO — o corte de `agent.py::_sem_corpo`, o único que o lê (import lazy, no
+# mesmo bloco de `schemas_v4`/`derivacoes`). O racional (por que 60) está em
+# `agent.py`. A trava é incondicional: não há flag que a desligue.
 CORPO_MIN_CHARS = 60
 
 
@@ -54,12 +48,12 @@ _V4_MOV_TEXT_CAP = 200_000        # snippet da mov (publicação pode trazer int
 _V4_DOC_TEXT_CAP = 1_000_000      # teto por doc (janela; casa com o fetch do shared)
 _V4_DOCS_BUDGET = 2_000_000       # orçamento agregado de docs por unidade (~500k tokens)
 
-# ── Perfil de leitura por Tipo de doc (2026-06-19) ─────────────────────────
-# Resolve o timeout do L1 em docs grandes (demonstrativo de 567pg = 1,9M chars →
-# Gemini 18-55s → estoura TIMEOUT_LAYER1_S=60s). NÃO é dup (memory
-# digesto-ocr-text-dup = falso alarme). 2 perfis:
+# ── Perfil de leitura por Tipo de doc ─────────────────────────────────────
+# Resolve o timeout do L1 em docs grandes (demonstrativo de centenas de páginas →
+# estoura TIMEOUT_LAYER1_S). NÃO é dup (memory digesto-ocr-text-dup = falso alarme).
+# 2 perfis:
 #   peça (substantivo: petição/sentença/acórdão/decisão...) → ler COMPLETO
-#         (chunk em camada separada se >200k — follow-up; aqui mantém a janela).
+#         (peça > CHUNK_SIZE é chunkada antes, em `chunking.py`; aqui mantém a janela).
 #   evidência (doc GRANDE >200k sem título legal — tipicamente tabular:
 #         demonstrativo/planilha/NFe) → HEAD+TAIL (natureza+valor no cabeçalho,
 #         totais no fim, miolo = bulk omitido).
@@ -106,11 +100,10 @@ def _render_doc_body(doc: DocAnexado | None, txt: str, cap: int) -> str:
     evidência tabular grande → head+tail (o sinal está nas pontas); peça → completo
     até o cap de janela. Sem doc anexado (fallback pro snippet da mov) → cap simples.
 
-    Fecha um GAP DE EXECUÇÃO: o head+tail de evidência (#41) vivia SÓ no ramo 1A; os
-    ramos 1D (órfão) e 1X (doc_incerto) liam 100% (`txt[:cap]`) → doc tabular grande
-    (ex.: bundle de NF-e de 230-248k que substancia um AIIM) estourava o
-    TIMEOUT_LAYER1_S. O chunk de PEÇA grande (agent.split_large_peca_variants) já roda
-    pré-dispatch em todos os ramos; só faltava o head+tail de EVIDÊNCIA aqui.
+    Os ramos 1D (órfão) e 1X (doc_incerto) passam por aqui pelo mesmo motivo do 1A: ler
+    100% (`txt[:cap]`) de um doc tabular grande (ex.: bundle de NF-e que substancia um
+    AIIM) estoura o TIMEOUT_LAYER1_S. O chunk de PEÇA grande
+    (`chunking.split_large_peca_variants`) roda pré-dispatch em todos os ramos.
     """
     if doc is not None and _doc_reading_profile(doc) == "evidencia":
         return _evidencia_head_tail(txt)
@@ -165,17 +158,13 @@ def _get(processo: Any, campo: str):
 def _familia_key(processo: Any) -> str:
     """Família da mov — escolhe qual bloco de VOCAB_FAMILIA instrui o extrator.
 
-    ⭐ DELEGA pra `garantis_shared.materia.classificar_materia` desde 2026-08-25
-    (card 869edc6u7). Antes era um match de SUBSTRING sobre `materia + classe`, e
-    ele errava por dois lados, medido sobre os 5.857 pns com membro ativo:
+    ⭐ DELEGA pra `garantis_shared.materia.classificar_materia`. ⛔ Não volte a casar
+    SUBSTRING sobre `materia + classe`: erra pelos dois lados —
 
-    - 203 processos puramente TRIBUTÁRIOS viravam `trabalhista`, porque o
-      cabeçalho da árvore CNJ contém a palavra TRABALHO ("1208 - PROCESSO CÍVEL E
-      DO TRABALHO - ..."). O guard que existia aqui só cortava o cabeçalho quando
-      o separador era `->`; com ` - ` ele passava batido.
-    - 204 processos fiscais viravam `civel` porque o `assunto` do processo NUNCA
-      chegava aqui: `ProcessoContext` não o declarava, e pydantic o descartava —
-      a mesma armadilha do fix L1 v7 com materia/nm_tomador/cnpj_tomador.
+    - processo puramente TRIBUTÁRIO vira `trabalhista`, porque o cabeçalho da árvore
+      CNJ contém a palavra TRABALHO ("1208 - PROCESSO CÍVEL E DO TRABALHO - ...");
+    - processo fiscal vira `civel` quando o `assunto` não chega aqui — o
+      `ProcessoContext` tem de declará-lo, senão o pydantic o descarta.
 
     ⚠️ `materia` (o texto da linha `Matéria:` do prompt) CONTINUA vindo de
     `resolve_materia`, que responde outra pergunta e mantém a apólice na frente.
@@ -281,10 +270,9 @@ def _build_orfao_prompt_v4(
 
     Saída = MovFactSheetCardV4 (mesmo schema). natureza de_fluxo/acessorio entra como
     RACIOCÍNIO (orienta data + se há decisão), não como campo. SEM fundação-do-Tomador.
-    v4.3 (#2 prompt-review): ganha VOCAB_FAMILIA + _REGRAS_CRUS (um doc pode ser uma
-    sentença — precisa das mesmas regras de extração do ramo movimento) + metadata do
-    doc (censo 2026-06-11: metadata jusbrasil é 100% preenchida e o título identifica
-    a peça — ex: 'PETICAO INICIAL').
+    Leva VOCAB_FAMILIA + _REGRAS_CRUS (um doc pode ser uma sentença — precisa das mesmas
+    regras de extração do ramo movimento) + metadata do doc (o título identifica a peça
+    — ex: 'PETICAO INICIAL').
     """
     doc = documentos_anexados[0] if documentos_anexados else None
     txt = (doc.text_content or "").strip() if doc else ""
@@ -340,26 +328,25 @@ Extraia os fatos neutros no schema MovFactSheetCardV4. Preencha SÓ o que o text
 o resto null."""
 
 
-# Guarda de janela do ramo petição (peticao_extract.v1): petições reais têm 100k+ chars
+# Guarda de janela do ramo petição (peticao_extract): petições reais têm 100k+ chars
 # e os conectores (CDA em planilha, citações) podem estar em qualquer ponto — cap alto
-# alinhado à decisão "sem limite primeiro, qualidade > custo" (2026-06-11), limitado só
-# pela janela do flash-lite (1M tokens ≈ 4M chars; 200k chars ≈ 50k tokens, cobre p99).
+# alinhado à decisão "sem limite primeiro, qualidade > custo", limitado só pela janela
+# do flash-lite (1M tokens ≈ 4M chars; 200k chars ≈ 50k tokens).
 _PETICAO_TEXT_CAP_CHARS = 200_000
 
-# ⭐ STEERING DOS ANEXOS (v1.5, 2026-08-13) — o fix RAIZ do AIIM-miss, provado por repro.
+# ⭐ STEERING DOS ANEXOS (v1.5) — o fix RAIZ do AIIM-miss, provado por repro.
 #
-# O prompt NUNCA dizia que há PDFs anexados à chamada: ele apresenta o texto concatenado
-# como sendo A peça inteira e fecha com "Preencha SÓ o que o TEXTO sustenta". Com isso o
-# modelo ANCORA no texto e trata os PDFs como redundância — não é cegueira: a repro
-# offline (8 chamadas Gemini reais, mesmos bytes, mesmo endpoint Vertex, temp 0) mostrou
-# a chamada fiel reproduzindo o miss 2x DETERMINISTICAMENTE, enquanto a MESMA carga com
-# este parágrafo extrai o par PA+AIIM completo (com `par_numero` cruzado e âncora que o
-# guard do sink aceita), também 2x. Caso: MS 1012150-95.2026.8.26.0224, cujas 6 partes da
-# inicial estão em VETOR e cujo AIIM 5.059.644-5 só existe dentro do PDF.
+# Sem este parágrafo o prompt não diz que há PDFs anexados à chamada: ele apresenta o
+# texto concatenado como sendo A peça inteira e fecha com "Preencha SÓ o que o TEXTO
+# sustenta". Com isso o modelo ANCORA no texto e trata os PDFs como redundância — não é
+# cegueira: na repro offline (mesmos bytes, mesmo endpoint Vertex, temp 0) a chamada sem
+# o parágrafo reproduz o miss DETERMINISTICAMENTE, e a MESMA carga com ele extrai o par
+# PA+AIIM completo (com `par_numero` cruzado e âncora que o guard do sink aceita). O caso
+# típico é a inicial em VETOR, com o AIIM só dentro do PDF.
 #
 # ⛔ CONDICIONAL POR CONSTRUÇÃO: só entra quando o gate REALMENTE mandou ≥1 PDF (o caller
-# passa `pdfs_anexados=True` no ramo Vision). Sem anexo o prompt fica BYTE-IDÊNTICO ao
-# v1.4 fora o vocabulário — e o caminho texto é 99,7% do volume.
+# passa `pdfs_anexados=True` no ramo Vision). Sem anexo o prompt fica sem o parágrafo — e
+# o caminho texto é o grosso do volume.
 _STEER_PDF_ANEXADOS = (
     "ATENÇÃO — DOCUMENTOS PDF ANEXADOS A ESTA CHAMADA: além do texto acima, estão"
     " anexados PDFs que são PARTES {da_peca} cujo texto NÃO pôde ser extraído (páginas em"
@@ -383,16 +370,15 @@ def _build_peticao_prompt_v4(
     documentos_anexados: list[DocAnexado],
     pdfs_anexados: bool = False,
 ) -> str:
-    """Prompt do ramo PETIÇÃO INICIAL (peticao_extract.v1) — FASE 4 conexos.
+    """Prompt do ramo PETIÇÃO INICIAL (peticao_extract) — FASE 4 conexos.
 
     Diferenças vs o ramo DOCUMENTO: contexto AFIRMATIVO (a integração já identificou
-    que ESTE doc é a petição inicial — identify_peticao_doc metadata-first) + extração
-    DIRIGIDA dos conectores (cdas + processos_citados com papel), conforme o contrato
-    `prompts/fase4-alfredo-handoff-peticao-extraction.md`. Escopo = SÓ petição inicial:
-    fora dela a precisão das citações despenca (validação Onda 1).
+    que ESTE doc é a petição inicial — `fetch_peticao_doc` do shared) + extração
+    DIRIGIDA dos conectores (cdas + processos_citados com papel). Escopo = SÓ petição
+    inicial: fora dela a precisão das citações despenca.
 
-    PROMPT v0 (esqueleto) — as regras jurídicas de `papel` são DS do Alfredo; iterar
-    aqui + mini-eval de petições rotuladas antes de plugar no sink.
+    As regras jurídicas de `papel` são DS do Alfredo; mudança nelas pede mini-eval de
+    petições rotuladas.
     """
     doc = documentos_anexados[0] if documentos_anexados else None
     txt = (doc.text_content or "").strip() if doc else ""
@@ -530,17 +516,15 @@ def _build_doc_incerto_prompt_v4(
     documentos_anexados: list[DocAnexado],
     pdfs_anexados: bool = False,
 ) -> str:
-    """Prompt do ramo 1X (doc_incerto_extract.v1) — doc de tipo NÃO identificado.
+    """Prompt do ramo 1X (doc_incerto_extract) — doc de tipo NÃO identificado.
 
     Variante do 1P pro fallback do identify (camada L3 — doc substancial do 1º
     dia da captura, sem confirmação de tipo): frame de INCERTEZA + classificação
     ativa via TAXONOMIA completa (do ramo 1D) + a MESMA extração relacional do
     1P com papel MAIS conservador (default jurisprudência/incerto em peça
-    decisória — decisões citam precedente o tempo todo). Censo 2026-06-12: a
-    regra crua do 1º dia tinha 0/15 precisão de identify; aqui a incerteza vai
-    pra prompt e a extração degrada com graça. Schema REUSA PeticaoExtractCardV4
-    (já tem tipo_doc). Draft aprovado Elton 2026-06-12
-    (~/.claude/plans/ramo-1x-doc-incerto-draft-2026-06-12.md).
+    decisória — decisões citam precedente o tempo todo). A regra crua do 1º dia
+    não acerta o identify; aqui a incerteza vai pra prompt e a extração degrada com
+    graça. Schema REUSA PeticaoExtractCardV4 (já tem tipo_doc). Decisão do Elton.
     """
     doc = documentos_anexados[0] if documentos_anexados else None
     txt = (doc.text_content or "").strip() if doc else ""
@@ -677,7 +661,7 @@ def build_mov_factsheet_prompt_v4(
 
     Drop-in da assinatura de `build_mov_factsheet_prompt` (v3.1) — o agente troca a função
     sob flag. classe '1D' = ramo DOCUMENTO (doc avulso); classe 'peticao' = ramo PETIÇÃO
-    INICIAL (peticao_extract.v1, opt-in do caller — prod nunca envia hoje).
+    INICIAL (peticao_extract, opt-in do caller: o materializer de petição do shared).
 
     `pdfs_anexados=True` acrescenta o STEERING dos anexos (v1.5) — só os ramos petição/
     doc_incerto o usam, e só quando o gate de Vision de fato mandou PDF. Os demais ramos
@@ -732,12 +716,9 @@ def build_mov_factsheet_prompt_v4(
     else:
         docs_section = ""
 
-    # RESUMO DO PROCESSO removido do caminho v4 (decisão D do prompt-review,
-    # 2026-06-11): a dependência (resumo_ia via Escavador lazy_gen) não é garantida
-    # em todo processo, e o bloco era contexto de FUNDO, não desta mov. Se a
-    # qualidade dos 1A degradar, re-adicionar é a melhoria futura (rollback =
-    # revert deste commit). O lazy_gen upstream NÃO foi tocado (resumo_ia tem
-    # consumidores fora da L1).
+    # Sem RESUMO DO PROCESSO no caminho v4 (decisão do prompt-review): a dependência
+    # (resumo_ia) não é garantida em todo processo, e o bloco era contexto de FUNDO,
+    # não desta mov. Se a qualidade dos 1A degradar, re-adicionar é a melhoria.
 
     # Instruções de uso do contexto — neutras (docs prevalecem; não copie).
     instrucoes = []
@@ -749,14 +730,13 @@ def build_mov_factsheet_prompt_v4(
             "processo."
         )
     else:
-        # ⚰️ ANTICORPO REMOVIDO (869ent0g8; o ramo `else` que o carregava saiu em 2026-08-27
-        # com a flag). Aqui vivia o teste ESTÉTICO "Snippet genérico (ex: 'Expedição de outros
-        # documentos', 'Juntada de petição') => tem_decisao=false", que pedia ao modelo um
-        # juízo de gosto sobre a própria entrada. Ele falha por construção no caso que
-        # importa: o rótulo do catálogo do provider NÃO é genérico — "Julgado - Julgado
-        # improcedente o pedido" é específico, e errado. Quem decide isso é a TRAVA MECÂNICA
-        # de `agent.py::_sem_corpo` (sem corpo E sem doc ⇒ tem_decisao=false), que não
-        # depende de o modelo achar a frase feia.
+        # ⛔ Sem teste ESTÉTICO aqui ("Snippet genérico (ex: 'Expedição de outros
+        # documentos', 'Juntada de petição') => tem_decisao=false"): pedir ao modelo um
+        # juízo de gosto sobre a própria entrada falha por construção no caso que
+        # importa — o rótulo do catálogo do provider NÃO é genérico ("Julgado - Julgado
+        # improcedente o pedido" é específico, e errado). Quem decide isso é a TRAVA
+        # MECÂNICA de `agent.py::_sem_corpo` (sem corpo E sem doc ⇒ tem_decisao=false),
+        # que não depende de o modelo achar a frase feia.
         instrucoes.append(
             "- Sem doc anexo, você SÓ tem o snippet da publicação + metadata. NÃO INVENTE "
             "conteúdo: o snippet é o texto INTEIRO de que se dispõe, não um resumo de algo "
