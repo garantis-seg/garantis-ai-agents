@@ -24,27 +24,17 @@ steps:
       - 'garantis-ai-agents-staging'
       - '--image=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api:staging-latest'
       # GEMINI_BACKEND=vertex (2026-07-20): espelha prod (cloudbuild-deploy.yaml:84) — flip do spending cap AI Studio.
-      # CALCULO_FICHA_MODEL + AUDITOR_EVIDENCIAS_MODEL (2026-08-13, QA B1 achado A-1):
-      # espelha prod. Aqui e ainda mais necessario que la: o --update-env-vars e ADITIVO,
-      # entao o DEFAULT_MODEL que ja mora no clone SOBREVIVE a cada deploy — e sem estas
-      # duas os agentes do C4 colapsam no mesmo modelo, com o staging ensaiando um
-      # comportamento que prod nao tem. Valores = defaults do codigo; modelos DISTINTOS
-      # e o ponto, nao a escolha especifica.
-      # ⚠️ CALCULO_FICHA_MODEL 3.1-pro-preview -> 3.5-flash (2026-08-13, decisao do dono):
-      # o preview dava 404 no Vertex e, fora do catalogo MODELS, zerava o custo no ledger.
-      # Espelha prod (cloudbuild-deploy.yaml). Detalhe do bug la e em calculo_ficha/agent.py.
-      # FICHA_AUDITORIA_TEXTO_MODEL (2026-08-13, S6): doutrina do A-1 para o par
-      # redator(S4) x auditor(S6) — o auditor NAO herda DEFAULT_MODEL no codigo; a env
-      # explicita garante que staging ensaie o par real. Precisa ser != FICHA_WRITER_MODEL.
-      # (resolucao 155x156: S6 em 3.5-flash — o 2.5-flash aposenta 2026-10-16.)
-      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,FICHA_WRITER_MODEL=gemini-3.1-flash-lite,FICHA_AUDITORIA_TEXTO_MODEL=gemini-3.5-flash'
+      # ⛔ Nenhuma env de modelo aqui: o modelo de cada agent sai do papel em
+      # garantis_shared.llm_models, igual a prod.
+      - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
       # PAR do --update-env-vars acima, que sendo ADITIVO nunca REMOVE: env que sai
       # do repo fica viva no servico pra sempre. Padrao copiado do irmao
       # `execucao-fiscal/risk-engine-worker/cloudbuild-staging-build.yaml`.
       # ⛔ Nao troque por um `gcloud ... --remove-env-vars` a mao: o proximo
       # `refresh-staging-from-prod` desfaz a limpeza, calado.
       # `L3_AB_TEST_ENABLED`: sem leitor desde a poda de 2026-07-05 (card 869ejape0).
-      - '--remove-env-vars=L3_AB_TEST_ENABLED'
+      # As 5 envs de modelo: sem leitor desde que cada agent le o modelo do papel.
+      - '--remove-env-vars=L3_AB_TEST_ENABLED,DEFAULT_MODEL,CALCULO_FICHA_MODEL,AUDITOR_EVIDENCIAS_MODEL,FICHA_WRITER_MODEL,FICHA_AUDITORIA_TEXTO_MODEL'
       - '--region=southamerica-east1'
       - '--project=neqsti'
 timeout: '1500s'

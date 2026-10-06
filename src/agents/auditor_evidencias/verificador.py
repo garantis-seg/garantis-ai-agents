@@ -73,13 +73,10 @@ logger = logging.getLogger(__name__)
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 #: Modelo do VERIFICADOR — familia DIFERENTE do calculador (anti-conluio).
-#: O default sai do PAPEL (`llm_models.ROLES`), nunca de literal: papel tem UM
-#: endereco, e literal duplicado deriva pra modelo fora do catalogo sem ninguem ver
+#: Sai do PAPEL (`llm_models.ROLES`), nunca de literal nem de env: papel tem UM
+#: endereco, e copia deriva pra modelo fora do catalogo sem ninguem ver
 #: (preco zero => custo invisivel no ledger).
-DEFAULT_MODEL = os.getenv(
-    "AUDITOR_EVIDENCIAS_MODEL",
-    os.getenv("DEFAULT_MODEL") or model_for("ficha_auditoria_evidencias"),
-)
+DEFAULT_MODEL = model_for("ficha_auditoria_evidencias")
 
 
 def _dinco_ligado() -> bool:

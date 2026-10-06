@@ -18,6 +18,8 @@ import logging
 import os
 from typing import Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -27,7 +29,9 @@ from .schemas import CampoSpec, FichaWriteFieldsRequest, FichaWriteFieldsRespons
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
-DEFAULT_MODEL = os.getenv("FICHA_WRITER_MODEL", os.getenv("DEFAULT_MODEL", "gemini-2.5-flash"))
+#: O papel no registro do shared, que o mantem de familia diferente do auditor de
+#: texto (S6). Sem env: uma 2a fonte diverge do papel.
+DEFAULT_MODEL = model_for("ficha_redacao")
 
 
 def _resolve_campos_alvo(

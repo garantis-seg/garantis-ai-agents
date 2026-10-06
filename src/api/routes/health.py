@@ -37,7 +37,6 @@ async def health_check():
         "status": "healthy",
         "service": "garantis-ai-agents",
         "version": "0.5.0",
-        "model_default": os.getenv("DEFAULT_MODEL", "gemini-3.1-flash-lite"),
         "prompt_default": os.getenv("DEFAULT_PROMPT_VERSION", "v3"),
         "timestamp": datetime.now().isoformat(),
         "uptime_seconds": round(uptime, 2),
@@ -51,7 +50,6 @@ async def readiness_check(response: Response):
 
     Checks:
     - Gemini is callable (`check_gemini_api`: ADC no vertex, key no aistudio)
-    - Model configuration is valid
 
     Returns 503 if not ready (for load balancer integration).
     """
@@ -64,10 +62,6 @@ async def readiness_check(response: Response):
     if not gemini_ready:
         all_ready = False
         logger.warning("Gemini API key not configured")
-
-    # Check model configuration
-    default_model = os.getenv("DEFAULT_MODEL", "gemini-3.1-flash-lite")
-    checks["model_config"] = {"ready": True, "model": default_model, "status": "ready"}
 
     result = {
         "ready": all_ready,

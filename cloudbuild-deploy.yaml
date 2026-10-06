@@ -189,55 +189,17 @@ steps:
       # resiliente-sem-juris + economia. Estava como --update-env-vars temp (rev
       # 00233); persistido aqui pra nao resetar no proximo deploy. Lido por
       # agents/processo_synthesis/agent.py::_exito_gate_enabled (default OFF no codigo).
-      # MOV_TRIAGE_MODEL=gemini-2.5-flash (2026-06-27): a triagem L1 (mov_triage/agent.py)
-      # roda no flash FULL, NAO no flash-lite. flash-lite da ~75% 503 ("high demand" =
-      # quota COMPARTILHADA do Gemini) sob a rajada do cascade; flash FULL deu 0% 503 em
-      # 715 calls medidos (memory l1-triage-503-burst-quota-semaphore-rootcause). PONTE ate
-      # a fila DBOS de triagem + bump de quota flash-lite (GCP) deixarem lite voltar barato.
-      # Estava --update-env-vars (rev 00242); persistido aqui pra nao resetar no proximo deploy.
       # GEMINI_BACKEND=vertex (2026-07-18): Gemini via Vertex AI (aiplatform) em vez do
       # AI Studio, que bateu o tier spending cap (US$250/mes, imposto pelo Google;
       # creditos GCP nao cobrem o AI Studio). Vertex = mesmos modelos, mesmo preco/token,
       # sem esse teto. Lido por garantis_shared.gemini_backend (default aistudio no codigo).
       # Reverter: trocar pra aistudio aqui + redeploy. Requer SA com roles/aiplatform.user.
-      # Trilha A (2026-07-21, OK Elton): DEFAULT_MODEL 2.5-flash-lite -> 3.1-flash-lite e
-      # MOV_TRIAGE_MODEL 2.5-flash -> 3.1-flash-lite (gold staging 16/26 vs 15/26; familia
-      # transito-julgado nao reproduz). A ponte "flash FULL por 503 do 2.5-lite" (2026-06-27,
-      # acima) fica HISTORICA — sob Vertex o 3.1-flash-lite nao tem aquela quota compartilhada.
-      # NUNCA usar gemini-3.1-flash NAO-lite: nao existe no Vertex (404).
-      # CALCULO_FICHA_MODEL + AUDITOR_EVIDENCIAS_MODEL (2026-08-13, QA B1 achado A-1):
-      # os DOIS precisam estar aqui, EXPLICITOS. Os agentes do C4 leem
-      # `CALCULO_FICHA_MODEL or DEFAULT_MODEL or <default>` (calculo_ficha/agent.py) e
-      # `AUDITOR_EVIDENCIAS_MODEL or DEFAULT_MODEL or <default>` (auditor_evidencias/agent.py):
-      # com DEFAULT_MODEL setado e as especificas AUSENTES, os dois colapsam no MESMO
-      # modelo (medido: ambos gemini-3.1-flash-lite) e a premissa central do desenho cai
-      # EM SILENCIO — auditar com o mesmo modelo que calculou e pedir a alguem que revise
-      # o proprio trabalho; dois erros correlacionados se confirmam mutuamente e o auditor
-      # nao tem como sinalizar. Os valores abaixo replicam os defaults DO CODIGO (nao sao
-      # escolha nova): auditor no flash. Cruzar PROVIDER (nao so versao) e a decisao em
-      # aberto — do Alfredo, nao deste fix. Guard: o teste
-      # test_calculador_e_auditor_usam_modelos_diferentes_por_default parseia ESTE arquivo.
-      # ⚠️ CALCULO_FICHA_MODEL 3.1-pro-preview -> 3.5-flash (2026-08-13, decisao do dono):
-      # o `gemini-3.1-pro-preview` DAVA 404 no Vertex (e aqui roda GEMINI_BACKEND=vertex,
-      # abaixo), entao o calculador nao respondia em prod; e como o id nao existe em
-      # llm_models.MODELS, get_model_pricing() devolvia 0/0 e o custo saia ZERADO do ledger
-      # (mesmo mecanismo dos US$ 97,61 em 39.309 calls). 3.5-flash esta no catalogo
-      # (1.50/9.00, preco de fatura) e nao e preview. A proposta formal de ROLES pra fichas
-      # e o PR #345 do garantis-shared — este aqui e so o fix do bug.
-      # FICHA_WRITER_MODEL + FICHA_AUDITORIA_TEXTO_MODEL (2026-08-13, S6 auditor de
-      # ficha): a MESMA doutrina do A-1 aplicada ao par redator(S4) x auditor(S6).
-      # O redator lia `FICHA_WRITER_MODEL or DEFAULT_MODEL or <default>` e, sem a
-      # env, resolvia pro DEFAULT_MODEL; se o auditor tambem herdasse, os dois
-      # rodariam em gemini-3.1-flash-lite e o S6 seria o redator revisando a
-      # propria prosa — reprovacao nenhuma, gate ligado, ficha aprovada em
-      # silencio. Por isso DUAS defesas: `resolver_modelo()` do auditor NAO le
-      # DEFAULT_MODEL (so a env propria -> ROLES -> literal), e as duas envs estao
-      # EXPLICITAS aqui com valores DIFERENTES. Guard: o teste
-      # test_cloudbuild_seta_o_modelo_do_auditor_de_ficha parseia ESTE arquivo.
-      # Trocar por PROVIDER diferente (nao so versao) segue em aberto — do Alfredo.
-      # (resolução 155×156: S6 em 3.5-flash — o 2.5-flash do PR aposenta 2026-10-16;
-      #  writer segue 3.1-flash-lite = no-op; par redator×auditor continua distinto.)
-      - 'DEFAULT_MODEL=gemini-3.1-flash-lite,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,CALCULO_FICHA_MODEL=gemini-3.5-flash,AUDITOR_EVIDENCIAS_MODEL=gemini-2.5-flash,FICHA_WRITER_MODEL=gemini-3.1-flash-lite,FICHA_AUDITORIA_TEXTO_MODEL=gemini-3.5-flash,DEFAULT_PROMPT_VERSION=v3,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,L1_DECISAO_EXIGE_DISPOSITIVO=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
+      # Modelo de LLM: sai do PAPEL em garantis_shared.llm_models (o shared pinado no
+      # requirements.txt). ⛔ Nao declare env de modelo aqui: env e uma 2a fonte e
+      # diverge do papel em silencio. Excecao, ate a triagem L1 ler o papel:
+      # MOV_TRIAGE_MODEL, a alavanca de emergencia do modelo da triagem.
+      # ⛔ NUNCA usar gemini-3.1-flash NAO-lite: nao existe no Vertex (404).
+      - 'MOV_TRIAGE_MODEL=gemini-3.1-flash-lite,DEFAULT_PROMPT_VERSION=v3,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,L1_DECISAO_EXIGE_DISPOSITIVO=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
       # Fase 3 vertex-sem-key (2026-07-21, OK Elton): GOOGLE_API_KEY=GEMINI_API_KEY:latest
       # REMOVIDO — auth e ADC do service account (GEMINI_BACKEND=vertex; provado em staging
       # 2026-07-21 rodando sem key nenhuma). --clear-secrets (e nao so tirar a flag) porque
