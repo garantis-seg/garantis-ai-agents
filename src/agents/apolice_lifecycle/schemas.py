@@ -124,7 +124,7 @@ class ApoliceLifecycleRequest(BaseModel):
     )
     model: Optional[str] = Field(
         default=None,
-        description="Override do modelo (default: gemini-2.5-flash-lite via env).",
+        description="Override do modelo (default: o papel apolice_ciclo_de_vida do registro).",
     )
     provider: Optional[str] = Field(
         default=None,

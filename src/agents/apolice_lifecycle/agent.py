@@ -9,6 +9,8 @@ import logging
 import os
 from typing import Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -22,9 +24,8 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 
-# Default validado no gold de staging (decisao do Elton).
-# NUNCA usar gemini-3.1-flash NAO-lite — nao existe no Vertex (404).
-DEFAULT_MODEL = os.getenv("APOLICE_LIFECYCLE_MODEL", "gemini-3.1-flash-lite")
+# O papel no registro do shared (o modelo validado no gold de staging, decisao do Elton).
+DEFAULT_MODEL = model_for("apolice_ciclo_de_vida")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 

@@ -14,6 +14,7 @@ import json
 import logging
 from typing import List, Literal, Optional
 
+from garantis_shared.llm_models import model_for
 from pydantic import BaseModel
 
 from ...providers import create_provider
@@ -26,16 +27,16 @@ logger = logging.getLogger(__name__)
 # ⭐ DERIVADA, nao mantida a mao — razao em `_utils/prompt_identity.py`. Este emissor decide
 # a banda AUTORITATIVA e e a camada mais cara do L3: sem proveniencia, "isto piorou depois de
 # qual prompt?" nao tem resposta.
-# ⭐ UM arquivo basta: o pacote so tem `agent.py` + `__init__.py`, e a CONVENTION (o prompt),
-# os schemas `BandOut`/`VerifyOut` e o `DEFAULT_MODEL` moram TODOS aqui.
+# ⭐ UM arquivo basta: o pacote so tem `agent.py` + `__init__.py`, e a CONVENTION (o prompt)
+# e os schemas `BandOut`/`VerifyOut` moram aqui. O modelo servido vai na coluna `model`.
 # ⛔ NAO incluir o `__init__.py`: e re-export, nao molda saida nenhuma — peso mudo.
 # ⭐ Ninguem casa este valor por LITERAL.
 PROMPT_VERSION = versao_com_identidade("merito_reducao.v2", __file__)
 
-# gemini-3.5-flash: o alvo L2 de acurácia (não-lite; 3.5-flash-lite não existe). Gate-0
-# provou que carrega o raciocínio da redução (iguala/supera opus). O engine injeta o model
+# O papel `engine_layer3_v2`: o alvo de acurácia (não-lite). Gate-0 provou que carrega o
+# raciocínio da redução (iguala/supera opus). O engine injeta o model
 # (SSOT ENGINE_LAYER3_V2_MODEL); este default é só fallback.
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = model_for("engine_layer3_v2")
 # thinking DINÂMICO de propósito: este agent não passa thinking_budget, então vale o
 # default do modelo (3.5-flash pensa). Não é acidente — é a config MEDIDA no gold: desligar
 # o thinking perde casos da zona-consenso e cria danger-under NOVO. max alto cobre

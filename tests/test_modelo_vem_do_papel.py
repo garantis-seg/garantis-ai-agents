@@ -1,23 +1,30 @@
-"""O modelo de cada agent da ficha sai do SEU papel no registro do shared
-(`model_for`): nem literal, nem env, nem o papel de outro agent. Env de modelo era
-uma 2a fonte e divergia do papel em silencio (deixou o auditor de evidencias num
-modelo que aposenta e o par redator x auditor de texto invertido em relacao ao
-registro).
+"""O modelo de cada agent sai do SEU papel no registro do shared (`model_for`): nem
+literal, nem env, nem o papel de outro agent. Env de modelo era uma 2a fonte e divergia
+do papel em silencio (deixou o auditor de evidencias num modelo que aposenta e o par
+redator x auditor de texto invertido em relacao ao registro).
 """
 import ast
-import importlib
 import inspect
+from pathlib import Path
 
 import pytest
 from garantis_shared import llm_models
-from garantis_shared.llm_models import model_for
+from garantis_shared.llm_models_guarda import modelos_escritos_a_mao
 
+import src.agents.apolice_lifecycle.agent as apolice_lifecycle
 import src.agents.auditor_evidencias.agent as auditor_evidencias
 import src.agents.auditor_evidencias.verificador as verificador
 import src.agents.auditor_ficha.agent as auditor_ficha
 import src.agents.calculo_ficha.agent as calculo_ficha
 import src.agents.ficha_writer.agent as ficha_writer
-from src.providers.gemini import DEFAULT_MODEL as DEFAULT_DO_PROVIDER
+import src.agents.merito_reducao_v2.agent as merito_reducao_v2
+import src.agents.merito_synthesis.agent as merito_synthesis
+import src.agents.merito_synthesis.redacao as merito_redacao
+import src.agents.mov_factsheet.agent as mov_factsheet
+import src.agents.mov_triage.agent as mov_triage
+import src.agents.peticao_confirmador.agent as peticao_confirmador
+import src.agents.processo_synthesis.agent as processo_synthesis
+import src.providers.gemini as provider_gemini
 
 _PAPEIS = [
     (calculo_ficha, "ficha_calculo"),
@@ -25,24 +32,41 @@ _PAPEIS = [
     (verificador, "ficha_auditoria_evidencias"),
     (ficha_writer, "ficha_redacao"),
     (auditor_ficha, "ficha_auditoria_texto"),
+    (mov_triage, "engine_layer1"),
+    (mov_factsheet, "engine_layer1"),
+    (processo_synthesis, "engine_layer2"),
+    (merito_synthesis, "engine_layer3"),
+    (merito_redacao, "engine_layer3"),
+    (merito_reducao_v2, "engine_layer3_v2"),
+    (peticao_confirmador, "peticao_confirmador"),
+    (apolice_lifecycle, "apolice_ciclo_de_vida"),
+    # so alcancado por quem nao passa modelo (test_connection, /providers)
+    (provider_gemini, "engine_layer1"),
 ]
-_IDS = [m.__name__.split("agents.")[1] for m, _ in _PAPEIS]
+_IDS = [m.__name__.removeprefix("src.") for m, _ in _PAPEIS]
+
+
+def _default_model_sob_sentinela(mod, monkeypatch) -> str:
+    """Avalia a expressao do `DEFAULT_MODEL` nos globals do proprio modulo, com um
+    valor-sentinela por papel. Sem recarregar o modulo: reload recria classes que
+    outros testes ja importaram e deixa a suite dependente da ordem."""
+    monkeypatch.setattr(llm_models, "ROLES", {r: f"sentinela-{r}" for r in llm_models.ROLES})
+    atribuicoes = [
+        no for no in ast.parse(inspect.getsource(mod)).body
+        if isinstance(no, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "DEFAULT_MODEL" for t in no.targets)
+    ]
+    assert len(atribuicoes) == 1, f"{mod.__name__}: DEFAULT_MODEL tem de nascer 1 vez, no topo"
+    expr = compile(ast.Expression(atribuicoes[0].value), mod.__file__, "eval")
+    return eval(expr, dict(vars(mod)))  # noqa: S307 — fonte do proprio repo
 
 
 @pytest.mark.parametrize(("mod", "papel"), _PAPEIS, ids=_IDS)
 def test_agent_le_o_SEU_papel(monkeypatch, mod, papel):
-    """Com um valor-sentinela por papel, o modulo recarregado so acerta lendo o
-    proprio papel: literal, env ou o papel de OUTRO agent dao outro valor. Com os
-    valores reais nao daria — so ha dois modelos centrais, entao o papel errado
-    quase sempre tem o mesmo valor."""
-    monkeypatch.setattr(llm_models, "ROLES", {r: f"sentinela-{r}" for r in llm_models.ROLES})
-    try:
-        assert importlib.reload(mod).DEFAULT_MODEL == f"sentinela-{papel}"
-    finally:
-        monkeypatch.undo()
-        # O reload REBINDA o modulo que outros testes monkeypatcham: recarrega sob o
-        # registro real, senao a ordem dos testes vira dependencia.
-        importlib.reload(mod)
+    """So acerta lendo o proprio papel: literal, env com default ou o papel de OUTRO
+    agent dao outro valor. Com os valores reais nao daria — so ha dois modelos
+    centrais, entao o papel errado quase sempre tem o mesmo valor."""
+    assert _default_model_sob_sentinela(mod, monkeypatch) == f"sentinela-{papel}"
 
 
 _LEITORES_DE_ENV = {"os.getenv", "getenv", "os.environ.get", "environ.get"}
@@ -65,7 +89,7 @@ def _envs_de_modelo_lidas(fonte: str) -> list[str]:
 
 @pytest.mark.parametrize(("mod", "papel"), _PAPEIS, ids=_IDS)
 def test_agent_nao_le_env_de_modelo(mod, papel):
-    """Nem no import nem na chamada: o teste do papel acima so ve o import."""
+    """Nem no import nem na chamada: o teste do papel acima so ve a expressao do topo."""
     assert _envs_de_modelo_lidas(inspect.getsource(mod)) == []
 
 
@@ -89,5 +113,17 @@ def test_auditor_e_auditado_rodam_modelos_diferentes():
     assert ficha_writer.DEFAULT_MODEL != auditor_ficha.DEFAULT_MODEL
 
 
-def test_default_do_provider_vem_do_registro():
-    assert DEFAULT_DO_PROVIDER == model_for("engine_layer1")
+def test_nenhum_modelo_escrito_a_mao_no_repo():
+    """A guarda do shared sobre o repo inteiro: codigo e deploy (cloudbuild) so
+    escolhem modelo pelo papel. Comentario, docstring e teste podem citar modelo."""
+    assert modelos_escritos_a_mao(Path(__file__).resolve().parents[1]) == []
+
+
+def test_controle_positivo_a_guarda_ve_o_que_este_repo_escreve(tmp_path):
+    (tmp_path / "agent.py").write_text('DEFAULT_MODEL = "gemini-2.5-flash"\n', encoding="utf-8")
+    (tmp_path / "cloudbuild-deploy.yaml").write_text(
+        "      - 'X=1,MOV_TRIAGE_MODEL=gemini-3.1-flash-lite'\n", encoding="utf-8")
+    assert modelos_escritos_a_mao(tmp_path) == [
+        "agent.py:1: gemini-2.5-flash",
+        "cloudbuild-deploy.yaml:1: gemini-3.1-flash-lite",
+    ]

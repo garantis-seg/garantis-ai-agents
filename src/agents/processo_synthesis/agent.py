@@ -18,6 +18,7 @@ from typing import Optional
 from .._utils.prompt_identity import versao_com_identidade
 
 from garantis_shared.llm_chunking import map_reduce_classify
+from garantis_shared.llm_models import model_for
 
 from ...providers import create_provider
 from ...providers.base import LLMResponse
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 # no Vertex. Decisao do Elton: manter o lite ate o NAO-lite estar disponivel.
 # O ENGINE manda `model` no payload (SSOT: ENGINE_LAYER2_MODEL no garantis-shared) -> este
 # default so vale como FALLBACK pra callers nao-engine (curl/eval).
-DEFAULT_MODEL = os.getenv("PROCESSO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
+DEFAULT_MODEL = model_for("engine_layer2")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # ⭐ DERIVADA, nao mantida a mao. O rotulo `v2.5` continua legivel; o sufixo e
