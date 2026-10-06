@@ -33,8 +33,8 @@ steps:
       # ⛔ Nao troque por um `gcloud ... --remove-env-vars` a mao: o proximo
       # `refresh-staging-from-prod` desfaz a limpeza, calado.
       # `L3_AB_TEST_ENABLED`: sem leitor desde a poda de 2026-07-05 (card 869ejape0).
-      # As 5 envs de modelo: sem leitor desde que cada agent le o modelo do papel.
-      - '--remove-env-vars=L3_AB_TEST_ENABLED,DEFAULT_MODEL,CALCULO_FICHA_MODEL,AUDITOR_EVIDENCIAS_MODEL,FICHA_WRITER_MODEL,FICHA_AUDITORIA_TEXTO_MODEL'
+      # As envs de modelo: sem leitor desde que cada agent le o modelo do papel.
+      - '--remove-env-vars=L3_AB_TEST_ENABLED,DEFAULT_MODEL,CALCULO_FICHA_MODEL,AUDITOR_EVIDENCIAS_MODEL,FICHA_WRITER_MODEL,FICHA_AUDITORIA_TEXTO_MODEL,MOV_TRIAGE_MODEL'
       - '--region=southamerica-east1'
       - '--project=neqsti'
 timeout: '1500s'

@@ -55,6 +55,8 @@ import os
 import pathlib
 from typing import Any, Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -67,15 +69,12 @@ from .schemas import CONFIRMADOR_RESPONSE_SCHEMA
 
 logger = logging.getLogger(__name__)
 
-# ⭐⭐ O MODELO E UM PARAMETRO MEDIDO, nao uma politica -- por isso ele e literal
-# aqui e nao `model_for("engine_layer1")`. O papel `engine_layer1` aponta pro MESMO
-# modelo hoje, mas ele existe pra ser trocado por decisao de custo/qualidade do L1;
-# amarrar o confirmador nele faria um bump do L1 trocar o modelo desta camada em
-# silencio, e o placar medido deixaria de descrever o que roda. As 4 varreduras (POS_A/B/C +
-# os 2 controles negativos) rodaram em `gemini-3.1-flash-lite`.
-# ⛔ NUNCA usar `gemini-3.1-flash` NAO-lite -- nao existe no Vertex (404).
-# ⚠️ Se um dia isto virar papel, o lugar e `garantis_shared.llm_models.ROLES`.
-DEFAULT_MODEL = os.getenv("PETICAO_CONFIRMADOR_MODEL", "gemini-3.1-flash-lite")
+# ⭐⭐ O MODELO E UM PARAMETRO MEDIDO, nao uma politica -- por isso ele tem papel PROPRIO
+# e nao `engine_layer1`, que aponta pro MESMO modelo hoje mas existe pra ser trocado por
+# decisao de custo/qualidade do L1: amarrar o confirmador nele faria um bump do L1 trocar
+# o modelo desta camada em silencio, e o placar medido deixaria de descrever o que roda.
+# As 4 varreduras (POS_A/B/C + os 2 controles negativos) rodaram no modelo deste papel.
+DEFAULT_MODEL = model_for("peticao_confirmador")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # Teto de saida do arnes. tok_out MAXIMO medido = 158 -- o teto e folga, nao alvo.
@@ -83,8 +82,8 @@ _MAX_TOKENS = 2048
 
 # ⭐ DERIVADA, nao mantida a mao -- razao e medicoes em `_utils/prompt_identity.py`.
 # Os 3 arquivos entram porque os 3 moldam a saida: `prompts.py` (o texto),
-# `schemas.py` (o `response_schema` que o provider aplica) e ESTE arquivo (modelo,
-# temperatura, `thinking_budget`, teto de tokens). ⛔ O `garantis_shared` usa
+# `schemas.py` (o `response_schema` que o provider aplica) e ESTE arquivo (temperatura,
+# `thinking_budget`, teto de tokens). O modelo servido vai na coluna `model`. ⛔ O `garantis_shared` usa
 # `"peticao_confirmador.v1"` como FALLBACK quando o ai-agents nao devolve nada, e
 # ele casa por... nada: ninguem casa `prompt_version` por igualdade nesta casa. Se
 # um consumidor novo passar a casar, tem de casar por PREFIXO.

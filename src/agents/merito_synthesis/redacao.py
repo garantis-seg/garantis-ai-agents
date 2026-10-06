@@ -21,6 +21,8 @@ import os
 import re
 from typing import Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -31,7 +33,7 @@ from .schemas import RedacaoCard, RedacaoRequest
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
+DEFAULT_MODEL = model_for("engine_layer3")  # o engine injeta o model; isto e o fallback
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 _PROSE_FIELDS = (

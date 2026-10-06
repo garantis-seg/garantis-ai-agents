@@ -14,6 +14,8 @@ import logging
 import os
 from typing import Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -70,11 +72,10 @@ def _project_merito_decisao_facts(card, processo_syntheses) -> None:
     except Exception as e:  # noqa: BLE001 — projecao e best-effort
         logger.warning("L3_PROJECT_MERITO_FACTS_FAIL: %r", e)
 
-# Default alinhado ao L2 (decisao do Elton); como e a sintese FINAL (qualidade), o lite
-# aqui e o que mais preocupa. Override via env. O ENGINE manda `model` no payload (SSOT;
-# ENGINE_LAYER3_MODEL no worker) -> este default so vale como FALLBACK pra callers
-# nao-engine. O caller do engine sobrescreve via request.model.
-DEFAULT_MODEL = os.getenv("MERITO_SYNTHESIS_MODEL", "gemini-3.1-flash-lite")
+# Como e a sintese FINAL (qualidade), o lite aqui e o que mais preocupa. O ENGINE manda
+# `model` no payload (SSOT; ENGINE_LAYER3_MODEL no worker) -> este default so vale como
+# FALLBACK pra callers nao-engine. O caller do engine sobrescreve via request.model.
+DEFAULT_MODEL = model_for("engine_layer3")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 

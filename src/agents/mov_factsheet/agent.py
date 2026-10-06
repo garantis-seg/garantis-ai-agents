@@ -10,6 +10,7 @@ import os
 from typing import Optional
 
 from garantis_shared.llm_chunking import map_reduce_classify
+from garantis_shared.llm_models import model_for
 
 from ...providers import create_provider
 from ...providers.base import LLMResponse
@@ -56,7 +57,8 @@ def _resumo_looks_like_json_meta_leak(resumo) -> bool:
     low = resumo.lower()
     return any(m in low for m in _RESUMO_META_LEAK_MARKERS)
 
-DEFAULT_MODEL = os.getenv("MOV_FACTSHEET_MODEL", "gemini-3.1-flash-lite")  # decisao do Elton
+# O engine manda o model no payload (ENGINE_LAYER1_MODEL, que le o mesmo papel); fallback.
+DEFAULT_MODEL = model_for("engine_layer1")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # Bump quando alterar build_mov_factsheet_prompt OR MovFactSheetCard schema.

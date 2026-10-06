@@ -20,6 +20,8 @@ import os
 import pathlib
 from typing import Optional
 
+from garantis_shared.llm_models import model_for
+
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
@@ -37,9 +39,9 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-# Triagem roda SEMPRE no modelo mais barato — e o ponto do 1o estagio.
-# NUNCA usar gemini-3.1-flash NAO-lite — nao existe no Vertex (404).
-DEFAULT_MODEL = os.getenv("MOV_TRIAGE_MODEL", "gemini-3.1-flash-lite")
+# Triagem roda SEMPRE no modelo mais barato — e o ponto do 1o estagio. O engine manda o
+# model no payload (ENGINE_LAYER1_MODEL, que le o mesmo papel); este default e o fallback.
+DEFAULT_MODEL = model_for("engine_layer1")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
 # ⭐ DERIVADA, nao mantida a mao — razao em `_utils/prompt_identity.py`. A triagem e a
