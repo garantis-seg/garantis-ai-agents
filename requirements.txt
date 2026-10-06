@@ -102,7 +102,7 @@ pypdf>=4.0.0
 # build de publish (`[version] computed 1.705.0`, build cab6f02c), nao do `versions list`.
 # Wheel verificada por CONTEUDO (as 4 existem em `peticao_contract.py`).
 # ⚠️ Bump ATOMICO com o `papel` do `ProcessoAdminCitado` deste PR.
-garantis-shared==1.719.0
+garantis-shared==1.729.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
