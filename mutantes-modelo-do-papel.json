@@ -34,7 +34,7 @@
   ["src/agents/processo_synthesis/agent.py",
    "DEFAULT_MODEL = model_for(\"engine_layer2\")",
    "DEFAULT_MODEL = os.getenv(\"PROCESSO_SYNTHESIS_MODEL\", model_for(\"engine_layer2\"))",
-   "M9: env com o papel de default (o sentinela casa; so o detector de env pega)"],
+   "M9: env com o papel de default (o valor casa com o papel quando a env esta ausente)"],
   ["src/agents/merito_reducao_v2/agent.py",
    "DEFAULT_MODEL = model_for(\"engine_layer3_v2\")",
    "DEFAULT_MODEL = \"gemini-3.5-flash\"",

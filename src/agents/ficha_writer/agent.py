@@ -29,8 +29,6 @@ from .schemas import CampoSpec, FichaWriteFieldsRequest, FichaWriteFieldsRespons
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
-#: O papel no registro do shared, que o mantem de familia diferente do auditor de
-#: texto (S6). Sem env: uma 2a fonte diverge do papel.
 DEFAULT_MODEL = model_for("ficha_redacao")
 
 

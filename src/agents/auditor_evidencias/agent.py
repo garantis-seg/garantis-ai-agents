@@ -30,8 +30,6 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-#: Modelo do AUDITOR: o papel no registro do shared, que o mantem de familia
-#: diferente do calculador (`ficha_calculo`). Sem env: uma 2a fonte diverge do papel.
 DEFAULT_MODEL = model_for("ficha_auditoria_evidencias")
 
 _MOTIVO_OMISSO = (

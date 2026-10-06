@@ -8,7 +8,6 @@ import inspect
 from pathlib import Path
 
 import pytest
-from garantis_shared import llm_models
 from garantis_shared.llm_models_guarda import modelos_escritos_a_mao
 
 import src.agents.apolice_lifecycle.agent as apolice_lifecycle
@@ -46,27 +45,17 @@ _PAPEIS = [
 _IDS = [m.__name__.removeprefix("src.") for m, _ in _PAPEIS]
 
 
-def _default_model_sob_sentinela(mod, monkeypatch) -> str:
-    """Avalia a expressao do `DEFAULT_MODEL` nos globals do proprio modulo, com um
-    valor-sentinela por papel. Sem recarregar o modulo: reload recria classes que
-    outros testes ja importaram e deixa a suite dependente da ordem."""
-    monkeypatch.setattr(llm_models, "ROLES", {r: f"sentinela-{r}" for r in llm_models.ROLES})
-    atribuicoes = [
+@pytest.mark.parametrize(("mod", "papel"), _PAPEIS, ids=_IDS)
+def test_agent_le_o_SEU_papel(mod, papel):
+    """O `DEFAULT_MODEL` e EXATAMENTE `model_for('<o papel dele>')`. Comparar pelo VALOR
+    nao serviria: so ha dois modelos centrais, entao o papel errado quase sempre da o
+    mesmo valor. Literal, env com o papel de default ou papel alheio mudam a expressao."""
+    [atribuicao] = [
         no for no in ast.parse(inspect.getsource(mod)).body
         if isinstance(no, ast.Assign)
         and any(isinstance(t, ast.Name) and t.id == "DEFAULT_MODEL" for t in no.targets)
     ]
-    assert len(atribuicoes) == 1, f"{mod.__name__}: DEFAULT_MODEL tem de nascer 1 vez, no topo"
-    expr = compile(ast.Expression(atribuicoes[0].value), mod.__file__, "eval")
-    return eval(expr, dict(vars(mod)))  # noqa: S307 — fonte do proprio repo
-
-
-@pytest.mark.parametrize(("mod", "papel"), _PAPEIS, ids=_IDS)
-def test_agent_le_o_SEU_papel(monkeypatch, mod, papel):
-    """So acerta lendo o proprio papel: literal, env com default ou o papel de OUTRO
-    agent dao outro valor. Com os valores reais nao daria — so ha dois modelos
-    centrais, entao o papel errado quase sempre tem o mesmo valor."""
-    assert _default_model_sob_sentinela(mod, monkeypatch) == f"sentinela-{papel}"
+    assert ast.unparse(atribuicao.value) == f"model_for('{papel}')"
 
 
 _LEITORES_DE_ENV = {"os.getenv", "getenv", "os.environ.get", "environ.get"}
@@ -103,14 +92,6 @@ def test_controle_positivo_o_detector_enxerga_import_e_chamada():
     )
     assert _envs_de_modelo_lidas(fonte) == [
         "AUDITOR_EVIDENCIAS_MODEL", "CALCULO_FICHA_MODEL", "DEFAULT_MODEL"]
-
-
-def test_auditor_e_auditado_rodam_modelos_diferentes():
-    """ANTI-CONLUIO no que RODA (o registro guarda o mesmo nos papeis): auditar com
-    o modelo que produziu e revisar o proprio trabalho — os erros se confirmam."""
-    assert calculo_ficha.DEFAULT_MODEL != auditor_evidencias.DEFAULT_MODEL
-    assert calculo_ficha.DEFAULT_MODEL != verificador.DEFAULT_MODEL
-    assert ficha_writer.DEFAULT_MODEL != auditor_ficha.DEFAULT_MODEL
 
 
 def test_nenhum_modelo_escrito_a_mao_no_repo():

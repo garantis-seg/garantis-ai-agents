@@ -35,13 +35,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 
-#: Modelo do CALCULADOR: o papel no registro do shared. Um calculo que vira
-#: garantia bilionaria nao roda em flash-lite — foi o default do V3
-#: (`optimize_cost`) e a economia apareceu como erro de 3x. O registro mantem o
-#: auditor (`ficha_auditoria_evidencias`) de familia DIFERENTE: dois erros
-#: correlacionados do mesmo modelo se confirmariam mutuamente. Sem env: uma 2a
-#: fonte diverge do papel.
-DEFAULT_MODEL = model_for("ficha_calculo")
+DEFAULT_MODEL = model_for("ficha_calculo")  # o porque do modelo e o anti-conluio: no ROLES
 
 #: Grafo grande e sinal de caso mal decomposto, e o custo de validar explode.
 MAX_CELULAS = 120
