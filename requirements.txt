@@ -104,7 +104,7 @@ pypdf>=4.0.0
 # ⚠️ Bump ATOMICO com o `papel` do `ProcessoAdminCitado` deste PR.
 # 1.729.0: os agents da ficha leem o modelo do papel (llm_models.ROLES); abaixo dela o
 # ROLES tem o par redator x auditor de texto INVERTIDO em relacao a prod.
-garantis-shared==1.729.0
+garantis-shared==1.730.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
