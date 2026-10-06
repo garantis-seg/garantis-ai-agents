@@ -106,7 +106,7 @@ pypdf>=4.0.0
 # ROLES tem o par redator x auditor de texto INVERTIDO em relacao a prod.
 # 1.730.0: llm_models_guarda (tests/test_modelo_vem_do_papel.py) e os papeis
 # peticao_confirmador / apolice_ciclo_de_vida.
-garantis-shared==1.730.0
+garantis-shared==1.731.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
