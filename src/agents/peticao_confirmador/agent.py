@@ -69,11 +69,7 @@ from .schemas import CONFIRMADOR_RESPONSE_SCHEMA
 
 logger = logging.getLogger(__name__)
 
-# ⭐⭐ O MODELO E UM PARAMETRO MEDIDO, nao uma politica -- por isso ele tem papel PROPRIO
-# e nao `engine_layer1`, que aponta pro MESMO modelo hoje mas existe pra ser trocado por
-# decisao de custo/qualidade do L1: amarrar o confirmador nele faria um bump do L1 trocar
-# o modelo desta camada em silencio, e o placar medido deixaria de descrever o que roda.
-# As 4 varreduras (POS_A/B/C + os 2 controles negativos) rodaram no modelo deste papel.
+# Papel PROPRIO, nao `engine_layer1`: o modelo e o das varreduras medidas (ver o ROLES).
 DEFAULT_MODEL = model_for("peticao_confirmador")
 DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
 

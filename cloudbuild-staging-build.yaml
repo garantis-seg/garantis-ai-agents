@@ -24,8 +24,7 @@ steps:
       - 'garantis-ai-agents-staging'
       - '--image=southamerica-east1-docker.pkg.dev/neqsti/garantis-ai-agents/api:staging-latest'
       # GEMINI_BACKEND=vertex (2026-07-20): espelha prod (cloudbuild-deploy.yaml:84) — flip do spending cap AI Studio.
-      # ⛔ Nenhuma env de modelo aqui: o modelo de cada agent sai do papel em
-      # garantis_shared.llm_models, igual a prod.
+      # ⛔ Nenhuma env de modelo: o modelo e o papel em garantis_shared.llm_models.
       - '--update-env-vars=ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
       # PAR do --update-env-vars acima, que sendo ADITIVO nunca REMOVE: env que sai
       # do repo fica viva no servico pra sempre. Padrao copiado do irmao
