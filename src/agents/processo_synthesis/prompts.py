@@ -2,7 +2,7 @@
 
 A forma do prompt, e o que muda o que se faz ao edita-lo:
 - Sem bloco "=== FORMATO DE SAIDA ===": o output e enforced via response_schema=
-  ProcessoSynthesisCard / ProbabilidadeExito em agent.py.
+  ProcessoSynthesisCard em agent.py.
 - REGRA DE LEITURA DE POLOS no TOPO, em bloco <regras_criticas> XML (combate
   Lost-in-the-Middle), e <lembrete_final> no fim como recency anchor.
 - Tipo-specific blocks (FISCAL/TRABALHISTA/CIVEL) no meio — sao contextuais por
@@ -17,12 +17,6 @@ A forma do prompt, e o que muda o que se faz ao edita-lo:
 """
 
 import logging
-
-# Matriz Daycoval (Probabilidade de Exito): mora em
-# garantis_shared.engine_v6.matrices.daycoval; aqui fica so o alias do builder.
-from garantis_shared.engine_v6.matrices.daycoval import (
-    build_matriz_block_compat as _build_matriz_block,
-)
 
 from .schemas import ApoliceContextMin, MovFactSheetMin, ProcessoSynthesisRequest
 
@@ -136,74 +130,6 @@ def _render_timeline(factsheets_sorted: list, empty: str) -> str:
             "garantia, peca-pivo, peticao inicial, sinais de suspensao e as movs mais recentes.]"
         )
     return block
-
-
-def build_probabilidade_exito_prompt(req: ProcessoSynthesisRequest) -> str:
-    """Prompt FOCADO so na Probabilidade de Exito Daycoval — call B do C2.
-
-    Sem ruido das outras partes (estado_processual, decisao_vigente, etc.) —
-    LLM concentra atencao na matriz e produz output mais consistente.
-    Empirico: combinado com synthesis no mesmo prompt, gemini-2.5-flash
-    omitia prob_exito em 100% das tentativas.
-    """
-    factsheets = req.mov_factsheets or []
-    # MESMA chave (data ASC, mov_id ASC) do build_processo_synthesis_prompt e do
-    # split_movs_chronological — as 3 ordens batem (determinismo).
-    factsheets_sorted = sorted(factsheets, key=lambda f: (f.data or "", f.mov_id or ""))
-
-    # Render tudo p/ processo normal (sem cap); filtra ruido/baixa só p/ processo gigante.
-    timeline_block = _render_timeline(factsheets_sorted, "(sem movimentacoes)")
-
-    matriz_block = _build_matriz_block(req.tipo_judicial)
-
-    header_parts = [f"CNJ: {req.processo_numero}"]
-    if req.classe:
-        header_parts.append(f"Classe: {req.classe}")
-    header_parts.append(f"Tipo judicial: {req.tipo_judicial.upper()}")
-    if req.polo_passivo:
-        header_parts.append(f"Tomador (polo passivo): {req.polo_passivo}")
-    header_block = "\n  ".join(header_parts)
-
-    prompt = f"""Voce e analista juridico brasileiro especializado em SEGURO GARANTIA JUDICIAL.
-
-Sua UNICA tarefa: aplicar a Matriz Daycoval e classificar a PROBABILIDADE
-DO TOMADOR TER EXITO neste processo. Sao 4 buckets — escolha 1.
-
-=== PROCESSO ===
-  {header_block}
-
-=== TIMELINE DE FACTSHEETS (ordenados por data ASC) ===
-  {timeline_block}
-{matriz_block}
-
-=== INSTRUCOES ===
-
-1. classificacao: escolha UM bucket da matriz acima
-   (provavel | possivel | poucas_chances | remota).
-   - "provavel" exige evidencia FORTE: decisao favoravel transitada,
-     pericia/parecer favoravel no autos, jurisprudencia explicitamente firmada
-     em sentido pro-tomador documentada.
-   - "remota" exige evidencia FORTE em contrario: decisao desfavoravel
-     transitada, penhora em curso, juris predominantemente contraria.
-   - "possivel" e "poucas_chances" sao faixa cinza pra ambiguidade.
-   - **Sem evidencia suficiente: prefira "poucas_chances"** (default conservador
-     contra Baixo bias do v5), NAO "possivel" (vies otimista).
-
-2. score: ESPELHE classificacao exato.
-   provavel=1.0 | possivel=0.7 | poucas_chances=0.4 | remota=0.0001
-
-3. criterios_aplicados: lista de strings com bullets LITERAIS copiados da
-   matriz {req.tipo_judicial.upper()} acima. Minimo 1, max 4. NAO invente
-   criterios.
-
-4. justificativa: 1-3 frases PT-BR amarrando os criterios ao caso concreto
-   (cite factsheet/autos quando relevante).
-
-Output: JSON estruturado conforme schema ProbabilidadeExito (enforced via
-response_schema do Gemini — nao precisa formato textual no prompt).
-"""
-    _log_prompt_size("prob_exito", req.processo_numero, prompt, len(factsheets_sorted))
-    return prompt
 
 
 def _summarize_factsheet(fs: MovFactSheetMin) -> str:
@@ -422,61 +348,6 @@ def _build_tipo_specific_block(tipo: str | None) -> str:
     return _TIPO_RULES_CIVEL
 
 
-def _clip_head_tail(text: str, *, head: int, tail: int) -> str:
-    """Clip preservando inicio (materia/tese) + fim (dispositivo) da ementa.
-
-    O dispositivo (provido/improvido/nega-se) — o sinal de QUEM GANHOU — costuma
-    vir no FIM da ementa: truncar so o head joga o resultado fora. Se cabe inteiro
-    (<= head+tail) retorna intacto.
-    """
-    text = text or ""
-    if len(text) <= head + tail:
-        return text
-    return f"{text[:head]} […] {text[-tail:]}"
-
-
-def _build_juris_externa_block(je) -> str:
-    """Renderiza jurisprudencia externa (provider jurisprudencias.ai), a fonte
-    jurisprudencial unica do L2.
-
-    Quando JURISPRUDENCE_PATH_ENABLED=off, este field eh None upstream e este
-    helper nao eh chamado (caller short-circuita). Quando present:
-    header + tally + top 3 ementas (process_number + publication_date +
-    excerpt curto + url). LLM deve emit risco_jurisprudencial baseado nele.
-    """
-    if je is None:
-        # Should not be reached — caller checks before invocation. Guard so
-        # mudancas upstream no schema nao quebrarem byte-identical em off.
-        return "(sem jurisprudencia externa — flag off ou tribunal sem mapping)"
-    lines = []
-    parts = []
-    if je.tribunal:
-        parts.append(f"tribunal={je.tribunal}")
-    if je.resultado_majoritario:
-        parts.append(f"resultado={je.resultado_majoritario}")
-    if je.n_hits is not None:
-        parts.append(f"n_hits={je.n_hits}")
-    if je.cached is not None:
-        parts.append(f"cached={je.cached}")
-    lines.append("  " + " | ".join(parts) if parts else "  (sem metadata)")
-    top = je.top_decisions or []
-    if top:
-        lines.append("  Top 3 ementas (provider):")
-        for i, d in enumerate(top[:3], start=1):
-            pn = d.get("process_number") or "?"
-            pub = d.get("publication_date") or "?"
-            excerpt = (d.get("excerpt") or "").strip().replace("\n", " ")
-            # O DISPOSITIVO (provido/improvido — quem ganhou) vem no FIM da ementa;
-            # cap-no-head jogava o resultado fora. head+tail preserva materia +
-            # dispositivo. Provider devolve ~600-900 chars => na pratica entra
-            # inteira; head+tail so morde outlier longo.
-            excerpt = _clip_head_tail(excerpt, head=700, tail=400)
-            lines.append(f"    [{i}] {pn} ({pub}): {excerpt}")
-    else:
-        lines.append("  (sem ementas retornadas pelo provider)")
-    return "\n".join(lines)
-
-
 def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     """Build prompt que agrega mov_factsheets + apolice context.
 
@@ -510,33 +381,20 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     header_block = "\n  ".join(header_lines)
 
     tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
-    # Jurisprudencia: fonte UNICA = provider externo jurisprudencias.ai
-    # (jurisprudencia_externa), e a juris VIVA entra SO via risk_decomposition_section
-    # (risco_jurisprudencial, 4 valores do provider). `tese_juris_section` fica vazio:
+    # Jurisprudencia: nenhuma fonte; o risco_jurisprudencial vem so do
+    # risk_decomposition_section. `tese_juris_section` fica vazio:
     # ⛔ bloco juris interno ou glossario em <regras_criticas> duplicaria a contagem e
     # empurraria o LEGACY risco_processo_intermediario.
     tese_juris_section = ""
 
-    # Bloco "Decomposicao Orthogonal" SEMPRE renderizado (independente da flag
-    # JURISPRUDENCE_PATH_ENABLED): forca o LLM a emitir risco_factual +
-    # risco_jurisprudencial separados em TODOS os cascades. Sem provider disponivel,
-    # o LLM emite Indeterminado.
-    juris_externa_header = ""
-    if req.jurisprudencia_externa is not None:
-        juris_externa_header = (
-            "\n=== JURISPRUDENCIA EXTERNA (provider jurisprudencias.ai) ===\n"
-            + _build_juris_externa_block(req.jurisprudencia_externa)
-        )
-
-    juris_sources_clause = (
-        "jurisprudencia_externa PROVIDER (acima)"
-        if req.jurisprudencia_externa is not None
-        else "(NENHUMA fonte juris disponivel — emit risco_jurisprudencial=Indeterminado)"
-    )
+    # Bloco "Decomposicao Orthogonal" SEMPRE renderizado: forca o LLM a emitir
+    # risco_factual + risco_jurisprudencial separados em TODOS os cascades. Sem fonte de
+    # juris, o LLM emite Indeterminado. ⛔ Mexer neste texto muda a saida do LLM (e a seed,
+    # que deriva do prompt).
+    juris_sources_clause = "(NENHUMA fonte juris disponivel — emit risco_jurisprudencial=Indeterminado)"
 
     risk_decomposition_section = (
-        juris_externa_header
-        + "\n\nINSTRUCAO — DECOMPOSICAO ORTHOGONAL (Architecture D, sempre emit):\n"
+        "\n\nINSTRUCAO — DECOMPOSICAO ORTHOGONAL (Architecture D, sempre emit):\n"
         "  - risco_factual:        derive APENAS do estado processual + tier +\n"
         "                          decisao_vigente + lifecycle (Matriz Daycoval pura).\n"
         "                          IGNORE jurisprudencia. Mesma logica que voce usaria\n"

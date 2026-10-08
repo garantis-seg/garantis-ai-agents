@@ -1,14 +1,10 @@
 """Processo Synthesis Agent - engine v6_meritos camada 2.
 
-Faz 2 LLM calls em paralelo:
-- Call A: synthesis tradicional (estado_processual, decisao_vigente, etc.).
-- Call B: probabilidade_exito Daycoval (matriz per tipo_judicial).
-
-Merge no card final. Empirico: combinado num so prompt, gemini-2.5-flash
-omitia prob_exito em 100% das tentativas.
+Faz 1 LLM call: a synthesis (estado_processual, decisao_vigente, etc.). O card sai com
+`probabilidade_exito` VAZIO, que o L3 trata como sem-sinal e decide pela Matriz de Risco.
+⛔ Uma 2a call por processo multiplica o gasto da cascade (guarda: tests/test_l2_uma_call.py).
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -25,7 +21,7 @@ from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT, seed_for
 from .chunking import reduce_processo_synthesis_cards, split_movs_chronological
-from .prompts import build_probabilidade_exito_prompt, build_processo_synthesis_prompt
+from .prompts import build_processo_synthesis_prompt
 from .schemas import (
     DecisaoVigenteRich,
     ProbabilidadeExito,
@@ -62,7 +58,7 @@ async def classify_processo_synthesis(
     provider: str = DEFAULT_PROVIDER,
     _no_chunk: bool = False,
 ) -> dict:
-    """Synthesize a processo + classify probabilidade_exito (2 LLM calls em paralelo).
+    """Synthesize a processo (1 LLM call).
 
     Processo GIGANTE (render dos movs > L2_CHUNK_CHARS) entra no chunk gate: split em
     lotes cronológicos → map-reduce paralelo (cada lote re-entra com _no_chunk=True). O
@@ -70,9 +66,9 @@ async def classify_processo_synthesis(
 
     Returns:
         {"card": ProcessoSynthesisCard.model_dump() | error_dict,
-         "raw_response": {"synthesis": ..., "prob_exito": ...},
-         "llm_raw_prompt": {"synthesis": str, "prob_exito": str},
-         "usage": dict (somando tokens dos 2 calls)}
+         "raw_response": {"synthesis": ...},
+         "llm_raw_prompt": {"synthesis": str},
+         "usage": dict}
     """
     if isinstance(request, dict):
         request = ProcessoSynthesisRequest(**request)
@@ -81,8 +77,8 @@ async def classify_processo_synthesis(
 
     # CHUNK GATE: processo GIGANTE (render dos movs > L2_CHUNK_CHARS) vira 1 prompt único
     # lento demais → estoura o TIMEOUT_LAYER2_S do worker → retry/loop. Split em lotes
-    # CRONOLÓGICOS → classifica cada lote em PARALELO (_no_chunk=True → caminho normal de 2
-    # calls sobre <= _L2_BATCH_MAX_MOVS movs, prompt pequeno/rápido) → reduce por campo.
+    # CRONOLÓGICOS → classifica cada lote em PARALELO (_no_chunk=True → caminho normal, 1
+    # call sobre <= _L2_BATCH_MAX_MOVS movs, prompt pequeno/rápido) → reduce por campo.
     # Lê COMPLETO sem timeout. Roda DENTRO do 1 HTTP do worker (o worker vê 1 resposta → step DBOS é 1 só →
     # replay-safe). Processo normal: split retorna None → caminho quente byte-idêntico.
     if not _no_chunk:
@@ -112,87 +108,30 @@ async def classify_processo_synthesis(
                 )
                 if card.get("confianca") is not None:
                     card["confianca"] = round(card["confianca"] * n_ok / n_var, 3)
-            # L2 tipa raw_response/llm_raw_prompt como dict {synthesis, prob_exito} (a route
+            # L2 tipa raw_response/llm_raw_prompt como dict {synthesis} (a route
             # ProcessoSynthesisResponse EXIGE dict). O framework devolve marker string →
             # embrulha pro shape do L2 (senão a serialização da response 500a).
-            marker_raw = result.get("raw_response")
-            marker_prompt = result.get("llm_raw_prompt")
-            result["raw_response"] = {"synthesis": marker_raw, "prob_exito": marker_raw}
-            result["llm_raw_prompt"] = {"synthesis": marker_prompt, "prob_exito": marker_prompt}
+            result["raw_response"] = {"synthesis": result.get("raw_response")}
+            result["llm_raw_prompt"] = {"synthesis": result.get("llm_raw_prompt")}
             # Condicao A: projeta os fatos ECHO no card REDUZIDO usando os movs COMPLETOS
             # (request.mov_factsheets), nao os subsets dos chunks.
             _project_decisao_facts(result.get("card"), request.mov_factsheets)
             return result
 
-    llm_provider = create_provider(provider)
+    synthesis_result = await _call_synthesis(create_provider(provider), request, model, provider)
 
-    synthesis_task = _call_synthesis(llm_provider, request, model, provider)
-
-    # Exito-gate (flag EXITO_GATED_ON_JURIS: default OFF no codigo, ligada em prod pelo
-    # `cloudbuild-deploy.yaml`). A probabilidade de exito (Matriz Daycoval, call B) so
-    # agrega valor quando ha jurisprudencia REAL; sem sinal de juris ela vira ~redundante
-    # com o risco_factual. Com a flag ON e SEM sinal de juris, pulamos a call B -> card
-    # sai com probabilidade_exito vazio (L3 trata classificacao=null como sem-sinal ->
-    # decide pela Matriz de Risco/estagio).
-    n_calls = 2
-    if _exito_gate_enabled() and not _juris_has_signal(request):
-        synthesis_result = await synthesis_task
-        prob_exito_result = {
-            "raw_response": "{}",  # parseia pra ProbabilidadeExito() vazio -> sem-sinal
-            "prompt": "(exito gated: sem sinal de jurisprudencia — call B pulada)",
-            "usage": {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "cost_usd": 0.0},
-        }
-        n_calls = 1
-        logger.info(
-            "EXITO_GATED pn=%s (sem sinal juris) — call B pulada",
-            request.processo_numero,
-        )
-    else:
-        prob_exito_task = _call_probabilidade_exito(llm_provider, request, model, provider)
-        # return_exceptions=True — uma call que LEVANTA (TPM timeout/503 sob a saturação
-        # que o chunking enfrenta) não pode descartar o lote inteiro. synthesis é load-bearing
-        # (re-raise como antes); call B que levanta degrada pra prob vazio (mesmo fallback do
-        # exito-gate) preservando a synthesis boa — espelha a degradação graciosa do _parse_prob_exito.
-        synthesis_result, prob_exito_result = await asyncio.gather(
-            synthesis_task, prob_exito_task, return_exceptions=True,
-        )
-        if isinstance(synthesis_result, BaseException):
-            raise synthesis_result
-        if isinstance(prob_exito_result, BaseException):
-            if not isinstance(prob_exito_result, Exception):
-                raise prob_exito_result  # CancelledError etc — não engole
-            logger.warning(
-                "prob_exito RAISED pn=%s: %r — card sai com probabilidade_exito vazio",
-                request.processo_numero, prob_exito_result,
-            )
-            prob_exito_result = {
-                "raw_response": "{}",
-                "prompt": "(prob_exito raised — degradado pra vazio)",
-                "usage": {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "cost_usd": 0.0},
-            }
-            n_calls = 1
-
-    card_data = _merge_results(request, synthesis_result, prob_exito_result)
+    card_data = _merge_results(request, synthesis_result)
     # Condicao A: projeta os fatos ECHO SO no outer call (nao nos sub-calls _no_chunk=True,
     # que veem subsets de movs). Proc normal: _no_chunk=False -> projeta com os movs completos.
     if not _no_chunk:
         _project_decisao_facts(card_data, request.mov_factsheets)
-    usage = _merge_usage(
-        synthesis_result["usage"], prob_exito_result["usage"], model, provider, calls=n_calls,
-    )
 
     return {
         "card": card_data,
-        "raw_response": {
-            "synthesis": synthesis_result["raw_response"],
-            "prob_exito": prob_exito_result["raw_response"],
-        },
-        "llm_raw_prompt": {
-            "synthesis": synthesis_result["prompt"],
-            "prob_exito": prob_exito_result["prompt"],
-        },
+        "raw_response": {"synthesis": synthesis_result["raw_response"]},
+        "llm_raw_prompt": {"synthesis": synthesis_result["prompt"]},
         "prompt_version": PROMPT_VERSION,
-        "usage": usage,
+        "usage": _usage_da_call(synthesis_result["usage"], model, provider),
     }
 
 
@@ -268,25 +207,8 @@ def _project_decisao_facts(card, mov_factsheets) -> None:
         logger.warning("L2_PROJECT_FACTS_FAIL: %r", e)
 
 
-def _exito_gate_enabled() -> bool:
-    """Flag EXITO_GATED_ON_JURIS (default OFF; prod liga no `cloudbuild-deploy.yaml`).
-    ON => pula a call B de probabilidade_exito quando NAO ha sinal de jurisprudencia
-    (deixa a Matriz de Risco/estagio decidir)."""
-    return os.environ.get("EXITO_GATED_ON_JURIS", "").strip().lower() in ("1", "true", "yes", "on")
-
-
-def _juris_has_signal(request: ProcessoSynthesisRequest) -> bool:
-    """True se jurisprudencia_externa traz resultado DIRECIONAL (nao None/vazio/
-    'indeterminado'). E o gate de exito — sem sinal direcional, a
-    probabilidade_exito nao tem juris real pra agregar."""
-    je = request.jurisprudencia_externa
-    if je is None:
-        return False
-    return (je.resultado_majoritario or "").strip().lower() not in ("", "indeterminado")
-
-
 async def _call_synthesis(llm_provider, request, model, provider) -> dict:
-    """Call A — synthesis sem prob_exito.
+    """A call do L2.
 
     response_schema=ProcessoSynthesisCard (Gemini structured output nativo). O schema
     tem Optional[str] em campos enum (sentido/instancia/natureza) — descriptions ricas
@@ -313,35 +235,8 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
     return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
 
 
-async def _call_probabilidade_exito(llm_provider, request, model, provider) -> dict:
-    """Call B — probabilidade_exito Daycoval focused.
-
-    response_schema=ProbabilidadeExito (Gemini structured output).
-
-    Determinismo: temperature=0.0 + thinking_budget=0.
-    """
-    prompt = build_probabilidade_exito_prompt(request)
-    # seed determinístico (proc + prompt da call B) — mesma reprodutibilidade da call A.
-    seed = seed_for("probabilidade_exito", request.processo_numero, prompt)
-    response: LLMResponse = await llm_provider.agenerate(
-        prompt=prompt, model=model, temperature=0.0,
-        response_schema=ProbabilidadeExito,
-        thinking_budget=0,
-        seed=seed,
-    )
-    return {"raw_response": response.text, "prompt": prompt, "usage": _usage_from(response)}
-
-
-def _merge_results(
-    request: ProcessoSynthesisRequest,
-    synthesis_result: dict,
-    prob_exito_result: dict,
-) -> dict:
-    """Parse + merge synthesis (call A) + prob_exito (call B) num card final.
-
-    Defensive: se call A falhar, retorna error_dict. Se call B falhar, card
-    synthesis sai com probabilidade_exito vazio (telemetria warning).
-    """
+def _merge_results(request: ProcessoSynthesisRequest, synthesis_result: dict) -> dict:
+    """Parse da synthesis num card final. Defensive: parse que falha => error_dict."""
     synthesis_raw = synthesis_result["raw_response"]
     try:
         parsed = parse_llm_json(synthesis_raw)
@@ -356,9 +251,10 @@ def _merge_results(
         if not parsed.get("movs_processed"):
             parsed["movs_processed"] = len(request.mov_factsheets or [])
 
-        parsed["probabilidade_exito"] = _parse_prob_exito(
-            request, prob_exito_result["raw_response"],
-        )
+        # ⛔ SEMPRE vazio, mesmo que o LLM o preencha: o campo esta no response_schema da call
+        # (ProcessoSynthesisCard), e o prompt manda NAO inclui-lo. O L3 le classificacao=null
+        # como sem-sinal.
+        parsed["probabilidade_exito"] = ProbabilidadeExito().model_dump()
 
         card = ProcessoSynthesisCard(**parsed)
         return card.model_dump()
@@ -373,30 +269,6 @@ def _merge_results(
         }
 
 
-def _parse_prob_exito(
-    request: ProcessoSynthesisRequest, raw_response: str,
-) -> dict:
-    """Parse call B output. Defaults vazios se LLM omitiu/falhou — caller
-    (merito_synthesis aggregator) trata classificacao=null como sem-sinal."""
-    try:
-        parsed = parse_llm_json(raw_response)
-        pe = ProbabilidadeExito(**parsed)
-        result = pe.model_dump()
-        if not result.get("classificacao"):
-            logger.warning(
-                "probabilidade_exito pn=%s OMITIDO pelo LLM (tipo=%s, movs=%d)",
-                request.processo_numero, request.tipo_judicial,
-                len(request.mov_factsheets or []),
-            )
-        return result
-    except (json.JSONDecodeError, Exception) as e:
-        logger.warning(
-            "prob_exito parse failed pn=%s: %s | raw_first_400=%s",
-            request.processo_numero, repr(e), (raw_response or "")[:400],
-        )
-        return ProbabilidadeExito().model_dump()
-
-
 def _usage_from(response: LLMResponse) -> dict:
     return {
         "input_tokens": response.input_tokens or 0,
@@ -406,25 +278,18 @@ def _usage_from(response: LLMResponse) -> dict:
     }
 
 
-def _merge_usage(
-    usage_a: dict, usage_b: dict, model: str, provider: str, calls: int = 2,
-) -> dict:
-    """Soma os 2 calls + adiciona model/provider. `calls` reflete quantas LLM calls
-    rodaram de fato (1 quando o exito-gate pula a call B)."""
+def _usage_da_call(usage: dict, model: str, provider: str) -> dict:
+    """O usage da call + model/provider. As chaves sao as de quando havia 2 calls (os
+    consumidores leem `calls` e `total_tokens`)."""
     return {
-        "input_tokens": usage_a["input_tokens"] + usage_b["input_tokens"],
-        "output_tokens": usage_a["output_tokens"] + usage_b["output_tokens"],
-        "total_tokens": (
-            usage_a["input_tokens"] + usage_b["input_tokens"]
-            + usage_a["output_tokens"] + usage_b["output_tokens"]
-        ),
-        # .get: os stubs degradados (exito-gate / call B que levantou) sao dicts
-        # literais — chave nova nao pode virar KeyError se um deles for esquecido.
-        "cached_tokens": usage_a.get("cached_tokens", 0) + usage_b.get("cached_tokens", 0),
-        "cost_usd": usage_a["cost_usd"] + usage_b["cost_usd"],
+        "input_tokens": usage["input_tokens"],
+        "output_tokens": usage["output_tokens"],
+        "total_tokens": usage["input_tokens"] + usage["output_tokens"],
+        "cached_tokens": usage.get("cached_tokens", 0),
+        "cost_usd": usage["cost_usd"],
         "model": model,
         "provider": provider,
-        "calls": calls,
+        "calls": 1,
         # L2 sempre text — não tem Vision path (consume cards L1, não docs raw).
         "model_variant": MODEL_VARIANT_TEXT,
     }

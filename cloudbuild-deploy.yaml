@@ -184,18 +184,13 @@ steps:
       # (ex. Petrobras 25 procs) o fan-out de L1 satura o rate-limiter e o 1 call de L3
       # no fim não pega slot em 60s → acquire TimeoutError → 500 → engine desiste após
       # retries → merito fica indeterminado. 180s (< Cloud Run --timeout 300) dá folga.
-      # EXITO_GATED_ON_JURIS=on (2026-06-22): gate de custo do L2 — pula a Call B
-      # (probabilidade_exito) quando NAO ha sinal de jurisprudencia. Salvaguarda
-      # resiliente-sem-juris + economia. Estava como --update-env-vars temp (rev
-      # 00233); persistido aqui pra nao resetar no proximo deploy. Lido por
-      # agents/processo_synthesis/agent.py::_exito_gate_enabled (default OFF no codigo).
       # GEMINI_BACKEND=vertex (2026-07-18): Gemini via Vertex AI (aiplatform) em vez do
       # AI Studio, que bateu o tier spending cap (US$250/mes, imposto pelo Google;
       # creditos GCP nao cobrem o AI Studio). Vertex = mesmos modelos, mesmo preco/token,
       # sem esse teto. Lido por garantis_shared.gemini_backend (default aistudio no codigo).
       # Reverter: trocar pra aistudio aqui + redeploy. Requer SA com roles/aiplatform.user.
       # ⛔ Nenhuma env de modelo: o modelo e o papel em garantis_shared.llm_models (guarda: tests/test_modelo_vem_do_papel.py).
-      - 'DEFAULT_PROMPT_VERSION=v3,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,L1_DECISAO_EXIGE_DISPOSITIVO=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,EXITO_GATED_ON_JURIS=on,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
+      - 'DEFAULT_PROMPT_VERSION=v3,BLOQUEIO_PROB_EXITO_ENABLED=true,L1_NEUTRAL_ENABLED=true,VISION_L1_ENABLED=true,L1_DECISAO_EXIGE_DISPOSITIVO=true,GEMINI_RATE_LIMIT_TIMEOUT_S=180,ENGINE_LLM_SEED_ENABLED=true,GEMINI_BACKEND=vertex'
       # Fase 3 vertex-sem-key (2026-07-21, OK Elton): GOOGLE_API_KEY=GEMINI_API_KEY:latest
       # REMOVIDO — auth e ADC do service account (GEMINI_BACKEND=vertex; provado em staging
       # 2026-07-21 rodando sem key nenhuma). --clear-secrets (e nao so tirar a flag) porque

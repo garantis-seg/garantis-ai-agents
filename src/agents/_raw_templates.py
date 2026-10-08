@@ -75,10 +75,7 @@ def _mov_factsheet_template() -> str:
 
 
 def _processo_synthesis_template() -> str:
-    from .processo_synthesis.prompts import (
-        build_probabilidade_exito_prompt,
-        build_processo_synthesis_prompt,
-    )
+    from .processo_synthesis.prompts import build_processo_synthesis_prompt
     from .processo_synthesis.schemas import (
         ApoliceContextMin,
         MovFactSheetMin,
@@ -87,7 +84,7 @@ def _processo_synthesis_template() -> str:
 
     # tipo_judicial eh Literal — nao pode ser "{{...}}". Renderizamos a variante
     # 'civel' (default). Instrucoes universais nao mudam; soh o bloco TIPO-
-    # SPECIFIC + matriz Daycoval. A UI avisa que fiscal/trabalhista trocam isso.
+    # SPECIFIC. A UI avisa que fiscal/trabalhista trocam isso.
     req = ProcessoSynthesisRequest(
         processo_numero="{{processo_numero}}",
         classe="{{classe}}",
@@ -110,17 +107,7 @@ def _processo_synthesis_template() -> str:
             )
         ],
     )
-    synthesis = build_processo_synthesis_prompt(req)
-    prob_exito = build_probabilidade_exito_prompt(req)
-    return (
-        synthesis
-        + "\n\n"
-        + "=" * 78
-        + "\n=== PROMPT 2/2 — PROBABILIDADE DE EXITO (Matriz Daycoval, call separada) ===\n"
-        + "=" * 78
-        + "\n\n"
-        + prob_exito
-    )
+    return build_processo_synthesis_prompt(req)
 
 
 def _merito_synthesis_template() -> str:

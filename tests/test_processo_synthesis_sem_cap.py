@@ -7,10 +7,7 @@ do censo —, instrucoes novas (peticao + split por doc), instrucoes mortas de
 """
 from __future__ import annotations
 
-from src.agents.processo_synthesis.prompts import (
-    build_probabilidade_exito_prompt,
-    build_processo_synthesis_prompt,
-)
+from src.agents.processo_synthesis.prompts import build_processo_synthesis_prompt
 from src.agents.processo_synthesis.schemas import (
     MovFactSheetMin,
     ProcessoSynthesisRequest,
@@ -81,15 +78,6 @@ def test_resumo_ato_sem_truncagem():
     longo = "x" * 1500
     p = build_processo_synthesis_prompt(_req([_fs("uuid-1", "2024-01-01", resumo=longo)]))
     assert longo in p
-
-
-def test_prob_exito_sem_cap():
-    fs = [
-        _fs(f"uuid-{i:04d}", "2024-01-01", resumo=f"ato numero {i}")
-        for i in range(60)
-    ]
-    p = build_probabilidade_exito_prompt(_req(fs))
-    assert all(f"ato numero {i}" in p for i in range(60))
 
 
 # ── Filtro de relevância p/ processo GIGANTE (2026-06-20, insight Elton) ──
