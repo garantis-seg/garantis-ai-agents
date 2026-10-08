@@ -151,55 +151,6 @@ class LifecycleGarantiaEvent(BaseModel):
     motivo_recusa: Optional[str] = None
 
 
-class JurisprudenciaExternaMin(BaseModel):
-    """Jurisprudencia externa da tese × tribunal via provider jurisprudencias.ai.
-
-    Architecture D PR3 (2026-05-31). Populated quando flag JURISPRUDENCE_PATH_ENABLED
-    != off + merito tem tese_canonica_id + tribunal cabe no provider (11 cortes).
-    None quando flag off OR tese unavailable OR tribunal sem mapping (graceful).
-
-    `top_decisions` traz ate 3 ementas (process_number / publication_date / excerpt /
-    url) que o prompt L2 pode citar no field justificativa. cached=True quando veio
-    do cache TTL 30d (sem chamar provider). source='provider' fixo em V1.
-    """
-
-    tribunal: Optional[str] = Field(
-        default=None,
-        description="Tribunal interno (TJSP/STJ/STF/TRF3/...) — mapeado pro provider court_id.",
-    )
-    resultado_majoritario: Optional[str] = Field(
-        default=None,
-        description=(
-            "Heuristic tally: 'pro_contribuinte' (provider mostra majoritariamente "
-            "favoravel ao Tomador) | 'pro_fazenda' (majoritariamente desfavoravel) | "
-            "'dividida' (ambas direcoes presentes) | 'indeterminado' (n_hits=0 ou "
-            "sinal fraco). V1 baseado em regex em excerpt — tuning iterativo "
-            "pos-shadow window."
-        ),
-    )
-    n_hits: Optional[int] = Field(
-        default=None,
-        description="Numero de acordaos retornados pela query (excludente do page>0).",
-    )
-    top_decisions: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description=(
-            "Top 3 ementas: cada item tem process_number, publication_date, excerpt, url. "
-            "Use pra citar evidencia na justificativa do risco_jurisprudencial."
-        ),
-    )
-    source: Optional[str] = Field(
-        default="provider",
-        description="Origem da informacao. V1 sempre 'provider' (jurisprudencias.ai).",
-    )
-    cached: Optional[bool] = Field(
-        default=None,
-        description="True quando veio do cache TTL 30d. False quando fresh provider call.",
-    )
-
-    model_config = {"extra": "ignore"}
-
-
 class EvidenceArtifact(BaseModel):
     """Citacao de factsheet/autos que sustenta a sintese L2.
 
@@ -347,9 +298,9 @@ class ProcessoSynthesisCard(BaseModel):
     )
 
     # Campos 4b/4c: Architecture D — orthogonal risk paths. O prompt pede os dois SEMPRE
-    # (o bloco "Decomposicao Orthogonal" e renderizado independente da flag
-    # JURISPRUDENCE_PATH_ENABLED); sem jurisprudencia_externa, risco_jurisprudencial sai
-    # Indeterminado. Default None pra ficar claro no audit quando o LLM nao emitiu.
+    # (o bloco "Decomposicao Orthogonal" e sempre renderizado); sem fonte de juris,
+    # risco_jurisprudencial sai Indeterminado. Default None pra ficar claro no audit quando
+    # o LLM nao emitiu.
     risco_factual: Optional[Literal[
         "Baixo", "Medio", "Alto", "Altissimo", "Indeterminado",
     ]] = Field(
@@ -514,18 +465,6 @@ class ProcessoSynthesisRequest(BaseModel):
     )
     mov_factsheets: list[MovFactSheetMin] = Field(default_factory=list)
     apolices: list[ApoliceContextMin] = Field(default_factory=list)
-    # Jurisprudencia externa via provider jurisprudencias.ai — a fonte unica.
-    # Populated quando flag JURISPRUDENCE_PATH_ENABLED != off + merito tem
-    # tese_canonica_id + tribunal cabe no provider. None em qualquer outro caso
-    # (graceful — prompt L2 nao injeta bloco extra, byte-identical).
-    jurisprudencia_externa: Optional[JurisprudenciaExternaMin] = Field(
-        default=None,
-        description=(
-            "Heuristic do provider jurisprudencias.ai pra (tese × tribunal). "
-            "Substitui curadoria interna apos shadow window 14d + drop PR5. "
-            "null quando flag off OR tese unavailable OR tribunal sem mapping."
-        ),
-    )
     model: Optional[str] = None
     provider: Optional[str] = None
 
@@ -549,7 +488,7 @@ class ProcessoSynthesisCardRich(ProcessoSynthesisCard):
 
 class ProcessoSynthesisResponse(BaseModel):
     card: ProcessoSynthesisCardRich  # RICO: preserva os 3 campos echo na serializacao da rota
-    # dict[str,str], uma chave por LLM call: {"synthesis": ..., "prob_exito": ...}
+    # dict[str,str], uma chave por LLM call: {"synthesis": ...}
     raw_response: Optional[dict[str, Any]] = None
     llm_raw_prompt: Optional[dict[str, Any]] = None
     prompt_version: Optional[str] = None
