@@ -566,17 +566,17 @@ class PeticaoExtractCardV4(MovFactSheetCardV4):
     debito_ou_credito: Optional[Literal["debito", "credito", "incerto"]] = Field(
         default=None,
         description=(
-            "O que esta ação pede, quanto a dinheiro entre a parte privada e o fisco ou o "
-            "credor. 'debito' = a ação discute um DÉBITO da parte privada: algo que o fisco ou "
-            "o credor cobra ou pode cobrar dela (execução fiscal, embargos, anulatória de "
-            "débito, lançamento ou auto de infração, mandado de segurança ou tutela contra "
-            "cobrança ou exigência, garantia oferecida antes da execução, compensação NÃO "
-            "homologada). 'credito' = a ação PEDE um crédito da parte privada, e nada é "
-            "cobrado dela nesta ação (restituição, repetição de indébito, ressarcimento, "
-            "anulatória da decisão que NEGOU restituição ou ressarcimento). Pedido MISTO "
-            "(pede o crédito E discute um débito) = 'debito'. 'incerto' = a "
-            "peça não deixa dizer. 'crédito tributário' é o crédito do FISCO, logo o DÉBITO "
-            "da parte privada. Responda pelo PEDIDO, nunca pelo resultado provável. null se "
-            "o documento não é a petição inicial."
+            "Existe DÉBITO A GARANTIR nesta ação? 'debito' = o fisco ou o credor COBRA, ou pode "
+            "cobrar, da parte privada um valor ainda NÃO PAGO, e esta ação o discute ou o "
+            "garante (execução fiscal, embargos, anulatória de débito, lançamento ou auto de "
+            "infração, mandado de segurança ou tutela contra cobrança ou exigência, garantia "
+            "oferecida antes da execução, compensação NÃO homologada), inclusive no pedido "
+            "misto, que também pede um crédito. 'credito' = a ação PEDE dinheiro de volta para "
+            "a parte privada (restituição, repetição de indébito, ressarcimento, anulatória da "
+            "decisão que NEGOU restituição ou ressarcimento), e nada lhe é cobrado: débito JÁ "
+            "EXTINTO (pago, ou compensado com a compensação homologada) que ela pede para "
+            "cancelar não é cobrança. 'incerto' = a peça não deixa dizer. 'crédito tributário' "
+            "é o crédito do FISCO, logo o DÉBITO da parte privada. Responda pelo PEDIDO, nunca "
+            "pelo resultado provável. null se o documento não é a petição inicial."
         ),
     )
