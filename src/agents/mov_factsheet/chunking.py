@@ -33,6 +33,7 @@ CHUNK_SIZE = 180_000   # < 200k (margem pro marcador + mov + outros docs no prom
                        # 200k de prompt é o teto comprovado dos 60s)
 _RESUMO_CAP = 3000
 _REL = {"alta": 3, "media": 2, "baixa": 1, "ruido": 0}
+_DC_RANK = {"debito": 3, "credito": 2, "incerto": 1}
 
 
 def split_large_peca_variants(docs: list[DocAnexado]) -> list[list[DocAnexado]] | None:
@@ -103,7 +104,9 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
       evento_garantia = 1o chunk com evento != nenhum; valores = max não-null/campo;
       resumo = concat não-ruido (dedup); cdas/citados = union;
       admin citados = union com o PAPEL consolidado sobre os chunks (`_union_admin`);
-      valor_causa_declarado/evidencia = o PAR do último chunk que declarou.
+      valor_causa_declarado/evidencia = o PAR do último chunk que declarou;
+      debito_ou_credito/evidencia = o PAR do chunk de resposta mais forte (debito > credito >
+      incerto), não o último.
     Derivados (categoria/status/...) NÃO são reduzidos — re-derive no caller.
     """
     assert cards, "reduce sem cards"
@@ -167,4 +170,12 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
         vc = next((c for c in reversed(cards) if c.get("valor_causa_declarado") is not None), {})
         out["valor_causa_declarado"] = vc.get("valor_causa_declarado")
         out["valor_causa_evidencia"] = vc.get("valor_causa_evidencia")
+        # Débito ou crédito: o mesmo furo, mas a regra é por CONTEÚDO, não por posição — o
+        # último pedaço pode ser só anexos ('incerto') ou o formulário do pedido de crédito.
+        # 'debito' vence 'credito', que vence 'incerto' (a mesma regra do conexo: 1 débito
+        # basta), e o par sai de UM pedaço, de preferência o que tem evidência.
+        dc = max(cards, key=lambda c: (_DC_RANK.get(c.get("debito_ou_credito"), 0),
+                                       bool((c.get("debito_ou_credito_evidencia") or "").strip())))
+        out["debito_ou_credito"] = dc.get("debito_ou_credito")
+        out["debito_ou_credito_evidencia"] = dc.get("debito_ou_credito_evidencia")
     return out
