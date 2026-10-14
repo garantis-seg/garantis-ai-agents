@@ -600,7 +600,8 @@ PARTE 1 — CLASSIFICAR e produzir o FactSheet:
   pedido misto, que também pede um crédito; 'credito' = a ação PEDE dinheiro de volta para a
   parte privada (restituição, repetição de indébito, ressarcimento, anulatória da decisão que
   NEGOU restituição), e nada lhe é cobrado — débito JÁ EXTINTO (pago, ou compensado com a
-  compensação homologada) que ela pede para cancelar não é cobrança; 'incerto' = a peça não
+  compensação homologada) que ela pede para cancelar, só para liberar o crédito, não é
+  cobrança; 'incerto' = a peça não
   deixa dizer. ⚠️ 'crédito tributário' é o DÉBITO da parte privada. Copie em
   `debito_ou_credito_evidencia` o trecho LITERAL (~200 chars) do PEDIDO — sem ele a resposta é
   DESCARTADA pela integração.

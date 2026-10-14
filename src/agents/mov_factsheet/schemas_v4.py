@@ -575,7 +575,8 @@ class PeticaoExtractCardV4(MovFactSheetCardV4):
             "a parte privada (restituição, repetição de indébito, ressarcimento, anulatória da "
             "decisão que NEGOU restituição ou ressarcimento), e nada lhe é cobrado: débito JÁ "
             "EXTINTO (pago, ou compensado com a compensação homologada) que ela pede para "
-            "cancelar não é cobrança. 'incerto' = a peça não deixa dizer. 'crédito tributário' "
+            "cancelar, só para liberar o crédito, não é cobrança. 'incerto' = a peça não deixa "
+            "dizer. 'crédito tributário' "
             "é o crédito do FISCO, logo o DÉBITO da parte privada. Responda pelo PEDIDO, nunca "
             "pelo resultado provável. null se o documento não é a petição inicial."
         ),

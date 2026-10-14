@@ -34,5 +34,11 @@
   "    nada lhe é cobrado. ⚠️ Débito JÁ EXTINTO (pago, ou compensado com a compensação homologada)\n    que a ação pede para cancelar ou revisar, só para liberar o crédito, NÃO é cobrança.\n",
   "    nada lhe é cobrado.\n",
   "A6 o 1P perde a regra do debito ja extinto (o caso Nestle volta a sair debito)"
+ ],
+ [
+  "src/agents/mov_factsheet/schemas_v4.py",
+  "\"cancelar, só para liberar o crédito, não é cobrança. 'incerto' = a peça não deixa \"",
+  "\"cancelar não é cobrança. 'incerto' = a peça não deixa \"",
+  "A7 a description do schema perde o limite (regra mais larga que a do 1P)"
  ]
 ]
