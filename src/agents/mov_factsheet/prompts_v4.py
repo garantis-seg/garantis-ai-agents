@@ -418,20 +418,19 @@ PARTE 1 — FactSheet da peça (campos do card):
   Quando preencher, copie em `valor_causa_evidencia` o trecho LITERAL (~120 chars) onde o
   valor é declarado, com o número como está escrito — valor sem esse trecho é DESCARTADO
   pela integração. Se a peça não declara, os dois null.
-- debito_ou_credito: o que esta ação PEDE, quanto a dinheiro entre a parte privada e o fisco
-  ou o credor. Copie em `debito_ou_credito_evidencia` o trecho LITERAL (~200 chars) do PEDIDO
-  que sustenta a resposta — resposta sem esse trecho é DESCARTADA pela integração.
-  · 'debito' — a ação discute um DÉBITO da parte privada: algo que o fisco ou o credor cobra
-    ou pode cobrar dela. Ex.: execução fiscal, embargos, anulatória de débito, lançamento ou
-    auto de infração, mandado de segurança ou tutela contra cobrança ou exigência, garantia
-    oferecida antes da execução, compensação NÃO homologada (os débitos compensados voltam a
-    ser cobrados).
-  · 'credito' — a ação PEDE um crédito da parte privada, e nada é cobrado dela nesta ação.
-    Ex.: restituição, repetição de indébito, ressarcimento, anulatória da decisão que NEGOU
-    restituição ou ressarcimento.
-  · Pedido MISTO — pede o crédito E discute um débito (ex.: anulatória do despacho que negou
-    o crédito E não homologou as compensações) — é 'debito'. Copie na evidência o trecho do
-    débito.
+- debito_ou_credito: existe DÉBITO A GARANTIR nesta ação? Copie em `debito_ou_credito_evidencia`
+  o trecho LITERAL (~200 chars) do PEDIDO que sustenta a resposta — resposta sem esse trecho é
+  DESCARTADA pela integração.
+  · 'debito' — o fisco ou o credor COBRA, ou pode cobrar, da parte privada um valor ainda NÃO
+    PAGO, e esta ação o discute ou o garante. Ex.: execução fiscal, embargos, anulatória de
+    débito, lançamento ou auto de infração, mandado de segurança ou tutela contra cobrança ou
+    exigência, garantia oferecida antes da execução, compensação NÃO homologada (os débitos
+    compensados voltam a ser cobrados). Vale também quando a ação pede um crédito E se defende
+    de uma cobrança assim (pedido misto).
+  · 'credito' — a ação PEDE dinheiro de volta para a parte privada (restituição, repetição de
+    indébito, ressarcimento, anulatória da decisão que NEGOU restituição ou ressarcimento), e
+    nada lhe é cobrado. ⚠️ Débito JÁ EXTINTO (pago, ou compensado com a compensação homologada)
+    que a ação pede para cancelar ou revisar, só para liberar o crédito, NÃO é cobrança.
   · 'incerto' — a peça não deixa dizer.
   ⚠️ 'crédito tributário' é o crédito do FISCO, ou seja, o DÉBITO da parte privada. Responda
   pelo PEDIDO da inicial, nunca pelo resultado provável.
@@ -594,13 +593,16 @@ PARTE 1 — CLASSIFICAR e produzir o FactSheet:
   Quando preencher, copie em `valor_causa_evidencia` o trecho LITERAL (~120 chars), com o
   número como está escrito — sem ele o valor é DESCARTADO pela integração.
 - debito_ou_credito: SÓ se o documento for a PETIÇÃO INICIAL (ou a emenda dela). Em QUALQUER
-  outro tipo, null, e `debito_ou_credito_evidencia` null. Na inicial: 'debito' = a ação discute
-  um DÉBITO da parte privada, algo que o fisco ou o credor cobra ou pode cobrar dela (execução
-  fiscal, embargos, anulatória de débito ou lançamento, mandado de segurança contra cobrança,
-  compensação NÃO homologada); 'credito' = a ação PEDE um crédito da parte privada, e nada é
-  cobrado dela (restituição, repetição de indébito, ressarcimento, anulatória da decisão que
-  NEGOU restituição); 'incerto' = a peça não deixa dizer. Pedido MISTO (pede o crédito E
-  discute um débito) é 'debito'. ⚠️ 'crédito tributário' é o DÉBITO da parte privada. Copie em
+  outro tipo, null, e `debito_ou_credito_evidencia` null. Na inicial: existe DÉBITO A GARANTIR?
+  'debito' = o fisco ou o credor COBRA, ou pode cobrar, da parte privada um valor ainda NÃO PAGO,
+  e esta ação o discute ou o garante (execução fiscal, embargos, anulatória de débito ou
+  lançamento, mandado de segurança contra cobrança, compensação NÃO homologada), inclusive no
+  pedido misto, que também pede um crédito; 'credito' = a ação PEDE dinheiro de volta para a
+  parte privada (restituição, repetição de indébito, ressarcimento, anulatória da decisão que
+  NEGOU restituição), e nada lhe é cobrado — débito JÁ EXTINTO (pago, ou compensado com a
+  compensação homologada) que ela pede para cancelar, só para liberar o crédito, não é
+  cobrança; 'incerto' = a peça não
+  deixa dizer. ⚠️ 'crédito tributário' é o DÉBITO da parte privada. Copie em
   `debito_ou_credito_evidencia` o trecho LITERAL (~200 chars) do PEDIDO — sem ele a resposta é
   DESCARTADA pela integração.
 

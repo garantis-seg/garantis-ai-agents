@@ -58,8 +58,19 @@ def test_as_DUAS_prompts_pedem_a_resposta_COM_evidencia(_ctx, _doc, build):
     assert "DESCARTADA" in p
     # O ponto mais traiçoeiro: o "crédito" do fisco é o débito da empresa.
     assert "'crédito tributário'" in p
-    # E o desempate do pedido que pede crédito E discute débito (o PER/DCOMP não homologado).
-    assert "MISTO" in p
+    # O desempate do pedido que pede crédito E se defende de uma cobrança (o PER/DCOMP não
+    # homologado) é 'debito'...
+    assert "pedido misto" in p
+    # ...mas o débito JÁ EXTINTO que a ação quer cancelar não é cobrança: sem esta frase, a
+    # restituição que cita os débitos compensados (o caso Nestlé) saía 'debito'.
+    assert "JÁ EXTINTO" in p and "só para liberar o crédito" in " ".join(p.split())
+
+
+def test_a_description_do_schema_diz_a_MESMA_regra_das_prompts():
+    """O schema vai no `response_schema` das 2 chamadas: uma regra mais larga aqui vale também
+    no 1P. ⛔ MUTANTE: tirar o limite "só para liberar o crédito" da description."""
+    d = " ".join(PeticaoExtractCardV4.model_fields["debito_ou_credito"].description.split())
+    assert "JÁ EXTINTO" in d and "só para liberar o crédito" in d and "pedido misto" in d
 
 
 def test_o_1X_so_responde_na_PETICAO_INICIAL(_ctx, _doc):
