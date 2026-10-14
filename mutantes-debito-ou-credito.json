@@ -1,0 +1,26 @@
+[
+ [
+  "src/agents/mov_factsheet/chunking.py",
+  "        dc = next((c for c in reversed(cards) if c.get(\"debito_ou_credito\") is not None), {})\n        out[\"debito_ou_credito\"] = dc.get(\"debito_ou_credito\")\n        out[\"debito_ou_credito_evidencia\"] = dc.get(\"debito_ou_credito_evidencia\")\n",
+  "",
+  "A1 a peca chunkada perde o par"
+ ],
+ [
+  "src/agents/mov_factsheet/chunking.py",
+  "dc = next((c for c in reversed(cards) if c.get(\"debito_ou_credito\") is not None), {})",
+  "dc = next((c for c in cards if c.get(\"debito_ou_credito\") is not None), {})",
+  "A2 o reduce pega o PRIMEIRO chunk, nao o ultimo"
+ ],
+ [
+  "src/agents/mov_factsheet/prompts_v4.py",
+  "- debito_ou_credito: SÓ se o documento for a PETIÇÃO INICIAL (ou a emenda dela).",
+  "- debito_ou_credito: se o documento for a PETIÇÃO INICIAL (ou a emenda dela).",
+  "A3 o 1X responde em qualquer documento"
+ ],
+ [
+  "src/agents/mov_factsheet/schemas_v4.py",
+  "    debito_ou_credito: Optional[Literal[\"debito\", \"credito\", \"incerto\"]] = Field(",
+  "    debito_ou_credito: Optional[Literal[\"debito\", \"credito\"]] = Field(",
+  "A4 o enum perde o incerto"
+ ]
+]
