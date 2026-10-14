@@ -549,3 +549,33 @@ class PeticaoExtractCardV4(MovFactSheetCardV4):
             "`valor_causa_declarado` for preenchido. null quando ele for null."
         ),
     )
+    # Consumidos por NOME de chave no frontend-api (`conexos_engine.garantia`), que agrega a
+    # resposta das petições do conexo na chave `existe_debito` do callback ao parceiro:
+    # renomear aqui cala a chave lá, sem erro. Aditivos e sem bump de versão, como o par do
+    # valor da causa: card sem eles = "não medido", nunca "não há débito".
+    # ⚠️ A evidência vem ANTES da resposta de propósito: sob constrained decoding a ordem dos
+    # campos é a ordem da saída, e a resposta é decidida DEPOIS do trecho que a sustenta.
+    debito_ou_credito_evidencia: Optional[str] = Field(
+        default=None,
+        description=(
+            "Trecho LITERAL (~200 chars) do PEDIDO da petição inicial (o que ela pede ao "
+            "juízo), copiado do texto, que sustenta `debito_ou_credito`. Obrigatório quando "
+            "ele for 'debito' ou 'credito'. null quando ele for 'incerto' ou null."
+        ),
+    )
+    debito_ou_credito: Optional[Literal["debito", "credito", "incerto"]] = Field(
+        default=None,
+        description=(
+            "O que esta ação pede, quanto a dinheiro entre a parte privada e o fisco ou o "
+            "credor. 'debito' = a ação discute um DÉBITO da parte privada: algo que o fisco ou "
+            "o credor cobra ou pode cobrar dela (execução fiscal, embargos, anulatória de "
+            "débito, lançamento ou auto de infração, mandado de segurança ou tutela contra "
+            "cobrança ou exigência, garantia oferecida antes da execução, compensação NÃO "
+            "homologada). 'credito' = a ação PEDE um crédito da parte privada, e nada é "
+            "cobrado dela nesta ação (restituição, repetição de indébito, ressarcimento, "
+            "anulatória da decisão que NEGOU restituição ou ressarcimento). 'incerto' = a "
+            "peça não deixa dizer. 'crédito tributário' é o crédito do FISCO, logo o DÉBITO "
+            "da parte privada. Responda pelo PEDIDO, nunca pelo resultado provável. null se "
+            "o documento não é a petição inicial."
+        ),
+    )

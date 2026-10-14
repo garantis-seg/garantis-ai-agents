@@ -103,7 +103,8 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
       evento_garantia = 1o chunk com evento != nenhum; valores = max não-null/campo;
       resumo = concat não-ruido (dedup); cdas/citados = union;
       admin citados = union com o PAPEL consolidado sobre os chunks (`_union_admin`);
-      valor_causa_declarado/evidencia = o PAR do último chunk que declarou.
+      valor_causa_declarado/evidencia = o PAR do último chunk que declarou;
+      debito_ou_credito/evidencia = o PAR do último chunk que respondeu.
     Derivados (categoria/status/...) NÃO são reduzidos — re-derive no caller.
     """
     assert cards, "reduce sem cards"
@@ -167,4 +168,8 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
         vc = next((c for c in reversed(cards) if c.get("valor_causa_declarado") is not None), {})
         out["valor_causa_declarado"] = vc.get("valor_causa_declarado")
         out["valor_causa_evidencia"] = vc.get("valor_causa_evidencia")
+        # Débito ou crédito: o mesmo furo e a mesma regra — o PEDIDO fecha a peça.
+        dc = next((c for c in reversed(cards) if c.get("debito_ou_credito") is not None), {})
+        out["debito_ou_credito"] = dc.get("debito_ou_credito")
+        out["debito_ou_credito_evidencia"] = dc.get("debito_ou_credito_evidencia")
     return out
