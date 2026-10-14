@@ -58,6 +58,8 @@ def test_as_DUAS_prompts_pedem_a_resposta_COM_evidencia(_ctx, _doc, build):
     assert "DESCARTADA" in p
     # O ponto mais traiçoeiro: o "crédito" do fisco é o débito da empresa.
     assert "'crédito tributário'" in p
+    # E o desempate do pedido que pede crédito E discute débito (o PER/DCOMP não homologado).
+    assert "MISTO" in p
 
 
 def test_o_1X_so_responde_na_PETICAO_INICIAL(_ctx, _doc):
@@ -81,15 +83,26 @@ def test_os_campos_sao_OPCIONAIS_e_a_evidencia_vem_ANTES():
     assert ordem.index("debito_ou_credito_evidencia") < ordem.index("debito_ou_credito")
 
 
-def test_a_peca_CHUNKADA_leva_o_par_do_ULTIMO_chunk_que_respondeu():
-    """⛔ MUTANTE: tirar o par do `reduce_peca_cards` — a lista de campos dele é FECHADA."""
-    base = {"cdas": [], "processos_citados": [], "tipo_doc": "peticao_inicial"}
-    out = reduce_peca_cards([
-        {**base, "debito_ou_credito": "debito", "debito_ou_credito_evidencia": "do 1o"},
-        dict(base),
-        {**base, "debito_ou_credito": "credito", "debito_ou_credito_evidencia": "do pedido"},
-        dict(base),
-    ])
-    assert (out["debito_ou_credito"], out["debito_ou_credito_evidencia"]) == (
-        "credito", "do pedido")
-    assert reduce_peca_cards([dict(base), dict(base)])["debito_ou_credito"] is None
+_BASE = {"cdas": [], "processos_citados": [], "tipo_doc": "peticao_inicial"}
+
+
+def _dc(resposta, evidencia):
+    return {**_BASE, "debito_ou_credito": resposta, "debito_ou_credito_evidencia": evidencia}
+
+
+@pytest.mark.parametrize("caso,cards,esperado", [
+    ("o pedido no 1o pedaco, so anexos no ultimo",
+     [_dc("debito", "do pedido"), dict(_BASE), _dc("incerto", None)], ("debito", "do pedido")),
+    ("o formulario de credito no ultimo nao apaga o debito",
+     [_dc("debito", "do pedido"), _dc("credito", "do formulario")], ("debito", "do pedido")),
+    ("credito vence incerto", [_dc("incerto", None), _dc("credito", "do pedido")],
+     ("credito", "do pedido")),
+    ("no empate, o pedaco COM evidencia", [_dc("debito", None), _dc("debito", "trecho")],
+     ("debito", "trecho")),
+    ("nenhum pedaco respondeu", [dict(_BASE), dict(_BASE)], (None, None)),
+])
+def test_a_peca_CHUNKADA_leva_a_resposta_mais_FORTE(caso, cards, esperado):
+    """⛔ MUTANTES: tirar o par do `reduce_peca_cards` (a lista de campos dele é FECHADA), ou
+    voltar a pegar o ÚLTIMO pedaço — a posição não diz onde está o pedido."""
+    out = reduce_peca_cards(cards)
+    assert (out["debito_ou_credito"], out["debito_ou_credito_evidencia"]) == esperado, caso

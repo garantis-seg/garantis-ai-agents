@@ -429,6 +429,9 @@ PARTE 1 — FactSheet da peça (campos do card):
   · 'credito' — a ação PEDE um crédito da parte privada, e nada é cobrado dela nesta ação.
     Ex.: restituição, repetição de indébito, ressarcimento, anulatória da decisão que NEGOU
     restituição ou ressarcimento.
+  · Pedido MISTO — pede o crédito E discute um débito (ex.: anulatória do despacho que negou
+    o crédito E não homologou as compensações) — é 'debito'. Copie na evidência o trecho do
+    débito.
   · 'incerto' — a peça não deixa dizer.
   ⚠️ 'crédito tributário' é o crédito do FISCO, ou seja, o DÉBITO da parte privada. Responda
   pelo PEDIDO da inicial, nunca pelo resultado provável.
@@ -596,9 +599,10 @@ PARTE 1 — CLASSIFICAR e produzir o FactSheet:
   fiscal, embargos, anulatória de débito ou lançamento, mandado de segurança contra cobrança,
   compensação NÃO homologada); 'credito' = a ação PEDE um crédito da parte privada, e nada é
   cobrado dela (restituição, repetição de indébito, ressarcimento, anulatória da decisão que
-  NEGOU restituição); 'incerto' = a peça não deixa dizer. ⚠️ 'crédito tributário' é o DÉBITO da
-  parte privada. Copie em `debito_ou_credito_evidencia` o trecho LITERAL (~200 chars) do PEDIDO
-  — sem ele a resposta é DESCARTADA pela integração.
+  NEGOU restituição); 'incerto' = a peça não deixa dizer. Pedido MISTO (pede o crédito E
+  discute um débito) é 'debito'. ⚠️ 'crédito tributário' é o DÉBITO da parte privada. Copie em
+  `debito_ou_credito_evidencia` o trecho LITERAL (~200 chars) do PEDIDO — sem ele a resposta é
+  DESCARTADA pela integração.
 
 PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
 - cdas[]: TODOS os números de CDA/inscrição em dívida ativa que ESTE processo executa ou
