@@ -573,13 +573,6 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
    parte extinta vai para o estado_processual. Use 'extinto_sem_merito' so quando a
    extincao encerra o processo INTEIRO do Tomador, sem merito julgado contra ele.
 
-   ANULACAO: o acordao que da provimento, TOTAL OU PARCIAL, ao recurso para ANULAR ou
-   CASSAR a sentenca (cerceamento de defesa, nova pericia, reabertura da instrucao,
-   retorno dos autos a origem) NAO e procedencia parcial. A sentenca anulada deixa de
-   valer, e o processo volta ao estagio anterior, SEM decisao de merito: natureza=null e
-   sentido=null, mesmo com as palavras "parcial provimento". O transito dessa decisao e
-   processual: transito_certificado=false.
-
    - sentido: favoravel | desfavoravel | parcial | neutro (DO PONTO DE VISTA DO TOMADOR;
      aplique a REGRA DE LEITURA DE POLOS acima — NAO assuma Fazenda=autor por default)
    - instancia: 1g | 2g | stj | stf
@@ -675,7 +668,6 @@ Extincao SEM merito em Tomador-AUTOR: ver <regra_extincao_tomador_autor> —
 sentido='desfavoravel', NAO 'neutro'.
 decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA F).
 DECISAO MISTA (merito contra o Tomador + extincao de outra parte): vale o merito.
-ANULACAO da sentenca, mesmo por "parcial provimento": sem decisao de merito (natureza=null).
 Embargos de declaracao e contrarrazoes NAO tornam recorrida=true.
 Antes de transito_certificado=true: houve suspensao-de-merito / anulacao / reativacao
 DEPOIS da decisao? Se sim, transito=false (REGRA DE SUSPENSAO E TRANSITO). Suspensao-de-

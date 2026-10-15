@@ -13,26 +13,26 @@
  ],
  [
   "src/agents/processo_synthesis/prompts.py",
-  "ANULACAO: o acordao que da provimento, TOTAL OU PARCIAL,",
-  "ANULACAO: o acordao que da provimento TOTAL,",
-  "3. o parcial provimento que anula volta a ser lido como procedencia parcial"
- ],
- [
-  "src/agents/processo_synthesis/prompts.py",
-  "SEM decisao de merito: natureza=null e\n   sentido=null",
-  "SEM decisao de merito: natureza=parcialmente_procedente e\n   sentido=parcial",
-  "4. a anulacao vira perda parcial"
- ],
- [
-  "src/agents/processo_synthesis/prompts.py",
   "Embargos de declaracao (acolhidos ou rejeitados) e\n     contrarrazoes NAO contam",
   "Embargos de declaracao (acolhidos ou rejeitados) e\n     contrarrazoes contam",
-  "5. embargos de declaracao voltam a contar como recurso"
+  "3. embargos de declaracao voltam a contar como recurso no prompt"
  ],
  [
   "src/agents/processo_synthesis/prompts.py",
   "Embargos de declaracao e contrarrazoes NAO tornam recorrida=true.\n",
   "",
-  "6. o lembrete dos embargos de declaracao some"
+  "4. o lembrete dos embargos de declaracao some"
+ ],
+ [
+  "src/agents/processo_synthesis/schemas.py",
+  "\"Embargos de declaracao e contrarrazoes NAO contam.\"",
+  "\"\"",
+  "5. o schema volta a aceitar embargos de declaracao como recurso"
+ ],
+ [
+  "src/agents/processo_synthesis/schemas.py",
+  "interposto contra a decisao vigente e ainda pendente. ",
+  "interposto contra a decisao vigente. ",
+  "6. o schema deixa de exigir recurso pendente"
  ]
 ]

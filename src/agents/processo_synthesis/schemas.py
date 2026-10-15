@@ -48,7 +48,9 @@ class DecisaoVigente(BaseModel):
     )
     recorrida: bool = Field(
         default=False,
-        description="True se houve recurso interposto contra a decisao vigente.",
+        description=("True SO com recurso a outra instancia (apelacao, REsp/RE, agravo, "
+                     "recurso ordinario) interposto contra a decisao vigente e ainda pendente. "
+                     "Embargos de declaracao e contrarrazoes NAO contam."),
     )
 
 
