@@ -95,8 +95,7 @@ def paginas_inalcancaveis(
     for i, page in enumerate(doc, start=1):
         texto = textos.get(i, "")
         # Pergunta 1 — o texto desta folha se sustenta? Sai cedo no caso comum
-        # (documento born-digital), evitando `get_images`/`get_drawings`, que
-        # são as chamadas caras do Sinal 1.
+        # (documento born-digital), sem pagar o Sinal 1 (`_pagina_motivo`).
         if texto_decide_sozinho(texto):
             continue
         # Pergunta 2 — e a página, é alcançável por extrator?

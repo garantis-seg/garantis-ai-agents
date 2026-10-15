@@ -48,6 +48,8 @@ def test_scan_vira_imagem_sem_decodificar_a_imagem(monkeypatch):
     - `get_image_info(hashes=True)` ou `xrefs=True`: o mesmo hash.
     - `get_text("dict")` com `TEXT_PRESERVE_IMAGES`: re-encoda em PNG toda imagem que
       não é JPEG.
+    - Qualquer outra rota do Python que gere o Pixmap da imagem: o guarda fica na
+      PROPRIEDADE (`fz_get_pixmap_from_image`), não só no nome das 3 APIs acima.
     Aqui elas levantam, o `except` do `analisar_pdf_bytes` devolve None, e o scan fica
     no texto."""
     pdf = _scan(3)
@@ -73,9 +75,28 @@ def test_scan_vira_imagem_sem_decodificar_a_imagem(monkeypatch):
     monkeypatch.setattr(pymupdf.Page, "get_image_rects", _decodificou)
     monkeypatch.setattr(pymupdf.Page, "get_image_info", _info)
     monkeypatch.setattr(pymupdf.Page, "get_text", _texto)
+    monkeypatch.setattr(pymupdf.mupdf, "fz_get_pixmap_from_image", _decodificou)
     info = analisar_pdf_bytes(pdf)
     assert info is not None, "o gate falhou ao medir o scan"
     assert info["motivos"] == {"imagem": 3}
+
+
+def test_scan_inline_e_imagem():
+    """A imagem inline (BI ... ID ... EI) não tem xref, e o `get_images()` não a lista:
+    o código antigo deixava o scan inline no texto. ⛔ MUTANTE: medir a cobertura só
+    pelas imagens com xref."""
+    doc = pymupdf.open()
+    page = doc.new_page()
+    w, h = page.rect.width, page.rect.height
+    page.insert_text((30, h - 20), CARIMBO, fontsize=6)
+    xref = page.get_contents()[0]
+    # 1 pixel cinza, esticado na página inteira e desenhado inline.
+    inline = b"q %g 0 0 %g 0 0 cm BI /W 1 /H 1 /CS /G /BPC 8 ID \xc8 EI Q\n" % (w, h)
+    doc.update_stream(xref, inline + doc.xref_stream(xref))
+    p = pymupdf.open(stream=doc.tobytes(), filetype="pdf")[0]
+    assert p.get_images() == [], "premissa: a imagem é inline, sem xref"
+    assert _cobertura_img(p) == pytest.approx(1.0, abs=0.01)
+    assert _pagina_motivo(p, pymupdf) == "imagem"
 
 
 def test_cobertura_e_a_fracao_da_pagina_que_a_imagem_cobre():

@@ -145,12 +145,12 @@ def _cobertura_img(page) -> float:
 def _area_texto(page, pymupdf) -> float:
     pa = abs(page.rect) or 1.0
     a = 0.0
-    # ⛔ Sem TEXT_PRESERVE_IMAGES: com ele o "dict" decodifica toda imagem que não é
-    # JPEG e a re-encoda em PNG, e aqui só se somam os blocos de TEXTO.
-    flags = pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_IMAGES
-    for b in page.get_text("dict", flags=flags)["blocks"]:
-        if b.get("type") == 0:
-            a += abs(pymupdf.Rect(b["bbox"]))
+    # "blocks" com as flags do "dict" dá os MESMOS blocos de texto sem serializar imagem.
+    # ⛔ O "dict" decodifica toda imagem que não é JPEG e a re-encoda em PNG. E tirar
+    # TEXT_PRESERVE_IMAGES das flags muda a divisão em blocos, e com ela a área.
+    for b in page.get_text("blocks", flags=pymupdf.TEXTFLAGS_DICT):
+        if b[6] == 0:
+            a += abs(pymupdf.Rect(b[:4]))
     return a / pa
 
 
