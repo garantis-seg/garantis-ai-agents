@@ -34,5 +34,29 @@
   "interposto contra a decisao vigente e ainda pendente. ",
   "interposto contra a decisao vigente. ",
   "6. o schema deixa de exigir recurso pendente"
+ ],
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "CASSAR a sentenca e DEVOLVE os autos a origem sem julgar o merito",
+  "CASSAR a sentenca",
+  "7. a regra da anulacao perde a restricao (vale tambem para a causa madura)"
+ ],
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "   anulacao_data = a data do acordao que anulou. Duas excecoes",
+  "   Duas excecoes",
+  "8. o prompt deixa de pedir a data da anulacao"
+ ],
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "decisao_vigente (mantenha anulacao_data).",
+  "decisao_vigente.",
+  "9. a regra perde a sentenca nova depois da anulacao (texto)"
+ ],
+ [
+  "src/agents/processo_synthesis/schemas.py",
+  "default=None, description=\"YYYY-MM-DD do acordao que anulou a sentenca, ou null\",",
+  "default=None, description=\"YYYY-MM-DD do acordao que anulou ou cassou a sentenca e devolveu os autos sem julgar o merito (regra 4). null sem anulacao, na causa madura e na anulacao de so um capitulo.\",",
+  "10. a descricao do campo volta a ser longa (trava o decoder)"
  ]
 ]
