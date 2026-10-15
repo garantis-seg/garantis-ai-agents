@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Any, Literal, Optional
 
 logger = logging.getLogger(__name__)
@@ -372,6 +373,8 @@ async def call_l1_with_vision_fallback(
                          "n_nao_enviados_cap": 0, "motivo": None})
     pdf_bytes_list: list[bytes] = []
     motivos: list[str] = []
+    # Tempo síncrono do gate DENTRO do event loop: nele nenhum outro request da instância anda.
+    gate_s = 0.0
     if gcs_urls and flag_enabled("VISION_L1_ENABLED"):
         if docs_text:
             # GATE por documento: baixa e filtra só os que o gate aprova.
@@ -421,7 +424,9 @@ async def call_l1_with_vision_fallback(
                     pdf_bytes = raw[0] if raw else None
                 except Exception:
                     pdf_bytes = None
+                t0 = time.perf_counter()
                 manda, info = precisa_vision(text_content, pdf_bytes, so_capa=so_capa)
+                gate_s += time.perf_counter() - t0
                 if manda:
                     pdf_bytes_list.append(info.get("_pdf_bytes") or pdf_bytes)
                     if gate_out is not None:
@@ -444,7 +449,7 @@ async def call_l1_with_vision_fallback(
     if gate_out is not None and motivos:
         gate_out["motivo"] = ",".join(sorted(set(motivos)))
 
-    if pdf_bytes_list:
+    if pdf_bytes_list or gate_s:
         # ⭐ O POR QUE, no unico lugar que TODO caller alcanca — o `gate_out` e devolvido
         # "pro caller PERSISTIR" e so o materializer de PETICAO persiste (o do mov nao
         # grava `vision_gate`).
@@ -452,11 +457,14 @@ async def call_l1_with_vision_fallback(
         # coluna custaria migration + bump de pin em 2 repos por um dado que 30 dias de
         # retencao respondem. Historico maior que isso, ai sim vira coluna.
         # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (devolve zero neste projeto).
+        # A linha sai tambem quando o gate recusa tudo: o loop ficou parado do mesmo jeito.
         logger.info(
-            "[VisionL1] GATE %s: enviando %d de %d docs · motivo=%s",
+            "[VisionL1] GATE %s: enviando %d de %d docs · motivo=%s · gate_s=%.1f",
             log_label or "-", len(pdf_bytes_list),
             (gate_out or {}).get("n_docs", 0), (gate_out or {}).get("motivo") or "?",
+            gate_s,
         )
+    if pdf_bytes_list:
         try:
             resposta = await call_vision_l1(
                 provider,

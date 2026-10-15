@@ -418,3 +418,18 @@ def test_o_LOG_carrega_o_motivo_porque_e_ELE_o_entregavel(caplog):
     linhas = [r.getMessage() for r in caplog.records if "GATE" in r.getMessage()]
     assert linhas, "o gate nao logou nada — a pergunta fica sem resposta pro mov"
     assert "motivo=texto-lixo" in linhas[0], linhas[0]
+
+
+def test_o_LOG_sai_com_gate_s_tambem_quando_o_gate_recusa_tudo(caplog):
+    """O gate trava o event loop pelo tempo dele, mande ou nao mande o PDF. Sem a linha
+    no caso da recusa, o tempo do gate que nao manda nada fica invisivel.
+    ⛔ MUTANTE: logar so quando ha PDF para mandar."""
+    import logging
+
+    with caplog.at_level(logging.INFO, logger=V.__name__):
+        _g, enviados, _ = _roda([(CARIMBO_6_PAGINAS, "gs://b/texto.pdf")],
+                                fetched={"gs://b/texto.pdf": _pdf_texto()})
+    assert enviados == [], "premissa: o gate recusa o PDF textual"
+    linhas = [r.getMessage() for r in caplog.records if "GATE" in r.getMessage()]
+    assert linhas, "o gate rodou e nao logou o tempo dele"
+    assert "enviando 0 de 1" in linhas[0] and "gate_s=" in linhas[0], linhas[0]

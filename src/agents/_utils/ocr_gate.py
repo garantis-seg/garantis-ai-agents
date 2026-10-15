@@ -124,22 +124,33 @@ def texto_decide_sozinho(txt: Optional[str]) -> bool:
 
 # ── SINAL 1 — página-imagem (PyMuPDF, sobre bytes) ────────────────────────────
 def _cobertura_img(page) -> float:
+    """Maior fração da página coberta por UMA imagem, só pela geometria.
+
+    `get_image_info()` dá o bbox de toda imagem desenhada sem decodificá-la. ⛔ Não
+    volte a `get_images()` + `get_image_rects(xref)`: para casar o xref, ele decodifica
+    cada imagem da página (Pixmap + hash), e em página escaneada isso custa centenas de
+    ms de CPU por página. O gate roda dentro do event loop do serviço, então um scan de
+    dezenas de páginas trava todo request da instância até o caller desistir.
+    A lista inclui imagem inline, que `get_images()` não via: scan inline também é
+    página-imagem."""
     pa = abs(page.rect) or 1.0
     m = 0.0
-    for img in page.get_images(full=True):
-        for r in page.get_image_rects(img[0]):
-            inter = r & page.rect
-            if not inter.is_empty:
-                m = max(m, abs(inter) / pa)
+    for info in page.get_image_info():
+        inter = page.rect & info["bbox"]
+        if not inter.is_empty:
+            m = max(m, abs(inter) / pa)
     return m
 
 
 def _area_texto(page, pymupdf) -> float:
     pa = abs(page.rect) or 1.0
     a = 0.0
-    for b in page.get_text("dict")["blocks"]:
-        if b.get("type") == 0:
-            a += abs(pymupdf.Rect(b["bbox"]))
+    # "blocks" com as flags do "dict" dá os MESMOS blocos de texto sem serializar imagem.
+    # ⛔ O "dict" decodifica toda imagem que não é JPEG e a re-encoda em PNG. E tirar
+    # TEXT_PRESERVE_IMAGES das flags muda a divisão em blocos, e com ela a área.
+    for b in page.get_text("blocks", flags=pymupdf.TEXTFLAGS_DICT):
+        if b[6] == 0:
+            a += abs(pymupdf.Rect(b[:4]))
     return a / pa
 
 
@@ -149,8 +160,8 @@ def _pagina_motivo(page, pymupdf) -> Optional[str]:
     Ordem escolhida (não é só estilo): `area_texto` é a GUARDA PRIMÁRIA e sai na
     frente porque é ela que salva as páginas de tabela/formulário — elas têm
     217-413 vector paths (acima do corte de vetor) e seriam falso-positivo se o
-    path decidisse sozinho. Sair cedo aqui também evita `get_images()` e
-    `get_drawings()` na maioria das páginas, que são as chamadas caras."""
+    path decidisse sozinho. Sair cedo aqui também evita `get_drawings()` na maioria
+    das páginas, que é a chamada cara."""
     txt = page.get_text("text").strip()
     if not txt:
         return "vazia"
@@ -183,8 +194,8 @@ def _reserializa(doc, pdf_bytes: bytes) -> bytes:
     isso que `tobytes()` sozinho não basta.**
     ⛔ `pymupdf.open(stream=..., filetype="pdf")` **NÃO levanta** nele — `filetype`
     é DICA, não imposição (a mesma armadilha do memory `autos-html-filetype-e-dica`).
-    Ele abre como XHTML: `is_pdf=False`, `metadata['format']='XHTML'`; daí
-    `paginas_imagem=0` e `motivos={}`.
+    Ele abre como XHTML: `is_pdf=False`, `metadata['format']='XHTML'`; daí, sem
+    `<img>`, `paginas_imagem=0` e `motivos={}`.
     E `doc.tobytes()` sobre doc não-PDF levanta `AssertionError` NUA: o `except`
     devolve os bytes originais, e o Gemini receberia XHTML rotulado
     `mime_type='application/pdf'` e responderia o mesmo `400 The document has no pages`.
