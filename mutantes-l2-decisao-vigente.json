@@ -1,0 +1,38 @@
+[
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "A decisao_vigente\n   e a parte de MERITO",
+  "A decisao_vigente\n   e a parte EXTINTA",
+  "1. a decisao mista passa a valer pela parte extinta"
+ ],
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "DECISAO MISTA (merito contra o Tomador + extincao de outra parte): vale o merito.\n",
+  "",
+  "2. o lembrete da decisao mista some"
+ ],
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "ANULACAO: o acordao que da provimento, TOTAL OU PARCIAL,",
+  "ANULACAO: o acordao que da provimento TOTAL,",
+  "3. o parcial provimento que anula volta a ser lido como procedencia parcial"
+ ],
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "SEM decisao de merito: natureza=null e\n   sentido=null",
+  "SEM decisao de merito: natureza=parcialmente_procedente e\n   sentido=parcial",
+  "4. a anulacao vira perda parcial"
+ ],
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "Embargos de declaracao (acolhidos ou rejeitados) e\n     contrarrazoes NAO contam",
+  "Embargos de declaracao (acolhidos ou rejeitados) e\n     contrarrazoes contam",
+  "5. embargos de declaracao voltam a contar como recurso"
+ ],
+ [
+  "src/agents/processo_synthesis/prompts.py",
+  "Embargos de declaracao e contrarrazoes NAO tornam recorrida=true.\n",
+  "",
+  "6. o lembrete dos embargos de declaracao some"
+ ]
+]
