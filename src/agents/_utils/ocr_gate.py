@@ -128,11 +128,7 @@ def _cobertura_img(page) -> float:
 
     `get_image_info()` dá o bbox de toda imagem desenhada sem decodificá-la. ⛔ Não
     volte a `get_images()` + `get_image_rects(xref)`: para casar o xref, ele decodifica
-    cada imagem da página (Pixmap + hash), e em página escaneada isso custa centenas de
-    ms de CPU por página. O gate roda dentro do event loop do serviço, então um scan de
-    dezenas de páginas trava todo request da instância até o caller desistir.
-    A lista inclui imagem inline, que `get_images()` não via: scan inline também é
-    página-imagem."""
+    cada imagem da página (Pixmap + hash)."""
     pa = abs(page.rect) or 1.0
     m = 0.0
     for info in page.get_image_info():
