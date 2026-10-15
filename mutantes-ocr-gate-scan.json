@@ -5,12 +5,37 @@
    "s1 volta-o-defeito: a cobertura volta a get_image_rects, que decodifica a imagem de cada pagina"],
 
   ["src/agents/_utils/ocr_gate.py",
+   "    for info in page.get_image_info():\n",
+   "    for info in page.get_image_info(hashes=True):\n",
+   "s2 decodifica de novo: hashes=True faz Pixmap + hash de cada imagem desenhada"],
+
+  ["src/agents/_utils/ocr_gate.py",
+   "    for info in page.get_image_info():\n        inter = page.rect & info[\"bbox\"]\n",
+   "    for info in page.get_image_info(xrefs=True):\n        if not info[\"xref\"]:\n            continue\n        inter = page.rect & info[\"bbox\"]\n",
+   "s3 volta a semantica antiga (so imagem com xref) e o custo antigo"],
+
+  ["src/agents/_utils/ocr_gate.py",
+   "    for b in page.get_text(\"dict\", flags=flags)[\"blocks\"]:\n",
+   "    for b in page.get_text(\"dict\")[\"blocks\"]:\n",
+   "s4 o dict volta a re-encodar em PNG toda imagem que nao e JPEG"],
+
+  ["src/agents/_utils/ocr_gate.py",
    "            m = max(m, abs(inter) / pa)\n",
    "            m = 1.0\n",
-   "s2 geometria: qualquer imagem conta como pagina inteira"],
+   "s5 geometria: qualquer imagem conta como pagina inteira"],
+
+  ["src/agents/_utils/ocr_gate.py",
+   "            m = max(m, abs(inter) / pa)\n",
+   "            m += abs(inter) / pa\n",
+   "s6 soma as imagens em vez da maior UMA"],
+
+  ["src/agents/_utils/vision.py",
+   "    if pdf_bytes_list or gate_s:\n",
+   "    if pdf_bytes_list:\n",
+   "s7 o gate_s some quando o gate recusa todos os documentos"],
 
   ["src/agents/_utils/ocr_gate.py",
    "            m = max(m, abs(inter) / pa)\n    return m\n",
    "            m = max(m, abs(inter) / pa)\n    return 0.0\n",
-   "s3 CONTROLE: a cobertura zera -- o scan sai do ramo imagem e o assert dos motivos tem de quebrar"]
+   "s8 CONTROLE: a cobertura zera -- o scan sai do ramo imagem e o assert dos motivos tem de quebrar"]
 ]

@@ -449,7 +449,7 @@ async def call_l1_with_vision_fallback(
     if gate_out is not None and motivos:
         gate_out["motivo"] = ",".join(sorted(set(motivos)))
 
-    if pdf_bytes_list:
+    if pdf_bytes_list or gate_s:
         # ⭐ O POR QUE, no unico lugar que TODO caller alcanca — o `gate_out` e devolvido
         # "pro caller PERSISTIR" e so o materializer de PETICAO persiste (o do mov nao
         # grava `vision_gate`).
@@ -457,12 +457,14 @@ async def call_l1_with_vision_fallback(
         # coluna custaria migration + bump de pin em 2 repos por um dado que 30 dias de
         # retencao respondem. Historico maior que isso, ai sim vira coluna.
         # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (devolve zero neste projeto).
+        # A linha sai tambem quando o gate recusa tudo: o loop ficou parado do mesmo jeito.
         logger.info(
             "[VisionL1] GATE %s: enviando %d de %d docs · motivo=%s · gate_s=%.1f",
             log_label or "-", len(pdf_bytes_list),
             (gate_out or {}).get("n_docs", 0), (gate_out or {}).get("motivo") or "?",
             gate_s,
         )
+    if pdf_bytes_list:
         try:
             resposta = await call_vision_l1(
                 provider,

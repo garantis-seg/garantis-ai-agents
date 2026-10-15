@@ -145,7 +145,10 @@ def _cobertura_img(page) -> float:
 def _area_texto(page, pymupdf) -> float:
     pa = abs(page.rect) or 1.0
     a = 0.0
-    for b in page.get_text("dict")["blocks"]:
+    # ⛔ Sem TEXT_PRESERVE_IMAGES: com ele o "dict" decodifica toda imagem que não é
+    # JPEG e a re-encoda em PNG, e aqui só se somam os blocos de TEXTO.
+    flags = pymupdf.TEXTFLAGS_DICT & ~pymupdf.TEXT_PRESERVE_IMAGES
+    for b in page.get_text("dict", flags=flags)["blocks"]:
         if b.get("type") == 0:
             a += abs(pymupdf.Rect(b["bbox"]))
     return a / pa
@@ -191,8 +194,8 @@ def _reserializa(doc, pdf_bytes: bytes) -> bytes:
     isso que `tobytes()` sozinho não basta.**
     ⛔ `pymupdf.open(stream=..., filetype="pdf")` **NÃO levanta** nele — `filetype`
     é DICA, não imposição (a mesma armadilha do memory `autos-html-filetype-e-dica`).
-    Ele abre como XHTML: `is_pdf=False`, `metadata['format']='XHTML'`; daí
-    `paginas_imagem=0` e `motivos={}`.
+    Ele abre como XHTML: `is_pdf=False`, `metadata['format']='XHTML'`; daí, sem
+    `<img>`, `paginas_imagem=0` e `motivos={}`.
     E `doc.tobytes()` sobre doc não-PDF levanta `AssertionError` NUA: o `except`
     devolve os bytes originais, e o Gemini receberia XHTML rotulado
     `mime_type='application/pdf'` e responderia o mesmo `400 The document has no pages`.
