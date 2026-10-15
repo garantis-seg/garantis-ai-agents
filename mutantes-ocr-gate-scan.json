@@ -1,0 +1,16 @@
+[
+  ["src/agents/_utils/ocr_gate.py",
+   "    for info in page.get_image_info():\n        inter = page.rect & info[\"bbox\"]\n        if not inter.is_empty:\n            m = max(m, abs(inter) / pa)\n",
+   "    for img in page.get_images(full=True):\n        for r in page.get_image_rects(img[0]):\n            inter = r & page.rect\n            if not inter.is_empty:\n                m = max(m, abs(inter) / pa)\n",
+   "s1 volta-o-defeito: a cobertura volta a get_image_rects, que decodifica a imagem de cada pagina"],
+
+  ["src/agents/_utils/ocr_gate.py",
+   "            m = max(m, abs(inter) / pa)\n",
+   "            m = 1.0\n",
+   "s2 geometria: qualquer imagem conta como pagina inteira"],
+
+  ["src/agents/_utils/ocr_gate.py",
+   "            m = max(m, abs(inter) / pa)\n    return m\n",
+   "            m = max(m, abs(inter) / pa)\n    return 0.0\n",
+   "s3 CONTROLE: a cobertura zera -- o scan sai do ramo imagem e o assert dos motivos tem de quebrar"]
+]
