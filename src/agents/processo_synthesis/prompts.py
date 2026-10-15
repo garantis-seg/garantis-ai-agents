@@ -573,6 +573,17 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
    parte extinta vai para o estado_processual. Use 'extinto_sem_merito' so quando a
    extincao encerra o processo INTEIRO do Tomador, sem merito julgado contra ele.
 
+   ANULACAO: o acordao que da provimento, TOTAL OU PARCIAL, ao recurso para ANULAR ou
+   CASSAR a sentenca e DEVOLVE os autos a origem sem julgar o merito (cerceamento de
+   defesa, nova pericia, reabertura da instrucao) NAO e procedencia parcial. A sentenca
+   anulada deixa de valer, e o processo volta ao estagio anterior: natureza=null,
+   sentido=null, transito_certificado=false (o transito dessa decisao e processual) e
+   anulacao_data = a data do acordao que anulou. Duas excecoes, com anulacao_data=null: o
+   acordao que anula e JULGA o merito (causa madura, CPC art. 1.013, par. 3) e o que anula
+   SO um capitulo da sentenca. Neles vale o merito julgado ou mantido, como na DECISAO
+   MISTA. Depois da anulacao, a nova sentenca ou acordao de merito passa a ser a
+   decisao_vigente (mantenha anulacao_data).
+
    - sentido: favoravel | desfavoravel | parcial | neutro (DO PONTO DE VISTA DO TOMADOR;
      aplique a REGRA DE LEITURA DE POLOS acima — NAO assuma Fazenda=autor por default)
    - instancia: 1g | 2g | stj | stf
@@ -668,6 +679,8 @@ Extincao SEM merito em Tomador-AUTOR: ver <regra_extincao_tomador_autor> —
 sentido='desfavoravel', NAO 'neutro'.
 decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA F).
 DECISAO MISTA (merito contra o Tomador + extincao de outra parte): vale o merito.
+ANULACAO da sentenca que devolve os autos sem julgar o merito: natureza=null e
+anulacao_data = a data do acordao (null na causa madura e na anulacao de um capitulo).
 Embargos de declaracao e contrarrazoes NAO tornam recorrida=true.
 Antes de transito_certificado=true: houve suspensao-de-merito / anulacao / reativacao
 DEPOIS da decisao? Se sim, transito=false (REGRA DE SUSPENSAO E TRANSITO). Suspensao-de-

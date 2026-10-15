@@ -45,6 +45,25 @@ def test_l2_decisao_mista_vale_o_merito():
     assert "DECISAO MISTA" in _lembrete(_prompt())
 
 
+def test_l2_anulacao_devolve_o_estagio_e_da_a_data():
+    """Regra 4. O redutor do garantis-shared lê `anulacao_data` e tira o ruling da sentença
+    anulada (o andamento só diz "Provimento em Parte"). Sem a data, o `natureza=null` da
+    anulação voltaria derrota pelo P2. A causa madura e a anulação de um capítulo julgam ou
+    mantêm o mérito: ali a data fica null."""
+    secao = _secao_decisao_vigente(_prompt())
+    regra = secao[secao.index("ANULACAO:"):]
+    assert "DEVOLVE os autos a origem sem julgar o merito" in regra
+    assert "anulacao_data = a data do acordao que anulou" in regra
+    assert "causa madura" in regra and "SO um capitulo" in regra
+    assert "nova sentenca ou acordao de merito" in regra
+    assert "(mantenha anulacao_data)" in regra   # o redutor guarda o ruling posterior a ela
+    assert "ANULACAO" in _lembrete(_prompt())
+    desc = DecisaoVigente.model_fields["anulacao_data"].description or ""
+    assert "anulou a sentenca" in desc
+    # Optional[str] com descricao longa trava o decoder do Gemini (docstring do schema).
+    assert len(desc) <= len(DecisaoVigente.model_fields["data"].description or "") * 3
+
+
 def test_l2_embargos_de_declaracao_nao_sao_recurso_pendente():
     """O prompt e o `response_schema` dizem a mesma coisa: a descrição do campo vai ao
     Gemini junto com o schema, e uma contradição entre os dois deixa o LLM escolher."""

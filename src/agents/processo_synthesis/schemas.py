@@ -52,6 +52,10 @@ class DecisaoVigente(BaseModel):
                      "recurso ordinario) interposto contra a decisao vigente e ainda pendente. "
                      "Embargos de declaracao e contrarrazoes NAO contam."),
     )
+    # Descricao CURTA de proposito: Optional[str] com descricao longa trava o decoder (acima).
+    anulacao_data: Optional[str] = Field(
+        default=None, description="YYYY-MM-DD do acordao que anulou a sentenca, ou null",
+    )
 
 
 class DecisaoVigenteRich(DecisaoVigente):
