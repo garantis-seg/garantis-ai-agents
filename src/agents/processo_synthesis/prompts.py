@@ -566,6 +566,13 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
    embargante), NAO a interlocutoria de 2024. O bloqueio entra no
    estado_processual ("execucao em curso com bloqueio determinado").
 
+   DECISAO MISTA: a MESMA sentenca ou acordao julga o merito CONTRA o Tomador numa
+   parte (improcedencia mantida, apelacao dele negada) e extingue OUTRA parte SEM
+   resolucao do merito (coisa julgada, perda de objeto, ilegitimidade). A decisao_vigente
+   e a parte de MERITO: natureza e sentido do merito (ex.: improcedente, desfavoravel). A
+   parte extinta vai para o estado_processual. Use 'extinto_sem_merito' so quando a
+   extincao encerra o processo INTEIRO do Tomador, sem merito julgado contra ele.
+
    - sentido: favoravel | desfavoravel | parcial | neutro (DO PONTO DE VISTA DO TOMADOR;
      aplique a REGRA DE LEITURA DE POLOS acima — NAO assuma Fazenda=autor por default)
    - instancia: 1g | 2g | stj | stf
@@ -575,7 +582,11 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
    - transito_certificado: true SO se ha mov certificando transito E nao ha
      suspensao-de-merito / anulacao / reabertura POSTERIOR (REGRA DE SUSPENSAO E
      TRANSITO). Suspensao-de-execucao-pos-transito (rescisoria/RJ) MANTEM true.
-   - recorrida: true se houve recurso interposto contra esta decisao
+   - recorrida: true SO se ha recurso que leva a causa a outra instancia (apelacao,
+     recurso especial ou extraordinario, agravo, recurso ordinario) interposto contra
+     esta decisao e ainda pendente. Embargos de declaracao (acolhidos ou rejeitados) e
+     contrarrazoes NAO contam: depois deles, sem apelacao interposta, recorrida=false.
+     Prazo aberto sem recurso interposto tambem e false.
    - Se NAO ha decisao de merito (sentenca/acordao/homologatoria), deixe
      sentido/natureza=null. Use interlocutoria SOMENTE se TOTAL ausencia de
      decisao de merito E a interlocutoria for relevante (liminar concedida,
@@ -656,6 +667,8 @@ em qual polo? procedente=quem venceu?).
 Extincao SEM merito em Tomador-AUTOR: ver <regra_extincao_tomador_autor> —
 sentido='desfavoravel', NAO 'neutro'.
 decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA F).
+DECISAO MISTA (merito contra o Tomador + extincao de outra parte): vale o merito.
+Embargos de declaracao e contrarrazoes NAO tornam recorrida=true.
 Antes de transito_certificado=true: houve suspensao-de-merito / anulacao / reativacao
 DEPOIS da decisao? Se sim, transito=false (REGRA DE SUSPENSAO E TRANSITO). Suspensao-de-
 execucao-pos-transito (Acao Rescisoria / Recuperacao Judicial) MANTEM transito=true.
