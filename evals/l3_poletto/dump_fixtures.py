@@ -25,6 +25,9 @@ import sys
 import urllib.request
 from pathlib import Path
 
+# A materia sai da composicao do conexo, como no loader do L3 (a coluna saiu de leads.meritos).
+from garantis_shared.materia import MATERIA_DO_CONEXO_SQL
+
 DB_URL = "https://claude-db-tools-394302633873.southamerica-east1.run.app/api/query"
 FIX_DIR = Path(__file__).resolve().parent / "fixtures"
 
@@ -99,7 +102,7 @@ def main() -> int:
           ORDER BY entity_id::bigint, generated_at DESC
         )
         SELECT p.merito_id, p.risco_poletto, p.apolice_aceita,
-               m.titulo, m.tipo_principal, m.cnpj_principal, m.razao_social,
+               m.titulo, ({MATERIA_DO_CONEXO_SQL}) AS tipo_principal, m.cnpj_principal, m.razao_social,
                c.summary->>'risco' AS prod_risco,
                c.summary->'risk_decomposition'->>'risco_factual_aggregated' AS factual_agg,
                c.summary->'risk_decomposition'->>'risco_jurisprudencial_aggregated' AS juris_agg,
