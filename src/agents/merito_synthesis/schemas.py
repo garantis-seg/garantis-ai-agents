@@ -196,8 +196,8 @@ class CardsIndexCount(BaseModel):
     """Contagem de cards consumidos por kind.
 
     Substitui dict[str, Any] (que gerava additionalProperties bug + Gemini
-    ocasionalmente retornava dict aninhado). Schema fixo com fields known.
-    Validator legacy em MeritoSynthesisCard ainda normaliza inputs legacy.
+    ocasionalmente retornava dict aninhado). Schema fixo com fields known: o
+    response_schema forca int em cada campo.
     """
 
     processo_synthesis: int = 0
@@ -289,43 +289,8 @@ class MeritoSynthesisCard(BaseModel):
     evidence_artifacts: list[EvidenceArtifact] = Field(default_factory=list)
     cards_index: CardsIndexCount = Field(
         default_factory=CardsIndexCount,
-        description=(
-            "Contagem de cards consumidos por kind (schema fixo via CardsIndexCount). "
-            "Validator legacy normaliza dict aninhado (Gemini ocasionalmente retornava "
-            "{'processo_X': {'mov_factsheets': 12}}) somando os ints filhos."
-        ),
+        description="Contagem de cards consumidos por kind (schema fixo via CardsIndexCount).",
     )
-
-    @field_validator("cards_index", mode="before")
-    @classmethod
-    def _normalize_cards_index(cls, v: Any) -> Any:
-        """Aceita dict legacy + normaliza pra CardsIndexCount.
-
-        Forma legacy: dict[str, Any] com keys dinamicos e values int|dict.
-        Pydantic constroi CardsIndexCount a partir desse dict (campos extras
-        sao ignorados; valores aninhados sao somados).
-        """
-        if v is None or isinstance(v, CardsIndexCount):
-            return v
-        if not isinstance(v, dict):
-            return {}
-        out: dict[str, Any] = {}
-        # Filter pra keys conhecidos no CardsIndexCount + normaliza values
-        valid_keys = set(CardsIndexCount.model_fields.keys())
-        for key, val in v.items():
-            if key not in valid_keys:
-                continue
-            if isinstance(val, int):
-                out[key] = val
-            elif isinstance(val, dict):
-                total = sum(x for x in val.values() if isinstance(x, int))
-                out[key] = total
-            else:
-                try:
-                    out[key] = int(val)
-                except (TypeError, ValueError):
-                    out[key] = 0
-        return out
 
 
 # ── Request / Response ────────────────────────────────────────────────────
@@ -395,14 +360,6 @@ class TomadorCardMin(BaseModel):
     model_config = {"extra": "ignore"}
 
 
-class PreviousSnapshot(BaseModel):
-    """Snapshot anterior de risco do mesmo merito (pra computar trajetoria)."""
-
-    risco_anterior: Optional[str] = None
-    classified_at_anterior: Optional[str] = None
-    decisao_anterior: Optional[dict[str, Any]] = None
-
-
 class MeritoSynthesisRequest(BaseModel):
     merito_id: int
     # So 'global' e gravado hoje; o tipo composto aceita o valor legado do worker.
@@ -416,11 +373,9 @@ class MeritoSynthesisRequest(BaseModel):
     processo_syntheses: list[ProcessoSynthesisMin] = Field(default_factory=list)
     tomador: Optional[TomadorCardMin] = None
     cdas: list[CDACardMin] = Field(default_factory=list)
-    # Sem `aiims`, `jurisprudencia` (vive no L2 ps_card, regras J/J.1/J.2) nem
-    # `paradigmas`: extra='ignore' tolera payload antigo que ainda mande o campo.
-
-    # Snapshot anterior: aceito por compat; o prompt nao o renderiza.
-    previous_snapshot: Optional[PreviousSnapshot] = None
+    # Sem `aiims`, `jurisprudencia` (vive no L2 ps_card, regras J/J.1/J.2),
+    # `paradigmas` nem `previous_snapshot` (o snapshot anterior ancora o LLM e quebra o
+    # seed): extra='ignore' tolera payload antigo que ainda mande o campo.
 
     model: Optional[str] = None
     provider: Optional[str] = None

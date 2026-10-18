@@ -38,7 +38,7 @@ from .schemas import (
 #     anti-inversao, sem a regra dura tomador==vencedor (que contradiz a matriz).
 #   - ⛔ O snapshot anterior NAO e renderizado: ancora o LLM no risco anterior e quebra o
 #     seed deterministico (o seed_for inclui o prompt, e o snapshot muda a cada
-#     cascade). O campo previous_snapshot segue Optional no request (compat).
+#     cascade). O request nem tem o campo: payload antigo que o mande e ignorado.
 #   - O evento decisivo e marcado INLINE na justificativa como link markdown
 #     `[frase](CNJ)` (instrucao 12); o campo `citacoes` e DERIVADO em codigo pelo
 #     materializer do garantis-shared, e o front (garantis-app citacao-tags.ts)
@@ -47,7 +47,7 @@ from .schemas import (
 #     ultima coisa do prompt.
 #   - Sem truncagem de dado no render (decisao do Elton); a excecao e o bound
 #     head+tail do lifecycle_garantia (abaixo).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.10"
+PROMPT_VERSION_BASE = "merito_synthesis.v2.11"
 
 
 def _prompt_version_for(tipo: str) -> str:

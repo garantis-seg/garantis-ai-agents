@@ -115,7 +115,6 @@ def _merito_synthesis_template() -> str:
     from .merito_synthesis.schemas import (
         CDACardMin,
         MeritoSynthesisRequest,
-        PreviousSnapshot,
         ProcessoSynthesisMin,
         TomadorCardMin,
     )
@@ -144,10 +143,6 @@ def _merito_synthesis_template() -> str:
             )
         ],
         tomador=TomadorCardMin(nome="{{nome_tomador}}", cnpj_basico="{{cnpj_basico}}"),
-        previous_snapshot=PreviousSnapshot(
-            risco_anterior="{{risco_anterior}}",
-            classified_at_anterior="{{classified_at}}",
-        ),
     )
     return build_merito_synthesis_prompt(req)
 

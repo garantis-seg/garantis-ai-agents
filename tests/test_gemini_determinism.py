@@ -302,33 +302,29 @@ def test_agents_pass_thinking_budget_zero():
 def test_l3_prompt_invariante_a_previous_snapshot():
     """Acceptance do fix C (frescor/convergencia): o prompt L3 e BYTE-IDENTICO
     com previous_snapshot presente, ausente ou variando — seed estavel entre
-    cascades reais."""
+    cascades reais. O request nao tem mais o campo: o payload antigo que o manda
+    e aceito, e o campo e ignorado (extra='ignore')."""
     from src.agents.merito_synthesis.prompts import build_merito_synthesis_prompt
-    from src.agents.merito_synthesis.schemas import (
-        MeritoSynthesisRequest,
-        PreviousSnapshot,
-        ProcessoSynthesisMin,
-    )
+    from src.agents.merito_synthesis.schemas import MeritoSynthesisRequest
 
-    ps = [ProcessoSynthesisMin(
-        processo_numero="0000000-00.0000.0.00.0000", tipo_judicial="fiscal",
-    )]
+    ps = [{"processo_numero": "0000000-00.0000.0.00.0000", "tipo_judicial": "fiscal"}]
     base = MeritoSynthesisRequest(merito_id=1, processo_syntheses=ps)
-    com_prev = MeritoSynthesisRequest(
-        merito_id=1, processo_syntheses=ps,
-        previous_snapshot=PreviousSnapshot(
-            risco_anterior="Altissimo",
-            classified_at_anterior="2026-05-23 10:35:26.937755",
-            decisao_anterior={"natureza": "improcedente"},
-        ),
-    )
-    com_prev2 = MeritoSynthesisRequest(
-        merito_id=1, processo_syntheses=ps,
-        previous_snapshot=PreviousSnapshot(
-            risco_anterior="Baixo",
-            classified_at_anterior="2026-07-01 08:00:00.000000",
-        ),
-    )
+    com_prev = MeritoSynthesisRequest(**{
+        "merito_id": 1, "processo_syntheses": ps,
+        "previous_snapshot": {
+            "risco_anterior": "Altissimo",
+            "classified_at_anterior": "2026-05-23 10:35:26.937755",
+            "decisao_anterior": {"natureza": "improcedente"},
+        },
+    })
+    com_prev2 = MeritoSynthesisRequest(**{
+        "merito_id": 1, "processo_syntheses": ps,
+        "previous_snapshot": {
+            "risco_anterior": "Baixo",
+            "classified_at_anterior": "2026-07-01 08:00:00.000000",
+        },
+    })
+    assert "previous_snapshot" not in MeritoSynthesisRequest.model_fields
 
     p_base = build_merito_synthesis_prompt(base)
     assert p_base == build_merito_synthesis_prompt(com_prev)

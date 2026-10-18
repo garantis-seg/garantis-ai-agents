@@ -1,8 +1,7 @@
 """Merito Synthesis Agent - engine v6_meritos camada 3 (OUTPUT PRIMARIO).
 
 Single LLM call por MERITO. Recebe processo_syntheses de TODOS processos do
-merito + tomador + cda (o `previous_snapshot` do request e aceito por compat e nao
-entra no prompt). Output:
+merito + tomador + cda. Output:
 risco + justificativa + peca_pivo + proximos_passos.
 (Jurisprudencia nao entra no L3: vive no L2, regras J/J.1/J.2.)
 
