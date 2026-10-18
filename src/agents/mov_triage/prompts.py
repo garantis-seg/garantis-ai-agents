@@ -8,8 +8,8 @@ juridico pesado (sentido/polos/recursos/extincao, ~21k chars) so roda no passe
 COMPLETO (/mov-factsheet/classify) quando algum portao dispara. Aqui so persona
 de triagem + taxonomia tipo_doc + os 2 portoes + a regra de ouro.
 
-A taxonomia tipo_doc e o contexto de familia foram inlinados aqui (no POC vinham
-de l1_comum) — codigo identico ao original, sem reescrita.
+A taxonomia tipo_doc e o texto dos blocos de familia foram inlinados aqui (no POC
+vinham de l1_comum). Quem escolhe o bloco e a familia do L1 v4 (`_familia_key`).
 """
 
 from .schemas import DocAnexado, MovInput, ProcessoContext
@@ -66,9 +66,10 @@ _TAXONOMIA_TIPO_DOC = """tipo_doc — classifique em UMA destas opcoes (use 'out
   outros                     — nao se encaixa em nenhum tipo acima"""
 
 
-# ── Contexto de familia por materia — inlinado do POC l1_comum._FAMILIA_CTX ─────
+# ── Contexto de familia — texto do POC l1_comum._FAMILIA_CTX; a chave e a familia do
+# payload, o mesmo vocabulario do VOCAB_FAMILIA do L1 v4 ─────────────────────────────
 _FAMILIA_CTX = {
-    "tributario": (
+    "fiscal": (
         "MATERIA (ramo do direito): TRIBUTARIO/FISCAL. Aqui o Tomador e o "
         "CONTRIBUINTE: figura como EXECUTADO (Execucao Fiscal) ou como AUTOR "
         "(Anulatoria, Mandado de Seguranca, Tutela Cautelar/Antecedente, Embargos "
@@ -88,27 +89,13 @@ _FAMILIA_CTX = {
 }
 
 
-def _norm(s: str | None) -> str:
-    if not s:
-        return ""
-    return (
-        s.lower().replace("á", "a").replace("ã", "a").replace("â", "a")
-        .replace("é", "e").replace("ê", "e").replace("í", "i").replace("ó", "o")
-        .replace("ô", "o").replace("ú", "u").replace("ç", "c")
-    )
-
-
 def _familia_block(processo: ProcessoContext) -> str:
-    """Bloco de familia por materia. materia vem de
-    monitoramento.apolices_monitoradas.materia (fiscal/trabalhista/civel) e e
-    passada via ProcessoContext.materia quando disponivel."""
-    materia = getattr(processo, "materia", None)
-    if not materia:
-        return (
-            "MATERIA (ramo do direito) NAO INFORMADA — deduza pelo proprio texto; "
-            "se faltar base, NAO chute."
-        )
-    return _FAMILIA_CTX.get(_norm(materia), f"FAMILIA: {materia}.")
+    """Bloco de familia: a MESMA familia que escolhe o vocabulario do L1 v4, a que o
+    shared manda pronta no payload. O texto da linha `Materia` (`resolve_materia`, com a
+    apolice na frente) nao escolhe o bloco: ele so casaria uma chave com a planilha."""
+    from ..mov_factsheet.prompts_v4 import _familia_key
+
+    return _FAMILIA_CTX[_familia_key(processo)]
 
 
 # ── Persona + regra de ouro (porte direto do POC) ──────────────────────────────
