@@ -218,8 +218,7 @@ async def _call_synthesis(llm_provider, request, model, provider) -> dict:
     """
     prompt = build_processo_synthesis_prompt(request)
     # seed determinístico (proc + prompt): re-síntese L2 reproduzível dado o input
-    # — fecha a fonte que faz o risco oscilar sob resynthesize/L1-congelado. Gated
-    # (ENGINE_LLM_SEED_ENABLED).
+    # — fecha a fonte que faz o risco oscilar sob resynthesize/L1-congelado.
     seed = seed_for("processo_synthesis", request.processo_numero, prompt)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt, model=model, temperature=0.0,

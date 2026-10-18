@@ -26,9 +26,6 @@ from src.agents._utils import vision as V  # noqa: E402
 from src.agents._utils.llm_seed import seed_for  # noqa: E402
 from src.providers.base import BaseLLMProvider
 
-_FLAG = "ENGINE_LLM_SEED_ENABLED"
-
-
 # ── fakes que capturam o CONFIG (não só o kwarg) ─────────────────────────────
 class _ClientQueCapturaConfig:
     """Guarda o `GenerateContentConfig` REAL que saiu pro SDK.
@@ -102,9 +99,9 @@ def test_call_vision_l1_poe_o_seed_NO_CONFIG_do_sdk():
 
 
 def test_call_vision_l1_sem_seed_NAO_fixa_nada():
-    """A outra metade do contrato do `seed_for`: flag OFF devolve `None`, e `None`
-    tem que ser no-op — não `seed=None` explícito com significado, nem `seed=0`
-    (0 é seed VÁLIDO e fixaria a amostragem com a flag desligada)."""
+    """A outra metade do contrato do helper: sem `seed`, nada é fixado — não
+    `seed=None` explícito com significado, nem `seed=0` (0 é seed VÁLIDO e fixaria a
+    amostragem)."""
     prov = _ProviderQueCaptura()
 
     asyncio.run(V.call_vision_l1(
@@ -159,7 +156,7 @@ def test_helper_fia_o_seed_no_ramo_VISION(monkeypatch):
 
 
 # ── 3. O agent: o seed existe, é ESTÁVEL e DISCRIMINA ────────────────────────
-def _seed_visto(monkeypatch, *, texto_doc: str, mov_id: str, flag: str) -> int | None:
+def _seed_visto(monkeypatch, *, texto_doc: str, mov_id: str) -> int | None:
     """Roda `classify_mov_factsheet` DE VERDADE e devolve o seed que ele mandou."""
     from src.agents.mov_factsheet import agent as A
 
@@ -178,7 +175,7 @@ def _seed_visto(monkeypatch, *, texto_doc: str, mov_id: str, flag: str) -> int |
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
     monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
-    monkeypatch.setenv(_FLAG, flag)
+    monkeypatch.delenv("ENGINE_LLM_SEED_ENABLED", raising=False)
 
     asyncio.run(A.classify_mov_factsheet(
         processo={"cnj": "01688863120164025101"},
@@ -199,8 +196,8 @@ def test_o_MESMO_input_produz_o_MESMO_seed(monkeypatch):
     """A propriedade que corta o fork: os 2 cards a 3s de distância recebem o
     MESMO seed. ⛔ MUTANTE: pôr qualquer coisa volátil nas parts (timestamp,
     `id()`, `uuid4()`, contador) — a suíte fica vermelha aqui."""
-    s1 = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id=_MOV, flag="true")
-    s2 = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id=_MOV, flag="true")
+    s1 = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id=_MOV)
+    s2 = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id=_MOV)
 
     assert isinstance(s1, int), "o agent não mandou seed nenhum (kwarg ausente/None)"
     assert s1 == s2
@@ -219,20 +216,12 @@ def test_inputs_DIFERENTES_produzem_seeds_DIFERENTES(monkeypatch):
     Por isso os asserts abaixo afirmam só o que OBSERVAM ("mudar X mudou o
     seed"), nunca "X entra no seed" — que é conclusão sobre as parts, e essas
     duas coisas divergem exatamente no caso do mov_id."""
-    s_doc = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id=_MOV, flag="true")
-    s_doc_outro = _seed_visto(monkeypatch, texto_doc=_DOC_B, mov_id=_MOV, flag="true")
-    s_mov_outro = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id="peticao-outro",
-                              flag="true")
+    s_doc = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id=_MOV)
+    s_doc_outro = _seed_visto(monkeypatch, texto_doc=_DOC_B, mov_id=_MOV)
+    s_mov_outro = _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id="peticao-outro")
 
     assert s_doc != s_doc_outro, "mudar o CONTEUDO lido nao mudou o seed"
     assert s_doc != s_mov_outro, "mudar o mov_id nao mudou o seed"
-
-
-def test_flag_OFF_nao_manda_seed(monkeypatch):
-    """⛔ MUTANTE: trocar `seed_for` por `deterministic_seed` (ungated). O ship é
-    inerte por default e o flip é explícito — e é assim que dá pra medir o antes
-    e o depois. Todos os testes acima passariam com o mutante."""
-    assert _seed_visto(monkeypatch, texto_doc=_DOC_A, mov_id=_MOV, flag="false") is None
 
 
 def test_o_seed_e_o_do_llm_seed_e_cabe_no_int32_do_gemini(monkeypatch):
@@ -264,7 +253,6 @@ def test_o_seed_e_o_do_llm_seed_e_cabe_no_int32_do_gemini(monkeypatch):
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
     monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
-    monkeypatch.setenv(_FLAG, "true")
 
     asyncio.run(A.classify_mov_factsheet(
         processo={"cnj": "01688863120164025101"},
@@ -303,7 +291,6 @@ def test_o_seed_nao_alterou_o_prompt(monkeypatch):
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
     monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
-    monkeypatch.setenv(_FLAG, "true")
 
     proc = {"cnj": "01688863120164025101"}
     mov = {"mov_id": _MOV, "texto": ""}

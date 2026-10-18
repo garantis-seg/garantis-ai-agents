@@ -434,8 +434,7 @@ async def classify_mov_factsheet(
         response_schema = MovFactSheetCard
 
     # Seed determinístico (mov + prompt) — o MESMO padrão de L2/L3
-    # (processo_synthesis/merito_synthesis). Gated em ENGINE_LLM_SEED_ENABLED; `None`
-    # (flag OFF) é no-op no provider.
+    # (processo_synthesis/merito_synthesis).
     #
     # POR QUE no L1: `temperature=0.0` NÃO é determinismo — o Gemini a temp=0 sem
     # seed tem micro-ruído de decode entre runs, e no L1 esse ruído não sai como

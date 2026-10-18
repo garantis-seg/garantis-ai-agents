@@ -12,16 +12,9 @@ MESMO documento podem discordar do rótulo. Esse rótulo não é chave de
 `leads.admin_items` — a identidade do nó é o número (`uq_admin_items_identidade`), e o
 `tipo` é resolvido pelo writer do garantis-shared sobre as claims das arestas vivas.
 
-Gated em ENGINE_LLM_SEED_ENABLED (default OFF no código — ship inerte + flip explícito;
-é tightening de determinismo a temp=0, surety-neutro). O valor de prod mora no
-`cloudbuild-deploy.yaml` deste repo e no `config/services.yaml` do execucao-fiscal
-(env imperativa não sobrevive a deploy).
+O seed vai sempre: é tightening de determinismo a temp=0, surety-neutro.
 """
 import hashlib
-
-from .feature_flags import flag_enabled
-
-_SEED_FLAG = "ENGINE_LLM_SEED_ENABLED"
 
 
 def deterministic_seed(*parts: object) -> int:
@@ -37,12 +30,6 @@ def deterministic_seed(*parts: object) -> int:
     return int(digest[:8], 16) & 0x7FFFFFFF
 
 
-def seed_for(*parts: object) -> int | None:
-    """`deterministic_seed(*parts)` quando ENGINE_LLM_SEED_ENABLED, senão None.
-
-    Passar `seed=None` pro provider é no-op (Gemini usa seed aleatório) — então o
-    caller pode sempre `agenerate(..., seed=seed_for(...))` sem branch.
-    """
-    if not flag_enabled(_SEED_FLAG, default="false"):
-        return None
+def seed_for(*parts: object) -> int:
+    """O seed do call do cascade: `deterministic_seed(*parts)`."""
     return deterministic_seed(*parts)
