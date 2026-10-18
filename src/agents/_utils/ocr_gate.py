@@ -18,11 +18,11 @@ from __future__ import annotations
 import re
 from typing import Optional
 
-# Régua de teor ÚNICA, compartilhada com o piso de admissão do L1-petição no
-# garantis-shared. ⛔ Import DURO de propósito: um fallback local aqui seria a 6ª
+# Régua de teor ÚNICA (a medida e o piso `TEOR_MIN_CHARS`), compartilhada com o piso
+# de admissão do L1-petição no garantis-shared. ⛔ Import DURO de propósito: um fallback local aqui seria a 6ª
 # cópia do mesmo predicado, que é a doença que este módulo está curando. O wheel
 # do shared já é dependência declarada deste repo (requirements.txt).
-from garantis_shared.texto_util import texto_util_len
+from garantis_shared.texto_util import TEOR_MIN_CHARS, texto_util_len
 
 # Sinal 1 (página-imagem) — thresholds calibrados em banco real
 COBERTURA_IMG_MIN = 0.50
@@ -42,9 +42,6 @@ VETOR_PATHS_MIN = 200
 VETOR_CHARS_MAX = 600
 # Sinal 2 (rmgarbage)
 GARBAGE_RATIO_MAX = 0.30
-# Piso de TEOR: abaixo disto o texto não decide sozinho (ver texto_decide_sozinho).
-# 400 chars ≈ um parágrafo — carimbo do PJe e rodapé do ESAJ ficam em 285-399.
-TEOR_MIN_CHARS = 400
 # Controle de páginas
 TETO_PAGINAS = 100
 AMOSTRA_PONTAS = 30

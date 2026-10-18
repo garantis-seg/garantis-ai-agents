@@ -52,6 +52,15 @@ def test_vazio_e_garbage_continuam_indo_pro_pdf():
         assert not texto_decide_sozinho(txt)
 
 
+def test_o_piso_e_o_do_shared_sem_copia_local():
+    """O piso tem dono único: `garantis_shared.texto_util`, o mesmo da admissão da
+    petição. Uma cópia local deixaria os 2 lados divergirem com a suíte verde."""
+    from garantis_shared import texto_util
+    from src.agents._utils import ocr_gate
+
+    assert ocr_gate.TEOR_MIN_CHARS is texto_util.TEOR_MIN_CHARS
+
+
 if __name__ == "__main__":  # smoke sem pytest
     test_as_3_formas_de_prod_sao_texto_limpo_para_o_rmgarbage()
     test_carimbo_e_rodape_nao_decidem_sozinhos()
