@@ -39,8 +39,8 @@ necessário: o reduce faz o raciocínio cross-janela, e o LLM só sintetiza cada
 Editar prompts.py NÃO re-cascateia nada: o HIT de cache do L2 é "card ATIVO?"
 (superseded_at IS NULL) + scope_key + frescor — NÃO "existe synthesis na versão X?" (ver
 `_exists_cached_processo_synthesis` em garantis-shared
-`engine_v6/layer2_processo_synthesis/materializer.py`). Quem supersede é `enroll_processo`,
-pela versão do PROCESSO, não pelo PROMPT_VERSION.
+`engine_v6/layer2_processo_synthesis/materializer.py`). Nem a versão do card nem o
+PROMPT_VERSION aposentam card nenhum.
 ⛔ A consequência inversa é o limite real: sem invalidação, card L2 já gerado MANTÉM a
 saída do prompt antigo até ser superseded por outro motivo. Mudança de prompt vale PRA
 FRENTE, nunca retroativamente.

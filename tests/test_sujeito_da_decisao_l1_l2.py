@@ -125,9 +125,9 @@ class TestOPrompt:
 
 class TestOQueNaoMuda:
     def test_NAO_ha_bump_de_summary_prompt_version(self):
-        """⛔ Bump de `summary_prompt_version` e re-cascade do UNIVERSO
-        (`supersede_other_versions`). O `prompt_identity` (sha) muda sozinho, e e isso
-        que se quer: rastreabilidade sem custo.
+        """⛔ O rotulo da versao e decisao explicita, nunca efeito colateral. O
+        `prompt_identity` (sha) muda sozinho, e e isso que se quer: rastreabilidade sem
+        custo.
 
         ⚰️ **Ate 2026-09-01 este teste rodava `git diff origin/master` por subprocess, e
         era INERTE DE DUAS FORMAS:**
