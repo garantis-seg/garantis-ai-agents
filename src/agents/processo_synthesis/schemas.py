@@ -211,8 +211,8 @@ class ProbabilidadeExito(BaseModel):
     Sao inversamente correlacionados mas nao 100%: tempo ate transito,
     substituicao de garantia, transacao tambem entram no risco.
 
-    A camada 3 (merito_synthesis) usa probabilidade_exito como input forte
-    pro risco final do merito.
+    O L2 nao o preenche (1 call so): o card servido o leva vazio, fora do response_schema,
+    e a camada 3 le classificacao=null como sem-sinal.
 
     v2.1: APERTADO pra Literal[...] (mesmo motivo de DecisaoVigente).
     """
@@ -371,12 +371,6 @@ class ProcessoSynthesisCard(BaseModel):
         description="Tipo do processo (echo do request). Define qual matriz Daycoval aplicar.",
     )
 
-    # Campo 9: probabilidade de exito (Matriz Daycoval)
-    probabilidade_exito: ProbabilidadeExito = Field(
-        default_factory=ProbabilidadeExito,
-        description="Probabilidade do tomador ter exito. LLM aplica os criterios objetivos da matriz Daycoval correspondente ao tipo_judicial. Default vazio quando LLM nao retorna (audit no campo classificacao=null).",
-    )
-
     # Meta
     movs_processed: int = Field(default=0, description="Numero de mov_factsheets considerados")
     confianca: float = Field(default=0.7, ge=0.0, le=1.0)
@@ -490,6 +484,9 @@ class ProcessoSynthesisCardRich(ProcessoSynthesisCard):
     """
 
     decisao_vigente: DecisaoVigenteRich = Field(default_factory=DecisaoVigenteRich)
+    # SEMPRE vazio, e fora do response_schema: o L2 e 1 call so, e o L3 le
+    # classificacao=null como sem-sinal. O campo fica no card persistido (a forma de hoje).
+    probabilidade_exito: ProbabilidadeExito = Field(default_factory=ProbabilidadeExito)
 
 
 class ProcessoSynthesisResponse(BaseModel):

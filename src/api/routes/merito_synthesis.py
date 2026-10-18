@@ -22,8 +22,8 @@ router = APIRouter(prefix="/merito-synthesis", tags=["merito-synthesis"])
 @router.post("/classify", response_model=MeritoSynthesisResponse)
 async def classify_merito_synthesis_endpoint(request: MeritoSynthesisRequest):
     """Output primario da engine v6_meritos. Recebe processo_syntheses + tomador
-    + cdas + previous_snapshot. Retorna risco + justificativa + trajetoria +
-    peca_pivo do merito. Campo fora do schema (aiims, jurisprudencia) e ignorado
+    + cdas + previous_snapshot. Retorna risco + justificativa + peca_pivo do
+    merito. Campo fora do schema (aiims, jurisprudencia) e ignorado
     via extra='ignore'.
 
     Quem persiste em monitoramento.risk_snapshots e o materializer do L3 no

@@ -1,7 +1,11 @@
 """Pydantic schemas pro merito_synthesis agent (engine v6_meritos camada 3).
 
-Output PRIMARIO da engine v6 - risco + justificativa + trajetoria por merito.
+Output PRIMARIO da engine v6 - risco + justificativa por merito.
 Cabe em leitura_conexos.risk_snapshots + dossier_artifacts kind='merito_synthesis'.
+
+O que o codigo sobrescreve sempre fica FORA do response_schema do LLM: os valores do
+merito, a agregacao da probabilidade de exito e a trajetoria. O materializer L3 do
+garantis-shared calcula e grava esses campos no card.
 """
 
 from typing import Any, Literal, Optional
@@ -154,59 +158,13 @@ class Citacao(BaseModel):
         return str(v) if not isinstance(v, str) else v
 
 
-class BreakdownProcesso(BaseModel):
-    """Breakdown agregacao prob_exito por processo do merito.
-
-    Substitui o legacy list[dict[str, Any]] que Gemini rejeitava com
-    'additionalProperties is not supported' quando exposto via response_schema.
-    """
-
-    processo_numero: Optional[str] = Field(default=None, description="CNJ do processo.")
-    role: Optional[Literal["principal", "conexo"]] = Field(default=None)
-    classificacao: Optional[Literal[
-        "provavel", "possivel", "poucas_chances", "remota",
-    ]] = None
-    score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
-    peso_aplicado: Optional[float] = Field(
-        default=None,
-        description="Peso aplicado na agregacao (principal=1.0, conexo=0.5).",
-    )
-    valor_em_disputa: Optional[float] = None
-
-
 class ProbabilidadeExitoMerito(BaseModel):
-    """Probabilidade de Exito agregada do merito (Matriz Daycoval).
+    """A frase sobre a perspectiva de exito no merito (Matriz Daycoval).
 
-    Agregacao default V1: media ponderada por valor_em_disputa dos processos
-    'principal' (conexos contam metade). Pode evoluir pra peso especial de
-    peca-pivo apos testes (decisao open 2026-05-21).
-
-    Score numerico (0.0001 a 1.0) entra como FATOR no risco de acionamento
-    da Camada 3. Inversao monotonica: prob_exito alta → risco baixo.
-
-    v2.1: APERTADO pra Literal[...] + breakdown_por_processo via Pydantic model
-    concreto (BreakdownProcesso) em vez de dict[str, Any].
+    A agregacao (classificacao, score, metodo e breakdown por processo) e calculada em
+    codigo, a partir dos processos, depois desta chamada.
     """
 
-    classificacao_agregada: Optional[Literal[
-        "provavel", "possivel", "poucas_chances", "remota",
-    ]] = Field(
-        default=None,
-        description="Bucket equivalente ao score (provavel=1.0/possivel=0.7/poucas_chances=0.4/remota=0.0001).",
-    )
-    score_agregado: Optional[float] = Field(
-        default=None,
-        ge=0.0, le=1.0,
-        description="Media ponderada por valor_em_disputa dos processos. Espelha classificacao.",
-    )
-    metodo_agregacao: str = Field(
-        default="media_ponderada_valor_disputa",
-        description="Metodo usado (V1: media ponderada). Audit trail.",
-    )
-    breakdown_por_processo: list[BreakdownProcesso] = Field(
-        default_factory=list,
-        description="Lista de breakdown por processo. Audit trail da agregacao.",
-    )
     contribuicao_no_risco: Optional[str] = Field(
         default=None,
         description=(
@@ -314,34 +272,17 @@ class MeritoSynthesisCard(BaseModel):
     # (acima) segue como contrato do shape persistido. Consumidor: snapshots.py usa
     # card.get("ciclo_garantia") (dict), não atributo tipado.
 
-    # Valores agregados
-    valor_em_disputa_melhor_evidencia: Optional[float] = Field(
-        default=None,
-        description="Soma ou maior dos processo.valor_em_disputa (BRL)",
-    )
-    valor_garantia_melhor_evidencia: Optional[float] = Field(
-        default=None,
-        description="Soma dos valor_garantia das apolices atreladas (BRL)",
-    )
-
     # Peca-pivo
     peca_pivo_merito: PecaPivoMerito = Field(default_factory=PecaPivoMerito)
 
     # Probabilidade de Exito agregada (Matriz Daycoval)
     probabilidade_exito_merito: ProbabilidadeExitoMerito = Field(
         default_factory=ProbabilidadeExitoMerito,
-        description="Agregacao das prob_exito dos processos do merito. Input forte pro risco final.",
+        description="Contexto de apoio: a frase sobre a perspectiva de exito dos processos.",
     )
 
     # Forward
     proximos_passos_provaveis: list[str] = Field(default_factory=list)
-
-    # Trajetoria - o LLM NAO preenche esses campos; o materializer L3 do shared os zera
-    # antes de persistir (trajetoria desligada).
-    trajetoria: Optional[Literal[
-        "estavel", "piorou", "melhorou", "primeira_classificacao",
-    ]] = None
-    trajetoria_motivo: Optional[str] = None
 
     # Meta
     confidence: float = Field(default=0.7, ge=0.0, le=1.0)

@@ -2,7 +2,7 @@
 
 Agrega processo_syntheses de TODOS processos do merito + tomador + cda (o
 `previous_snapshot` do request e aceito por compat e nao entra no prompt).
-Output: risco + justificativa + trajetoria + peca_pivo + proximos_passos.
+Output: risco + justificativa + peca_pivo + proximos_passos.
 (Jurisprudencia nao entra no L3: vive no L2, regras J/J.1/J.2.)
 
 Persiste em leitura_conexos.risk_snapshots (via o materializer L3 do garantis-shared).

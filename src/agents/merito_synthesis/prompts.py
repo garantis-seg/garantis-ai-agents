@@ -47,7 +47,7 @@ from .schemas import (
 #     ultima coisa do prompt.
 #   - Sem truncagem de dado no render (decisao do Elton); a excecao e o bound
 #     head+tail do lifecycle_garantia (abaixo).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.9"
+PROMPT_VERSION_BASE = "merito_synthesis.v2.10"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -511,8 +511,8 @@ def _build_field_instructions() -> str:
 5. ciclo_garantia: NAO emita este campo — saiu do schema de output (2026-06-19). E
    montado DETERMINISTICAMENTE em codigo a partir dos lifecycle_garantia dos processos.
 
-6. valor_em_disputa_melhor_evidencia: maior valor entre os processos (BRL).
-   valor_garantia_melhor_evidencia: SOMA dos valor_garantia das apolices aceitas (BRL).
+6. Os valores do merito (em disputa e da garantia) NAO sao campos de saida: o codigo
+   soma o valor da causa dos processos e o LMG das apolices.
 
 7. peca_pivo_merito: a UNICA mov mais decisiva do merito inteiro (pode estar em qualquer
    processo). Use processo_numero + mov_id do peca_pivo_candidata da camada 2 mais
@@ -520,22 +520,10 @@ def _build_field_instructions() -> str:
 
 8. proximos_passos_provaveis: lista de 2-4 acoes esperadas pro merito como um todo.
 
-9. probabilidade_exito_merito (Matriz Daycoval agregada — CONTEXTO DE APOIO, NAO decide o nivel):
-   Cada processo_synthesis ja traz `probabilidade_exito` com score (1.0/0.7/0.4/0.0001)
-   da Matriz Daycoval. Voce agrega no nivel do MERITO:
-
-   a) classificacao_agregada + score_agregado:
-      - V1 (default): MEDIA PONDERADA POR valor_em_disputa dos processos.
-        Conexos contam metade do peso (multiplicar valor_em_disputa do conexo por 0.5
-        antes do calculo). Se valor_em_disputa estiver null em algum, use peso=1.
-        Mapeie de volta pro bucket: score >= 0.85 -> "provavel", >= 0.55 -> "possivel",
-        >= 0.20 -> "poucas_chances", < 0.20 -> "remota".
-      - Se UM SO processo (sem conexos), score_agregado = score do processo principal.
-   b) breakdown_por_processo: lista com {processo_numero, role, classificacao, score,
-      peso_aplicado, valor_em_disputa} pra audit.
-   c) metodo_agregacao: "media_ponderada_valor_disputa" (V1 default).
-   d) contribuicao_no_risco: 1 frase explicando COMO essa prob_exito agregada
-      influenciou o risco final que voce escolheu (vide regra F abaixo).
+9. probabilidade_exito_merito.contribuicao_no_risco (CONTEXTO DE APOIO, NAO decide o nivel):
+   1 frase explicando COMO a `probabilidade_exito` dos processos influenciou o risco
+   final que voce escolheu (vide regra F abaixo). A agregacao no nivel do MERITO
+   (classificacao, score, breakdown) e calculada em codigo.
 
 10. confidence (0-1):
     - 0.9+ quando decisao_atual clara em todos os processos

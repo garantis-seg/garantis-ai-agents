@@ -429,9 +429,6 @@ ARQUITETURA FULL-RAG: voce SO recebe cards estruturados ja-sintetizados pela Cam
 (nao recebe raw PDF nem docs cru). Confie nos cards — a Camada 1 fez o trabalho
 de extracao FACTUAL com acesso ao texto. Sua tarefa eh AGREGAR + INTERPRETAR.
 
-NOTA: `probabilidade_exito` (Matriz Daycoval) e calculada em CALL SEPARADA do C2;
-NAO inclua esse campo neste output.
-
 <regras_criticas>
 
 <regra_polos>
