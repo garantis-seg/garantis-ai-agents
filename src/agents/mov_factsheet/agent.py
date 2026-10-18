@@ -20,7 +20,6 @@ from .._utils import (
     call_l1_with_vision_fallback,
     seed_for,
 )
-from .._utils.feature_flags import flag_enabled
 from .chunking import reduce_peca_cards, split_large_peca_variants
 from .schemas import (
     DocAnexado,
