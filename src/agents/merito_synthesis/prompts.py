@@ -23,17 +23,6 @@ from .schemas import (
 )
 
 
-from .._utils import flag_enabled as _flag_enabled_shared
-
-
-def _flag_enabled(name: str, default: str = "true") -> bool:
-    """Wrapper com default ON pras flags de prompt deste modulo.
-
-    Helper canonical é `agents._utils.flag_enabled` (default OFF).
-    """
-    return _flag_enabled_shared(name, default=default)
-
-
 # Bump quando alterar build_merito_synthesis_prompt OU MeritoSynthesisCard
 # schema. Sufixo `-{tipo}` via _prompt_version_for() rastreia variant em
 # telemetria.engine_llm_calls. O que cada versao mudou esta no git; ficam aqui os
@@ -403,14 +392,8 @@ recurso, extincao SEM merito) NAO sobem risco — ver regras abaixo.
 
 def _build_bloqueio_prob_exito() -> str:
     """Reforca que a `probabilidade_exito` da L2 e CONTEXTO e nao decide o nivel
-    (quem decide e a MATRIZ DE RISCO).
-
-    Flag BLOQUEIO_PROB_EXITO_ENABLED (default ON pelo `_flag_enabled` deste modulo):
-    false tira o bloco sem code change. O nome (de quando o bloco BLOQUEAVA o sinal)
-    fica por compat com a env var.
+    (quem decide e a MATRIZ DE RISCO). O nome e de quando o bloco BLOQUEAVA o sinal.
     """
-    if not _flag_enabled("BLOQUEIO_PROB_EXITO_ENABLED"):
-        return ""
     return """=== PROBABILIDADE_EXITO = CONTEXTO, NAO DECIDE O NIVEL ===
 
 A probabilidade_exito de cada processo (Matriz Daycoval de chance de VENCER a
