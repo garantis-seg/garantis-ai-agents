@@ -1,10 +1,13 @@
 """O `risco_processo_intermediario` nao existe mais no L2 nem no L3.
 
-O L2 o emitia em toda chamada, e so o prompt do L3 legado o lia. O L2 segue com o par
-`risco_factual` + `risco_jurisprudencial`, e a escala que o `risco_factual` cita fica no
-prompt. O card L2 ja gravado ainda traz o campo: o L3 o aceita e o ignora.
+O L2 o emitia em toda chamada, e o prompt do L3 legado e o da redacao o liam (o mesmo
+bloco de processos). O L2 segue com o par `risco_factual` + `risco_jurisprudencial`, e a
+escala que o `risco_factual` cita fica no prompt. O card L2 ja gravado ainda traz o campo:
+o L3 o aceita e o ignora.
 """
 from __future__ import annotations
+
+from typing import get_args
 
 from src.agents.merito_synthesis.prompts import build_merito_synthesis_prompt
 from src.agents.merito_synthesis.schemas import MeritoSynthesisRequest
@@ -24,9 +27,14 @@ def test_l2_o_campo_saiu_do_schema_e_do_prompt():
         processo_numero="0", mov_factsheets=[MovFactSheetMin(mov_id="m1", data="2024-01-01")],
     ))
     assert "risco_processo_intermediario" not in p
-    # A escala que o risco_factual cita continua no prompt.
+    # A escala que o risco_factual cita continua no prompt, com 1 definicao por valor do
+    # Literal do schema (le os 2 lados: um nivel novo sem definicao fica vermelho).
     assert "A escala esta no item 4." in p
-    assert "4. Escala do risco_factual" in p
+    item4 = p[p.index("4. Escala do risco_factual"):p.index("5. trajetoria_dentro_processo")]
+    niveis = get_args(get_args(ProcessoSynthesisCard.model_fields["risco_factual"].annotation)[0])
+    for nivel in niveis:
+        if nivel != "Indeterminado":
+            assert f"- {nivel}:" in item4, nivel
 
 
 def test_l3_o_card_l2_antigo_e_aceito_e_o_campo_nao_entra_no_prompt():

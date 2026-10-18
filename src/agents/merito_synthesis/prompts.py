@@ -1464,7 +1464,7 @@ def build_prompt_and_version(
 #   mexer aqui e score-neutro. O item 12 do prompt PRINCIPAL tem o mesmo defeito, mas
 #   la o prompt entra no seed (agent.py: seed_for(..., prompt)) e mudar muda a banda:
 #   fica pra um PR separado, com OK explicito.
-REDACAO_PROMPT_VERSION = "redacao.v1.2"
+REDACAO_PROMPT_VERSION = "redacao.v1.3"
 
 _RISCO_POR_EXTENSO = {
     "Baixo": "baixo", "Medio": "medio", "Alto": "alto", "Altissimo": "altissimo",
