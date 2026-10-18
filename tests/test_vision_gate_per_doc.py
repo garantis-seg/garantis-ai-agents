@@ -405,10 +405,9 @@ def test_o_motivo_de_PAGINA_continua_sem_a_contagem_variavel():
 
 
 def test_o_LOG_carrega_o_motivo_porque_e_ELE_o_entregavel(caplog):
-    """⭐ O `gate_out` e devolvido "pro caller PERSISTIR" e o materializer do MOV
-    NAO persiste (0 ocorrencias de `vision_gate` nele) — so o de peticao persiste.
-    Entao pro mov o log e a UNICA resposta pra "por que este foi pro Vision?", e sem
-    o motivo nele a pergunta volta a custar medicao indireta (card 869eqbpyk).
+    """⭐ O log responde "por que este foi pro Vision?" sem consulta ao banco, com o
+    `gate_s` junto. O card do L1 (mov e peticao) tambem grava o veredito no `raw_ref`.
+    Sem o motivo no log, a pergunta volta a custar medicao indireta (card 869eqbpyk).
     ⚠️ Ancora no `motivo=`, nao na frase toda: o texto do log pode ser reescrito, o
     campo e o contrato."""
     import logging
