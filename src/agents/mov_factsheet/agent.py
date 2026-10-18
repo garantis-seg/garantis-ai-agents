@@ -186,19 +186,9 @@ def _zerar_decisao(card_data: dict) -> None:
 # frase no prompt. O bullet FICA: ele e o que faz o modelo emitir a ancora nos casos
 # em que ele consegue, e e o controle positivo desta trava.
 #
-# ⛔ Default OFF no codigo (o valor de prod mora no cloudbuild-deploy.yaml). O custo
-# declarado: decisao LEGITIMA que o modelo simplesmente nao soube citar cai junto
-# (falso positivo de higiene virando perda de sinal).
-L1_DECISAO_EXIGE_DISPOSITIVO = "L1_DECISAO_EXIGE_DISPOSITIVO"
-
-
-def _decisao_exige_dispositivo() -> bool:
-    """Flag da trava de dispositivo. Default OFF = card sem a trava.
-
-    Mora AQUI, e nao no modulo folha (`prompts_v4.py`): o prompt nao muda sob ela, entao
-    o unico consumidor e este modulo.
-    """
-    return flag_enabled(L1_DECISAO_EXIGE_DISPOSITIVO)
+# ⛔ A trava e incondicional (nao ha flag), igual a de corpo. O custo declarado: decisao
+# LEGITIMA que o modelo simplesmente nao soube citar cai junto (falso positivo de
+# higiene virando perda de sinal).
 
 
 def _sem_dispositivo(card_data: dict) -> bool:
@@ -240,16 +230,13 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
     if sem_corpo:
         _zerar_decisao(card_data)                # ANTES do G6: peca_pivo sai coerente
     if _sem_dispositivo(card_data):
-        # ⭐ O log sai tambem com a flag DESLIGADA, de proposito — ele e a metade que MEDE.
-        # Um contador que so fala quando a trava age nunca acumularia volume pra decidir,
-        # e "contador em zero" seria indistinguivel de mudo.
+        # O log conta a decisao que a trava apaga: e o volume do custo declarado na trava.
         logger.warning(
-            "L1_DECISAO_SEM_ANCORA mov_id=%s natureza=%s tipo_doc=%s travado=%s",
+            "L1_DECISAO_SEM_ANCORA mov_id=%s natureza=%s tipo_doc=%s",
             mov.mov_id, (card_data.get("decisao") or {}).get("natureza"),
-            card_data.get("tipo_doc"), _decisao_exige_dispositivo(),
+            card_data.get("tipo_doc"),
         )
-        if _decisao_exige_dispositivo():
-            _zerar_decisao(card_data)            # idem — a ancora e a outra metade
+        _zerar_decisao(card_data)                # idem — a ancora e a outra metade
     aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
     return card_data
 

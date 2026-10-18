@@ -177,8 +177,8 @@ class TestAAncoraDaRaizAChegaAoL2:
       3. *"o `_est_render_chars` do chunking"* -> ele CHAMA `_summarize_factsheet`. Detector e
          render nao podem divergir por construcao; este pe nunca existiu.
 
-    ⚠️ O que MUDA o tamanho daqui pra frente, e o card nao dizia: `L1_DECISAO_EXIGE_DISPOSITIVO`
-    esta ON em prod, entao todo card que afirmar decisao PRECISA de dispositivo por construcao —
+    ⚠️ O que MUDA o tamanho daqui pra frente, e o card nao dizia: a trava de dispositivo do L1
+    (`_sem_dispositivo`) roda em todo card, entao todo card que afirmar decisao PRECISA de dispositivo por construcao —
     da proxima rodada do L1 em diante a populacao sai de 3.112 pra a ordem de 25.613.
 
         SELECT count(*) total,

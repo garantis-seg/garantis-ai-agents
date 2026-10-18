@@ -18,14 +18,11 @@ tem_decisao=false"*. O modelo cumpre parte do tempo e ninguem cobra no resto. Po
 conserto e MECANICO e nao mais uma frase no prompt: acrescentar regra a um prompt cuja regra
 ja esta certa e o castelo-de-cartas que o card proibiu.
 
-⚠️ O flag e default OFF. Os testes de OFF sao os que provam "byte-identico em prod hoje".
+A trava e incondicional: o valor de prod virou codigo, e nenhuma env a desliga.
 
 Run: pytest tests/test_dispositivo_trava.py -q
 """
-import pytest
-
 from src.agents.mov_factsheet.agent import (
-    L1_DECISAO_EXIGE_DISPOSITIVO,
     _build_card_v4,
     _sem_dispositivo,
     _zerar_decisao,
@@ -112,34 +109,23 @@ def test_tolera_card_sem_bloco_decisao():
     assert not _sem_dispositivo({"decisao": None})
 
 
-# ── MUTANTE 4: flag desligada e a trava roda mesmo assim ──────────────────────
-def test_flag_off_e_byte_identico(monkeypatch):
-    monkeypatch.delenv(L1_DECISAO_EXIGE_DISPOSITIVO, raising=False)
-    card = _build_card_v4(_card_llm(), _mov())
-    assert card["decisao"]["tem_decisao"] is True
-    assert card["decisao"]["natureza"] == "procedente"
-    assert card["peca_pivo"]["e_pivo"] is True
-
-
-@pytest.mark.parametrize("valor", ["", "false", "0", "no", "off"])
-def test_flag_desligada_em_qualquer_forma(monkeypatch, valor):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_DISPOSITIVO, valor)
-    assert _build_card_v4(_card_llm(), _mov())["decisao"]["tem_decisao"] is True
+# ── a env da flag antiga nao desliga a trava ──────────────────────────────────
+def test_a_env_false_nao_desliga_a_trava(monkeypatch):
+    monkeypatch.setenv("L1_DECISAO_EXIGE_DISPOSITIVO", "false")
+    assert _build_card_v4(_card_llm(), _mov())["decisao"]["tem_decisao"] is False
 
 
 # ── MUTANTE 1: card sem ancora PASSA pela trava ───────────────────────────────
-def test_flag_on_apaga_a_afirmacao_sem_ancora(monkeypatch):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_DISPOSITIVO, "true")
+def test_apaga_a_afirmacao_sem_ancora():
     d = _build_card_v4(_card_llm(), _mov())["decisao"]
     assert d["tem_decisao"] is False
     assert d["natureza"] is None and d["instancia"] is None
 
 
 # ── MUTANTE 2: card COM ancora e zerado junto ─────────────────────────────────
-def test_flag_on_preserva_quem_tem_a_ancora(monkeypatch):
+def test_preserva_quem_tem_a_ancora():
     """O conserto e SUPERSET: os cards que ja funcionam tem de continuar identicos.
     Se este quebrar, a trava virou um apagador de decisao."""
-    monkeypatch.setenv(L1_DECISAO_EXIGE_DISPOSITIVO, "true")
     card = _build_card_v4(_card_llm(dispositivo=DISPOSITIVO_REAL), _mov())
     assert card["decisao"]["tem_decisao"] is True
     assert card["decisao"]["natureza"] == "procedente"
@@ -148,22 +134,20 @@ def test_flag_on_preserva_quem_tem_a_ancora(monkeypatch):
 
 
 # ── MUTANTE 3: a trava roda DEPOIS do G6 ──────────────────────────────────────
-def test_o_G6_ve_a_trava_e_sai_coerente(monkeypatch):
+def test_o_G6_ve_a_trava_e_sai_coerente():
     """`aplicar_derivados_sujeito_indep` deriva categoria/peca_pivo/relevante DE
     `tem_decisao`. Se a trava rodasse depois dele, o card sairia com tem_decisao=false e
     peca_pivo=true — afirmando pela porta dos fundos exatamente o que a trava negou."""
-    monkeypatch.setenv(L1_DECISAO_EXIGE_DISPOSITIVO, "true")
     card = _build_card_v4(_card_llm(), _mov())
     assert card["decisao"]["tem_decisao"] is False
     assert card["peca_pivo"]["e_pivo"] is False
 
 
 # ── MUTANTE 5: transito_certificado cai junto ─────────────────────────────────
-def test_transito_certificado_sobrevive(monkeypatch):
+def test_transito_certificado_sobrevive():
     """Certidao de transito e fato PROPRIO, com guard proprio no L2 — nao depende de haver
     decisao NESTA mov. Se cair junto, a trava passou do escopo (e e o mesmo contrato que a
     trava de corpo ja assinou)."""
-    monkeypatch.setenv(L1_DECISAO_EXIGE_DISPOSITIVO, "true")
     card = _build_card_v4(
         _card_llm(transito_certificado=True), _mov("Transitado em julgado"),
     )
@@ -171,47 +155,25 @@ def test_transito_certificado_sobrevive(monkeypatch):
     assert card["decisao"]["transito_certificado"] is True
 
 
-# ── os dois predicados sao INDEPENDENTES ──────────────────────────────────────
-def test_a_trava_de_corpo_nao_liga_esta(monkeypatch):
-    """⛔ A trava de CORPO (hoje incondicional) nao pode ligar a de dispositivo. Sao duas
-    decisoes de risco separadas, e colapsa-las faria a barata governar a cara."""
-    monkeypatch.delenv(L1_DECISAO_EXIGE_DISPOSITIVO, raising=False)
-    card = _build_card_v4(_card_llm(), _mov())     # tem corpo => a de corpo nao alcanca
-    assert card["decisao"]["tem_decisao"] is True
-
-
-def test_as_duas_ligadas_e_idempotente(monkeypatch):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_DISPOSITIVO, "true")
+# ── as duas travas juntas ─────────────────────────────────────────────────────
+def test_as_duas_ligadas_e_idempotente():
     card = _build_card_v4(_card_llm(), _mov(), sem_corpo=True)
     assert card["decisao"]["tem_decisao"] is False
     assert card["decisao"]["natureza"] is None
 
 
-# ── o log e a metade que MEDE: ele sai com a flag DESLIGADA ───────────────────
-def test_o_log_sai_com_a_flag_off(monkeypatch, caplog):
-    """⭐ A fase 0 mediu 4 ocorrencias, todas de 1 merito e 1 run — sem volume nao ha
-    decisao de ligar. Se o log so saisse junto com a trava, o volume nunca apareceria e
-    'contador em zero' ficaria indistinguivel de contador MUDO."""
-    monkeypatch.delenv(L1_DECISAO_EXIGE_DISPOSITIVO, raising=False)
+# ── o log conta a decisao que a trava apaga ───────────────────────────────────
+def test_o_log_sai_quando_a_trava_age(caplog):
     with caplog.at_level("WARNING"):
         card = _build_card_v4(_card_llm(), _mov())
-    assert card["decisao"]["tem_decisao"] is True          # nada mudou no card
+    assert card["decisao"]["tem_decisao"] is False
     assert "L1_DECISAO_SEM_ANCORA" in caplog.text
-    assert "travado=False" in caplog.text
 
 
-def test_o_log_nao_sai_para_quem_tem_a_ancora(monkeypatch, caplog):
-    monkeypatch.delenv(L1_DECISAO_EXIGE_DISPOSITIVO, raising=False)
+def test_o_log_nao_sai_para_quem_tem_a_ancora(caplog):
     with caplog.at_level("WARNING"):
         _build_card_v4(_card_llm(dispositivo=DISPOSITIVO_REAL), _mov())
     assert "L1_DECISAO_SEM_ANCORA" not in caplog.text
-
-
-def test_o_log_carimba_travado_quando_a_flag_esta_on(monkeypatch, caplog):
-    monkeypatch.setenv(L1_DECISAO_EXIGE_DISPOSITIVO, "true")
-    with caplog.at_level("WARNING"):
-        _build_card_v4(_card_llm(), _mov())
-    assert "travado=True" in caplog.text
 
 
 def test_zerar_decisao_e_idempotente():
