@@ -1,7 +1,7 @@
 [project]
 name = "garantis-ai-agents"
 version = "0.6.0"
-description = "Repositório centralizado de AI Agents com suporte a múltiplos LLM providers"
+description = "Repositório centralizado de AI Agents (LLM: Gemini)"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "MIT"}

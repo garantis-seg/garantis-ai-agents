@@ -17,7 +17,6 @@ prompt menor (sem matriz de decisao) -> mais barato e rapido.
 
 import json
 import logging
-import os
 import re
 from typing import Optional
 
@@ -34,7 +33,7 @@ from .schemas import RedacaoCard, RedacaoRequest
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = model_for("engine_layer3")  # o engine injeta o model; isto e o fallback
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 _PROSE_FIELDS = (
     "justificativa", "narrativa_executiva", "contribuicao_no_risco",

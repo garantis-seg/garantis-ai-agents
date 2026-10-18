@@ -16,7 +16,6 @@ malformado -> error dict, e o caller trata como "precisa completo".
 
 import json
 import logging
-import os
 import pathlib
 from typing import Optional
 
@@ -42,7 +41,7 @@ logger = logging.getLogger(__name__)
 # Triagem roda SEMPRE no modelo mais barato — e o ponto do 1o estagio. O engine manda o
 # model no payload (ENGINE_LAYER1_MODEL, que le o mesmo papel); este default e o fallback.
 DEFAULT_MODEL = model_for("engine_layer1")
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 # ⭐ DERIVADA, nao mantida a mao — razao em `_utils/prompt_identity.py`. A triagem e a
 # UNICA provenance de boa parte dos cards L1 (o ramo enxuto nao gera row em

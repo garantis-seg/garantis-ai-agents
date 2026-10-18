@@ -6,7 +6,6 @@ Single LLM call por movimentacao, extrai 13 campos estruturados (kind='mov_facts
 import hashlib
 import json
 import logging
-import os
 from typing import Optional
 
 from garantis_shared.llm_chunking import map_reduce_classify
@@ -59,7 +58,7 @@ def _resumo_looks_like_json_meta_leak(resumo) -> bool:
 
 # O engine manda o model no payload (ENGINE_LAYER1_MODEL, que le o mesmo papel); fallback.
 DEFAULT_MODEL = model_for("engine_layer1")
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 # Bump quando alterar build_mov_factsheet_prompt OR MovFactSheetCard schema.
 # Usado pra drift detection em telemetria.engine_llm_calls.prompt_version. O que cada

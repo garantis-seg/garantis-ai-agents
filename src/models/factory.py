@@ -3,7 +3,6 @@ Factory para criação de clientes de modelos.
 """
 
 import socket
-from typing import Optional
 
 import httpx
 from google import genai
@@ -44,34 +43,23 @@ _GENAI_LIMITS = httpx.Limits(
 _GENAI_TIMEOUT_MS = 600_000
 
 
-def create_genai_client(api_key: Optional[str] = None) -> genai.Client:
+def create_genai_client() -> genai.Client:
     """
     Cria um cliente genai com TCP keepalive no transport httpx (sync + async).
 
-    Args:
-        api_key: API key do Gemini. Se None, usa GEMINI_API_KEY do ambiente.
-
     Returns:
         Cliente genai configurado. SINGLETON por processo — o caller (GeminiProvider
-        via LLMFactory cache) NAO deve recriar por-request: rebuildar o cliente
+        do `create_provider`) NAO deve recriar por-request: rebuildar o cliente
         recria o pool e anula o keepalive.
-
-    Raises:
-        ValueError: Se não houver API key disponível.
     """
-    # Kill-switch GEMINI_BACKEND (aistudio|vertex) via garantis_shared. O guard de
-    # key só vale no modo aistudio (vertex autentica pelo SA — sem key). Toda a
-    # construção do Client (endpoint + auth) é decidida pelo helper; aqui só
-    # passamos o http_options (transport/keepalive/limits) que vale nos dois modos.
-    from garantis_shared.gemini_backend import gemini_available, make_genai_client
-
-    if not gemini_available(api_key):
-        raise ValueError("GEMINI_API_KEY environment variable not set")
+    # O backend, o endpoint e a auth sao do `make_genai_client` do shared (inclusive a
+    # chave e o erro sem chave, no modo aistudio). Aqui so entra o http_options
+    # (transport/keepalive/limits), que vale nos dois modos.
+    from garantis_shared.gemini_backend import make_genai_client
 
     # NOTA: sync e async exigem instancias de transport SEPARADAS (httpx.HTTPTransport
     # vs httpx.AsyncHTTPTransport — classes diferentes, nao da pra compartilhar).
     return make_genai_client(
-        api_key,
         http_options=types.HttpOptions(
             timeout=_GENAI_TIMEOUT_MS,
             client_args={

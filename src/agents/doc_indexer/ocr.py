@@ -44,36 +44,34 @@ nunca um texto inventado no lugar errado.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from typing import Any, Optional
+
+from garantis_shared.llm_models import model_for
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "PAPEL_OCR",
+    "DEFAULT_MODEL",
     "PROMPT_VERSION",
-    "modelo_ocr",
     "recortar_paginas",
     "montar_prompt_ocr",
     "parse_paginas_ocr",
     "ocr_paginas",
 ]
 
-#: Papel do ROLES: `vision_fallback`, o mesmo que o L1 usa para doc-imagem. O
+#: O modelo é o do papel `vision_fallback` no ROLES, o mesmo que o L1 usa para
+#: doc-imagem, nunca env nem literal (guarda: `tests/test_modelo_vem_do_papel.py`). O
 #: `ROLES` do shared REUSA esse papel para ler documento-imagem das fichas, em vez
 #: de criar um papel de OCR próprio, e trocar modelo de papel é decisão do Elton
 #: (memory `engine-owns-model-control`).
-PAPEL_OCR = "vision_fallback"
+DEFAULT_MODEL = model_for("vision_fallback")
 
 #: Versão do prompt de OCR. Entra na `extractor_version`? **Não** — entra na
 #: chave de cache do Leitor (§7.1). Aqui ela serve à telemetria e ao dia em que
 #: mudar o prompt exigir reindexar: bumpar isto e o `NORM_VERSION` juntos é o
 #: gesto que orfana as âncoras antigas de propósito.
 PROMPT_VERSION = "doc-indexer-ocr/v1"
-
-#: Env override do modelo: precede o papel do ROLES (ver `modelo_ocr`).
-_ENV_MODELO = "DOC_INDEXER_OCR_MODEL"
 
 #: Marcador de página na resposta. Escolhido para não colidir com texto de
 #: acórdão: `<<<` e `>>>` não aparecem em documento jurídico, e o `PG:` prefixa
@@ -84,24 +82,6 @@ _MARCADOR_RE = re.compile(r"<<<\s*PG\s*:\s*(\d+)\s*>>>")
 #: pior — degrada a transcrição no fim do documento sem nenhum erro. 30 é a
 #: mesma ordem de grandeza do `AMOSTRA_PONTAS` do gate da casa.
 MAX_PAGINAS_POR_CHAMADA = 30
-
-
-def modelo_ocr() -> str:
-    """O modelo do OCR: env específica → ROLES. **Nunca** hard-code.
-
-    `model_for` levanta `KeyError` para papel inexistente, de propósito — papel
-    desconhecido é bug de chamada, não um default silencioso. Mas OCR indisponível
-    não pode derrubar a indexação de um PDF nativo, então quem chama trata: se
-    este resolver falhar, o documento sai `metodo="native"` com as páginas
-    inalcançáveis declaradas no `gate_ocr`. Melhor um documento com lacuna
-    DECLARADA que um documento com lacuna silenciosa.
-    """
-    env = os.getenv(_ENV_MODELO)
-    if env:
-        return env
-    from garantis_shared.llm_models import model_for
-
-    return model_for(PAPEL_OCR)
 
 
 def recortar_paginas(pdf_bytes: bytes, paginas: list[int]) -> Optional[bytes]:
@@ -252,12 +232,7 @@ async def ocr_paginas(
         tele["paginas_pedidas"] = len(paginas)
         tele["truncado"] = True
 
-    try:
-        alvo = model or modelo_ocr()
-    except Exception as exc:
-        logger.warning("[doc_indexer] modelo de OCR não resolvido: %r", exc)
-        tele["erro"] = f"modelo nao resolvido: {exc!r}"
-        return {}, tele
+    alvo = model or DEFAULT_MODEL
     tele["model"] = alvo
 
     recorte = recortar_paginas(pdf_bytes, paginas)

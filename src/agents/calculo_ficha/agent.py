@@ -20,7 +20,6 @@ transforma isso em rejeicao de rodada e itera com contexto.
 
 import logging
 import math
-import os
 from typing import Any, Optional
 
 from garantis_shared.llm_models import model_for
@@ -33,7 +32,7 @@ from .schemas import CelulaDado, CelulaFormula, Evidencia, MontarGrafoRequest, M
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 DEFAULT_MODEL = model_for("ficha_calculo")  # o porque do modelo e o anti-conluio: no ROLES
 

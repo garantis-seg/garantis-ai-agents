@@ -9,7 +9,7 @@ from ..providers.gemini import gemini_call_timeout_cv, gemini_rota_cv, label_ver
 
 
 def _rota_template(scope) -> Optional[str]:
-    """Label `rota` da request: o TEMPLATE da rota (`/providers/{provider_name}/test`),
+    """Label `rota` da request: o TEMPLATE da rota (`/x/{id}`),
     nunca o path cru — mesmas 2 razoes do `current_route` do fe-api: segredo no path
     e cardinalidade (path concreto = 1 valor por id, e o GROUP BY da fatura deixa de
     agregar). `scope["route"]` so existe DEPOIS do router, e este middleware roda

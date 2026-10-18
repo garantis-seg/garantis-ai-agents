@@ -6,7 +6,6 @@ and classifies the lifecycle: apresentacao + aceitacao/recusa/pendente.
 
 import json
 import logging
-import os
 from typing import Optional
 
 from garantis_shared.llm_models import model_for
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 # O papel no registro do shared (o modelo validado no gold de staging, decisao do Elton).
 DEFAULT_MODEL = model_for("apolice_ciclo_de_vida")
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 
 async def classify_lifecycle(

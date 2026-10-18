@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import re
 from typing import Any, Optional
 
@@ -53,6 +52,7 @@ from garantis_shared.calculo_fichas.documento import (
     DocumentoIndexado,
     DocumentoInvalidoError,
 )
+from garantis_shared.llm_models import model_for
 
 from ...providers import create_provider
 from ...providers.base import LLMResponse
@@ -76,19 +76,19 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "DEFAULT_MODEL",
     "ERRO_CITACAO_INEXISTENTE",
     "ERRO_DOC_INVALIDO",
     "ERRO_DOC_MUDOU",
     "ERRO_ENVELOPE_SEM_CONFIANCA",
     "ERRO_PARSE",
     "ERRO_SEM_CITACAO",
-    "PAPEL_LEITOR",
-    "modelo_leitor",
     "perguntar",
     "resumir",
 ]
 
-#: Papel do ROLES (§8.4). O `ROLES` do shared não tem papel próprio de Leitor de
+#: O modelo é o do papel no ROLES (§8.4), nunca env nem literal (guarda:
+#: `tests/test_modelo_vem_do_papel.py`). O `ROLES` do shared não tem papel próprio de Leitor de
 #: ficha, e **trocar modelo de papel é decisão do Elton** (memory
 #: `engine-owns-model-control`). `leitor_autos_monolith` é o papel registrado que
 #: faz **esta mesma coisa** — ler documento processual longo e devolver extração
@@ -96,10 +96,7 @@ __all__ = [
 #: curta, context caching em doc-QA repetido). Apontar para ele é o mesmo modelo
 #: com uma decisão a menos tomada por conta própria, exatamente como o
 #: `doc_indexer` fez com `vision_fallback`.
-PAPEL_LEITOR = "leitor_autos_monolith"
-
-#: Env override, no padrão da casa (env específica → papel do ROLES).
-_ENV_MODELO = "DOC_READER_MODEL"
+DEFAULT_MODEL = model_for("leitor_autos_monolith")
 
 #: Tetos de saída do §2.2, em tokens, convertidos para o `max_tokens` do
 #: provider com folga: o teto do contrato é sobre o que o Leitor **deve**
@@ -161,23 +158,6 @@ _OBJETOS_REJEITADOS = frozenset({
 _SEPARADOR_DE_FRASE_RE = re.compile(r"(?<!\d)[.;!?]+(?:\s+|$)")
 
 
-def modelo_leitor() -> str:
-    """O modelo do Leitor: env específica → ROLES. **Nunca** hard-code.
-
-    `model_for` levanta `KeyError` para papel inexistente, de propósito — papel
-    desconhecido é bug de chamada, não um default silencioso. Diferente do OCR
-    (onde o documento ainda sai nativo se o modelo faltar), aqui não há caminho
-    degradado: sem modelo não há leitura, e a exceção sobe para virar
-    `success=false` no envelope.
-    """
-    env = os.getenv(_ENV_MODELO)
-    if env:
-        return env
-    from garantis_shared.llm_models import model_for
-
-    return model_for(PAPEL_LEITOR)
-
-
 # ── as duas ferramentas ─────────────────────────────────────────────────────
 
 async def perguntar(
@@ -205,7 +185,7 @@ async def perguntar(
     assert doc is not None
 
     n_dinco = _n_dinco(request.n_dinco)
-    modelo = model or request.model or modelo_leitor()
+    modelo = model or request.model or DEFAULT_MODEL
     chave = chave_leitor(
         namespace=NAMESPACE_PERGUNTAR,
         doc_hash=doc.doc_hash,
@@ -278,7 +258,7 @@ async def resumir(
     assert doc is not None
 
     n_dinco = _n_dinco(request.n_dinco)
-    modelo = model or request.model or modelo_leitor()
+    modelo = model or request.model or DEFAULT_MODEL
     chave = chave_leitor(
         namespace=NAMESPACE_RESUMIR,
         doc_hash=doc.doc_hash,
@@ -341,7 +321,7 @@ async def _rodar(
     aconteceram e as duas foram faturadas, e um ledger que só registra a última
     é o mesmo mecanismo que esconde gasto.
     """
-    llm = create_provider(provider or os.getenv("DEFAULT_PROVIDER", "gemini"))
+    llm = create_provider(provider or None)
 
     custo_total = 0.0
     modelo_usado: Optional[str] = None

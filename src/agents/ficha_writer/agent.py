@@ -15,7 +15,6 @@ error claro — o caller decide o retry. NAO valida limite de chars (`max`) aqui
 """
 
 import logging
-import os
 from typing import Optional
 
 from garantis_shared.llm_models import model_for
@@ -28,7 +27,7 @@ from .schemas import CampoSpec, FichaWriteFieldsRequest, FichaWriteFieldsRespons
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 DEFAULT_MODEL = model_for("ficha_redacao")
 
 
