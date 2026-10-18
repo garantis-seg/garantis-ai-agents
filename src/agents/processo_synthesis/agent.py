@@ -7,7 +7,6 @@ Faz 1 LLM call: a synthesis (estado_processual, decisao_vigente, etc.). O card s
 
 import json
 import logging
-import os
 import pathlib
 from typing import Optional
 
@@ -39,7 +38,7 @@ logger = logging.getLogger(__name__)
 # O ENGINE manda `model` no payload (SSOT: ENGINE_LAYER2_MODEL no garantis-shared) -> este
 # default so vale como FALLBACK pra callers nao-engine (curl/eval).
 DEFAULT_MODEL = model_for("engine_layer2")
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 # ⭐ DERIVADA, nao mantida a mao. O rotulo `v2.5` continua legivel; o sufixo e
 # `sha256[:12]` de (prompt + schema) — o que de fato molda a saida do LLM — e vai em

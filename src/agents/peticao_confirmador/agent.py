@@ -51,7 +51,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import pathlib
 from typing import Any, Optional
 
@@ -71,7 +70,7 @@ logger = logging.getLogger(__name__)
 
 # Papel PROPRIO, nao `engine_layer1`: o modelo e o das varreduras medidas (ver o ROLES).
 DEFAULT_MODEL = model_for("peticao_confirmador")
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 # Teto de saida do arnes. tok_out MAXIMO medido = 158 -- o teto e folga, nao alvo.
 _MAX_TOKENS = 2048

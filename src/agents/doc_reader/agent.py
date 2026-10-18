@@ -45,7 +45,6 @@ from __future__ import annotations
 
 import logging
 import math
-import os
 import re
 from typing import Any, Optional
 
@@ -322,7 +321,7 @@ async def _rodar(
     aconteceram e as duas foram faturadas, e um ledger que só registra a última
     é o mesmo mecanismo que esconde gasto.
     """
-    llm = create_provider(provider or os.getenv("DEFAULT_PROVIDER", "gemini"))
+    llm = create_provider(provider or None)
 
     custo_total = 0.0
     modelo_usado: Optional[str] = None

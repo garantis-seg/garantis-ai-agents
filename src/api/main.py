@@ -17,7 +17,7 @@ from .middleware import GeminiCallTimeoutMiddleware
 # de execucao-fiscal/frontend-api/services/court_presentation_inference_service.py.
 # Decisao do Elton: caminho de LLM para derivar FATO ESTRUTURAL do processo (tribunal,
 # estado) e para ser EVITADO — o fato vem do provider ou de derivacao deterministica.
-from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, doc_indexer, doc_reader, ficha_writer, health, merito_reducao_v2, merito_synthesis, mov_factsheet, processo_synthesis, prompts, providers, verificador
+from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, doc_indexer, doc_reader, ficha_writer, health, merito_reducao_v2, merito_synthesis, mov_factsheet, processo_synthesis, prompts, verificador
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -31,7 +31,6 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Lifecycle management da aplicação."""
     logger.info("Iniciando garantis-ai-agents...")
-    logger.info(f"Provider padrão: {os.getenv('DEFAULT_PROVIDER', 'gemini')}")
     logger.info(f"Prompt padrão: {os.getenv('DEFAULT_PROMPT_VERSION', 'v3')}")
 
     yield
@@ -42,7 +41,7 @@ async def lifespan(app: FastAPI):
 # Criar aplicação
 app = FastAPI(
     title="Garantis AI Agents",
-    description="API centralizada de AI Agents com suporte a múltiplos LLM providers",
+    description="API centralizada de AI Agents (LLM: Gemini)",
     version="0.5.0",
     lifespan=lifespan,
 )
@@ -62,7 +61,6 @@ app.add_middleware(
 # Registrar routers
 app.include_router(health.router)
 app.include_router(prompts.router)
-app.include_router(providers.router)
 app.include_router(apolice_lifecycle.router)
 app.include_router(mov_factsheet.router)
 app.include_router(processo_synthesis.router)
@@ -101,7 +99,6 @@ async def root():
         "docs": "/docs",
         "endpoints": {
             "prompts": "/prompts",
-            "providers": "/providers",
             "health": "/health",
         },
     }

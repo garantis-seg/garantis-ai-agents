@@ -23,7 +23,6 @@ mais falso-positivo. O dossie inteiro vai no contexto e o modelo julga o que le.
 """
 
 import logging
-import os
 from typing import Any, Optional
 
 from garantis_shared.llm_models import model_for
@@ -36,7 +35,7 @@ from .schemas import AuditarFichaRequest, AuditarFichaResponse, Reprovacao
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 DEFAULT_MODEL = model_for("ficha_auditoria_texto")
 

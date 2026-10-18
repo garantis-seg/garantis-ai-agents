@@ -11,7 +11,6 @@ Persiste em leitura_conexos.risk_snapshots (via o materializer L3 do garantis-sh
 
 import json
 import logging
-import os
 from typing import Optional
 
 from garantis_shared.llm_models import model_for
@@ -76,7 +75,7 @@ def _project_merito_decisao_facts(card, processo_syntheses) -> None:
 # `model` no payload (SSOT; ENGINE_LAYER3_MODEL no worker) -> este default so vale como
 # FALLBACK pra callers nao-engine. O caller do engine sobrescreve via request.model.
 DEFAULT_MODEL = model_for("engine_layer3")
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 
 def _assemble_ciclo_garantia(processo_syntheses) -> list[dict]:

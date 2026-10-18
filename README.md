@@ -45,7 +45,6 @@ uvicorn src.api.main:app --reload
 |----------|-----------|
 | `GEMINI_BACKEND` | `vertex` (o default, auth por ADC) ou `aistudio` (modo legado, exige key) |
 | `GEMINI_API_KEY` (ou `GOOGLE_API_KEY`) | Chave do AI Studio; só vale com `GEMINI_BACKEND=aistudio` |
-| `DEFAULT_PROVIDER` | Provider padrão; só `gemini` está registrado |
 
 Não há env de modelo. Cada agente lê o seu papel em `garantis_shared.llm_models` (guarda: `tests/test_modelo_vem_do_papel.py`).
 

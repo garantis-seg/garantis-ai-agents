@@ -70,7 +70,7 @@ from .verificador_schemas import (
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 DEFAULT_MODEL = model_for("ficha_auditoria_evidencias")
 

@@ -53,7 +53,7 @@ def create_genai_client(api_key: Optional[str] = None) -> genai.Client:
 
     Returns:
         Cliente genai configurado. SINGLETON por processo — o caller (GeminiProvider
-        via LLMFactory cache) NAO deve recriar por-request: rebuildar o cliente
+        do `create_provider`) NAO deve recriar por-request: rebuildar o cliente
         recria o pool e anula o keepalive.
 
     Raises:

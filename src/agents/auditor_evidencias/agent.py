@@ -15,7 +15,6 @@ Duas travas de fail-safe, ambas na direcao de REPROVAR:
 """
 
 import logging
-import os
 from typing import Any, Optional
 
 from garantis_shared.llm_models import model_for
@@ -28,7 +27,7 @@ from .schemas import AuditarEvidenciasRequest, AuditarEvidenciasResponse, Veredi
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_PROVIDER = os.getenv("DEFAULT_PROVIDER", "gemini")
+DEFAULT_PROVIDER = "gemini"
 
 DEFAULT_MODEL = model_for("ficha_auditoria_evidencias")
 

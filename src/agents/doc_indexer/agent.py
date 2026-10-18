@@ -324,12 +324,10 @@ def _provider(nome: Optional[str]) -> Optional[Any]:
     deixar de ser indexado porque as 2 folhas escaneadas do anexo não puderam
     ser lidas.
     """
-    import os
-
     from ...providers import create_provider
 
     try:
-        return create_provider(nome or os.getenv("DEFAULT_PROVIDER", "gemini"))
+        return create_provider(nome or None)
     except Exception as exc:
         logger.warning("[doc_indexer] provider indisponível: %r", exc)
         return None
