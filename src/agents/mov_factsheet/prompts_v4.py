@@ -8,7 +8,7 @@ DIFERENÇA CENTRAL vs v3.1: SEM fundação-do-Tomador. A LLM não sabe (nem prec
 julgamento (favorável/desfavorável) é derivado em código depois (`derivacoes.py`).
 
 O que o prompt APOSENTA (mote — viraram código em `derivacoes`, NÃO re-introduzir aqui):
-  - `<regra_polos>` inteira → `derivar_lado` / injeção-de-papel do provider.
+  - `<regra_polos>` inteira → `polo_do_tomador` / injeção-de-papel do provider.
   - `<regra_recursos>` (metade-mapeamento) → `SENTIDO_RECURSO` (recorrente × provido).
   - `<regra_extincao_sem_merito>` → `SENTIDO_EXTINCAO` (lado × motivo_extincao).
   - `<regra_titularidade>` / fundação-do-Tomador (`bloco_fundacao`) → fora do passe.
