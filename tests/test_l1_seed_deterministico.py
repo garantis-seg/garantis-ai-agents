@@ -174,7 +174,6 @@ def _seed_visto(monkeypatch, *, texto_doc: str, mov_id: str) -> int | None:
 
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
-    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
     monkeypatch.delenv("ENGINE_LLM_SEED_ENABLED", raising=False)
 
     asyncio.run(A.classify_mov_factsheet(
@@ -252,7 +251,6 @@ def test_o_seed_e_o_do_llm_seed_e_cabe_no_int32_do_gemini(monkeypatch):
 
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
-    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
 
     asyncio.run(A.classify_mov_factsheet(
         processo={"cnj": "01688863120164025101"},
@@ -290,7 +288,6 @@ def test_o_seed_nao_alterou_o_prompt(monkeypatch):
 
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
-    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
 
     proc = {"cnj": "01688863120164025101"}
     mov = {"mov_id": _MOV, "texto": ""}

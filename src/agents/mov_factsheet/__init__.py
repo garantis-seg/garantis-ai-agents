@@ -13,7 +13,6 @@ from .agent import classify_mov_factsheet
 from .schemas import (
     DocAnexado,
     FallbackContext,
-    MovFactSheetCard,
     MovFactSheetRequest,
     MovFactSheetResponse,
 )
@@ -22,7 +21,6 @@ __all__ = [
     "classify_mov_factsheet",
     "DocAnexado",
     "FallbackContext",
-    "MovFactSheetCard",
     "MovFactSheetRequest",
     "MovFactSheetResponse",
 ]

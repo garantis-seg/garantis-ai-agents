@@ -148,9 +148,9 @@ class TestOQueNaoMuda:
         (prompt + schema) e muda de proposito a cada edicao de prompt — era esse o ponto de
         `versao_com_identidade`.
         """
-        import src.agents.mov_factsheet.agent as L1
+        import src.agents.mov_factsheet.schemas_v4 as L1
         import src.agents.processo_synthesis.agent as L2
-        assert L1.PROMPT_VERSION == "mov_factsheet.v3.1"
+        assert L1.PROMPT_VERSION_V4.startswith("mov_factsheet.v4.5+")
         assert L2.PROMPT_VERSION.startswith("processo_synthesis.v2.5")
 
     def test_o_proxy_autor_polo_NAO_voltou(self):

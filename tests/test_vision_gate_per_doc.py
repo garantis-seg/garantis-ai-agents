@@ -206,7 +206,6 @@ def _classify(monkeypatch, *, documentos_anexados, documentos_gate, chunk=False,
 
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
-    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
     asyncio.run(A.classify_mov_factsheet(
         processo={"cnj": "10121509520268260224"},
         mov={"mov_id": "peticao-10121509520268260224", "texto": ""},
@@ -278,7 +277,6 @@ def test_o_CHUNKING_nao_pode_engolir_o_documentos_gate(monkeypatch):
 
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
-    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
     asyncio.run(A.classify_mov_factsheet(
         processo={"cnj": "10121509520268260224"},
         mov={"mov_id": "peticao-x", "texto": ""},
@@ -324,7 +322,6 @@ def test_o_CHUNKING_devolve_o_VEREDITO_da_variante_0(monkeypatch):
 
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
-    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
     out = asyncio.run(A.classify_mov_factsheet(
         processo={"cnj": "10121509520268260224"},
         mov={"mov_id": "peticao-x", "texto": ""},

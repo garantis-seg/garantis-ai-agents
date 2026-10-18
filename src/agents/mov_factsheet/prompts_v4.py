@@ -1,8 +1,7 @@
 """Prompt v4 (G10) — a LLM extrai FATOS NEUTROS de uma movimentação.
 
 Porte do contrato congelado do redesign do L1, validado end-to-end por um piloto
-zero-deploy. Coexiste com o `build_mov_factsheet_prompt` v3.1 sob flag
-(`agent.L1_NEUTRAL_FLAG`) — NÃO o substitui.
+zero-deploy.
 
 DIFERENÇA CENTRAL vs v3.1: SEM fundação-do-Tomador. A LLM não sabe (nem precisa) quem
 é o cliente — ela relata QUEM está em cada polo e O QUE aconteceu, de forma neutra. O
@@ -35,7 +34,7 @@ from .prompts import _summarize_doc
 from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
 
 # ── Caps v4.4 (decisão do Elton: "SEM LIMITE primeiro — qualidade > custo") ──
-# Sem cap de docs/mov nem por doc (o v3.1 tem): TODOS os docs entram, governados por um
+# Sem cap de docs/mov nem por doc (o v3.1 tinha): TODOS os docs entram, governados por um
 # ORÇAMENTO por unidade (guarda de janela do modelo, não economia). Sem cap o input
 # multiplica várias vezes — custo MEDIDO e aceito pela decisão.
 # TRAVA DE CORPO — o corte de `agent.py::_sem_corpo`, o único que o lê (import lazy, no
@@ -688,8 +687,7 @@ def build_mov_factsheet_prompt_v4(
 ) -> str:
     """Prompt v4 (fatos neutros) pra extrair o FactSheet de UMA movimentação.
 
-    Drop-in da assinatura de `build_mov_factsheet_prompt` (v3.1) — o agente troca a função
-    sob flag. classe '1D' = ramo DOCUMENTO (doc avulso); classe 'peticao' = ramo PETIÇÃO
+    classe '1D' = ramo DOCUMENTO (doc avulso); classe 'peticao' = ramo PETIÇÃO
     INICIAL (peticao_extract, opt-in do caller: o materializer de petição do shared).
 
     `pdfs_anexados=True` acrescenta o STEERING dos anexos (v1.5) — só os ramos petição/
