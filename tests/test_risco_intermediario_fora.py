@@ -24,7 +24,8 @@ def test_l2_o_campo_saiu_do_schema_e_do_prompt():
     assert "risco_processo_intermediario" not in ProcessoSynthesisCard.model_fields
     assert "risco_processo_intermediario" not in ProcessoSynthesisCardRich.model_fields
     p = build_processo_synthesis_prompt(ProcessoSynthesisRequest(
-        processo_numero="0", mov_factsheets=[MovFactSheetMin(mov_id="m1", data="2024-01-01")],
+        processo_numero="0", tipo_judicial="fiscal",
+        mov_factsheets=[MovFactSheetMin(mov_id="m1", data="2024-01-01")],
     ))
     assert "risco_processo_intermediario" not in p
     # A escala que o risco_factual cita continua no prompt, com 1 definicao por valor do
