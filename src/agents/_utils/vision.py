@@ -1,10 +1,9 @@
 """Helper Vision L1 — chamadas multimodais (PDF→Gemini Vision) do mov_factsheet (e do
 ramo petição dele); `fetch_pdfs_from_gcs` também serve o confirmador C5 e o doc_indexer.
 
-Acionado quando flag VISION_L1_ENABLED=true E o caller fornece pelo menos 1
-gcs_url no input. Todo payload sobe INLINE (`types.Blob`), sob dois caps
-(14MiB total / 5MiB por PDF, com o 1o PDF da fila isento do por-PDF) que deixam
-margem pro envelope — o limite do Gemini é ~20MB por request, e o SDK manda os
+Acionado quando o caller fornece pelo menos 1 gcs_url no input. Todo payload sobe
+INLINE (`types.Blob`), sob dois caps (14MiB total / 5MiB por PDF, com o 1o PDF da
+fila isento do por-PDF) que deixam margem pro envelope — o limite do Gemini é ~20MB por request, e o SDK manda os
 bytes em BASE64 (x4/3). Ver `_build_pdf_parts`.
 
 ⛔ Não há ramo Files API (`client.aio.files.upload`): com `vertexai=True` o SDK o recusa
@@ -320,7 +319,7 @@ async def call_l1_with_vision_fallback(
     """High-level helper do L1 (mov_factsheet, inclusive o ramo petição).
 
     Roteia entre Vision e Text:
-    - `VISION_L1_ENABLED` ON + ≥1 gcs_url + ≥1 PDF fetchável → Vision path
+    - ≥1 gcs_url + ≥1 PDF fetchável → Vision path
     - else → `provider.agenerate(prompt, model, ...)` text-only fallback
 
     Caller monta o prompt — esse helper só roteia + fetcha PDFs. Single
@@ -366,8 +365,6 @@ async def call_l1_with_vision_fallback(
     qual ramo roda depende do gate, que ele não controla. Fiar só um ramo deixaria o
     determinismo dependendo de uma decisão de rota. `None` = no-op (Gemini sorteia).
     """
-    from .feature_flags import flag_enabled
-
     if gate_out is not None:
         gate_out.update({"n_docs": 0, "n_inalcancaveis": 0, "n_enviados": 0,
                          "n_nao_enviados_cap": 0, "motivo": None})
@@ -375,7 +372,7 @@ async def call_l1_with_vision_fallback(
     motivos: list[str] = []
     # Tempo síncrono do gate DENTRO do event loop: nele nenhum outro request da instância anda.
     gate_s = 0.0
-    if gcs_urls and flag_enabled("VISION_L1_ENABLED"):
+    if gcs_urls:
         if docs_text:
             # GATE por documento: baixa e filtra só os que o gate aprova.
             from .ocr_gate import precisa_vision, texto_decide_sozinho
@@ -502,9 +499,9 @@ async def call_l1_with_vision_fallback(
                 log_label, len(pdf_bytes_list),
                 (gate_out or {}).get("n_nao_enviados_cap"), exc,
             )
-    elif gcs_urls and flag_enabled("VISION_L1_ENABLED"):
+    elif gcs_urls:
         logger.warning(
-            f"[VisionL1] {log_label}: flag ON mas 0 PDFs fetchados; fallback pra text-only",
+            f"[VisionL1] {log_label}: 0 PDFs fetchados; fallback pra text-only",
         )
 
     return await provider.agenerate(

@@ -374,8 +374,8 @@ class DocAnexado(BaseModel):
     gcs_url: Optional[str] = Field(
         default=None,
         description=(
-            "gs://bucket/path do PDF original. Consumido apenas quando "
-            "VISION_L1_ENABLED=true — agent lê PDF e passa pro Gemini Vision "
+            "gs://bucket/path do PDF original. Consumido pelo ramo Vision — "
+            "agent lê PDF e passa pro Gemini Vision "
             "em vez de serializar text_content. Backwards-compatible (None OK)."
         ),
     )
