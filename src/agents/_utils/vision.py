@@ -450,12 +450,9 @@ async def call_l1_with_vision_fallback(
         gate_out["motivo"] = ",".join(sorted(set(motivos)))
 
     if pdf_bytes_list or gate_s:
-        # ⭐ O POR QUE, no unico lugar que TODO caller alcanca — o `gate_out` e devolvido
-        # "pro caller PERSISTIR" e so o materializer de PETICAO persiste (o do mov nao
-        # grava `vision_gate`).
-        # ⛔ Log, nao coluna: `mov_factsheet` nao tem JSONB e a pergunta e DIAGNOSTICA —
-        # coluna custaria migration + bump de pin em 2 repos por um dado que 30 dias de
-        # retencao respondem. Historico maior que isso, ai sim vira coluna.
+        # ⭐ O POR QUE, no unico lugar que TODO caller alcanca. O `gate_out` volta "pro
+        # caller PERSISTIR": os materializers do L1 (mov e peticao, no garantis-shared)
+        # gravam o veredito no `raw_ref` do card. O `gate_s` mora so aqui, no log.
         # ⚠️ Busca por `jsonPayload`, nunca `textPayload:` (devolve zero neste projeto).
         # A linha sai tambem quando o gate recusa tudo: o loop ficou parado do mesmo jeito.
         logger.info(

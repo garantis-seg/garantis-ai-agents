@@ -17,9 +17,7 @@ envelope, e — o detalhe que mais importa aqui — **os PDFs ANTES do prompt** 
 contexto de um documento que o modelo ainda não viu, e a taxa de "não consigo
 ler" sobe.
 
-O débito do `garantis_shared/extraction/pdf_text.py` que esta frente NÃO herda: o
-`_DEFAULT_GEMINI_MODEL` fixo na família 2.5 (que aposenta em
-`garantis_shared.llm_models.RETIRE_2_5_FAMILY`). Aqui o modelo vem do **ROLES**
+O modelo vem do **ROLES**
 (`vision_fallback`) e o cliente vem do `provider` do factory da casa, que honra o
 `GEMINI_BACKEND`.
 
