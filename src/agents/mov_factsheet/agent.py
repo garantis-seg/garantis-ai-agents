@@ -230,6 +230,7 @@ async def classify_mov_factsheet(
     classe: Optional[str] = None,
     documentos_gate: list[DocGate | dict] | None = None,
     _no_chunk: bool = False,
+    _resposta: Optional[LLMResponse] = None,
 ) -> dict:
     """Extract a 13-field FactSheet from a single mov.
 
@@ -394,7 +395,9 @@ async def classify_mov_factsheet(
     # das vezes", nunca como garantia.
     seed = seed_for("mov_factsheet", mov.mov_id, prompt)
 
-    response: LLMResponse = await call_l1_with_vision_fallback(
+    # `_resposta`: a resposta de 1 lote do PDF acima do cap, já lida (ver `_classify_lotes`).
+    lotes: list = []
+    response: LLMResponse = _resposta if _resposta is not None else await call_l1_with_vision_fallback(
         llm_provider,
         model=model,
         prompt=prompt,
@@ -404,6 +407,9 @@ async def classify_mov_factsheet(
         # por documento se manda pro Vision (texto-lixo OU pagina-imagem). Ver ocr_gate.
         docs_text=gate_pairs,
         gate_out=vision_gate,
+        # O PDF acima do cap sobe em lotes de páginas, e o redutor da peça grande junta os
+        # cards. Só no v4, como o chunking: o redutor lê o card v4.
+        lotes_out=lotes if use_v4 else None,
         prompt_vision=prompt_vision,
         response_schema=response_schema,
         log_label=f"mov_id={mov.mov_id}",
@@ -415,6 +421,10 @@ async def classify_mov_factsheet(
         # tambem clampa).
         max_tokens=65535,
     )
+    if len(lotes) > 1:
+        return await _classify_lotes(
+            processo, mov, docs_typed, fb_typed, model, provider, classe, lotes, vision_gate,
+        )
 
     raw_response = response.text
     # Resposta VAZIA vira erro no parse, como o JSON quebrado: card sem leitura afirmaria
@@ -547,6 +557,35 @@ async def _classify_chunked(
     )
     if gate_v0:
         reduzido["vision_gate"] = gate_v0
+    return reduzido
+
+
+async def _classify_lotes(
+    processo, mov, docs, fb_typed, model, provider, classe, lotes, vision_gate,
+) -> dict:
+    """O PDF acima do cap, lido em lotes de páginas: o helper devolve 1 resposta por lote.
+    Cada resposta vira card pelo caminho de sempre (`_resposta`, sem nova chamada), e o card
+    final sai do MESMO redutor por campo da peça grande em texto (`_reduce_peca_and_rederive`).
+    Custo somado. O lote cujo card não parseou também ficou fora do card, e entra em
+    `n_lotes_falha` junto com o que o helper contou."""
+    async def _um_lote(resposta) -> dict:
+        return await classify_mov_factsheet(
+            processo, mov, documentos_anexados=docs, fallback_context=fb_typed, model=model,
+            provider=provider, classe=classe, _no_chunk=True, _resposta=resposta,
+        )
+
+    reduzido = await map_reduce_classify(
+        variants=lotes,
+        classify_one=_um_lote,
+        reduce_cards=_reduce_peca_and_rederive,
+        label="lotes",
+        on_all_fail={
+            "card": {"error": "all lotes failed", "mov_id": mov.mov_id},
+            "raw_response": "", "llm_raw_prompt": "", "prompt_version": None, "usage": {},
+        },
+    )
+    vision_gate["n_lotes_falha"] += len(lotes) - reduzido.get("n_ok", 0)
+    reduzido["vision_gate"] = vision_gate
     return reduzido
 
 

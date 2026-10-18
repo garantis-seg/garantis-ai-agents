@@ -8,10 +8,10 @@ bytes em BASE64 (x4/3). Ver `_build_pdf_parts`.
 
 ⛔ Não há ramo Files API (`client.aio.files.upload`): com `vertexai=True` o SDK o recusa
 (`ValueError`), e ele degradava o payload INTEIRO pra text-only sem rastro. O que não cabe
-nos caps é DROPADO e CONTADO (`n_nao_enviados_cap` + log `VISION_INLINE_CAP_DROP`). Quem
-quiser ler o excedente precisa de `Part.from_uri(gs://)` (bloqueado por IAM/região não
-resolvidos) ou de encolher o PDF por páginas (muda o que o modelo lê) — as duas coisas
-são decisão, não este helper.
+nos caps é DROPADO e CONTADO (`n_nao_enviados_cap` + log `VISION_INLINE_CAP_DROP`). A
+exceção é o PDF acima do cap TOTAL quando o caller junta os cards (`lotes_out`): ele sobe
+em lotes de páginas, 1 chamada por lote (`_vision_em_lotes`). `Part.from_uri(gs://)` segue
+bloqueado por IAM/região não resolvidos.
 """
 from __future__ import annotations
 
@@ -156,6 +156,19 @@ async def fetch_pdfs_from_gcs(gcs_urls: list[str]) -> list[bytes]:
     return accepted
 
 
+def _cabem(pdf_bytes_list: list[bytes]) -> list[bytes]:
+    """Os PDFs que sobem inline, greedy na ordem recebida (o porquê: `_build_pdf_parts`)."""
+    cabem: list[bytes] = []
+    total_bytes = 0
+    for i, b in enumerate(pdf_bytes_list):
+        if ((i > 0 and len(b) > _INLINE_PER_PDF_BYTES_CAP)
+                or total_bytes + len(b) > _INLINE_TOTAL_BYTES_CAP):
+            continue
+        cabem.append(b)
+        total_bytes += len(b)
+    return cabem
+
+
 def _build_pdf_parts(
     types, pdf_bytes_list: list[bytes], gate_out: Optional[dict] = None,
 ) -> list[Any]:
@@ -166,14 +179,8 @@ def _build_pdf_parts(
     materializer põe a PETIÇÃO NA FRENTE, então ordem == prioridade e quem paga
     o corte é o anexo periférico, não a peça.
     """
-    cabem: list[bytes] = []
-    total_bytes = 0
-    for i, b in enumerate(pdf_bytes_list):
-        if ((i > 0 and len(b) > _INLINE_PER_PDF_BYTES_CAP)
-                or total_bytes + len(b) > _INLINE_TOTAL_BYTES_CAP):
-            continue
-        cabem.append(b)
-        total_bytes += len(b)
+    cabem = _cabem(pdf_bytes_list)
+    total_bytes = sum(len(b) for b in cabem)
 
     n_dropados = len(pdf_bytes_list) - len(cabem)
     if gate_out is not None:
@@ -301,6 +308,74 @@ async def call_vision_l1(
     )
 
 
+async def _vision_em_lotes(
+    provider, pdf_bytes_list: list[bytes], *, prompt: str, gate_out: Optional[dict],
+    lotes_out: list, log_label: str, **kw: Any,
+) -> Any:
+    """O PDF acima do cap TOTAL, lido em lotes de páginas: 1 chamada Vision por lote.
+
+    O que cabe sobe na chamada de sempre, com a MESMA seleção (`_cabem`). Cada PDF acima
+    do cap vira lotes que cabem nele (`ocr_gate.lotes_de_paginas`), cada lote numa chamada
+    própria, com a parte dita no prompt. As chamadas rodam juntas, porque o engine dá ao
+    L1 de doc-imagem o relógio de UMA chamada. Toda resposta lida vai para `lotes_out`, e
+    o caller junta os cards. Devolve a 1ª resposta lida. Sem nenhuma, levanta a 1ª falha,
+    e o caller cai no texto, como na falha da chamada única.
+
+    Veredito: `n_lotes` (as chamadas) e `n_lotes_falha` (as que levantaram). `n_enviados`
+    conta o PDF só quando TODA chamada dele leu: o PDF lido em parte fica fora, e a régua
+    do CEGO o vê. `n_nao_enviados_cap` deixa de contar o PDF que subiu inteiro em lotes. O
+    PDF com página que nem sozinha cabe segue nele: o lote dela não é chamado, e a tela do
+    upload lê `n_nao_enviados_cap > 0` como "mande um arquivo menor", não "tente de novo".
+    """
+    from .ocr_gate import lotes_de_paginas
+
+    cabem = _cabem(pdf_bytes_list)
+    # (dono, PDFs, prompt): dono None = a chamada do que cabe; i = o i-ésimo PDF acima do cap
+    chamadas: list[tuple[Optional[int], list[bytes], str]] = (
+        [(None, cabem, prompt)] if cabem else [])
+    partidos: set[int] = set()  # PDF acima do cap com TODAS as páginas num lote que cabe
+    grandes = [b for b in pdf_bytes_list if len(b) > _INLINE_TOTAL_BYTES_CAP]
+    for i, grande in enumerate(grandes):
+        try:
+            partes = lotes_de_paginas(grande, _INLINE_TOTAL_BYTES_CAP)
+        except Exception:
+            partes = []  # o PDF que o pypdf não parte fica de fora, como sem lotes
+        if partes and all(len(p) <= _INLINE_TOTAL_BYTES_CAP for p in partes):
+            partidos.add(i)
+        chamadas += [(i, [p], f"[PARTE {j}/{len(partes)} do PDF anexo, dividido por páginas"
+                      f" — leia como continuação]\n\n{prompt}")
+                     for j, p in enumerate(partes, 1) if len(p) <= _INLINE_TOTAL_BYTES_CAP]
+    if not chamadas:
+        # nada cabe e nada se parte: a chamada única levanta o erro do cap, como sempre
+        return await call_vision_l1(provider, prompt=prompt, pdf_bytes_list=pdf_bytes_list,
+                                    gate_out=gate_out, **kw)
+
+    res = await asyncio.gather(
+        *[call_vision_l1(provider, prompt=p, pdf_bytes_list=b, **kw) for _d, b, p in chamadas],
+        return_exceptions=True)
+    falhos = {d for (d, _b, _p), r in zip(chamadas, res) if isinstance(r, BaseException)}
+    lidas = [(d, r) for (d, _b, _p), r in zip(chamadas, res) if not isinstance(r, BaseException)]
+    lotes_out.extend(r for _d, r in lidas)
+    if gate_out is not None:
+        gate_out.update({
+            "n_lotes": len(chamadas),
+            "n_lotes_falha": len(chamadas) - len(lidas),
+            "n_enviados": (sum(r.metadata["pdfs_processed"] for d, r in lidas if d is None)
+                           + len(partidos - falhos)),
+            "n_nao_enviados_cap": len(pdf_bytes_list) - len(cabem) - len(partidos),
+        })
+    (logger.warning if falhos else logger.info)(
+        "VISION_LOTES %s n_lotes=%d n_falha=%d n_nao_enviados_cap=%d bytes=%s erros=%s",
+        log_label or "-", len(chamadas), len(chamadas) - len(lidas),
+        len(pdf_bytes_list) - len(cabem) - len(partidos),
+        [sum(len(b) for b in pdfs) for _d, pdfs, _p in chamadas],
+        [repr(r)[:200] for r in res if isinstance(r, BaseException)],
+    )
+    if not lidas:
+        raise next(r for r in res if isinstance(r, BaseException))
+    return lidas[0][1]
+
+
 async def call_l1_with_vision_fallback(
     provider,
     *,
@@ -315,6 +390,7 @@ async def call_l1_with_vision_fallback(
     gate_out: Optional[dict] = None,
     prompt_vision: Optional[str] = None,
     seed: int | None = None,
+    lotes_out: Optional[list] = None,
 ) -> Any:
     """High-level helper do L1 (mov_factsheet, inclusive o ramo petição).
 
@@ -364,6 +440,12 @@ async def call_l1_with_vision_fallback(
     `seed` (opcional) vai pros DOIS ramos — o caller escolhe UM seed por leitura, e
     qual ramo roda depende do gate, que ele não controla. Fiar só um ramo deixaria o
     determinismo dependendo de uma decisão de rota. `None` = no-op (Gemini sorteia).
+
+    `lotes_out` (lista mutável, opcional) liga a leitura em LOTES do PDF aprovado acima do
+    cap total (`_vision_em_lotes`): o helper faz 1 chamada por lote, põe as respostas
+    nela e devolve a 1ª. Com 2 ou mais, quem junta os cards é o caller, que sabe o schema.
+    Ausente ⇒ o PDF acima do cap fica de fora, como sempre. Sem PDF acima do cap, a lista
+    fica vazia e a chamada é a de sempre, byte a byte.
     """
     if gate_out is not None:
         gate_out.update({"n_docs": 0, "n_inalcancaveis": 0, "n_enviados": 0,
@@ -460,6 +542,14 @@ async def call_l1_with_vision_fallback(
         )
     if pdf_bytes_list:
         try:
+            if lotes_out is not None and any(
+                    len(b) > _INLINE_TOTAL_BYTES_CAP for b in pdf_bytes_list):
+                return await _vision_em_lotes(
+                    provider, pdf_bytes_list, gate_out=gate_out, lotes_out=lotes_out,
+                    log_label=log_label, model=model, prompt=prompt_vision or prompt,
+                    response_schema=response_schema, temperature=0.0,
+                    thinking_budget=thinking_budget, max_tokens=max_tokens, seed=seed,
+                )
             resposta = await call_vision_l1(
                 provider,
                 model=model,
@@ -478,9 +568,8 @@ async def call_l1_with_vision_fallback(
                 # ⛔ LIDO da resposta, nunca recalculado por subtração aqui: quem
                 # sabe quantos PDFs subiram é `_build_pdf_parts`, e ele já publica
                 # isso em `pdfs_processed`. Subtrair só coincide enquanto o cap for
-                # o ÚNICO motivo de drop — no dia do segundo motivo (encolher por
-                # páginas está no docstring do módulo como o passo seguinte) os
-                # dois números divergiriam DENTRO da mesma resposta.
+                # o ÚNICO motivo de drop — no dia do segundo motivo os dois números
+                # divergiriam DENTRO da mesma resposta.
                 gate_out["n_enviados"] = resposta.metadata["pdfs_processed"]
             return resposta
         except Exception as exc:

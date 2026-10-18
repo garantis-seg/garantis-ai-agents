@@ -237,6 +237,29 @@ def inicio_do_pdf(pdf_bytes: bytes, n_paginas: int) -> Optional[bytes]:
         return None
 
 
+def lotes_de_paginas(pdf_bytes: bytes, cap: int) -> list[bytes]:
+    """O PDF em lotes de páginas seguidas, na ordem, cada um com até `cap` bytes. É assim
+    que o PDF acima do cap inline sobe ao Gemini, 1 chamada por lote (`vision.py`).
+
+    Corta no menor nº de lotes que o tamanho permite, com o mesmo nº de páginas em cada.
+    O lote que ainda passa do cap (página mais pesada que a média) se divide ao meio.
+    Página sozinha acima do cap sai sozinha e acima dele: nenhuma chamada a lê, e quem
+    chama decide o que fazer com ela. Levanta em qualquer falha do pypdf — o caller decide."""
+    import io
+    from pypdf import PdfReader
+    n = len(PdfReader(io.BytesIO(pdf_bytes)).pages)
+
+    def _cabe(idxs: list[int]) -> list[bytes]:
+        lote = _recorta(pdf_bytes, idxs)
+        if len(lote) <= cap or len(idxs) == 1:
+            return [lote]
+        meio = len(idxs) // 2
+        return _cabe(idxs[:meio]) + _cabe(idxs[meio:])
+
+    k = min(n, -(-len(pdf_bytes) // cap))
+    return [lote for i in range(k) for lote in _cabe(list(range(i * n // k, (i + 1) * n // k)))]
+
+
 def analisar_pdf_bytes(pdf_bytes: bytes) -> Optional[dict]:
     """Mede o Sinal 1 por página sobre os BYTES do PDF + controle de páginas.
     Retorna {pdf_bytes (recomposto ou recortado), n_paginas, paginas_imagem,
