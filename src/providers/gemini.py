@@ -273,23 +273,13 @@ class GeminiProvider(BaseLLMProvider):
     Supports structured output via response_schema parameter.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self):
         """
         Initialize Gemini provider.
 
-        Args:
-            api_key: Gemini API key. If None, reads from GEMINI_API_KEY env var.
+        O backend e a auth (ADC no Vertex) são do `make_genai_client` do shared.
         """
         super().__init__()
-
-        # Guard backend-aware (garantis_shared): sob GEMINI_BACKEND=vertex (o default)
-        # a auth é ADC do service account — key é opcional. Sob aistudio (legacy
-        # explícito), mantém o raise legado se não houver key.
-        from garantis_shared.gemini_backend import gemini_available
-
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-        if not gemini_available(self.api_key):
-            raise ValueError("No GEMINI_API_KEY provided or found in environment")
 
         # Import here to avoid issues if not installed
         try:
@@ -308,7 +298,7 @@ class GeminiProvider(BaseLLMProvider):
         # sob burst (higiene do hop, nao cura do stall do L2; ver models/factory.py).
         from ..models.factory import create_genai_client
 
-        self._client = create_genai_client(self.api_key)
+        self._client = create_genai_client()
         self._default_model = DEFAULT_MODEL
 
         logger.info(f"GeminiProvider initialized with default model: {self._default_model}")

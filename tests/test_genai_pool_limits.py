@@ -15,8 +15,20 @@ os.environ.setdefault("GEMINI_BACKEND", "aistudio")
 from src.models.factory import create_genai_client  # noqa: E402
 
 
+def test_a_chave_e_o_backend_sao_do_shared(monkeypatch):
+    """O ai-agents não escolhe chave nem backend: no modo aistudio, quem lê a chave é o
+    `make_genai_client` do shared. Aqui só entra o `http_options`."""
+    import garantis_shared.gemini_backend as gb
+
+    chamadas = []
+    monkeypatch.setattr(gb, "make_genai_client", lambda *a, **kw: chamadas.append((a, kw)))
+    create_genai_client()
+    [(args, kwargs)] = chamadas
+    assert args == () and set(kwargs) == {"http_options"}
+
+
 def test_limits_valem_nos_pools_sync_e_async():
-    api = create_genai_client("dummy-test-key")._api_client
+    api = create_genai_client()._api_client
     for nome in ("_httpx_client", "_async_httpx_client"):
         pool = getattr(api, nome)._transport._pool
         assert (pool._max_connections, pool._max_keepalive_connections, pool._keepalive_expiry) == (

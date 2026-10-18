@@ -68,7 +68,7 @@ def _provider(monkeypatch, backend: str) -> tuple[GeminiProvider, _Captura]:
     prov = GeminiProvider()
     # O client da factory tem transport de REDE; troca pelo do MESMO construtor da casa
     # com transporte simulado (sync e async — o SDK usa um cliente httpx pra cada).
-    prov._client = make_genai_client(prov.api_key, http_options=types.HttpOptions(
+    prov._client = make_genai_client(http_options=types.HttpOptions(
         client_args={"transport": httpx.MockTransport(cap)},
         async_client_args={"transport": httpx.MockTransport(cap)},
     ))
