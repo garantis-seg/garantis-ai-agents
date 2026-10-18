@@ -26,7 +26,6 @@ from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
 from .._utils import MODEL_VARIANT_TEXT
 from .._utils.prompt_identity import versao_com_identidade
-from ..mov_factsheet.agent import _resumo_looks_like_json_meta_leak
 from .prompts import build_mov_triage_prompt
 from .schemas import (
     DocAnexado,
@@ -50,9 +49,8 @@ DEFAULT_PROVIDER = "gemini"
 #
 # ⭐⭐ `agent.py` ENTRA NO CONJUNTO: `prompts.py` e `schemas.py` quase nunca mudam, e
 # hashear so os dois daria um id CONSTANTE — a mesma informacao que o rotulo que ele
-# substitui. E o `agent.py` muda o que o card EMITE: o leak guard de `resumo_ato`
-# SOBRESCREVE pos-LLM um dos 3 campos que o ramo enxuto copia verbatim da triagem, e o
-# modelo default mora aqui.
+# substitui. E o `agent.py` muda o que o card EMITE: o modelo default e os parametros da
+# chamada (temperatura, response_schema) moram aqui.
 # ⚠️ Isto inclui este proprio arquivo, entao edicao aqui que NAO muda a saida tambem bumpa.
 # E ruido barato e da classe que o `prompt_identity.py` abencoa ("sobre-sensivel na direcao
 # segura"): dois prompts diferentes nunca dividem um id.
@@ -139,18 +137,6 @@ async def classify_mov_triage(
     except (json.JSONDecodeError, Exception) as e:
         logger.error(f"mov_triage parse failed mov_id={mov.mov_id}: {repr(e)}")
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
-
-    # Leak guard: mesma degeneração do mov_factsheet — JSON válido cujo VALOR
-    # de resumo_ato é o meta-erro/inglês do modelo. Troca pelo TEXTO CRU do evento e mantém
-    # o card. Não pode ser None (schema str -> ValidationError->500->engine retenta 6x à
-    # toa) nem erro (idem). Esses movs degeneram em flash-lite E flash.
-    if (isinstance(card_data, dict) and not card_data.get("error")
-            and _resumo_looks_like_json_meta_leak(card_data.get("resumo_ato"))):
-        logger.warning(
-            "L1_TRIAGE_RESUMO_META_LEAK mov_id=%s -> texto cru (card mantido)",
-            mov.mov_id,
-        )
-        card_data["resumo_ato"] = (getattr(mov, "texto", "") or "").strip()[:500] or "(resumo indisponivel)"
 
     usage = {
         "input_tokens": response.input_tokens or 0,
