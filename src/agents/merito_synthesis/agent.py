@@ -148,7 +148,7 @@ async def classify_merito_synthesis(
     # no-op; se algum dia trocar pro 3.5-flash, MEÇA antes (no B1 desligar thinking
     # piorou).
     # + seed determinístico (mérito + prompt): fecha o micro-ruído residual do L3 a
-    # temp=0 → mesmo input, mesma banda N×. Gated (ENGINE_LLM_SEED_ENABLED).
+    # temp=0 → mesmo input, mesma banda N×.
     seed = seed_for("merito_synthesis", request.merito_id, bucket, prompt)
     response: LLMResponse = await llm_provider.agenerate(
         prompt=prompt,

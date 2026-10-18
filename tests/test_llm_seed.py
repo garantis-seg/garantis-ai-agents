@@ -7,7 +7,7 @@ LLM. A prova empírica end-to-end (banda N× estável) é o harness L3-only.
 
 import pytest
 
-from src.agents._utils.llm_seed import _SEED_FLAG, deterministic_seed, seed_for
+from src.agents._utils.llm_seed import deterministic_seed, seed_for
 
 
 def test_seed_estavel_para_mesmas_parts():
@@ -37,17 +37,10 @@ def test_seed_nao_e_hash_builtin_salgado():
     assert deterministic_seed("a", "b") != deterministic_seed("ab")
 
 
-def test_seed_for_respeita_flag(monkeypatch):
-    monkeypatch.setenv(_SEED_FLAG, "true")
+def test_seed_for_vai_sem_env(monkeypatch):
+    # o seed nao depende de env: a flag ENGINE_LLM_SEED_ENABLED saiu (ON em prod e na demo)
+    monkeypatch.delenv("ENGINE_LLM_SEED_ENABLED", raising=False)
     assert seed_for("x") == deterministic_seed("x")
-    monkeypatch.setenv(_SEED_FLAG, "false")
-    assert seed_for("x") is None  # OFF → seed aleatório (comportamento legado)
-
-
-def test_seed_for_default_off(monkeypatch):
-    # default OFF (ship inerte + flip explícito): ausência do env var → None.
-    monkeypatch.delenv(_SEED_FLAG, raising=False)
-    assert seed_for("x") is None
 
 
 if __name__ == "__main__":

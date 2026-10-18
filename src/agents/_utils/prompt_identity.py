@@ -8,12 +8,11 @@ Consequência: a pergunta *"quais cards vieram do prompt ruim?"* fica **irrespon
 sobra arqueologia por janela de timestamp, que pega card inocente e perde retry fora da
 janela.
 
-⭐ No card, o `summary_prompt_version` é a **chave de cache/rollout** — trocá-lo re-roda a
-cascata no universo inteiro —, então é congelado por custo, não por esquecimento.
-⛔ **NÃO reaproveite `summary_prompt_version` para isto**: `supersede_other_versions` faz
-`UPDATE ... SET superseded_at=now() WHERE summary_prompt_version IS DISTINCT FROM
-keep_version`, e um hash nunca casaria `keep_version` ⇒ o primeiro `enroll_processo`
-aposentaria o histórico INTEIRO de cards do processo.
+⭐ No card, o `summary_prompt_version` é o rótulo da versão do engine, uma constante do shared
+(`garantis_shared.engine_v6.persistence.versioning`).
+⛔ **NÃO reaproveite `summary_prompt_version` para isto**: o B5 do `p_and_p_smoke` (fe-api)
+conta como stale todo card ativo com versão fora das constantes do shared ⇒ um hash ali
+acenderia o smoke em todo card novo.
 
 ## Por que HASH DO ARQUIVO, e não dos blocos de regra
 

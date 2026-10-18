@@ -36,4 +36,11 @@ def test_formas_que_NAO_ligam(monkeypatch, valor):
 def test_ausente_usa_o_default_e_o_default_e_OFF(monkeypatch):
     monkeypatch.delenv(_FLAG, raising=False)
     assert flag_enabled(_FLAG) is False
-    assert flag_enabled(_FLAG, default="true") is True
+    assert flag_enabled(_FLAG, default=True) is True
+
+
+def test_o_parser_e_o_do_shared():
+    """Re-export, nao copia: uma copia local divergiria do vocabulario do engine."""
+    from garantis_shared.engine_v6 import feature_flags as dona
+
+    assert flag_enabled is dona.flag_enabled
