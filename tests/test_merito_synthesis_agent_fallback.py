@@ -62,3 +62,13 @@ def test_card_valido_sem_cards_index_nao_vira_parse_error(monkeypatch):
     # Campo segue no CardsIndexCount (response_schema) com default 0 —
     # so a LEITURA de request.jurisprudencia morreu.
     assert out["card"]["cards_index"]["jurisprudencia"] == 0
+
+
+def test_o_schema_do_llm_forca_int_no_cards_index():
+    """Sem normalizador do formato aninhado: o response_schema da chamada forca int em
+    cada contagem, entao o LLM nao consegue emitir `{'processo_X': {...}}`."""
+    from src.agents.merito_synthesis.schemas import MeritoSynthesisCard
+
+    schema = MeritoSynthesisCard.model_json_schema()
+    contagens = schema["$defs"]["CardsIndexCount"]["properties"]
+    assert contagens and {p["type"] for p in contagens.values()} == {"integer"}

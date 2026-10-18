@@ -1,9 +1,8 @@
 """Merito Synthesis Agent - engine v6_meritos camada 3 (OUTPUT PRIMARIO).
 
 Single LLM call por MERITO. Recebe processo_syntheses de TODOS processos do
-merito + tomador + cda (o `previous_snapshot` do request e aceito por compat e nao
-entra no prompt). Output:
-risco + justificativa + trajetoria + peca_pivo + proximos_passos.
+merito + tomador + cda. Output:
+risco + justificativa + peca_pivo + proximos_passos.
 (Jurisprudencia nao entra no L3: vive no L2, regras J/J.1/J.2.)
 
 Persiste em leitura_conexos.risk_snapshots (via o materializer L3 do garantis-shared).
@@ -139,8 +138,8 @@ async def classify_merito_synthesis(
     prompt, prompt_version = build_prompt_and_version(request, bucket=bucket)
 
     # response_schema=MeritoSynthesisCard: o schema nao pode ter dict[str, Any] (o
-    # additionalProperties derruba o response_schema — por isso BreakdownProcesso e
-    # CardsIndexCount) e os enums sao Literal[...] strict (enum frouxo faz o decoder
+    # additionalProperties derruba o response_schema — por isso CardsIndexCount) e
+    # os enums sao Literal[...] strict (enum frouxo faz o decoder
     # do Gemini entrar em loop).
     # Determinismo: temperature=0.0 + thinking_budget=0 (o provider aplica pra
     # QUALQUER modelo). Provider aplica top_p=1.0, top_k=1 quando temp=0. ⚠️ Este

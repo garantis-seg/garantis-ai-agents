@@ -176,8 +176,8 @@ def reduce_processo_synthesis_cards(cards: list[dict]) -> dict:
 
     ANCHOR = lote cuja decisao_vigente é a mais load-bearing (hierarquia transito >
     instância > mérito > recência, mirror do dec_score do L1). Os campos derivados do
-    ESTADO DECISÓRIO — decisao_vigente, risco_processo_intermediario, risco_factual,
-    risco_jurisprudencial, probabilidade_exito — vêm DELE: coerentes entre si e com a
+    ESTADO DECISÓRIO — decisao_vigente, risco_factual, risco_jurisprudencial,
+    probabilidade_exito — vêm DELE: coerentes entre si e com a
     decisão que governa. NÃO é MAX cego entre lotes (MAX super-flaga de-escalação REAL:
     acordo homologado / garantia aceita / extinção reduzem o risco; e prob_exito viria do
     tail procedural fraco em vez da janela com a decisão).
@@ -228,7 +228,6 @@ def reduce_processo_synthesis_cards(cards: list[dict]) -> dict:
     out["estado_processual"] = estado
     out["decisao_vigente"] = decisao
     out["lifecycle_garantia"] = _union_lifecycle(cards)
-    out["risco_processo_intermediario"] = anchor.get("risco_processo_intermediario") or "Baixo"
     out["risco_factual"] = anchor.get("risco_factual") or "Indeterminado"
     out["risco_jurisprudencial"] = anchor.get("risco_jurisprudencial") or "Indeterminado"
     out["trajetoria_dentro_processo"] = cards[-1].get("trajetoria_dentro_processo") or "indefinida"

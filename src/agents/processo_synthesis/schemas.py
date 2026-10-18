@@ -205,14 +205,14 @@ class ProbabilidadeExito(BaseModel):
     Matriz Daycoval 2026-05-21. Per-tipo (fiscal | trabalhista | civel) com
     criterios objetivos da planilha 'Matriz de Risco - Garantias Judiciais'.
 
-    Conceitualmente DIFERENTE de risco_processo_intermediario:
+    Conceitualmente DIFERENTE do risco do processo (risco_factual):
     - prob_exito = ponto de vista juridico (chance do contribuinte ganhar)
     - risco_processo = ponto de vista da seguradora (chance de acionamento)
     Sao inversamente correlacionados mas nao 100%: tempo ate transito,
     substituicao de garantia, transacao tambem entram no risco.
 
-    A camada 3 (merito_synthesis) usa probabilidade_exito como input forte
-    pro risco final do merito.
+    O L2 nao o preenche (1 call so): o card servido o leva vazio, fora do response_schema,
+    e a camada 3 le classificacao=null como sem-sinal.
 
     v2.1: APERTADO pra Literal[...] (mesmo motivo de DecisaoVigente).
     """
@@ -278,32 +278,7 @@ class ProcessoSynthesisCard(BaseModel):
         ),
     )
 
-    # Campo 4: risco intermediario do processo
-    #
-    # DEPRECATED — comment-only marker, NAO em Field(description), de proposito: a
-    # description vai pro LLM via response_schema (Gemini), e tag de depreciacao ali
-    # podia ser interpretada como "nao emit" -> silent degradation.
-    # Substituido por orthogonal pair (risco_factual + risco_jurisprudencial)
-    # na Architecture D. Field mantido backward-compat — drop deferido ate L2 schema
-    # extendido OU backtest runner migrado pra L3 snapshots; o porque esta na secao
-    # "Drop ainda nao seguro" do ADR-L2-LEGACY-CLEANUP-PR7.6:
-    # https://github.com/garantis-seg/execucao-fiscal/blob/133ac0d2142c1e5d29452323b83f419c97b78502/frontend-api/risk_engine_v6/ADR-L2-LEGACY-CLEANUP-PR7.6.md
-    risco_processo_intermediario: Optional[Literal[
-        "Baixo", "Medio", "Alto", "Altissimo",
-    ]] = Field(
-        default="Baixo",
-        description=(
-            "Risco SO deste processo (NAO o risco do MERITO — esse e camada 3). "
-            "Baixo: pendente sem decisao desfavoravel; embargos nao julgados; acordo vigente; "
-            "extinto sem merito; suspensao por causa externa (RJ). "
-            "Medio: improcedente em 1a inst COM apelacao pendente (efeito suspensivo CPC 1.012), "
-            "EXCETO sinais explicitos de irregularidade (penhora, intimacao pagamento). "
-            "Alto: sentenca desfavoravel SEM recurso; mantido em 2a inst sem transito. "
-            "Altissimo: transito desfavoravel certificado; cumprimento determinado."
-        ),
-    )
-
-    # Campos 4b/4c: Architecture D — orthogonal risk paths. O prompt pede os dois SEMPRE
+    # Campos 4/4b: Architecture D — orthogonal risk paths. O prompt pede os dois SEMPRE
     # (o bloco "Decomposicao Orthogonal" e sempre renderizado); sem fonte de juris,
     # risco_jurisprudencial sai Indeterminado. Default None pra ficar claro no audit quando
     # o LLM nao emitiu.
@@ -369,12 +344,6 @@ class ProcessoSynthesisCard(BaseModel):
     tipo_judicial: Optional[Literal["fiscal", "trabalhista", "civel"]] = Field(
         default="civel",
         description="Tipo do processo (echo do request). Define qual matriz Daycoval aplicar.",
-    )
-
-    # Campo 9: probabilidade de exito (Matriz Daycoval)
-    probabilidade_exito: ProbabilidadeExito = Field(
-        default_factory=ProbabilidadeExito,
-        description="Probabilidade do tomador ter exito. LLM aplica os criterios objetivos da matriz Daycoval correspondente ao tipo_judicial. Default vazio quando LLM nao retorna (audit no campo classificacao=null).",
     )
 
     # Meta
@@ -490,6 +459,9 @@ class ProcessoSynthesisCardRich(ProcessoSynthesisCard):
     """
 
     decisao_vigente: DecisaoVigenteRich = Field(default_factory=DecisaoVigenteRich)
+    # SEMPRE vazio, e fora do response_schema: o L2 e 1 call so, e o L3 le
+    # classificacao=null como sem-sinal. O campo fica no card persistido (a forma de hoje).
+    probabilidade_exito: ProbabilidadeExito = Field(default_factory=ProbabilidadeExito)
 
 
 class ProcessoSynthesisResponse(BaseModel):

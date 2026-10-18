@@ -56,4 +56,4 @@ def test_schema_nao_pede_cite_cnj_solto():
 
 def test_versao_do_prompt_bumpada():
     """Prompt mudou -> versao muda (telemetria consegue separar antes/depois)."""
-    assert REDACAO_PROMPT_VERSION == "redacao.v1.2"
+    assert REDACAO_PROMPT_VERSION == "redacao.v1.3"

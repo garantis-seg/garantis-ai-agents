@@ -23,7 +23,6 @@ from .chunking import reduce_processo_synthesis_cards, split_movs_chronological
 from .prompts import build_processo_synthesis_prompt
 from .schemas import (
     DecisaoVigenteRich,
-    ProbabilidadeExito,
     ProcessoSynthesisCard,
     ProcessoSynthesisRequest,
 )
@@ -248,11 +247,6 @@ def _merge_results(request: ProcessoSynthesisRequest, synthesis_result: dict) ->
         parsed["tipo_judicial"] = request.tipo_judicial
         if not parsed.get("movs_processed"):
             parsed["movs_processed"] = len(request.mov_factsheets or [])
-
-        # ⛔ SEMPRE vazio, mesmo que o LLM o preencha: o campo esta no response_schema da call
-        # (ProcessoSynthesisCard), e o prompt manda NAO inclui-lo. O L3 le classificacao=null
-        # como sem-sinal.
-        parsed["probabilidade_exito"] = ProbabilidadeExito().model_dump()
 
         card = ProcessoSynthesisCard(**parsed)
         return card.model_dump()

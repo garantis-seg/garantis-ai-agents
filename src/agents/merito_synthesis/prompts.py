@@ -29,8 +29,7 @@ from .schemas import (
 # invariantes que elas firmaram:
 #   - Output enforced pelo response_schema nativo (MeritoSynthesisCard): o schema nao
 #     tem dict[str, Any] e os enums sao Literal[...] strict (ver agent.py).
-#   - Jurisprudencia NAO entra no L3: vive no L2 (regras J/J.1/J.2), e o L3 confia no
-#     risco_processo_intermediario dele — contar de novo aqui e double-counting.
+#   - Jurisprudencia NAO entra no L3: vive no L2, e contar de novo aqui e double-counting.
 #   - A MATRIZ DE RISCO (estagio processual) e o UNICO decisor do nivel; a
 #     probabilidade_exito (chance de vencer a causa) e CONTEXTO de apoio. Misturar as
 #     duas matrizes Daycoval causa over-rating sistematico.
@@ -38,7 +37,7 @@ from .schemas import (
 #     anti-inversao, sem a regra dura tomador==vencedor (que contradiz a matriz).
 #   - ⛔ O snapshot anterior NAO e renderizado: ancora o LLM no risco anterior e quebra o
 #     seed deterministico (o seed_for inclui o prompt, e o snapshot muda a cada
-#     cascade). O campo previous_snapshot segue Optional no request (compat).
+#     cascade). O request nem tem o campo: payload antigo que o mande e ignorado.
 #   - O evento decisivo e marcado INLINE na justificativa como link markdown
 #     `[frase](CNJ)` (instrucao 12); o campo `citacoes` e DERIVADO em codigo pelo
 #     materializer do garantis-shared, e o front (garantis-app citacao-tags.ts)
@@ -47,7 +46,7 @@ from .schemas import (
 #     ultima coisa do prompt.
 #   - Sem truncagem de dado no render (decisao do Elton); a excecao e o bound
 #     head+tail do lifecycle_garantia (abaixo).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.9"
+PROMPT_VERSION_BASE = "merito_synthesis.v2.12"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -101,8 +100,6 @@ def _summarize_processo_synthesis(ps: ProcessoSynthesisMin) -> str:
             f"data={dv.get('data') or '?'}, transito={dv.get('transito_certificado')}, "
             f"recorrida={dv.get('recorrida')})"
         )
-    if ps.risco_processo_intermediario:
-        parts.append(f"  Risco intermediario: {ps.risco_processo_intermediario}")
     if ps.trajetoria_dentro_processo and ps.trajetoria_dentro_processo != "indefinida":
         parts.append(f"  Trajetoria interna: {ps.trajetoria_dentro_processo}")
     pivo = ps.peca_pivo_candidata or {}
@@ -219,10 +216,8 @@ def _build_intro() -> str:
         "Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.\n"
         "\n"
         "Sua tarefa: classificar o RISCO DE ACIONAMENTO DA APOLICE pro MERITO inteiro. Voce recebe\n"
-        "os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda\n"
-        "+ snapshot anterior (referencia historica). A jurisprudencia da tese NAO vem\n"
-        "neste payload — ela ja foi absorvida pelo risco_processo_intermediario de cada\n"
-        "processo na camada 2 (regras J/J.1/J.2).\n"
+        "os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda.\n"
+        "A jurisprudencia da tese NAO vem neste payload.\n"
         "\n"
         "ESTA E A CAMADA 3 - OUTPUT PRIMARIO. Risco aqui e o que vai pra UI/cliente."
     )
@@ -511,8 +506,8 @@ def _build_field_instructions() -> str:
 5. ciclo_garantia: NAO emita este campo — saiu do schema de output (2026-06-19). E
    montado DETERMINISTICAMENTE em codigo a partir dos lifecycle_garantia dos processos.
 
-6. valor_em_disputa_melhor_evidencia: maior valor entre os processos (BRL).
-   valor_garantia_melhor_evidencia: SOMA dos valor_garantia das apolices aceitas (BRL).
+6. Os valores do merito (em disputa e da garantia) NAO sao campos de saida: o codigo
+   soma o valor da causa dos processos e o LMG das apolices.
 
 7. peca_pivo_merito: a UNICA mov mais decisiva do merito inteiro (pode estar em qualquer
    processo). Use processo_numero + mov_id do peca_pivo_candidata da camada 2 mais
@@ -520,22 +515,10 @@ def _build_field_instructions() -> str:
 
 8. proximos_passos_provaveis: lista de 2-4 acoes esperadas pro merito como um todo.
 
-9. probabilidade_exito_merito (Matriz Daycoval agregada — CONTEXTO DE APOIO, NAO decide o nivel):
-   Cada processo_synthesis ja traz `probabilidade_exito` com score (1.0/0.7/0.4/0.0001)
-   da Matriz Daycoval. Voce agrega no nivel do MERITO:
-
-   a) classificacao_agregada + score_agregado:
-      - V1 (default): MEDIA PONDERADA POR valor_em_disputa dos processos.
-        Conexos contam metade do peso (multiplicar valor_em_disputa do conexo por 0.5
-        antes do calculo). Se valor_em_disputa estiver null em algum, use peso=1.
-        Mapeie de volta pro bucket: score >= 0.85 -> "provavel", >= 0.55 -> "possivel",
-        >= 0.20 -> "poucas_chances", < 0.20 -> "remota".
-      - Se UM SO processo (sem conexos), score_agregado = score do processo principal.
-   b) breakdown_por_processo: lista com {processo_numero, role, classificacao, score,
-      peso_aplicado, valor_em_disputa} pra audit.
-   c) metodo_agregacao: "media_ponderada_valor_disputa" (V1 default).
-   d) contribuicao_no_risco: 1 frase explicando COMO essa prob_exito agregada
-      influenciou o risco final que voce escolheu (vide regra F abaixo).
+9. probabilidade_exito_merito.contribuicao_no_risco (CONTEXTO DE APOIO, NAO decide o nivel):
+   1 frase explicando COMO a `probabilidade_exito` dos processos influenciou o risco
+   final que voce escolheu (vide regra F abaixo). A agregacao no nivel do MERITO
+   (classificacao, score, breakdown) e calculada em codigo.
 
 10. confidence (0-1):
     - 0.9+ quando decisao_atual clara em todos os processos
@@ -1096,8 +1079,7 @@ def _build_regras_ouro_fiscal() -> str:
 G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
    Antes L3 aplicava regras G/G.1/G.2 sobre `jurisprudencia` recebida no
    payload. v2.2: jurisprudencia migrada pra Camada 2 (regras J/J.1/J.2 do
-   prompt L2 v2.2). risco_processo_intermediario de cada processo JA absorveu
-   o sinal da juris. Confie nele.
+   prompt L2 v2.2).
    NAO tente re-aplicar regras de juris aqui — double-counting destroi
    coerencia entre L2 e L3.
 
@@ -1152,9 +1134,7 @@ def _build_regras_ouro_trabalhista() -> str:
 {_REGRA_F_COMUM}
 
 G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
-   Idem nota G da variant FISCAL. Sumulas TST / Temas STF trabalhistas agora
-   pesam direto em risco_processo_intermediario via L2 prompt v2.2 (regras
-   J/J.1/J.2). NAO re-aplicar aqui.
+   Idem nota G da variant FISCAL. NAO re-aplicar regras de juris aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (TRABALHISTA):
    Padrao analogo ao H fiscal mas adaptado pro contexto trabalhista:
@@ -1204,9 +1184,7 @@ def _build_regras_ouro_civel() -> str:
 {_REGRA_F_COMUM}
 
 G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
-   Idem nota G das outras variants. Temas repetitivos STJ / Sumulas STJ /
-   Temas STF cíveis agora pesam direto em risco_processo_intermediario via
-   L2 prompt v2.2 (regras J/J.1/J.2). NAO re-aplicar aqui.
+   Idem nota G das outras variants. NAO re-aplicar regras de juris aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (CIVEL):
    Padrao analogo ao H fiscal mas adaptado pro contexto civel:
@@ -1267,9 +1245,7 @@ E. REGRA EXTRA PRA MERITO MISTO — CONFIDENCE REDUZIDO:
    — confidence reduzida por incerteza estrutural na agregacao".
 
 G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
-   Idem nota G das outras variants. Cada processo do mérito (mesmo em
-   mérito misto) carrega risco_processo_intermediario JA modulado pela
-   juris da sua tese via L2. Use a agregacao normal pelos N processos.
+   Idem nota G das outras variants. Use a agregacao normal pelos N processos.
    NAO re-aplicar regras de juris aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (MISTO):
@@ -1488,7 +1464,7 @@ def build_prompt_and_version(
 #   mexer aqui e score-neutro. O item 12 do prompt PRINCIPAL tem o mesmo defeito, mas
 #   la o prompt entra no seed (agent.py: seed_for(..., prompt)) e mudar muda a banda:
 #   fica pra um PR separado, com OK explicito.
-REDACAO_PROMPT_VERSION = "redacao.v1.2"
+REDACAO_PROMPT_VERSION = "redacao.v1.3"
 
 _RISCO_POR_EXTENSO = {
     "Baixo": "baixo", "Medio": "medio", "Alto": "alto", "Altissimo": "altissimo",

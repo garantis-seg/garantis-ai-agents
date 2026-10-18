@@ -35,27 +35,6 @@ from .schemas import (
 
 logger = logging.getLogger(__name__)
 
-# Frases EN que NUNCA aparecem num resumo_ato legitimo (PT) — assinaturas das 2 formas
-# de degeneracao do Gemini observadas em prod: (a) o modelo vaza o proprio
-# meta-erro de JSON ("The JSON was not valid... Here is the schema again"); (b) o modelo
-# quebra a meio e RE-ESCREVE o resumo em ingles ("The process has been concluded. This is
-# a routine administrative action..."). Em ambas o JSON e VALIDO e o schema (resumo_ato:
-# str) aceita -> ia cru pro card e poluia a timeline. Set tight p/ zero falso-positivo.
-_RESUMO_META_LEAK_MARKERS = (
-    "the json", "valid json", "json should", "schema again", "wrapped in markdown",
-    "control characters", "the process has been", "this is a routine",
-    "does not involve", "does not mention", "in the;",
-)
-
-
-def _resumo_looks_like_json_meta_leak(resumo) -> bool:
-    """True se o resumo_ato carrega assinatura de degeneracao (meta-JSON ou EN). Match
-    por substring lowercase contra _RESUMO_META_LEAK_MARKERS."""
-    if not isinstance(resumo, str):
-        return False
-    low = resumo.lower()
-    return any(m in low for m in _RESUMO_META_LEAK_MARKERS)
-
 # O engine manda o model no payload (ENGINE_LAYER1_MODEL, que le o mesmo papel); fallback.
 DEFAULT_MODEL = model_for("engine_layer1")
 DEFAULT_PROVIDER = "gemini"
@@ -239,35 +218,6 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
         _zerar_decisao(card_data)                # idem — a ancora e a outra metade
     aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
     return card_data
-
-
-def _stub_ruido_card(
-    mov: "MovInput", use_v4: bool, response_schema, classe: Optional[str]
-) -> dict:
-    """Card de baixa relevância pra quando o modelo devolve resposta VAZIA — doc
-    ilegível (texto-lixo/OCR corrompido) ou safety-block. O mov foi LIDO (nada
-    extraível), NÃO é um gap: evita o ciclo erro→500→5 retries→mov-falha→l1_degraded.
-    Honesto: relevancia='ruido', tipo_doc='outros', sem decisão. Reusa o derivador G6.
-    """
-    stub = {
-        "tipo_doc": "outros",
-        "relevancia_merito": "ruido",
-        "resumo_ato": (
-            "Documento sem texto extraível (resposta vazia do modelo — "
-            "provável OCR/texto corrompido)."
-        ),
-    }
-    if use_v4:
-        return _build_card_v4(
-            stub, mov,
-            card_cls=response_schema if classe in ("peticao", "doc_incerto") else None,
-        )
-    stub["mov_id"] = mov.mov_id
-    if mov.data:
-        stub["data"] = mov.data
-    stub["categoria"] = derivar_categoria("outros")
-    stub["status_garantia_pos_mov"] = derivar_status_garantia(None)
-    return MovFactSheetCard(**stub).model_dump()
 
 
 async def classify_mov_factsheet(
@@ -467,17 +417,10 @@ async def classify_mov_factsheet(
     )
 
     raw_response = response.text
+    # Resposta VAZIA vira erro no parse, como o JSON quebrado: card sem leitura afirmaria
+    # relevancia. O L1_PARSE_FAIL leva o finish_reason, e o mov entra no l1_degraded.
     try:
-        if not (raw_response or "").strip():
-            # Resposta VAZIA do modelo — doc ilegível (texto-lixo/OCR) ou safety-block.
-            # Card ruido em vez de erro: o mov foi LIDO (nada extraível), NÃO é gap —
-            # evita o ciclo erro→500→5 retries→mov-falha→l1_degraded.
-            # ponytail: empty determinístico (texto-lixo) re-tenta ao mesmo vazio.
-            logger.warning(
-                f"L1_EMPTY_RESPONSE mov_id={mov.mov_id} → card ruido (doc ilegível/sem texto)"
-            )
-            card_data = _stub_ruido_card(mov, use_v4, response_schema, classe)
-        elif use_v4:
+        if use_v4:
             # v4: fatos neutros + derivados sujeito-independentes (G6). Identidade injetada
             # dentro do helper (mov_id/data fora do response_schema). Ramo peticao valida
             # com o superset (a base droparia cdas/processos_citados).
@@ -519,21 +462,6 @@ async def classify_mov_factsheet(
             len(prompt or ""), _phash, len(raw_response or ""), (raw_response or "")[-120:],
         )
         card_data = {"error": repr(e), "raw": raw_response, "mov_id": mov.mov_id}
-
-    # Leak guard: JSON VÁLIDO mas o VALOR de resumo_ato carrega o meta-erro de
-    # JSON / inglês do modelo (passa no schema permissivo resumo_ato: str). O resto do card
-    # (tipo_doc, categoria, decisao, evento_garantia) parseou OK — só o texto do resumo é
-    # lixo. Troca o resumo pelo TEXTO CRU do evento (mov.texto) e mantém o card. NÃO pode
-    # ser None (schema resumo_ato: str — vira ValidationError->500->engine retenta à toa)
-    # e NÃO devolver erro (idem). MEDIDO: esses movs degeneram em flash-lite E flash
-    # (não é flakiness; escalar não recupera).
-    if (isinstance(card_data, dict) and not card_data.get("error")
-            and _resumo_looks_like_json_meta_leak(card_data.get("resumo_ato"))):
-        logger.warning(
-            "L1_RESUMO_META_LEAK mov_id=%s resumo_head=%r -> texto cru (card mantido)",
-            mov.mov_id, (card_data.get("resumo_ato") or "")[:80],
-        )
-        card_data["resumo_ato"] = (getattr(mov, "texto", "") or "").strip()[:500] or "(resumo indisponivel)"
 
     usage = {
         "input_tokens": response.input_tokens or 0,
