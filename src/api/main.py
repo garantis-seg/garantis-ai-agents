@@ -17,7 +17,7 @@ from .middleware import GeminiCallTimeoutMiddleware
 # de execucao-fiscal/frontend-api/services/court_presentation_inference_service.py.
 # Decisao do Elton: caminho de LLM para derivar FATO ESTRUTURAL do processo (tribunal,
 # estado) e para ser EVITADO — o fato vem do provider ou de derivacao deterministica.
-from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, doc_indexer, doc_reader, ficha_writer, health, merito_reducao_v2, merito_synthesis, mov_factsheet, processo_synthesis, prompts, verificador
+from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, doc_indexer, doc_reader, ficha_writer, health, merito_synthesis, mov_factsheet, processo_synthesis, prompts, verificador
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -65,7 +65,6 @@ app.include_router(apolice_lifecycle.router)
 app.include_router(mov_factsheet.router)
 app.include_router(processo_synthesis.router)
 app.include_router(merito_synthesis.router)
-app.include_router(merito_reducao_v2.router)
 app.include_router(ficha_writer.router)
 # S6 — auditor de ficha. Mesmo prefixo `/ficha` do writer (escrever e auditar
 # sao o mesmo recurso em dois momentos); registrado DEPOIS dele so por ordem de
