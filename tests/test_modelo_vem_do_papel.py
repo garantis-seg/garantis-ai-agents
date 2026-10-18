@@ -15,6 +15,8 @@ import src.agents.auditor_evidencias.agent as auditor_evidencias
 import src.agents.auditor_evidencias.verificador as verificador
 import src.agents.auditor_ficha.agent as auditor_ficha
 import src.agents.calculo_ficha.agent as calculo_ficha
+import src.agents.doc_indexer.ocr as doc_indexer_ocr
+import src.agents.doc_reader.agent as doc_reader
 import src.agents.ficha_writer.agent as ficha_writer
 import src.agents.merito_reducao_v2.agent as merito_reducao_v2
 import src.agents.merito_synthesis.agent as merito_synthesis
@@ -39,6 +41,8 @@ _PAPEIS = [
     (merito_reducao_v2, "engine_layer3_v2"),
     (peticao_confirmador, "peticao_confirmador"),
     (apolice_lifecycle, "apolice_ciclo_de_vida"),
+    (doc_reader, "leitor_autos_monolith"),
+    (doc_indexer_ocr, "vision_fallback"),
     # so alcancado por quem nao passa modelo (test_connection, /providers)
     (provider_gemini, "engine_layer1"),
 ]
@@ -62,15 +66,24 @@ _LEITORES_DE_ENV = {"os.getenv", "getenv", "os.environ.get", "environ.get"}
 
 
 def _envs_de_modelo_lidas(fonte: str) -> list[str]:
-    """Nomes de env com MODEL lidos por os.getenv / os.environ.get / os.environ[...]."""
+    """Nomes de env com MODEL lidos por os.getenv / os.environ.get / os.environ[...],
+    com o nome literal ou numa constante do modulo (`_ENV = "X_MODEL"; os.getenv(_ENV)`)."""
+    arvore = ast.parse(fonte)
+    constantes = {
+        t.id: no.value
+        for no in arvore.body if isinstance(no, ast.Assign) and isinstance(no.value, ast.Constant)
+        for t in no.targets if isinstance(t, ast.Name)
+    }
     achados = []
-    for no in ast.walk(ast.parse(fonte)):
+    for no in ast.walk(arvore):
         if isinstance(no, ast.Call) and no.args and ast.unparse(no.func) in _LEITORES_DE_ENV:
             alvo = no.args[0]
         elif isinstance(no, ast.Subscript) and ast.unparse(no.value) in {"os.environ", "environ"}:
             alvo = no.slice
         else:
             continue
+        if isinstance(alvo, ast.Name):
+            alvo = constantes.get(alvo.id, alvo)
         if isinstance(alvo, ast.Constant) and isinstance(alvo.value, str) and "MODEL" in alvo.value:
             achados.append(alvo.value)
     return sorted(achados)
@@ -89,9 +102,12 @@ def test_controle_positivo_o_detector_enxerga_import_e_chamada():
         'def f(model=None):\n'
         '    return model or os.environ.get("AUDITOR_EVIDENCIAS_MODEL") or os.environ["DEFAULT_MODEL"]\n'
         'P = os.getenv("DEFAULT_PROVIDER", "gemini")\n'
+        '_ENV_MODELO = "DOC_READER_MODEL"\n'
+        'def g():\n'
+        '    return os.getenv(_ENV_MODELO)\n'
     )
     assert _envs_de_modelo_lidas(fonte) == [
-        "AUDITOR_EVIDENCIAS_MODEL", "CALCULO_FICHA_MODEL", "DEFAULT_MODEL"]
+        "AUDITOR_EVIDENCIAS_MODEL", "CALCULO_FICHA_MODEL", "DEFAULT_MODEL", "DOC_READER_MODEL"]
 
 
 def test_nenhum_modelo_escrito_a_mao_no_repo():

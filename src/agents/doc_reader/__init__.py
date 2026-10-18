@@ -5,14 +5,13 @@ Ver `agent.py`. Papel L do desenho do Agente Investigador (§2): recebe o
 com `confianca` + `objeto_da_confianca` em CAMPO (§5.3).
 """
 from .agent import (
+    DEFAULT_MODEL,
     ERRO_CITACAO_INEXISTENTE,
     ERRO_DOC_INVALIDO,
     ERRO_DOC_MUDOU,
     ERRO_ENVELOPE_SEM_CONFIANCA,
     ERRO_PARSE,
     ERRO_SEM_CITACAO,
-    PAPEL_LEITOR,
-    modelo_leitor,
     perguntar,
     resumir,
 )
@@ -25,19 +24,18 @@ from .schemas import (
 )
 
 __all__ = [
+    "DEFAULT_MODEL",
     "ERRO_CITACAO_INEXISTENTE",
     "ERRO_DOC_INVALIDO",
     "ERRO_DOC_MUDOU",
     "ERRO_ENVELOPE_SEM_CONFIANCA",
     "ERRO_PARSE",
     "ERRO_SEM_CITACAO",
-    "PAPEL_LEITOR",
     "EvidenciaResumo",
     "PerguntarRequest",
     "PerguntarResponse",
     "ResumirRequest",
     "ResumirResponse",
-    "modelo_leitor",
     "perguntar",
     "resumir",
 ]

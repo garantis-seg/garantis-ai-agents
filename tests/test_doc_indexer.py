@@ -643,22 +643,15 @@ def test_prompt_de_ocr_proibe_corrigir_e_lista_as_folhas_na_ordem():
     assert "Não corrija" in p and "Não invente" not in p.replace("Nunca invente", "")
 
 
-def test_ocr_usa_o_papel_do_ROLES_e_nao_um_modelo_hard_coded(monkeypatch):
+def test_ocr_usa_o_papel_do_ROLES_e_nao_um_modelo_hard_coded():
     """§8.4: *"modelos pelo ROLES, nunca hard-code"*. O `pdf_text.py` fixa
     `gemini-2.5-flash-lite`, família que APOSENTA em 16/10/2026 — este é o
-    débito que a onda 2 não herda."""
-    from garantis_shared.llm_models import MODELS, model_for
+    débito que a onda 2 não herda. Que o modelo é o do papel certo, a guarda
+    `tests/test_modelo_vem_do_papel.py` confere."""
+    from garantis_shared.llm_models import MODELS
 
-    monkeypatch.delenv("DOC_INDEXER_OCR_MODEL", raising=False)
-
-    assert O.modelo_ocr() == model_for(O.PAPEL_OCR)
-    assert O.modelo_ocr() in MODELS, "modelo fora do catálogo ⇒ preço 0/0, gasto invisível"
-    assert "2.5" not in O.modelo_ocr()
-
-
-def test_env_sobrepoe_o_papel_do_ROLES(monkeypatch):
-    monkeypatch.setenv("DOC_INDEXER_OCR_MODEL", "gemini-3.5-flash")
-    assert O.modelo_ocr() == "gemini-3.5-flash"
+    assert O.DEFAULT_MODEL in MODELS, "modelo fora do catálogo ⇒ preço 0/0, gasto invisível"
+    assert "2.5" not in O.DEFAULT_MODEL
 
 
 def test_recorte_de_paginas_produz_pdf_so_com_as_folhas_pedidas():

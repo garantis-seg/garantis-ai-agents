@@ -786,24 +786,17 @@ def test_sids_citados_no_texto_acha_na_ordem_sem_repetir():
 
 # ── modelo: pelo ROLES, nunca hard-coded ────────────────────────────────────
 
-def test_modelo_vem_do_ROLES_e_nao_de_string_hard_coded(monkeypatch):
+def test_modelo_vem_do_ROLES_e_nao_de_string_hard_coded():
     """§8.4. Modelo fora do catálogo devolve preço 0/0 em `get_model_pricing()`
     e o custo sai SILENCIOSAMENTE ZERADO do ledger — o mecanismo que já escondeu
-    US$ 97,61 em 39.309 calls e reincidiu duas vezes."""
-    from garantis_shared.llm_models import MODELS, ROLES, model_for
+    US$ 97,61 em 39.309 calls e reincidiu duas vezes. Que o modelo é o do papel
+    certo, a guarda `tests/test_modelo_vem_do_papel.py` confere."""
+    from garantis_shared.llm_models import MODELS
 
-    monkeypatch.delenv("DOC_READER_MODEL", raising=False)
-    assert A.PAPEL_LEITOR in ROLES, "o papel tem que existir no catalogo do shared"
-    assert A.modelo_leitor() == model_for(A.PAPEL_LEITOR)
-    assert A.modelo_leitor() in MODELS, (
+    assert A.DEFAULT_MODEL in MODELS, (
         "modelo fora de MODELS sai com preco 0/0 e o gasto fica invisivel no ledger"
     )
-    assert "preview" not in A.modelo_leitor(), "nunca um id de preview (404 no Vertex)"
-
-
-def test_env_sobrepoe_o_papel_do_ROLES(monkeypatch):
-    monkeypatch.setenv("DOC_READER_MODEL", "gemini-3.5-flash")
-    assert A.modelo_leitor() == "gemini-3.5-flash"
+    assert "preview" not in A.DEFAULT_MODEL, "nunca um id de preview (404 no Vertex)"
 
 
 # ── falha de infra e de parse ───────────────────────────────────────────────
