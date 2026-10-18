@@ -38,7 +38,7 @@ def test_o_L2_faz_UMA_call_e_o_card_sai_sem_probabilidade_de_exito(monkeypatch):
     prov = _Provider({"processo_numero": "00000000000000000001",
                       "probabilidade_exito": {"classificacao": "provavel", "score": 1.0}})
     monkeypatch.setattr(l2, "create_provider", lambda provider: prov)
-    req = ProcessoSynthesisRequest(processo_numero="00000000000000000001",
+    req = ProcessoSynthesisRequest(processo_numero="00000000000000000001", tipo_judicial="fiscal",
                                    mov_factsheets=[MovFactSheetMin(mov_id="m1", data="2024-01-01")])
 
     out = asyncio.run(l2.classify_processo_synthesis(req, model="m", provider="gemini"))
