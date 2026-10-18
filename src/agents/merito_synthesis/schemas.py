@@ -305,7 +305,6 @@ class ProcessoSynthesisMin(BaseModel):
     estado_processual: Optional[str] = None
     decisao_vigente: Optional[dict[str, Any]] = None
     lifecycle_garantia: Optional[list[dict[str, Any]]] = None
-    risco_processo_intermediario: Optional[str] = None
     trajetoria_dentro_processo: Optional[str] = None
     peca_pivo_candidata: Optional[dict[str, Any]] = None
     valor_em_disputa: Optional[float] = None

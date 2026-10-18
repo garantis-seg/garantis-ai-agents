@@ -29,8 +29,7 @@ from .schemas import (
 # invariantes que elas firmaram:
 #   - Output enforced pelo response_schema nativo (MeritoSynthesisCard): o schema nao
 #     tem dict[str, Any] e os enums sao Literal[...] strict (ver agent.py).
-#   - Jurisprudencia NAO entra no L3: vive no L2 (regras J/J.1/J.2), e o L3 confia no
-#     risco_processo_intermediario dele — contar de novo aqui e double-counting.
+#   - Jurisprudencia NAO entra no L3: vive no L2, e contar de novo aqui e double-counting.
 #   - A MATRIZ DE RISCO (estagio processual) e o UNICO decisor do nivel; a
 #     probabilidade_exito (chance de vencer a causa) e CONTEXTO de apoio. Misturar as
 #     duas matrizes Daycoval causa over-rating sistematico.
@@ -47,7 +46,7 @@ from .schemas import (
 #     ultima coisa do prompt.
 #   - Sem truncagem de dado no render (decisao do Elton); a excecao e o bound
 #     head+tail do lifecycle_garantia (abaixo).
-PROMPT_VERSION_BASE = "merito_synthesis.v2.11"
+PROMPT_VERSION_BASE = "merito_synthesis.v2.12"
 
 
 def _prompt_version_for(tipo: str) -> str:
@@ -101,8 +100,6 @@ def _summarize_processo_synthesis(ps: ProcessoSynthesisMin) -> str:
             f"data={dv.get('data') or '?'}, transito={dv.get('transito_certificado')}, "
             f"recorrida={dv.get('recorrida')})"
         )
-    if ps.risco_processo_intermediario:
-        parts.append(f"  Risco intermediario: {ps.risco_processo_intermediario}")
     if ps.trajetoria_dentro_processo and ps.trajetoria_dentro_processo != "indefinida":
         parts.append(f"  Trajetoria interna: {ps.trajetoria_dentro_processo}")
     pivo = ps.peca_pivo_candidata or {}
@@ -219,10 +216,8 @@ def _build_intro() -> str:
         "Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.\n"
         "\n"
         "Sua tarefa: classificar o RISCO DE ACIONAMENTO DA APOLICE pro MERITO inteiro. Voce recebe\n"
-        "os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda\n"
-        "+ snapshot anterior (referencia historica). A jurisprudencia da tese NAO vem\n"
-        "neste payload — ela ja foi absorvida pelo risco_processo_intermediario de cada\n"
-        "processo na camada 2 (regras J/J.1/J.2).\n"
+        "os processo_syntheses (camada 2 ja sintetizou cada processo) + tomador + cda.\n"
+        "A jurisprudencia da tese NAO vem neste payload.\n"
         "\n"
         "ESTA E A CAMADA 3 - OUTPUT PRIMARIO. Risco aqui e o que vai pra UI/cliente."
     )
@@ -1084,8 +1079,7 @@ def _build_regras_ouro_fiscal() -> str:
 G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
    Antes L3 aplicava regras G/G.1/G.2 sobre `jurisprudencia` recebida no
    payload. v2.2: jurisprudencia migrada pra Camada 2 (regras J/J.1/J.2 do
-   prompt L2 v2.2). risco_processo_intermediario de cada processo JA absorveu
-   o sinal da juris. Confie nele.
+   prompt L2 v2.2).
    NAO tente re-aplicar regras de juris aqui — double-counting destroi
    coerencia entre L2 e L3.
 
@@ -1140,9 +1134,7 @@ def _build_regras_ouro_trabalhista() -> str:
 {_REGRA_F_COMUM}
 
 G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
-   Idem nota G da variant FISCAL. Sumulas TST / Temas STF trabalhistas agora
-   pesam direto em risco_processo_intermediario via L2 prompt v2.2 (regras
-   J/J.1/J.2). NAO re-aplicar aqui.
+   Idem nota G da variant FISCAL. NAO re-aplicar regras de juris aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (TRABALHISTA):
    Padrao analogo ao H fiscal mas adaptado pro contexto trabalhista:
@@ -1192,9 +1184,7 @@ def _build_regras_ouro_civel() -> str:
 {_REGRA_F_COMUM}
 
 G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
-   Idem nota G das outras variants. Temas repetitivos STJ / Sumulas STJ /
-   Temas STF cíveis agora pesam direto em risco_processo_intermediario via
-   L2 prompt v2.2 (regras J/J.1/J.2). NAO re-aplicar aqui.
+   Idem nota G das outras variants. NAO re-aplicar regras de juris aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (CIVEL):
    Padrao analogo ao H fiscal mas adaptado pro contexto civel:
@@ -1255,9 +1245,7 @@ E. REGRA EXTRA PRA MERITO MISTO — CONFIDENCE REDUZIDO:
    — confidence reduzida por incerteza estrutural na agregacao".
 
 G. JURISPRUDENCIA (v2.2 DEPRECATED em L3, vive em L2):
-   Idem nota G das outras variants. Cada processo do mérito (mesmo em
-   mérito misto) carrega risco_processo_intermediario JA modulado pela
-   juris da sua tese via L2. Use a agregacao normal pelos N processos.
+   Idem nota G das outras variants. Use a agregacao normal pelos N processos.
    NAO re-aplicar regras de juris aqui.
 
 H. REGRA DURA — PESO DA GARANTIA + SUSPENSAO POR CONEXO FAVORAVEL (MISTO):

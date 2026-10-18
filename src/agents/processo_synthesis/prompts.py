@@ -383,8 +383,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
     tipo_specific_block = _build_tipo_specific_block(req.tipo_judicial)
     # Jurisprudencia: nenhuma fonte; o risco_jurisprudencial vem so do
     # risk_decomposition_section. `tese_juris_section` fica vazio:
-    # ⛔ bloco juris interno ou glossario em <regras_criticas> duplicaria a contagem e
-    # empurraria o LEGACY risco_processo_intermediario.
+    # ⛔ bloco juris interno ou glossario em <regras_criticas> duplicaria a contagem.
     tese_juris_section = ""
 
     # Bloco "Decomposicao Orthogonal" SEMPRE renderizado: forca o LLM a emitir
@@ -397,8 +396,7 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         "\n\nINSTRUCAO — DECOMPOSICAO ORTHOGONAL (Architecture D, sempre emit):\n"
         "  - risco_factual:        derive APENAS do estado processual + tier +\n"
         "                          decisao_vigente + lifecycle (Matriz Daycoval pura).\n"
-        "                          IGNORE jurisprudencia. Mesma logica que voce usaria\n"
-        "                          em risco_processo_intermediario, mas SEM peso de tese.\n"
+        "                          IGNORE jurisprudencia. A escala esta no item 4.\n"
         f"  - risco_jurisprudencial: derive APENAS de {juris_sources_clause}.\n"
         "                          IGNORE estado processual. LEIA AS EMENTAS — cada uma\n"
         "                          traz o dispositivo (provido/improvido/nega-se) que diz\n"
@@ -416,7 +414,6 @@ def build_processo_synthesis_prompt(req: ProcessoSynthesisRequest) -> str:
         "                            sem sinal                                  -> Indeterminado\n"
         "  AMBOS sao orthogonal — NAO combine sinais cruzados. Camada 3 agrega via\n"
         "  matriz determ + A/B test entre prompts (PR6).\n"
-        "  risco_processo_intermediario LEGACY tambem eh emitido (compat backward).\n"
     )
 
     prompt = f"""Voce e analista juridico-securitario brasileiro especializado em SEGURO GARANTIA JUDICIAL.
@@ -606,14 +603,14 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
    motivo_recusa (so quando evento=recusa).
    Reconstrua a partir dos factsheets que tem evento_garantia.tipo != nenhum.
 
-4. risco_processo_intermediario: classifique o risco deste PROCESSO (nao do merito) em:
+4. Escala do risco_factual (risco deste PROCESSO, nao do merito; sem peso de tese):
    - Baixo: pendente sem decisao desfavoravel; embargos nao julgados; acordo vigente;
      trans favoravel; processo extinto sem merito; suspensao por causa externa (RJ)
    - Medio: improcedente em 1a inst COM apelacao pendente (efeito suspensivo presumido
      por CPC art. 1.012), EXCETO sinais explicitos de irregularidade (penhora online,
      intimacao para pagamento)
    - Alto: sentenca desfavoravel SEM recurso; mantido em 2a inst sem transito;
-     intimacao para pagamento; jurisprudencia majoritaria pro-fazenda firmada
+     intimacao para pagamento
    - Altissimo: transito em julgado certificado desfavoravel; cumprimento de sentenca
      determinado contra o tomador
 
@@ -646,16 +643,15 @@ acordo, desistencia da Fazenda) — raras em Tomador-autor.
 === REGRAS DE OURO ===
 
 A. NAO INVENTE. Se nenhum factsheet menciona apolice, deixe lifecycle_garantia=[].
-B. O risco_processo_intermediario e do PROCESSO SO. NAO tente integrar conexos/merito aqui.
-C. Se a apolice esta RECUSADA com motivo claro, isso NAO baixa o risco -- a fazenda
+B. Se a apolice esta RECUSADA com motivo claro, isso NAO baixa o risco -- a fazenda
    pode buscar outra forma de garantia ou prosseguir pra penhora.
-D. Apelacao tem efeito suspensivo automatico (CPC art. 1.012) -- improcedente em 1g
+C. Apelacao tem efeito suspensivo automatico (CPC art. 1.012) -- improcedente em 1g
    + apelacao pendente = Medio, NAO Alto. Vire Alto somente com sinal explicito
    contrario (penhora deferida, intimacao para pagamento).
-E. Suspensao e ambigua: explicite POR QUE no estado_processual (acordo/RJ/prejudicialidade/
+D. Suspensao e ambigua: explicite POR QUE no estado_processual (acordo/RJ/prejudicialidade/
    efeito suspensivo de recurso). Cada motivo move o risco diferente.
 
-F. ESTABILIDADE TEMPORAL — decisao_vigente NAO deve oscilar entre cuts/snapshots
+E. ESTABILIDADE TEMPORAL — decisao_vigente NAO deve oscilar entre cuts/snapshots
    sucessivos do MESMO processo so porque chegaram movs procedurais novos.
    (EXCECAO: suspensao-de-merito / anulacao / reativacao NAO sao "procedurais" —
    elas DEVEM mover a decisao_vigente e zerar transito; ver REGRA DE SUSPENSAO E TRANSITO.)
@@ -674,7 +670,7 @@ Antes de emitir decisao_vigente.sentido: cheque <regra_polos> no topo (Tomador
 em qual polo? procedente=quem venceu?).
 Extincao SEM merito em Tomador-AUTOR: ver <regra_extincao_tomador_autor> —
 sentido='desfavoravel', NAO 'neutro'.
-decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA F).
+decisao_vigente.sentido NAO deve oscilar por movs procedurais recentes (REGRA E).
 DECISAO MISTA (merito contra o Tomador + extincao de outra parte): vale o merito.
 ANULACAO da sentenca que devolve os autos sem julgar o merito: natureza=null e
 anulacao_data = a data do acordao (null na causa madura e na anulacao de um capitulo).

@@ -14,7 +14,7 @@ from src.agents.merito_synthesis.schemas import (
 
 
 def test_version_bumped():
-    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.11"
+    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.12"
 
 
 def test_lifecycle_completo_sem_cap_de_5():
@@ -65,4 +65,5 @@ def test_intro_nao_promete_jurisprudencia():
     )
     p = build_merito_synthesis_prompt(req)
     assert "+ jurisprudencia da tese + snapshot anterior" not in p
-    assert "NAO vem\nneste payload" in p
+    assert "snapshot anterior (referencia historica)" not in p  # o request nao o traz
+    assert "A jurisprudencia da tese NAO vem neste payload." in p

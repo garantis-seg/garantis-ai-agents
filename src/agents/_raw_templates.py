@@ -132,7 +132,6 @@ def _merito_synthesis_template() -> str:
                 processo_numero="{{processo_numero}}",
                 classe="{{classe}}",
                 estado_processual="{{estado_processual}}",
-                risco_processo_intermediario="{{risco_processo_intermediario}}",
             )
         ],
         cdas=[

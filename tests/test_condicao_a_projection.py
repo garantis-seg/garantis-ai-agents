@@ -129,7 +129,7 @@ def test_projection_does_not_mutate_risk_or_other_fields():
     estado/prob_exito ficam intactos. Guarda a direcao under-rating contra refactor."""
     import copy
     card = {"risco_factual": "Alto", "risco_jurisprudencial": "Medio",
-            "risco_processo_intermediario": "Alto", "estado_processual": "execucao em curso",
+            "estado_processual": "execucao em curso",
             "probabilidade_exito": {"classificacao": "possivel"},
             "decisao_vigente": {"natureza": "extinto_sem_merito"}}
     snapshot = copy.deepcopy({k: v for k, v in card.items() if k != "decisao_vigente"})

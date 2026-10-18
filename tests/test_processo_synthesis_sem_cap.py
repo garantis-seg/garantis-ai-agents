@@ -7,6 +7,8 @@ do censo —, instrucoes novas (peticao + split por doc), instrucoes mortas de
 """
 from __future__ import annotations
 
+import re
+
 from src.agents.processo_synthesis.prompts import build_processo_synthesis_prompt
 from src.agents.processo_synthesis.schemas import (
     MovFactSheetMin,
@@ -66,12 +68,14 @@ def test_instrucoes_peticao_e_split_presentes():
 
 
 def test_autos_raw_instrucoes_mortas_ausentes():
-    """v2.3: zero mencoes a 'autos raw' (request nunca teve o campo no
-    caminho vivo; ex-REGRA F removida, G ESTABILIDADE renumerada pra F)."""
+    """Zero mencoes a 'autos raw' (o request nunca teve o campo no caminho vivo). A regra
+    de ESTABILIDADE fica, e o lembrete_final aponta para a letra dela, qualquer que seja:
+    tirar uma regra de ouro re-letra as seguintes."""
     p = build_processo_synthesis_prompt(_req([_fs("uuid-1", "2024-01-01")]))
     assert "autos raw" not in p
-    assert "ESTABILIDADE TEMPORAL" in p  # ex-G, agora F — nao sumiu junto
-    assert "(REGRA F)" in p              # lembrete_final aponta pra letra nova
+    letra = re.search(r"^([A-Z])\. ESTABILIDADE TEMPORAL", p, re.M)
+    assert letra, "a regra de ESTABILIDADE sumiu do prompt"
+    assert f"(REGRA {letra.group(1)})" in p
 
 
 def test_resumo_ato_sem_truncagem():

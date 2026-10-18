@@ -84,15 +84,15 @@ def test_routing_80_20_at_threshold():
 
 def test_prompt_version_format():
     """_prompt_version_for(tipo) concatena base + tipo dominante."""
-    assert _prompt_version_for("fiscal") == "merito_synthesis.v2.11-fiscal"
-    assert _prompt_version_for("trabalhista") == "merito_synthesis.v2.11-trabalhista"
-    assert _prompt_version_for("civel") == "merito_synthesis.v2.11-civel"
-    assert _prompt_version_for("misto") == "merito_synthesis.v2.11-misto"
+    assert _prompt_version_for("fiscal") == "merito_synthesis.v2.12-fiscal"
+    assert _prompt_version_for("trabalhista") == "merito_synthesis.v2.12-trabalhista"
+    assert _prompt_version_for("civel") == "merito_synthesis.v2.12-civel"
+    assert _prompt_version_for("misto") == "merito_synthesis.v2.12-misto"
 
 
 def test_prompt_version_base_constant():
-    """PROMPT_VERSION_BASE = v2.11 (o cards_index sem o validator legado)."""
-    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.11"
+    """PROMPT_VERSION_BASE = v2.12 (sai o risco_processo_intermediario do bloco por processo)."""
+    assert PROMPT_VERSION_BASE == "merito_synthesis.v2.12"
     assert PROMPT_VERSION_BASE.startswith("merito_synthesis.")
 
 

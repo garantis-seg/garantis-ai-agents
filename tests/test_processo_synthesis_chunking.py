@@ -95,7 +95,7 @@ def _card(**over):
     base = {
         "processo_numero": "123", "tipo_judicial": "fiscal",
         "estado_processual": "", "decisao_vigente": {}, "lifecycle_garantia": [],
-        "risco_processo_intermediario": "Baixo", "risco_factual": "Indeterminado",
+        "risco_factual": "Indeterminado",
         "risco_jurisprudencial": "Indeterminado", "trajetoria_dentro_processo": "indefinida",
         "peca_pivo_candidata": {}, "valor_em_disputa": None, "valor_garantia": None,
         "probabilidade_exito": {}, "movs_processed": 0, "confianca": 0.7,
@@ -106,7 +106,7 @@ def _card(**over):
 
 
 def test_reduce_decisao_hierarquia_nao_ultimo_lote():
-    # transito num lote ANTIGO vence interlocutória num lote RECENTE (REGRA F / load-bearing)
+    # transito num lote ANTIGO vence interlocutória num lote RECENTE (ESTABILIDADE / load-bearing)
     c0 = _card(decisao_vigente={
         "natureza": "improcedente", "instancia": "1g",
         "transito_certificado": True, "data": "2022-01-01",
@@ -130,12 +130,12 @@ def test_reduce_risco_from_anchor_nao_max():
     # risco vem do lote da DECISÃO (anchor); um risco numa janela SEM decisão não sobrepõe.
     anchor = _card(
         decisao_vigente={"natureza": "improcedente", "instancia": "1g", "data": "2022-01-01"},
-        risco_processo_intermediario="Alto", risco_factual="Alto",
+        risco_factual="Alto",
     )
-    recent_no_decision = _card(risco_processo_intermediario="Baixo", risco_factual="Baixo")
+    recent_no_decision = _card(risco_factual="Baixo")
     out = reduce_processo_synthesis_cards([anchor, recent_no_decision])
-    assert out["risco_processo_intermediario"] == "Alto"   # do anchor
-    assert out["risco_factual"] == "Alto"
+    assert out["risco_factual"] == "Alto"   # do anchor
+    assert "risco_processo_intermediario" not in out
 
 
 def test_reduce_risco_de_escalation_acordo_nao_over_flag():
@@ -144,14 +144,14 @@ def test_reduce_risco_de_escalation_acordo_nao_over_flag():
     # (MAX cego daria Alto = over-flag da de-escalação real.)
     old = _card(
         decisao_vigente={"natureza": "improcedente", "instancia": "1g", "data": "2020-01-01"},
-        risco_processo_intermediario="Alto", risco_factual="Alto",
+        risco_factual="Alto",
     )
     acordo = _card(
         decisao_vigente={"natureza": "homologatoria", "instancia": "1g", "data": "2023-06-01"},
-        risco_processo_intermediario="Baixo", risco_factual="Baixo",
+        risco_factual="Baixo",
     )
     out = reduce_processo_synthesis_cards([old, acordo])
-    assert out["risco_processo_intermediario"] == "Baixo"
+    assert out["risco_factual"] == "Baixo"
     assert out["decisao_vigente"]["natureza"] == "homologatoria"
 
 
