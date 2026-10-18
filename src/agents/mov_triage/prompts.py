@@ -12,7 +12,7 @@ A taxonomia tipo_doc e o contexto de familia foram inlinados aqui (no POC vinham
 de l1_comum) — codigo identico ao original, sem reescrita.
 """
 
-from .schemas import DocAnexado, FallbackContext, MovInput, ProcessoContext
+from .schemas import DocAnexado, MovInput, ProcessoContext
 
 # Caps de corpo — triagem nao precisa do doc inteiro pra rotear.
 _MOV_CAP = 3000
@@ -132,13 +132,10 @@ def build_mov_triage_prompt(
     processo: ProcessoContext,
     mov: MovInput,
     documentos_anexados: list[DocAnexado] | None = None,
-    fallback_context: FallbackContext | None = None,
 ) -> str:
     """Monta o prompt curto da triagem pra uma unidade (mov e/ou docs).
 
     Funciona pras 4 classes de input: 1A (so mov), 1B/1C (mov+doc), 1D (so doc).
-    fallback_context aceito pela paridade de assinatura com o factsheet (a triagem
-    nao o consome — o roteamento e barato e nao precisa de contexto anterior).
     """
     documentos_anexados = documentos_anexados or []
 

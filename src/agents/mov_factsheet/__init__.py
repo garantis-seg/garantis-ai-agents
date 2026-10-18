@@ -12,7 +12,6 @@ Usado pela engine v6 como input da camada 2 (processo_synthesis).
 from .agent import classify_mov_factsheet
 from .schemas import (
     DocAnexado,
-    FallbackContext,
     MovFactSheetRequest,
     MovFactSheetResponse,
 )
@@ -20,7 +19,6 @@ from .schemas import (
 __all__ = [
     "classify_mov_factsheet",
     "DocAnexado",
-    "FallbackContext",
     "MovFactSheetRequest",
     "MovFactSheetResponse",
 ]

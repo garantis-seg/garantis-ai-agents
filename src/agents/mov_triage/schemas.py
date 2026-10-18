@@ -7,8 +7,8 @@ o caller roda o passe COMPLETO (/mov-factsheet/classify).
 
 REGRA DE OURO: a triagem so erra pro lado SEGURO (na duvida -> completo).
 
-Reusa os tipos de input do mov_factsheet (ProcessoContext, MovInput, DocAnexado,
-FallbackContext) — mesma forma de request, prompt/schema diferentes.
+Reusa os tipos de input do mov_factsheet (ProcessoContext, MovInput, DocAnexado) —
+mesma forma de request, prompt/schema diferentes.
 
 Spec: memory l1-triagem-2estagios + POC /Users/.../prompt_monit_reader/l1_triagem.py
 """
@@ -19,14 +19,12 @@ from pydantic import BaseModel, Field
 # Reusa os tipos de input do mov_factsheet — a triagem espelha o mesmo request.
 from ..mov_factsheet.schemas import (
     DocAnexado,
-    FallbackContext,
     MovInput,
     ProcessoContext,
 )
 
 __all__ = [
     "DocAnexado",
-    "FallbackContext",
     "MovInput",
     "ProcessoContext",
     "MovTriageCard",
@@ -114,10 +112,6 @@ class TriageRequest(BaseModel):
     documentos_anexados: list[DocAnexado] = Field(
         default_factory=list,
         description="Docs vinculados a esta mov via document_movement_links. Vazio = sem doc.",
-    )
-    fallback_context: Optional[FallbackContext] = Field(
-        default=None,
-        description="Contexto auxiliar; passar SOMENTE quando documentos_anexados=[]",
     )
     model: Optional[str] = None
     provider: Optional[str] = None

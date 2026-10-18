@@ -4,12 +4,11 @@ O prompt e o `build_mov_factsheet_prompt_v4` (`prompts_v4.py`), que importa daqu
 bloco de 1 documento (`_summarize_doc`).
 """
 
-from .schemas import DocAnexado, FallbackContext
+from .schemas import DocAnexado
 
 
 # Cap por doc anexado no prompt (Flash Lite 1M context aguenta, mas economiza)
 _DOC_TEXT_CAP_CHARS = 8000
-_RESUMO_PROCESSO_CAP = 1000
 
 
 def _summarize_doc(
@@ -44,30 +43,3 @@ def _summarize_doc(
     if truncated_note:
         parts.append(truncated_note)
     return "\n".join(parts)
-
-
-def _processo_resumo_block(ctx: FallbackContext | None) -> str:
-    """Bloco RESUMO DO PROCESSO (so o resumo_ia, sem MOV ANTERIOR)."""
-    if not ctx or not ctx.processo_resumo_ia:
-        return ""
-    resumo = ctx.processo_resumo_ia[:_RESUMO_PROCESSO_CAP]
-    return (
-        f"\n\n=== RESUMO DO PROCESSO (cascata IA, cap {_RESUMO_PROCESSO_CAP} chars) ===\n"
-        f"{resumo}"
-    )
-
-
-def _mov_anterior_block(ctx: FallbackContext | None) -> str:
-    """Bloco MOV ANTERIOR (so quando ha resumo_ato anterior — modo cadenciado)."""
-    if not ctx or not ctx.mov_anterior_resumo:
-        return ""
-    prev_cat = ctx.mov_anterior_categoria or "?"
-    prev_dist = (
-        f"ha {ctx.distance_dias_mov_anterior} dias atras"
-        if ctx.distance_dias_mov_anterior is not None
-        else "data anterior nao informada"
-    )
-    return (
-        f"\n\n=== MOV ANTERIOR NA TIMELINE (categoria={prev_cat}, {prev_dist}) ===\n"
-        f"{(ctx.mov_anterior_resumo or '')[:600]}"
-    )

@@ -38,7 +38,6 @@ async def classify_mov_factsheet_endpoint(request: MovFactSheetRequest):
             processo=request.processo,
             mov=request.mov,
             documentos_anexados=request.documentos_anexados,
-            fallback_context=request.fallback_context,
             model=request.model,
             provider=request.provider or "gemini",
             classe=request.classe,
@@ -83,7 +82,6 @@ async def triage_mov_endpoint(request: TriageRequest):
             processo=request.processo,
             mov=request.mov,
             documentos_anexados=request.documentos_anexados,
-            fallback_context=request.fallback_context,
             model=request.model,
             provider=request.provider or "gemini",
         )

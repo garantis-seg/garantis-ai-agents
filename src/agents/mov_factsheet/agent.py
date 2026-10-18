@@ -25,7 +25,6 @@ from .chunking import reduce_peca_cards, split_large_peca_variants
 from .schemas import (
     DocAnexado,
     DocGate,
-    FallbackContext,
     MovInput,
     ProcessoContext,
 )
@@ -190,7 +189,6 @@ async def classify_mov_factsheet(
     processo: ProcessoContext | dict,
     mov: MovInput | dict,
     documentos_anexados: list[DocAnexado | dict] | None = None,
-    fallback_context: FallbackContext | dict | None = None,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
     classe: Optional[str] = None,
@@ -208,7 +206,6 @@ async def classify_mov_factsheet(
             OCR/Vision, quando `documentos_anexados` traz o conjunto CONCATENADO
             num entry só (é o caso da petição). Ausente = o gate usa
             `documentos_anexados`, como sempre.
-        fallback_context: passado SOMENTE quando documentos_anexados vazio
         model: override Gemini model
         provider: 'gemini' (default)
 
@@ -252,14 +249,6 @@ async def classify_mov_factsheet(
     vision_gate: dict = {}
     prompt_vision: Optional[str] = None
 
-    fb_typed: FallbackContext | None = None
-    if fallback_context is not None:
-        fb_typed = (
-            fallback_context
-            if isinstance(fallback_context, FallbackContext)
-            else FallbackContext(**fallback_context)
-        )
-
     if model is None:
         model = DEFAULT_MODEL
 
@@ -273,7 +262,7 @@ async def classify_mov_factsheet(
         variants = split_large_peca_variants(docs_typed)
         if variants:
             return await _classify_chunked(
-                processo, mov, variants, fb_typed, model, provider, classe,
+                processo, mov, variants, model, provider, classe,
                 gate_typed,
             )
 
@@ -291,7 +280,6 @@ async def classify_mov_factsheet(
     prompt = build_mov_factsheet_prompt_v4(
         processo, mov,
         documentos_anexados=docs_typed,
-        fallback_context=fb_typed,
         classe=classe,
     )
     response_schema = MovFactSheetCardV4
@@ -305,7 +293,6 @@ async def classify_mov_factsheet(
         prompt_vision = build_mov_factsheet_prompt_v4(
             processo, mov,
             documentos_anexados=docs_typed,
-            fallback_context=fb_typed,
             classe=classe,
             pdfs_anexados=True,
         )
@@ -441,7 +428,7 @@ async def classify_mov_factsheet(
 
 
 async def _classify_chunked(
-    processo, mov, variants, fb_typed, model, provider, classe,
+    processo, mov, variants, model, provider, classe,
     documentos_gate=None,
 ) -> dict:
     """Map-reduce de peça grande via framework compartilhado: N variantes (chunks) →
@@ -465,7 +452,7 @@ async def _classify_chunked(
 
     async def _classify_one(v) -> dict:
         resultado = await classify_mov_factsheet(
-            processo, mov, v, fb_typed, model, provider, classe,
+            processo, mov, v, model, provider, classe,
             # SÓ na 1ª variante: basta UMA chamada ver o conteúdo inalcançável, e o
             # reduce funde os cards. Passar em todas multiplicaria o custo do Vision
             # pelo nº de chunks sem acrescentar informação. `is variants[0]` é

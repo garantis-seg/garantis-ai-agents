@@ -300,6 +300,6 @@ def test_o_seed_nao_alterou_o_prompt(monkeypatch):
     esperado = build_mov_factsheet_prompt_v4(
         ProcessoContext(**proc), MovInput(**mov),
         documentos_anexados=[DocAnexado(**docs[0])],
-        fallback_context=None, classe="peticao",
+        classe="peticao",
     )
     assert visto["prompt"] == esperado

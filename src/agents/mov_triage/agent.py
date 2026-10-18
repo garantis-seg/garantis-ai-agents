@@ -29,7 +29,6 @@ from .._utils.prompt_identity import versao_com_identidade
 from .prompts import build_mov_triage_prompt
 from .schemas import (
     DocAnexado,
-    FallbackContext,
     MovInput,
     MovTriageCard,
     ProcessoContext,
@@ -72,7 +71,6 @@ async def classify_mov_triage(
     processo: ProcessoContext | dict,
     mov: MovInput | dict,
     documentos_anexados: list[DocAnexado | dict] | None = None,
-    fallback_context: FallbackContext | dict | None = None,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
 ) -> dict:
@@ -82,7 +80,6 @@ async def classify_mov_triage(
         processo: contexto minimo (CNJ, classe, polos)
         mov: id + data + tipo + texto da publicacao (snippet DJe)
         documentos_anexados: docs vinculados a essa mov
-        fallback_context: paridade de assinatura com o factsheet (nao consumido)
         model: override Gemini model (default DEFAULT_MODEL)
         provider: 'gemini' (default)
 
@@ -102,14 +99,6 @@ async def classify_mov_triage(
     for d in documentos_anexados or []:
         docs_typed.append(d if isinstance(d, DocAnexado) else DocAnexado(**d))
 
-    fb_typed: FallbackContext | None = None
-    if fallback_context is not None:
-        fb_typed = (
-            fallback_context
-            if isinstance(fallback_context, FallbackContext)
-            else FallbackContext(**fallback_context)
-        )
-
     if model is None:
         model = DEFAULT_MODEL
 
@@ -117,7 +106,6 @@ async def classify_mov_triage(
     prompt = build_mov_triage_prompt(
         processo, mov,
         documentos_anexados=docs_typed,
-        fallback_context=fb_typed,
     )
 
     # Triagem e text-only por design (roteamento barato, sem Vision).

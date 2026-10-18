@@ -83,24 +83,6 @@ class DocAnexado(BaseModel):
     )
 
 
-class FallbackContext(BaseModel):
-    """Contexto auxiliar quando mov NAO tem doc anexado (rota fallback DD4)."""
-
-    processo_resumo_ia: Optional[str] = Field(
-        default=None,
-        description="Resumo IA do processo (leads.processos.resumo_ia) cap 1k chars",
-    )
-    mov_anterior_resumo: Optional[str] = Field(
-        default=None,
-        description="resumo_ato do mov_factsheet anterior por data ASC",
-    )
-    mov_anterior_categoria: Optional[str] = None
-    distance_dias_mov_anterior: Optional[int] = Field(
-        default=None,
-        description="Dias entre data da mov anterior e esta",
-    )
-
-
 class DocGate(BaseModel):
     """1 documento do conjunto, SÓ pro gate de OCR/Vision decidir por documento.
 
@@ -152,10 +134,6 @@ class MovFactSheetRequest(BaseModel):
             "Mandar quando documentos_anexados vem concatenado (petição). Vazio = "
             "o gate usa documentos_anexados."
         ),
-    )
-    fallback_context: Optional[FallbackContext] = Field(
-        default=None,
-        description="Contexto auxiliar; passar SOMENTE quando documentos_anexados=[]",
     )
     model: Optional[str] = None
     provider: Optional[str] = None
