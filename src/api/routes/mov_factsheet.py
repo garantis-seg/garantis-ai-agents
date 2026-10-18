@@ -75,8 +75,9 @@ async def triage_mov_endpoint(request: TriageRequest):
 
     Caller decide o roteamento: mov_merito OU mov_garantia_exec = true -> roda o
     passe COMPLETO em POST /mov-factsheet/classify. Ambos false -> deriva o card
-    enxuto por codigo, sem 2a chamada LLM. Triagem malformada (HTTP 500) =
-    fail-safe: o caller deve tratar como "precisa completo".
+    enxuto por codigo, sem 2a chamada LLM. Triagem malformada = HTTP 200 com
+    `card` null: o caller roda o passe completo, sem retry. O 500 fica para a falha
+    que outra tentativa pode resolver.
     """
     try:
         result = await classify_mov_triage(
@@ -88,14 +89,10 @@ async def triage_mov_endpoint(request: TriageRequest):
             provider=request.provider or "gemini",
         )
         card_data = result.get("card", {})
-        if isinstance(card_data, dict) and "error" in card_data:
-            raise HTTPException(
-                status_code=500,
-                detail=f"LLM parse error: {card_data.get('error')}",
-            )
+        malformada = isinstance(card_data, dict) and "error" in card_data
 
         return TriageResponse(
-            card=MovTriageCard(**card_data),
+            card=None if malformada else MovTriageCard(**card_data),
             raw_response=result.get("raw_response"),
             llm_raw_prompt=result.get("llm_raw_prompt"),
             prompt_version=result.get("prompt_version"),

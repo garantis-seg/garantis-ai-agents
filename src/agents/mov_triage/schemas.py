@@ -124,7 +124,9 @@ class TriageRequest(BaseModel):
 
 
 class TriageResponse(BaseModel):
-    card: MovTriageCard
+    # None = a resposta do LLM nao virou card valido. O caller roda o passe completo, que
+    # e o fail-safe dele (precisa_completo(None) -> True), sem retry: o parse e da resposta.
+    card: Optional[MovTriageCard] = None
     raw_response: Optional[str] = None
     llm_raw_prompt: Optional[str] = None
     prompt_version: Optional[str] = None
