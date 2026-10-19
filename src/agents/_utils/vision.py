@@ -345,14 +345,26 @@ async def _vision_em_lotes(
         chamadas += [(i, [p], f"[PARTE {j}/{len(partes)} do PDF anexo, dividido por páginas"
                       f" — leia como continuação]\n\n{prompt}")
                      for j, p in enumerate(partes, 1) if len(p) <= _INLINE_TOTAL_BYTES_CAP]
+
+    def _posicao(chamada) -> int:
+        dono, pdfs, _p = chamada
+        alvo = pdfs if dono is None else [grandes[dono]]
+        return max(k for k, b in enumerate(pdf_bytes_list) if any(b is x for x in alvo))
+
+    # O redutor junta os cards na ordem das chamadas, e o valor declarado por último vence
+    # (a emenda vem depois da inicial): a ordem é a do último PDF de cada chamada na lista
+    # do caller. O sort é estável, e as partes de um PDF seguem em ordem.
+    chamadas.sort(key=_posicao)
     if not chamadas:
         # nada cabe e nada se parte: a chamada única levanta o erro do cap, como sempre
         return await call_vision_l1(provider, prompt=prompt, pdf_bytes_list=pdf_bytes_list,
                                     gate_out=gate_out, **kw)
 
+    t0 = time.monotonic()
     res = await asyncio.gather(
         *[call_vision_l1(provider, prompt=p, pdf_bytes_list=b, **kw) for _d, b, p in chamadas],
         return_exceptions=True)
+    dur_ms = int((time.monotonic() - t0) * 1000)
     falhos = {d for (d, _b, _p), r in zip(chamadas, res) if isinstance(r, BaseException)}
     lidas = [(d, r) for (d, _b, _p), r in zip(chamadas, res) if not isinstance(r, BaseException)]
     lotes_out.extend(r for _d, r in lidas)
@@ -365,9 +377,9 @@ async def _vision_em_lotes(
             "n_nao_enviados_cap": len(pdf_bytes_list) - len(cabem) - len(partidos),
         })
     (logger.warning if falhos else logger.info)(
-        "VISION_LOTES %s n_lotes=%d n_falha=%d n_nao_enviados_cap=%d bytes=%s erros=%s",
+        "VISION_LOTES %s n_lotes=%d n_falha=%d n_nao_enviados_cap=%d dur_ms=%d bytes=%s erros=%s",
         log_label or "-", len(chamadas), len(chamadas) - len(lidas),
-        len(pdf_bytes_list) - len(cabem) - len(partidos),
+        len(pdf_bytes_list) - len(cabem) - len(partidos), dur_ms,
         [sum(len(b) for b in pdfs) for _d, pdfs, _p in chamadas],
         [repr(r)[:200] for r in res if isinstance(r, BaseException)],
     )

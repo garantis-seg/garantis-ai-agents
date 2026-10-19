@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import os
 import re
 
@@ -23,14 +24,14 @@ from src.agents._utils.ocr_gate import lotes_de_paginas  # noqa: E402
 from src.providers.base import BaseLLMProvider  # noqa: E402
 
 
-def _scan(pesos: list[int]) -> bytes:
+def _scan(pesos: list[int], marca: str = "PAGINA") -> bytes:
     doc = pymupdf.open()
     for i, peso in enumerate(pesos, 1):
         pg = doc.new_page()
         lado = int((peso / 3) ** 0.5)
         pix = pymupdf.Pixmap(pymupdf.csRGB, lado, lado, os.urandom(lado * lado * 3), False)
         pg.insert_image(pg.rect, pixmap=pix)
-        pg.insert_text((20, 20), f"PAGINA-{i}")
+        pg.insert_text((20, 20), f"{marca}-{i}")
     return doc.tobytes()
 
 
@@ -83,9 +84,9 @@ class _ErroDaAPI(RuntimeError):
 
 class _Provider:
     """Client fake que guarda (contents, config) de cada chamada. `falha(texto)` diz se a
-    chamada com aquele prompt levanta."""
+    chamada com aquele prompt levanta. Com `eco`, a resposta repete o prompt da chamada."""
 
-    def __init__(self, falha=lambda texto: False) -> None:
+    def __init__(self, falha=lambda texto: False, eco: bool = False) -> None:
         self._types = gtypes
         self.chamadas: list[tuple[list, object]] = []
         self.textos: list[str] = []
@@ -98,7 +99,7 @@ class _Provider:
                     raise _ErroDaAPI()
 
                 class _R:
-                    text = "{}"
+                    text = contents[-1].text if eco else "{}"
                     usage_metadata = None
 
                 return _R()
@@ -121,7 +122,7 @@ class _Provider:
         return "RESPOSTA_TEXTO"
 
 
-def _roda(prov, pdfs, *, lotes_out, gate=True, monkeypatch=None):
+def _roda(prov, pdfs, *, lotes_out, gate=True, monkeypatch=None, prompt_vision=None):
     """`call_l1_with_vision_fallback` com o GCS fake. `gate=True` passa pelo gate de
     OCR, como em produção (o texto vazio é texto-lixo, então o PDF sobe)."""
     urls = [f"gs://b/{i}.pdf" for i in range(len(pdfs))]
@@ -137,7 +138,7 @@ def _roda(prov, pdfs, *, lotes_out, gate=True, monkeypatch=None):
         out = asyncio.run(V.call_l1_with_vision_fallback(
             prov, model="m", prompt="PROMPT", response_schema=None, gcs_urls=urls,
             docs_text=[("", u) for u in urls] if gate else None,
-            gate_out=gate_out, lotes_out=lotes_out, seed=7,
+            gate_out=gate_out, lotes_out=lotes_out, seed=7, prompt_vision=prompt_vision,
         ))
     return out, gate_out
 
@@ -217,6 +218,7 @@ def test_lote_que_falha_conta_e_o_PDF_lido_em_parte_NAO_conta_como_enviado(monke
     assert len(prov.chamadas) == 3 and len(lotes) == 2 and out is lotes[0]
     assert gate["n_lotes"] == 3 and gate["n_lotes_falha"] == 1
     assert gate["n_enviados"] == 0
+    assert gate["n_nao_enviados_cap"] == 0, "o PDF se partiu inteiro: o lote falhou, não o cap"
     assert "n_falha_vision" not in gate, "o card leu 2 lotes: ele não cai no texto"
     assert prov.textos == []
 
@@ -276,9 +278,76 @@ def test_os_PDFs_que_cabem_sobem_com_a_MESMA_selecao_de_hoje(monkeypatch):
     assert gate["n_nao_enviados_cap"] == 1, "o anexo de 30 KB, como hoje"
 
 
+@pytest.mark.parametrize("grande_na_frente", [True, False])
+def test_os_cards_seguem_a_ordem_dos_PDFs(monkeypatch, grande_na_frente):
+    """O redutor junta os cards na ordem de `lotes_out`, e o valor declarado por último
+    vence. A ordem é a do último PDF de cada chamada na lista do caller.
+    ⛔ MUTANTE: a chamada do que cabe sempre na frente (ou sempre no fim). Um dos 2 casos
+    põe o anexo do lado errado dos lotes."""
+    monkeypatch.setattr(V, "_INLINE_TOTAL_BYTES_CAP", 50_000)
+    grande, anexo = _scan([20_000] * 6), b"B" * 10_000
+    prov = _Provider(eco=True)
+    lotes: list = []
+
+    _roda(prov, [grande, anexo] if grande_na_frente else [anexo, grande],
+          lotes_out=lotes, gate=False)
+
+    partes = ["[PARTE 1/3", "[PARTE 2/3", "[PARTE 3/3"]
+    esperado = partes + ["PROMPT"] if grande_na_frente else ["PROMPT"] + partes
+    assert [r.text.split(" do PDF")[0] if r.text.startswith("[PARTE") else r.text
+            for r in lotes] == esperado
+
+
+def test_o_PDF_que_o_pypdf_nao_parte_fica_no_cap_e_o_resto_sobe(monkeypatch):
+    """⛔ MUTANTE: a falha do corte sobe e derruba também a chamada do que cabe."""
+    monkeypatch.setattr(V, "_INLINE_TOTAL_BYTES_CAP", 50_000)
+    from src.agents._utils import ocr_gate
+
+    def _explode(pdf, cap):
+        raise ValueError("pypdf não abriu")
+
+    monkeypatch.setattr(ocr_gate, "lotes_de_paginas", _explode)
+    anexo = b"B" * 10_000
+    prov = _Provider()
+    lotes: list = []
+
+    _out, gate = _roda(prov, [_scan([20_000] * 6), anexo], lotes_out=lotes, gate=False)
+
+    assert [[p.inline_data.data for p in c[:-1]] for c, _cfg in prov.chamadas] == [[anexo]]
+    assert gate["n_enviados"] == 1 and gate["n_nao_enviados_cap"] == 1
+
+
+def test_nada_cabe_e_nada_se_parte_o_cap_conta_e_o_card_cai_no_texto(monkeypatch):
+    """1 PDF de 1 página acima do cap: nenhum lote cabe. A chamada única levanta o erro do
+    cap, que conta no `n_nao_enviados_cap`.
+    ⛔ MUTANTE: levantar sem passar pelo contador do cap."""
+    monkeypatch.setattr(V, "_INLINE_TOTAL_BYTES_CAP", 50_000)
+    prov = _Provider()
+    lotes: list = []
+
+    out, gate = _roda(prov, [_scan([80_000])], lotes_out=lotes, gate=False)
+
+    assert prov.chamadas == [] and lotes == []
+    assert out == "RESPOSTA_TEXTO" and prov.textos == ["PROMPT"]
+    assert gate["n_nao_enviados_cap"] == 1
+
+
+def test_os_lotes_levam_o_prompt_do_ramo_vision(monkeypatch):
+    """⛔ MUTANTE: os lotes recebem o `prompt` de texto no lugar do `prompt_vision`."""
+    monkeypatch.setattr(V, "_INLINE_TOTAL_BYTES_CAP", 50_000)
+    prov = _Provider()
+
+    _roda(prov, [_scan([20_000] * 6)], lotes_out=[], prompt_vision="PV")
+
+    assert len(prov.chamadas) == 3
+    assert all(c[-1].text.endswith("\n\nPV") for c, _cfg in prov.chamadas)
+
+
 # ── 3. O agent junta os lotes ────────────────────────────────────────────────
-def _classify_com_lotes(monkeypatch, textos: list[str]) -> dict:
-    """`classify_mov_factsheet` com um helper fake que lê o PDF em len(textos) lotes."""
+def _classify_com_lotes(monkeypatch, textos: list[str], *, classe=None,
+                        falha_http: int = 0) -> dict:
+    """`classify_mov_factsheet` com um helper fake que lê o PDF em len(textos) lotes.
+    `falha_http` é o nº de lotes que o helper já contou como falha."""
     from src.agents.mov_factsheet import agent as A
 
     def _r(texto):
@@ -295,7 +364,8 @@ def _classify_com_lotes(monkeypatch, textos: list[str]) -> dict:
             kw["lotes_out"].extend(respostas)
             kw["gate_out"].update({"n_docs": 1, "n_inalcancaveis": 1, "n_enviados": 1,
                                    "n_nao_enviados_cap": 0, "motivo": "texto-lixo",
-                                   "n_lotes": len(textos), "n_lotes_falha": 0})
+                                   "n_lotes": len(textos) + falha_http,
+                                   "n_lotes_falha": falha_http})
         return respostas[0]
 
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
@@ -306,6 +376,7 @@ def _classify_com_lotes(monkeypatch, textos: list[str]) -> dict:
         mov={"mov_id": "m-1", "texto": "Juntada de documento"},
         documentos_anexados=[{"doc_key": "d1", "tipo": "1", "text_content": "",
                               "gcs_url": "gs://b/scan.pdf"}],
+        classe=classe,
     ))
 
 
@@ -331,10 +402,87 @@ def test_o_agent_junta_os_cards_dos_lotes_pelo_redutor_da_peca_grande(monkeypatc
 
 
 def test_o_lote_cujo_card_nao_parseia_conta_como_falha(monkeypatch):
-    out = _classify_com_lotes(monkeypatch, [_LOTE_1, "NAO EH JSON", _LOTE_2])
+    """O PDF lido em parte sai do `n_enviados`, como na falha HTTP, e a régua do CEGO o vê.
+    ⛔ MUTANTE: o agent sobrescreve o `n_lotes_falha` do helper (`=` no lugar de `+=`), ou
+    deixa o PDF no `n_enviados`."""
+    out = _classify_com_lotes(monkeypatch, [_LOTE_1, "NAO EH JSON", _LOTE_2], falha_http=1)
 
     assert out["card"]["tipo_doc"] == "sentenca", "o reduce segue com os lotes bons"
-    assert out["vision_gate"]["n_lotes"] == 3 and out["vision_gate"]["n_lotes_falha"] == 1
+    assert out["vision_gate"]["n_lotes"] == 4 and out["vision_gate"]["n_lotes_falha"] == 2
+    assert out["vision_gate"]["n_enviados"] == 0
+
+
+_PETICAO_1 = ('{"tipo_doc":"peticao_inicial","relevancia_merito":"alta","resumo_ato":"Inicial.",'
+              '"cdas":[{"numero":"80.6.19.000001-01"}]}')
+_PETICAO_2 = ('{"tipo_doc":"peticao_inicial","relevancia_merito":"alta",'
+              '"resumo_ato":"Fim da inicial.",'
+              '"processos_citados":[{"cnj":"0000134-19.2004.4.02.5101","papel":"originario"}],'
+              '"valor_causa_declarado":12345.6,"valor_causa_evidencia":"Da-se a causa o valor"}')
+
+
+def test_o_ramo_peticao_junta_os_lotes_com_o_schema_da_peticao(monkeypatch):
+    """⛔ MUTANTE: o lote vira card sem a `classe`. O card perde as CDAs, os processos
+    citados e o valor da causa, que só o schema da petição tem."""
+    card = _classify_com_lotes(monkeypatch, [_PETICAO_1, _PETICAO_2], classe="peticao")["card"]
+
+    assert [c["numero"] for c in card.get("cdas") or []] == ["80.6.19.000001-01"]
+    assert [p["cnj"] for p in card.get("processos_citados") or []] == ["0000134-19.2004.4.02.5101"]
+    assert card.get("valor_causa_declarado") == 12345.6
+
+
+def test_a_emenda_que_cabe_vence_a_inicial_lida_em_lotes(monkeypatch):
+    """O caminho real (gate, helper, agent e redutor), com o Gemini fake respondendo pelo
+    PDF que recebeu. A inicial escaneada passa do cap e declara R$ 1 mi. A emenda, depois
+    dela na lista do materializer, cabe e corrige para R$ 2 mi."""
+    from src.agents.mov_factsheet import agent as A
+
+    monkeypatch.setattr(V, "_INLINE_TOTAL_BYTES_CAP", 50_000)
+    monkeypatch.setattr(V, "_INLINE_PER_PDF_BYTES_CAP", 20_000)
+    inicial, emenda = _scan([20_000] * 6), _scan([10_000], marca="EMENDA")
+    por_url = {"gs://b/inicial.pdf": inicial, "gs://b/emenda.pdf": emenda}
+
+    def _card(valor=None):
+        c = {"tipo_doc": "peticao_inicial", "relevancia_merito": "alta", "resumo_ato": "x"}
+        if valor:
+            c |= {"valor_causa_declarado": valor, "valor_causa_evidencia": f"R$ {valor}"}
+        return json.dumps(c)
+
+    class _Models:
+        async def generate_content(self, *, model, contents, config):
+            # o gate reescreve o PDF: o fake reconhece cada peça pelo texto da página
+            texto = " ".join(pg.extract_text() for p in contents[:-1]
+                             for pg in PdfReader(io.BytesIO(p.inline_data.data)).pages)
+
+            class _R:
+                text = (_card(2_000_000.0) if "EMENDA" in texto
+                        else _card(1_000_000.0) if "PAGINA-6" in texto else _card())
+                usage_metadata = None
+            return _R()
+
+    class _Prov(_Provider):
+        def __init__(self):
+            super().__init__()
+            self._client.aio.models = _Models()
+
+    async def _fetch(urls):
+        return [por_url[u] for u in urls]
+
+    monkeypatch.setattr(V, "fetch_pdfs_from_gcs", _fetch)
+    monkeypatch.setattr(A, "create_provider", lambda p: _Prov())
+    monkeypatch.setenv("VISION_L1_ENABLED", "true")
+    monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
+
+    out = asyncio.run(A.classify_mov_factsheet(
+        processo={"cnj": "00000000000000000000"},
+        mov={"mov_id": "peticao-x", "texto": "Peticao inicial"},
+        documentos_anexados=[{"doc_key": "conjunto", "text_content": "(capa)"}],
+        documentos_gate=[{"text_content": "", "gcs_url": "gs://b/inicial.pdf"},
+                         {"text_content": "", "gcs_url": "gs://b/emenda.pdf"}],
+        classe="peticao",
+    ))
+
+    assert out["card"]["valor_causa_declarado"] == 2_000_000.0
+    assert out["vision_gate"]["n_lotes"] == 4 and out["vision_gate"]["n_lotes_falha"] == 0
 
 
 def test_com_1_resposta_o_agent_segue_o_caminho_de_sempre(monkeypatch):

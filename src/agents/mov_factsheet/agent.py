@@ -584,7 +584,13 @@ async def _classify_lotes(
             "raw_response": "", "llm_raw_prompt": "", "prompt_version": None, "usage": {},
         },
     )
-    vision_gate["n_lotes_falha"] += len(lotes) - reduzido.get("n_ok", 0)
+    falhas = len(lotes) - reduzido.get("n_ok", 0)
+    vision_gate["n_lotes_falha"] += falhas
+    if falhas:
+        # O PDF lido em parte não conta como enviado, como na falha HTTP do helper, e a
+        # régua do CEGO o vê. Desconta 1 por lote: 2 lotes do mesmo PDF passam do número
+        # exato, mas o PDF lido em parte já deixa a leitura incompleta.
+        vision_gate["n_enviados"] = max(0, vision_gate.get("n_enviados", 0) - falhas)
     reduzido["vision_gate"] = vision_gate
     return reduzido
 
