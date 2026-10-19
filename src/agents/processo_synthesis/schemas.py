@@ -98,7 +98,7 @@ class DecisaoVigenteRich(DecisaoVigente):
     )
 
     # Sinal #2 (suspensao_processual): marcador DETERMINISTICO derivado da
-    # TIMELINE crua (leads.processos_movimentos) pelo materializer L2 — NAO do LLM nem do
+    # TIMELINE do canonical (leads.processo_eventos_canonical) pelo materializer L2 — NAO do LLM nem do
     # mov L1. Injetado out-of-band pos-classify (igual pipeline_quality); upsert grava o
     # dict cru. Resolve o gap "suspensao vive so na timeline" + destrava override T4
     # (sobrestamento-pos-transito -> -1 banda) e R1 (parcelamento -> teto Medio vs quitacao

@@ -20,15 +20,10 @@ from .._utils import (
     call_l1_with_vision_fallback,
     seed_for,
 )
-from .._utils.feature_flags import flag_enabled
 from .chunking import reduce_peca_cards, split_large_peca_variants
-from .prompts import build_mov_factsheet_prompt
-from .fundacao import derivar_categoria, derivar_status_garantia
 from .schemas import (
     DocAnexado,
     DocGate,
-    FallbackContext,
-    MovFactSheetCard,
     MovInput,
     ProcessoContext,
 )
@@ -38,32 +33,6 @@ logger = logging.getLogger(__name__)
 # O engine manda o model no payload (ENGINE_LAYER1_MODEL, que le o mesmo papel); fallback.
 DEFAULT_MODEL = model_for("engine_layer1")
 DEFAULT_PROVIDER = "gemini"
-
-# Bump quando alterar build_mov_factsheet_prompt OR MovFactSheetCard schema.
-# Usado pra drift detection em telemetria.engine_llm_calls.prompt_version. O que cada
-# versao mudou esta no git; ficam os invariantes do caminho v3.1:
-#   - Estrutura e do response_schema (Field(description=...) em schemas.py carrega a
-#     guidance de cada campo); o prompt cobre a semantica do dominio + as regras
-#     criticas (POLOS, RECURSOS, EXTINCAO), no TOPO em <regras_criticas>, com o
-#     <lembrete_final> no fim (Lost-in-the-Middle).
-#   - Extincao sem merito: DEFAULT neutro pra classes Tomador-reu, EXCECAO desfavoravel
-#     pra classes Tomador-autor (Anulatoria/MS/Tutela Cautelar Antecedente/Embargos) —
-#     a MESMA regra do L2, senao L1 e L2 se contradizem em silencio.
-#   - INEXIGIBILIDADE NAO e EXTINCAO SEM MERITO: sentenca que acolhe a tese e declara a
-#     inexigibilidade do credito e natureza='procedente'; a extincao da EF correlata e
-#     efeito reflexo.
-#   - A fundacao (Tomador no polo, grupo economico, taxonomia tipo_doc com categoria
-#     derivada por codigo) e as cirurgias de `fundacao.py` (TRAVA_DECISAO,
-#     REGRA_TITULARIDADE, MODULO_TRABALHISTA) entram no prompt.
-#   - Sem campo morto no response_schema ('apolice' e 'proximos_passos' sairam);
-#     'processos_conexos_mencionados' fica no schema e e suprimido via prompt.
-PROMPT_VERSION = "mov_factsheet.v3.1"
-
-# Caminho v4 (fatos neutros + derivacoes) sob flag, default OFF no codigo (o valor de
-# prod mora no cloudbuild-deploy.yaml). Flag ON => a LLM emite SO fatos neutros
-# (schemas_v4) com prompt neutro (prompts_v4); sentido/categoria/status/peca_pivo viram
-# DERIVED (garantis_shared.derivacoes). O v3.1 segue como o caminho com a flag OFF.
-L1_NEUTRAL_FLAG = "L1_NEUTRAL_ENABLED"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -94,9 +63,7 @@ L1_NEUTRAL_FLAG = "L1_NEUTRAL_ENABLED"
 # ⛔ A trava e incondicional (nao ha flag; decisao do Elton): apagar decisao fabricada
 # move banda nos DOIS sentidos, e a trava ligada e o comportamento decidido.
 #
-# O corte (`CORPO_MIN_CHARS`) mora em `prompts_v4.py` e so `_sem_corpo` o le. Import
-# LAZY, mesmo motivo do `schemas_v4`/`derivacoes` logo abaixo: o caminho v3.1 nao pode
-# passar a depender do modulo v4.
+# O corte (`CORPO_MIN_CHARS`) mora em `prompts_v4.py` e so `_sem_corpo` o le.
 
 
 def _sem_corpo(mov: "MovInput", docs: list) -> bool:
@@ -192,10 +159,7 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
     on-read na Fase 3.
 
     card_cls: classe de validacao do ramo (default MovFactSheetCardV4; o ramo PETICAO
-    passa PeticaoExtractCardV4 — superset; validar com a base DROPARIA cdas/citados).
-
-    Imports lazy: schemas_v4 + garantis_shared.derivacoes so sao tocados sob flag, e o
-    caminho v3.1 nao depende deles."""
+    passa PeticaoExtractCardV4 — superset; validar com a base DROPARIA cdas/citados)."""
     from .schemas_v4 import MovFactSheetCardV4
     from garantis_shared.engine_v6.layer1_mov_factsheet.derivacoes import (
         aplicar_derivados_sujeito_indep,
@@ -224,7 +188,6 @@ async def classify_mov_factsheet(
     processo: ProcessoContext | dict,
     mov: MovInput | dict,
     documentos_anexados: list[DocAnexado | dict] | None = None,
-    fallback_context: FallbackContext | dict | None = None,
     model: Optional[str] = None,
     provider: str = DEFAULT_PROVIDER,
     classe: Optional[str] = None,
@@ -242,12 +205,11 @@ async def classify_mov_factsheet(
             OCR/Vision, quando `documentos_anexados` traz o conjunto CONCATENADO
             num entry só (é o caso da petição). Ausente = o gate usa
             `documentos_anexados`, como sempre.
-        fallback_context: passado SOMENTE quando documentos_anexados vazio
         model: override Gemini model
         provider: 'gemini' (default)
 
     Returns:
-        {"card": MovFactSheetCard.model_dump() | error_dict,
+        {"card": MovFactSheetCardV4.model_dump() | error_dict,
          "raw_response": str,
          "llm_raw_prompt": str,
          "usage": dict,
@@ -286,19 +248,8 @@ async def classify_mov_factsheet(
     vision_gate: dict = {}
     prompt_vision: Optional[str] = None
 
-    fb_typed: FallbackContext | None = None
-    if fallback_context is not None:
-        fb_typed = (
-            fallback_context
-            if isinstance(fallback_context, FallbackContext)
-            else FallbackContext(**fallback_context)
-        )
-
     if model is None:
         model = DEFAULT_MODEL
-
-    use_v4 = flag_enabled(L1_NEUTRAL_FLAG)
-    prompt_version = PROMPT_VERSION
 
     llm_provider = create_provider(provider)
 
@@ -306,70 +257,57 @@ async def classify_mov_factsheet(
     # TIMEOUT_LAYER1_S). Split em chunks, classifica cada um em PARALELO e reduz por
     # campo (lê COMPLETO sem timeout). Evidência já vai head+tail no prompt builder; só
     # peça precisa. Recursa com _no_chunk=True (cada chunk <CHUNK_SIZE → 1 call normal).
-    if use_v4 and not _no_chunk:
+    if not _no_chunk:
         variants = split_large_peca_variants(docs_typed)
         if variants:
             return await _classify_chunked(
-                processo, mov, variants, fb_typed, model, provider, classe,
+                processo, mov, variants, model, provider, classe,
                 gate_typed,
             )
 
-    if use_v4:
-        # Caminho neutro: prompt + response_schema v4, imports lazy (o caminho v3.1 nao
-        # depende do modulo v4). Mesmo envelope de input (processo/mov/docs/fallback/
-        # classe) — so o card emitido muda.
-        from .prompts_v4 import build_mov_factsheet_prompt_v4
-        from .schemas_v4 import (
-            MovFactSheetCardV4,
-            PeticaoExtractCardV4,
-            DOC_INCERTO_PROMPT_VERSION,
-    PETICAO_PROMPT_VERSION,
-            PROMPT_VERSION_V4,
-        )
+    # Caminho neutro: prompt + response_schema v4.
+    from .prompts_v4 import build_mov_factsheet_prompt_v4
+    from .schemas_v4 import (
+        MovFactSheetCardV4,
+        PeticaoExtractCardV4,
+        DOC_INCERTO_PROMPT_VERSION,
+        PETICAO_PROMPT_VERSION,
+        PROMPT_VERSION_V4,
+    )
 
-        prompt_version = PROMPT_VERSION_V4
-        prompt = build_mov_factsheet_prompt_v4(
+    prompt_version = PROMPT_VERSION_V4
+    prompt = build_mov_factsheet_prompt_v4(
+        processo, mov,
+        documentos_anexados=docs_typed,
+        classe=classe,
+    )
+    response_schema = MovFactSheetCardV4
+    if classe in ("peticao", "doc_incerto") and gate_urls:
+        # STEERING DOS ANEXOS (v1.5): 2ª versão do MESMO prompt, com o parágrafo que
+        # declara os PDFs. Quem escolhe é o helper — só o ramo Vision a usa, e só
+        # depois que o gate de fato mandou PDF. Aqui só se sabe que há CANDIDATO
+        # (`gate_urls`), e candidato não é anexo: o gate ainda pode dizer que todo
+        # doc é alcançável por texto. Montar as duas é 1 concat de string; deixar o
+        # helper remontar prompt seria dar conhecimento de agent pra ele.
+        prompt_vision = build_mov_factsheet_prompt_v4(
             processo, mov,
             documentos_anexados=docs_typed,
-            fallback_context=fb_typed,
             classe=classe,
+            pdfs_anexados=True,
         )
-        response_schema = MovFactSheetCardV4
-        if classe in ("peticao", "doc_incerto") and gate_urls:
-            # STEERING DOS ANEXOS (v1.5): 2ª versão do MESMO prompt, com o parágrafo que
-            # declara os PDFs. Quem escolhe é o helper — só o ramo Vision a usa, e só
-            # depois que o gate de fato mandou PDF. Aqui só se sabe que há CANDIDATO
-            # (`gate_urls`), e candidato não é anexo: o gate ainda pode dizer que todo
-            # doc é alcançável por texto. Montar as duas é 1 concat de string; deixar o
-            # helper remontar prompt seria dar conhecimento de agent pra ele.
-            prompt_vision = build_mov_factsheet_prompt_v4(
-                processo, mov,
-                documentos_anexados=docs_typed,
-                fallback_context=fb_typed,
-                classe=classe,
-                pdfs_anexados=True,
-            )
-        if classe == "peticao":
-            # Ramo PETICAO (peticao_extract): schema SUPERSET (card v4 +
-            # cdas/processos_citados) e versao POR RAMO — bump da peticao nao invalida
-            # cache do mov_factsheet e vice-versa. Opt-in do caller: quem manda
-            # classe='peticao' (ou 'doc_incerto') e o materializer de peticao do shared.
-            prompt_version = PETICAO_PROMPT_VERSION
-            response_schema = PeticaoExtractCardV4
-        elif classe == "doc_incerto":
-            # Ramo 1X (doc_incerto_extract): fallback do identify — doc do 1o dia
-            # sem tipo confirmado. MESMO schema superset; a prompt CLASSIFICA o tipo
-            # em vez de crava-lo (decisao do Elton).
-            prompt_version = DOC_INCERTO_PROMPT_VERSION
-            response_schema = PeticaoExtractCardV4
-    else:
-        prompt = build_mov_factsheet_prompt(
-            processo, mov,
-            documentos_anexados=docs_typed,
-            fallback_context=fb_typed,
-            classe=classe,
-        )
-        response_schema = MovFactSheetCard
+    if classe == "peticao":
+        # Ramo PETICAO (peticao_extract): schema SUPERSET (card v4 +
+        # cdas/processos_citados) e versao POR RAMO — bump da peticao nao invalida
+        # cache do mov_factsheet e vice-versa. Opt-in do caller: quem manda
+        # classe='peticao' (ou 'doc_incerto') e o materializer de peticao do shared.
+        prompt_version = PETICAO_PROMPT_VERSION
+        response_schema = PeticaoExtractCardV4
+    elif classe == "doc_incerto":
+        # Ramo 1X (doc_incerto_extract): fallback do identify — doc do 1o dia
+        # sem tipo confirmado. MESMO schema superset; a prompt CLASSIFICA o tipo
+        # em vez de crava-lo (decisao do Elton).
+        prompt_version = DOC_INCERTO_PROMPT_VERSION
+        response_schema = PeticaoExtractCardV4
 
     # Seed determinístico (mov + prompt) — o MESMO padrão de L2/L3
     # (processo_synthesis/merito_synthesis).
@@ -408,8 +346,8 @@ async def classify_mov_factsheet(
         docs_text=gate_pairs,
         gate_out=vision_gate,
         # O PDF acima do cap sobe em lotes de páginas, e o redutor da peça grande junta os
-        # cards. Só no v4, como o chunking: o redutor lê o card v4.
-        lotes_out=lotes if use_v4 else None,
+        # cards.
+        lotes_out=lotes,
         prompt_vision=prompt_vision,
         response_schema=response_schema,
         log_label=f"mov_id={mov.mov_id}",
@@ -423,42 +361,22 @@ async def classify_mov_factsheet(
     )
     if len(lotes) > 1:
         return await _classify_lotes(
-            processo, mov, docs_typed, fb_typed, model, provider, classe, lotes, vision_gate,
+            processo, mov, docs_typed, model, provider, classe, lotes, vision_gate,
         )
 
     raw_response = response.text
     # Resposta VAZIA vira erro no parse, como o JSON quebrado: card sem leitura afirmaria
     # relevancia. O L1_PARSE_FAIL leva o finish_reason, e o mov entra no l1_degraded.
     try:
-        if use_v4:
-            # v4: fatos neutros + derivados sujeito-independentes (G6). Identidade injetada
-            # dentro do helper (mov_id/data fora do response_schema). Ramo peticao valida
-            # com o superset (a base droparia cdas/processos_citados).
-            parsed = parse_llm_json(raw_response)
-            card_data = _build_card_v4(
-                parsed, mov,
-                card_cls=response_schema if classe in ("peticao", "doc_incerto") else None,
-                sem_corpo=_sem_corpo(mov, docs_typed),
-            )
-        else:
-            # Echo input identifiers em caso de LLM reset
-            parsed = parse_llm_json(raw_response)
-            parsed.setdefault("mov_id", mov.mov_id)
-            if mov.data and not parsed.get("data"):
-                parsed["data"] = mov.data
-            if mov.tipo and not parsed.get("tipo_origem"):
-                parsed["tipo_origem"] = mov.tipo
-            # DERIVACAO POR CODIGO (L1 v7): o LLM emite tipo_doc(34) e evento_garantia.tipo;
-            # categoria(14) e status_garantia_pos_mov sao DERIVADOS — fonte unica da verdade,
-            # zero contradicao. ★ ARMADILHA #1: derivar ANTES de instanciar (categoria e lida
-            # pela L2; se ficar None o sinal some).
-            if not parsed.get("categoria"):
-                parsed["categoria"] = derivar_categoria(parsed.get("tipo_doc"))
-            _eg_tipo = (parsed.get("evento_garantia") or {}).get("tipo")
-            if not parsed.get("status_garantia_pos_mov") or parsed.get("status_garantia_pos_mov") == "nenhum":
-                parsed["status_garantia_pos_mov"] = derivar_status_garantia(_eg_tipo)
-            card = MovFactSheetCard(**parsed)
-            card_data = card.model_dump()
+        # v4: fatos neutros + derivados sujeito-independentes (G6). Identidade injetada
+        # dentro do helper (mov_id/data fora do response_schema). Ramo peticao valida
+        # com o superset (a base droparia cdas/processos_citados).
+        parsed = parse_llm_json(raw_response)
+        card_data = _build_card_v4(
+            parsed, mov,
+            card_cls=response_schema if classe in ("peticao", "doc_incerto") else None,
+            sem_corpo=_sem_corpo(mov, docs_typed),
+        )
     except (json.JSONDecodeError, Exception) as e:
         # L1_PARSE_FAIL diag: finish_reason distingue MAX_TOKENS / STOP-
         # truncado-sob-carga / SAFETY; out_tokens confirma o teto; prompt_md5 compara
@@ -509,7 +427,7 @@ async def classify_mov_factsheet(
 
 
 async def _classify_chunked(
-    processo, mov, variants, fb_typed, model, provider, classe,
+    processo, mov, variants, model, provider, classe,
     documentos_gate=None,
 ) -> dict:
     """Map-reduce de peça grande via framework compartilhado: N variantes (chunks) →
@@ -533,7 +451,7 @@ async def _classify_chunked(
 
     async def _classify_one(v) -> dict:
         resultado = await classify_mov_factsheet(
-            processo, mov, v, fb_typed, model, provider, classe,
+            processo, mov, v, model, provider, classe,
             # SÓ na 1ª variante: basta UMA chamada ver o conteúdo inalcançável, e o
             # reduce funde os cards. Passar em todas multiplicaria o custo do Vision
             # pelo nº de chunks sem acrescentar informação. `is variants[0]` é
@@ -561,7 +479,7 @@ async def _classify_chunked(
 
 
 async def _classify_lotes(
-    processo, mov, docs, fb_typed, model, provider, classe, lotes, vision_gate,
+    processo, mov, docs, model, provider, classe, lotes, vision_gate,
 ) -> dict:
     """O PDF acima do cap, lido em lotes de páginas: o helper devolve 1 resposta por lote.
     Cada resposta vira card pelo caminho de sempre (`_resposta`, sem nova chamada), e o card
@@ -570,7 +488,7 @@ async def _classify_lotes(
     `n_lotes_falha` junto com o que o helper contou."""
     async def _um_lote(resposta) -> dict:
         return await classify_mov_factsheet(
-            processo, mov, documentos_anexados=docs, fallback_context=fb_typed, model=model,
+            processo, mov, documentos_anexados=docs, model=model,
             provider=provider, classe=classe, _no_chunk=True, _resposta=resposta,
         )
 

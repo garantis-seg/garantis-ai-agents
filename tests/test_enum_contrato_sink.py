@@ -37,7 +37,6 @@ from garantis_shared.engine_v6.persistence.peticao_contract import (
     resolve_admin_papel,
 )
 
-from src.agents.mov_factsheet.schemas import CDABlock          # v3.1 — ramo ainda vivo
 from src.agents.mov_factsheet.schemas_v4 import (
     CdaPeticao,
     EventoGarantiaV4,
@@ -71,11 +70,6 @@ def test_ente_da_cda_cobertura_total_nos_dois_sentidos():
         f"chave inalcancavel no sink: {sorted(mapa - enum)}. O miner nunca emite esse "
         "valor — remova, ou o proximo leitor vai achar que ela cobre algo."
     )
-
-
-def test_ente_do_schema_v3_nao_divergiu_do_v4():
-    """O ramo v3.1 (`use_v4=False`, agent.py) segue vivo e escreve no MESMO sink."""
-    assert _enum_values(CDABlock, "ente") == _enum_values(CdaPeticao, "ente")
 
 
 def test_as_3_colunas_do_no_sao_do_dominio_certo():

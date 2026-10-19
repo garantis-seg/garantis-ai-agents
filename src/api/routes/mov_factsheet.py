@@ -38,7 +38,6 @@ async def classify_mov_factsheet_endpoint(request: MovFactSheetRequest):
             processo=request.processo,
             mov=request.mov,
             documentos_anexados=request.documentos_anexados,
-            fallback_context=request.fallback_context,
             model=request.model,
             provider=request.provider or "gemini",
             classe=request.classe,
@@ -51,9 +50,8 @@ async def classify_mov_factsheet_endpoint(request: MovFactSheetRequest):
                 detail=f"LLM parse error: {card_data.get('error')}",
             )
 
-        # card_data já validado dentro de classify (v3.1=MovFactSheetCard,
-        # v4=MovFactSheetCardV4) — passa o dict direto, SEM re-coercir via
-        # MovFactSheetCard (que dropava os fatos crus v4). Ver schemas.MovFactSheetResponse.
+        # card_data já validado dentro de classify — passa o dict direto, SEM re-coercir.
+        # Ver schemas.MovFactSheetResponse.
         return MovFactSheetResponse(
             card=card_data,
             raw_response=result.get("raw_response"),
@@ -84,7 +82,6 @@ async def triage_mov_endpoint(request: TriageRequest):
             processo=request.processo,
             mov=request.mov,
             documentos_anexados=request.documentos_anexados,
-            fallback_context=request.fallback_context,
             model=request.model,
             provider=request.provider or "gemini",
         )

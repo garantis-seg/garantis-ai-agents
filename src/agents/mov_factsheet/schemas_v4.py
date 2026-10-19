@@ -1,11 +1,6 @@
-"""Schema v4 — fatos NEUTROS do L1 (response_schema do Gemini).
+"""Schema v4 — fatos NEUTROS do L1 (response_schema do Gemini), sob `PROMPT_VERSION_V4`.
 
-NÃO substitui o `MovFactSheetCard` v3.1 — coexiste com ele, escolhido pela flag
-`L1_NEUTRAL_ENABLED` (default OFF no código; ligada em prod pelo `cloudbuild-deploy.yaml`),
-sob `PROMPT_VERSION_V4`. Reversível: deletar este módulo + o caminho v4 do agente volta a
-100% v3.1.
-
-DIFERENÇA CENTRAL vs v3.1: a LLM emite SÓ fatos neutros + os julgamentos genuínos
+A LLM emite SÓ fatos neutros + os julgamentos genuínos
 (`relevancia_merito`, `resumo_ato`). NÃO emite `sentido`/`delta_risco`/`categoria`/
 `status_garantia_pos_mov`/`relevante_garantia`/`peca_pivo` — esses são DERIVED por
 código (`garantis_shared.engine_v6.layer1_mov_factsheet.derivacoes`): os sujeito-
@@ -53,8 +48,8 @@ PROMPT_VERSION_V4 = versao_com_identidade(
     __file__,
 )
 
-# Taxonomia tipo_doc (34) — idêntica à v3.1 (`schemas.py` / `fundacao.TAXONOMIA_TIPO_DOC`).
-# Mantida aqui pra o módulo v4 ser auto-contido/reversível; insumo de `categoria` (DERIVED).
+# Taxonomia tipo_doc (34) — idêntica à `fundacao.TAXONOMIA_TIPO_DOC` (o texto do prompt).
+# Insumo de `categoria` (DERIVED).
 TIPO_DOC = Literal[
     "sentenca", "acordao", "decisao_interlocutoria", "despacho", "voto",
     "peticao_inicial", "peticao", "contestacao", "recurso", "embargos",

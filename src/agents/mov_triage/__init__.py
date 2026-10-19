@@ -11,7 +11,6 @@ REGRA DE OURO: a triagem so erra pro lado SEGURO (na duvida -> completo).
 from .agent import classify_mov_triage
 from .schemas import (
     DocAnexado,
-    FallbackContext,
     MovInput,
     MovTriageCard,
     ProcessoContext,
@@ -22,7 +21,6 @@ from .schemas import (
 __all__ = [
     "classify_mov_triage",
     "DocAnexado",
-    "FallbackContext",
     "MovInput",
     "MovTriageCard",
     "ProcessoContext",

@@ -29,10 +29,9 @@ logger = logging.getLogger(__name__)
 
 
 def _mov_factsheet_template() -> str:
-    from .mov_factsheet.prompts import build_mov_factsheet_prompt
+    from .mov_factsheet.prompts_v4 import build_mov_factsheet_prompt_v4
     from .mov_factsheet.schemas import (
         DocAnexado,
-        FallbackContext,
         MovInput,
         ProcessoContext,
     )
@@ -49,9 +48,7 @@ def _mov_factsheet_template() -> str:
         tipo="{{tipo_origem}}",
         texto="{{texto_da_publicacao}}",
     )
-    # 1 doc sentinela renderiza o bloco DOCUMENTOS ANEXADOS; fallback_context
-    # renderiza os blocos RESUMO DO PROCESSO + MOV ANTERIOR (sao independentes
-    # de has_docs no builder).
+    # 1 doc sentinela renderiza o bloco DOCUMENTOS ANEXADOS.
     docs = [
         DocAnexado(
             doc_key="{{doc_key}}",
@@ -62,12 +59,7 @@ def _mov_factsheet_template() -> str:
             provider="{{provider}}",
         )
     ]
-    fb = FallbackContext(
-        processo_resumo_ia="{{resumo_ia_do_processo}}",
-        mov_anterior_resumo="{{resumo_da_mov_anterior}}",
-        mov_anterior_categoria="{{categoria_mov_anterior}}",
-    )
-    return build_mov_factsheet_prompt(processo, mov, docs, fb)
+    return build_mov_factsheet_prompt_v4(processo, mov, docs)
 
 
 # Agent aposentado sai tambem do registry `_BUILDERS`: o lazy import dele falharia em
