@@ -122,7 +122,7 @@ def test_a_capa_com_flag_CHEGA_ao_Gemini_e_sem_flag_nao():
     gate, enviados = _roda([(CAPA, "gs://b/peticao.pdf")], pdf)
     assert enviados == [] and gate == {"n_docs": 1, "n_inalcancaveis": 0,
                                        "n_enviados": 0, "n_nao_enviados_cap": 0,
-                                       "nao_enviados_cap_gcs": [], "motivo": None}
+                                       "motivo": None}
 
 
 def test_par_de_2_elementos_continua_funcionando():

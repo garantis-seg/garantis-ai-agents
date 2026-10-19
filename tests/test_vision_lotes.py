@@ -190,7 +190,7 @@ def test_o_PDF_acima_do_cap_sobe_em_lotes_1_chamada_por_lote(monkeypatch):
         "cada lote leva o prompt inteiro, com a parte dita antes dele")
     assert len(lotes) == 3 and out is lotes[0]
     assert gate == {"n_docs": 1, "n_inalcancaveis": 1, "n_enviados": 1,
-                    "n_nao_enviados_cap": 0, "nao_enviados_cap_gcs": [], "motivo": "imagem",
+                    "n_nao_enviados_cap": 0, "motivo": "imagem",
                     "n_lotes": 3, "n_lotes_falha": 0}
     assert prov.textos == [], "o PDF foi lido: o card não cai no texto"
 
@@ -306,6 +306,40 @@ def test_nos_lotes_o_PDF_partido_inteiro_nao_e_cortado(monkeypatch):
                        lotes_out=[])
 
     assert gate["n_nao_enviados_cap"] == 1
+    assert gate["nao_enviados_cap_gcs"] == ["gs://b/1.pdf"]
+
+
+def test_sem_corte_a_chave_fica_de_fora(monkeypatch):
+    """⛔ O veredito vai pro `raw_ref` do card, e o `content_hash` o cobre: uma chave nova em
+    todo gate faria toda releitura idêntica virar card novo, e o L2 pagaria de novo."""
+    _caps_pequenos(monkeypatch)
+
+    _out, gate = _roda(_Provider(), [_scan([10_000]), _scan([5_000])], lotes_out=None)
+
+    assert gate["n_nao_enviados_cap"] == 0 and "nao_enviados_cap_gcs" not in gate
+
+
+def test_a_URL_e_a_do_PDF_certo_quando_o_gate_pula_um_doc_antes(monkeypatch):
+    """O conjunto comum mistura texto e scan: o doc de texto bom não baixa PDF nem entra na
+    lista do Vision. ⛔ MUTANTE: guardar a URL antes de o gate decidir. A lista de URLs
+    desalinha da de PDFs, e o gate nomeia o PDF errado."""
+    _caps_pequenos(monkeypatch)
+    pdfs = {"gs://b/0.pdf": _scan([10_000]), "gs://b/1.pdf": _scan([30_000])}
+
+    async def _fake_fetch(pedidos):
+        return [pdfs[u] for u in pedidos]
+
+    texto_bom = "Trata-se de acao anulatoria de debito fiscal. " * 20
+    docs = [(texto_bom, "gs://b/texto.pdf"), ("", "gs://b/0.pdf"), ("", "gs://b/1.pdf")]
+    gate: dict = {}
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(V, "fetch_pdfs_from_gcs", _fake_fetch)
+        mp.setenv("VISION_L1_ENABLED", "true")
+        asyncio.run(V.call_l1_with_vision_fallback(
+            _Provider(), model="m", prompt="PROMPT", response_schema=None,
+            gcs_urls=[u for _t, u in docs], docs_text=docs, gate_out=gate))
+
+    assert gate["n_docs"] == 3 and gate["n_inalcancaveis"] == 2
     assert gate["nao_enviados_cap_gcs"] == ["gs://b/1.pdf"]
 
 

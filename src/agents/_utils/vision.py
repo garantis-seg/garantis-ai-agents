@@ -408,13 +408,15 @@ def _publica_cortados(gate_out: Optional[dict], pdf_urls: Optional[list[str]]) -
     """Troca as POSIÇÕES do corte (`idx_nao_enviados_cap`) pelo `gcs_url` de cada PDF
     cortado (`nao_enviados_cap_gcs`).
 
-    Sem `pdf_urls` (o ramo sem gate por documento, onde o fetch descarta URL e a lista
-    desalinha), a chave fica de fora: ausente = não medido."""
+    ⛔ Só quando o teto cortou algum: o veredito vai pro `raw_ref` do card, e o
+    `content_hash` cobre o `raw_ref`. Uma chave nova em todo gate faria toda releitura
+    idêntica virar card novo, e o L2 pagaria de novo. Sem `pdf_urls` (o ramo sem gate por
+    documento, onde o fetch descarta URL e a lista desalinha), a chave também fica de fora."""
     if gate_out is None:
         return
     idx = gate_out.pop("idx_nao_enviados_cap", None)
-    if pdf_urls is not None:
-        gate_out["nao_enviados_cap_gcs"] = [pdf_urls[i] for i in (idx or [])]
+    if pdf_urls is not None and idx:
+        gate_out["nao_enviados_cap_gcs"] = [pdf_urls[i] for i in idx]
 
 
 async def call_l1_with_vision_fallback(
@@ -464,9 +466,9 @@ async def call_l1_with_vision_fallback(
     conta o que o Gemini REALMENTE recebeu: se a Vision call falhar e cair no
     texto, ele volta a 0 (o card é cego, e é isso que a métrica tem que dizer).
     `n_nao_enviados_cap` = quantos o cap dropou, e `nao_enviados_cap_gcs` = QUAIS (o
-    `gcs_url` de cada um, `[]` = nenhum). Com 2 ou mais peças, só a URL diz se o PDF
-    cortado é o que o operador mandou. Ela só existe no ramo com `docs_text`: ausente =
-    não medido, nunca "nada cortado". Quando a chamada Vision falha (o
+    `gcs_url` de cada um). Com 2 ou mais peças, só a URL diz se o PDF cortado é o que o
+    operador mandou. Ela só existe no ramo com `docs_text` e só quando o cap cortou algum:
+    ausente = nada cortado, ou não medido (ver `_publica_cortados`). Quando a chamada Vision falha (o
     Gemini recusa o payload, timeout, 400), o ramo de exceção acrescenta
     `n_falha_vision` (quantos o gate aprovou e o card não leu) + `erro_vision`
     (tipo + mensagem): é o que separa "nada coube" (`n_nao_enviados_cap>0`) de "o
@@ -506,8 +508,6 @@ async def call_l1_with_vision_fallback(
             from .ocr_gate import precisa_vision, texto_decide_sozinho
             # Alinhada a `pdf_bytes_list`: só este ramo sabe de que URL é cada PDF.
             pdf_urls = []
-            if gate_out is not None:
-                gate_out["nao_enviados_cap_gcs"] = []
             for _par in docs_text:
                 # 2 ou 3 elementos: o 3º (`so_capa`) é ADITIVO — caller antigo e o
                 # fallback por `documentos_anexados` mandam pares, como sempre.
