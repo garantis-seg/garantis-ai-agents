@@ -109,7 +109,7 @@ def test_manda_o_PDF_DO_DOC_CERTO_quando_o_conjunto_e_misto():
     assert len(enviados) == 1
     assert enviados[0][:8] == peticao[:8], "subiu o PDF do documento errado"
     assert gate == {"n_docs": 2, "n_inalcancaveis": 1, "n_enviados": 1,
-                    "n_nao_enviados_cap": 0, "motivo": "vetor"}
+                    "n_nao_enviados_cap": 0, "nao_enviados_cap_gcs": [], "motivo": "vetor"}
 
 
 def test_veredito_registra_ZERO_ENVIADO_quando_a_call_vision_falha():
