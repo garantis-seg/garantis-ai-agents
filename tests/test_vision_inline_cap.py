@@ -114,7 +114,8 @@ def test_o_teto_TOTAL_corta_o_FIM_da_fila_e_conta():
 
 # ── 2. O caso DOMINANTE: 1 doc só (56 dos 66 cards cegos, `n_inalcancaveis=1`) ──
 def test_pdf_unico_acima_do_cap_nao_paga_chamada_nenhuma():
-    """Aqui não há leitura a recuperar — o único documento não cabe. O que muda é
+    """Numa chamada só, o único documento não cabe (quem o lê em lotes de páginas é o
+    `call_l1_with_vision_fallback`, com `lotes_out`). O que muda é
     que a razão fica DITA (contador + mensagem com o tamanho) em vez de virar um
     ValueError do SDK sobre 'Gemini Developer client', que não diz nada sobre o
     card. E a chamada não sai: o Gemini nunca é acionado com zero PDFs."""
@@ -201,8 +202,7 @@ def test_n_enviados_vem_da_RESPOSTA_nao_de_uma_subtracao():
     """Régua copiada: enquanto o cap for o ÚNICO motivo de drop,
     `len(pedidos) - n_nao_enviados_cap` COINCIDE com a verdade por identidade
     aritmética, e nenhum teste acima separa as duas fórmulas. Este separa,
-    simulando o segundo motivo de drop — que o docstring do módulo já anuncia
-    como o passo seguinte (encolher o PDF por páginas).
+    simulando um segundo motivo de drop.
 
     ⛔ MUTANTE: voltar a subtrair reprova aqui, dizendo `n_enviados=2` contra
     `pdfs_processed=1` — dois números divergentes DENTRO da mesma resposta, e a
