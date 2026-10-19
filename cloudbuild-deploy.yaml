@@ -166,20 +166,6 @@ steps:
       - '--set-env-vars'
       # PR7.3 (2026-05-31): JURISPRUDENCIA_BLOCK_ENABLED + PARADIGMAS_BLOCK_ENABLED
       # dropados (zero callers Python pos-PR7.2 — blocos internos removidos).
-      # L1_NEUTRAL_ENABLED (2026-06-10): FLIP PERMANENTE do v4 — agent mov_factsheet
-      # emite fatos neutros (prompt/schema v4). Par de fe-api + risk-engine-worker.
-      # VISION_L1_ENABLED (2026-06-13 ON -> 2026-06-17 OFF): default OFF (CLAUDE.md;
-      # benchmark 05-28 sem lift + 1.2-2.4x custo). Ficou ON SO aqui no ai-agents
-      # mas OFF no worker/fe-api -> estado meio-ligado: o worker (OFF) so carrega doc
-      # COM texto, entao os doc-imagem que o Vision precisaria nunca chegavam aqui; o
-      # Vision so tentava PDF dos docs-com-texto-e-anexo e dava 400 "document has no
-      # pages" nos PDFs ruins -> l1_degraded -> indeterminado (dias de dano). Pra
-      # retomar o experimento per-doc: ligar os 3 (worker+fe-api+ai-agents) JUNTOS +
-      # tratar 0-page (pular PDF sem pagina em vez de falhar a mov).
-      # 2026-06-29: condicoes atendidas -> FLIP PERSISTENTE pra true. Os 3 ligados
-      # (services.yaml + cloudbuilds do worker/fe-api no PR execucao-fiscal#437) e o
-      # 0-page guard ja entrou (PR garantis-ai-agents#65: stub-filter + try/except no
-      # call_l1_with_vision_fallback). Custo limitado pelo gate ocr_gate (so doc-imagem).
       # GEMINI_RATE_LIMIT_TIMEOUT_S=180 (2026-06-16): era default 60 — em mérito GRANDE
       # (ex. Petrobras 25 procs) o fan-out de L1 satura o rate-limiter e o 1 call de L3
       # no fim não pega slot em 60s → acquire TimeoutError → 500 → engine desiste após
