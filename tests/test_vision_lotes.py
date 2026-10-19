@@ -255,6 +255,104 @@ def test_pagina_que_nem_sozinha_cabe_deixa_o_PDF_no_contador_do_cap(monkeypatch)
     assert gate["n_nao_enviados_cap"] == 1 and gate["n_enviados"] == 0
 
 
+# ── QUAL PDF o teto cortou, além de quantos ──────────────────────────────────
+# Com 2 ou mais peças, a contagem não diz se o PDF cortado é o que o operador mandou. A URL
+# diz, e é ela que o materializer traduz para a peça confirmada.
+def _caps_pequenos(monkeypatch):
+    monkeypatch.setattr(V, "_INLINE_TOTAL_BYTES_CAP", 50_000)
+    monkeypatch.setattr(V, "_INLINE_PER_PDF_BYTES_CAP", 20_000)
+
+
+def test_o_gate_diz_QUAL_PDF_o_teto_cortou(monkeypatch):
+    """⛔ MUTANTE: publicar as posições que SUBIRAM. A URL sairia a dos PDFs lidos."""
+    _caps_pequenos(monkeypatch)
+
+    _out, gate = _roda(_Provider(), [_scan([10_000]), _scan([30_000]), _scan([5_000])],
+                       lotes_out=None)
+
+    assert gate["n_nao_enviados_cap"] == 1
+    assert gate["nao_enviados_cap_gcs"] == ["gs://b/1.pdf"]
+    assert "idx_nao_enviados_cap" not in gate, "a posição é interna: sai a URL"
+
+
+def test_nada_coube_o_gate_nomeia_todos(monkeypatch):
+    _caps_pequenos(monkeypatch)
+    prov = _Provider()
+
+    out, gate = _roda(prov, [_scan([60_000]), _scan([30_000])], lotes_out=None)
+
+    assert prov.chamadas == [] and out == "RESPOSTA_TEXTO"
+    assert gate["nao_enviados_cap_gcs"] == ["gs://b/0.pdf", "gs://b/1.pdf"]
+    assert gate["erro_vision"].startswith("ValueError: VISION_INLINE_CAP_DROP")
+
+
+def test_a_chamada_que_falha_mantem_o_PDF_cortado_nomeado(monkeypatch):
+    """O caso do toast: o teto corta o 2º PDF, e a chamada do 1º falha."""
+    _caps_pequenos(monkeypatch)
+
+    _out, gate = _roda(_Provider(falha=lambda texto: True),
+                       [_scan([10_000]), _scan([30_000])], lotes_out=None)
+
+    assert gate["nao_enviados_cap_gcs"] == ["gs://b/1.pdf"]
+    assert re.match(r"^\w+: \d{3}\b", gate["erro_vision"])
+
+
+def test_nos_lotes_o_PDF_partido_inteiro_nao_e_cortado(monkeypatch):
+    """⛔ MUTANTE: esquecer o `partidos` no conjunto dos que subiram. O PDF lido em lotes
+    sairia nomeado como cortado."""
+    _caps_pequenos(monkeypatch)
+
+    _out, gate = _roda(_Provider(), [_scan([20_000] * 6), _scan([30_000]), _scan([5_000])],
+                       lotes_out=[])
+
+    assert gate["n_nao_enviados_cap"] == 1
+    assert gate["nao_enviados_cap_gcs"] == ["gs://b/1.pdf"]
+
+
+def test_sem_corte_a_chave_fica_de_fora(monkeypatch):
+    """⛔ O veredito vai pro `raw_ref` do card, e o `content_hash` o cobre: uma chave nova em
+    todo gate faria toda releitura idêntica virar card novo, e o L2 pagaria de novo."""
+    _caps_pequenos(monkeypatch)
+
+    _out, gate = _roda(_Provider(), [_scan([10_000]), _scan([5_000])], lotes_out=None)
+
+    assert gate["n_nao_enviados_cap"] == 0 and "nao_enviados_cap_gcs" not in gate
+
+
+def test_a_URL_e_a_do_PDF_certo_quando_o_gate_pula_um_doc_antes(monkeypatch):
+    """O conjunto comum mistura texto e scan: o doc de texto bom não baixa PDF nem entra na
+    lista do Vision. ⛔ MUTANTE: guardar a URL antes de o gate decidir. A lista de URLs
+    desalinha da de PDFs, e o gate nomeia o PDF errado."""
+    _caps_pequenos(monkeypatch)
+    pdfs = {"gs://b/0.pdf": _scan([10_000]), "gs://b/1.pdf": _scan([30_000])}
+
+    async def _fake_fetch(pedidos):
+        return [pdfs[u] for u in pedidos]
+
+    texto_bom = "Trata-se de acao anulatoria de debito fiscal. " * 20
+    docs = [(texto_bom, "gs://b/texto.pdf"), ("", "gs://b/0.pdf"), ("", "gs://b/1.pdf")]
+    gate: dict = {}
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(V, "fetch_pdfs_from_gcs", _fake_fetch)
+        mp.setenv("VISION_L1_ENABLED", "true")
+        asyncio.run(V.call_l1_with_vision_fallback(
+            _Provider(), model="m", prompt="PROMPT", response_schema=None,
+            gcs_urls=[u for _t, u in docs], docs_text=docs, gate_out=gate))
+
+    assert gate["n_docs"] == 3 and gate["n_inalcancaveis"] == 2
+    assert gate["nao_enviados_cap_gcs"] == ["gs://b/1.pdf"]
+
+
+def test_sem_gate_por_documento_a_chave_fica_de_fora(monkeypatch):
+    """Ausente = não medido: sem `docs_text`, ninguém sabe de que URL é cada PDF."""
+    _caps_pequenos(monkeypatch)
+
+    _out, gate = _roda(_Provider(), [b"A" * 10_000, b"B" * 30_000], lotes_out=None, gate=False)
+
+    assert gate["n_nao_enviados_cap"] == 1
+    assert "nao_enviados_cap_gcs" not in gate and "idx_nao_enviados_cap" not in gate
+
+
 def test_os_PDFs_que_cabem_sobem_com_a_MESMA_selecao_de_hoje(monkeypatch):
     """[grande, anexo de 30 KB, anexo de 10 KB], com teto por PDF de 20 KB. Hoje o 1º
     passa do total e sai, o 2º passa do teto por PDF e sai, e sobe só o 3º. Com os lotes,
