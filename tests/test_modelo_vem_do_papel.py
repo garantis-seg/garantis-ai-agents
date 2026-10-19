@@ -18,7 +18,6 @@ import src.agents.calculo_ficha.agent as calculo_ficha
 import src.agents.doc_indexer.ocr as doc_indexer_ocr
 import src.agents.doc_reader.agent as doc_reader
 import src.agents.ficha_writer.agent as ficha_writer
-import src.agents.merito_reducao_v2.agent as merito_reducao_v2
 import src.agents.merito_synthesis.agent as merito_synthesis
 import src.agents.merito_synthesis.redacao as merito_redacao
 import src.agents.mov_factsheet.agent as mov_factsheet
@@ -38,7 +37,6 @@ _PAPEIS = [
     (processo_synthesis, "engine_layer2"),
     (merito_synthesis, "engine_layer3"),
     (merito_redacao, "engine_layer3"),
-    (merito_reducao_v2, "engine_layer3_v2"),
     (peticao_confirmador, "peticao_confirmador"),
     (apolice_lifecycle, "apolice_ciclo_de_vida"),
     (doc_reader, "leitor_autos_monolith"),

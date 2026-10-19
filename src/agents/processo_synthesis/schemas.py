@@ -435,8 +435,7 @@ class ProcessoSynthesisRequest(BaseModel):
     polo_passivo: Optional[str] = None
     role_no_merito: Optional[Literal["principal", "conexo"]] = None
     tipo_judicial: Literal["fiscal", "trabalhista", "civel"] = Field(
-        default="civel",
-        description="Determinado upstream por garantis_shared.cnj_utils.classify_tipo_judicial(assunto, tribunal, classe_codigo). Caller resolve e passa.",
+        description="Determinado upstream pela materia canonica do garantis-shared (o mesmo insumo da familia do L1). Caller resolve e passa: sem default, o servidor nao afirma civel.",
     )
     mov_factsheets: list[MovFactSheetMin] = Field(default_factory=list)
     apolices: list[ApoliceContextMin] = Field(default_factory=list)

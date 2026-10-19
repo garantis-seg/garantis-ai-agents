@@ -8,7 +8,7 @@ DIFERENÇA CENTRAL vs v3.1: SEM fundação-do-Tomador. A LLM não sabe (nem prec
 julgamento (favorável/desfavorável) é derivado em código depois (`derivacoes.py`).
 
 O que o prompt APOSENTA (mote — viraram código em `derivacoes`, NÃO re-introduzir aqui):
-  - `<regra_polos>` inteira → `derivar_lado` / injeção-de-papel do provider.
+  - `<regra_polos>` inteira → `polo_do_tomador` / injeção-de-papel do provider.
   - `<regra_recursos>` (metade-mapeamento) → `SENTIDO_RECURSO` (recorrente × provido).
   - `<regra_extincao_sem_merito>` → `SENTIDO_EXTINCAO` (lado × motivo_extincao).
   - `<regra_titularidade>` / fundação-do-Tomador (`bloco_fundacao`) → fora do passe.
@@ -22,12 +22,15 @@ response_schema (`schemas_v4` descriptions).
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
 from .fundacao import TAXONOMIA_TIPO_DOC
 from .prompts import _summarize_doc
 from .schemas import DocAnexado, MovInput, ProcessoContext
+
+logger = logging.getLogger(__name__)
 
 # ── Caps v4.4 (decisão do Elton: "SEM LIMITE primeiro — qualidade > custo") ──
 # Sem cap de docs/mov nem por doc (o v3.1 tinha): TODOS os docs entram, governados por um
@@ -176,6 +179,9 @@ def _familia_key(processo: Any) -> str:
     if familia in VOCAB_FAMILIA:
         return familia
 
+    # Contador: o engine manda a `familia` pronta. Quem cai aqui e payload sem ela.
+    logger.warning("FALLBACK_DISPAROU familia=%s cnj=%s familia_recebida=%r",
+                   "materia_familia_sem_payload", _get(processo, "cnj"), familia)
     from garantis_shared.materia import classificar_materia
 
     return classificar_materia(

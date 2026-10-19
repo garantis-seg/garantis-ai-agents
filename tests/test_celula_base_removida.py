@@ -36,11 +36,10 @@ _FONTES_QUE_SAIRAM = [
     "api/routes/celula_base_classifier.py",
 ]
 
-# Os 3 agentes do ENGINE moram no MESMO `src/agents/` e no mesmo `include_router`
+# Os agentes do ENGINE moram no MESMO `src/agents/` e no mesmo `include_router`
 # do que saiu. Se um teardown futuro cortar por proximidade, e aqui que fica
 # vermelho -- `ModuleNotFoundError` = alguem levou o engine junto.
 _AGENTES_DO_ENGINE_QUE_FICAM = [
-    "src.agents.merito_reducao_v2",
     "src.agents.merito_synthesis",
     "src.agents.mov_factsheet",
 ]

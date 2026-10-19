@@ -95,3 +95,13 @@ def test_fallback_local_NAO_toca_o_banco():
     finally:
         ref._load = orig
         ref.invalidate_cache()
+
+
+def test_o_fallback_local_conta_e_o_payload_pronto_nao(caplog):
+    """Contador do fallback DB-less: so o payload sem `familia` (ou fora do vocabulario)
+    loga FALLBACK_DISPAROU. A decisao de tira-lo sai da contagem em prod."""
+    caplog.set_level("WARNING", logger="src.agents.mov_factsheet.prompts_v4")
+    _familia_key({"familia": "fiscal", "classe": "Execução Fiscal"})
+    assert "FALLBACK_DISPAROU" not in caplog.text
+    _familia_key({"cnj": "1000588-96.2022.5.00.0000", "classe": "AR"})
+    assert "FALLBACK_DISPAROU familia=materia_familia_sem_payload" in caplog.text
