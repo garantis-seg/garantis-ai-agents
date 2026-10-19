@@ -129,8 +129,8 @@ steps:
       # teto. O que se paga a mais em rajada e cold start, nao capacidade.
       # Custo: SKU `Services Min Instance CPU/Memory Tier 2` = 0,0000035 USD por
       # vCPU-s e por GiB-s em southamerica-east1 => 2 instancias a menos
-      # (1 vCPU + 2 GiB cada) = -54,43 USD/mes de PRECO DE TABELA (a fatura e
-      # inalcancavel nesta casa: Billing API desabilitada, SA sem permissao).
+      # (1 vCPU + 2 GiB cada) = -54,43 USD/mes de PRECO DE TABELA (o custo faturado
+      # mora no export de billing no BigQuery, que o fe-api le).
       # 🚨 Este numero tem par em `execucao-fiscal/config/services.yaml`
       # (`min_instances`), e NADA os compara automaticamente. O
       # `lint-services-yaml.py` de la mapeia `min_instances -> --min-instances`,
