@@ -346,8 +346,8 @@ async def classify_mov_factsheet(
         docs_text=gate_pairs,
         gate_out=vision_gate,
         # O PDF acima do cap sobe em lotes de páginas, e o redutor da peça grande junta os
-        # cards. Só no v4, como o chunking: o redutor lê o card v4.
-        lotes_out=lotes if use_v4 else None,
+        # cards.
+        lotes_out=lotes,
         prompt_vision=prompt_vision,
         response_schema=response_schema,
         log_label=f"mov_id={mov.mov_id}",
@@ -361,7 +361,7 @@ async def classify_mov_factsheet(
     )
     if len(lotes) > 1:
         return await _classify_lotes(
-            processo, mov, docs_typed, fb_typed, model, provider, classe, lotes, vision_gate,
+            processo, mov, docs_typed, model, provider, classe, lotes, vision_gate,
         )
 
     raw_response = response.text
@@ -479,7 +479,7 @@ async def _classify_chunked(
 
 
 async def _classify_lotes(
-    processo, mov, docs, fb_typed, model, provider, classe, lotes, vision_gate,
+    processo, mov, docs, model, provider, classe, lotes, vision_gate,
 ) -> dict:
     """O PDF acima do cap, lido em lotes de páginas: o helper devolve 1 resposta por lote.
     Cada resposta vira card pelo caminho de sempre (`_resposta`, sem nova chamada), e o card
@@ -488,7 +488,7 @@ async def _classify_lotes(
     `n_lotes_falha` junto com o que o helper contou."""
     async def _um_lote(resposta) -> dict:
         return await classify_mov_factsheet(
-            processo, mov, documentos_anexados=docs, fallback_context=fb_typed, model=model,
+            processo, mov, documentos_anexados=docs, model=model,
             provider=provider, classe=classe, _no_chunk=True, _resposta=resposta,
         )
 
