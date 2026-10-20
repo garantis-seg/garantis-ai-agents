@@ -186,8 +186,13 @@ steps:
       - '--clear-secrets'
 
   # ------------------------------------------------------------------
-  # Sombra: staging passa a SEGUIR prod. Espelha o `deploy-staging-sombra` do
-  # frontend-api, que e por que o staging DELE nao deriva.
+  # Sombra: o `garantis-ai-agents-staging` SEGUE prod. Apontam para ele: a demo,
+  # o 2o ambiente (`frontend-api-teste`) e os builds de branch do fe-api.
+  #
+  # A demo e a homologacao CONGELADA da Daycoval, mas a IA dela segue prod DE
+  # PROPOSITO. A versao congelada cobre so o fe-api e o app. A troca de versao
+  # (`frontend-api/cloudbuild-demo.yaml`) nao mexe neste servico. Se a demo passar
+  # a chamar a IA ao vivo, a troca precisa fixar uma IA propria para ela.
   #
   # POR QUE EXISTE (medido 2026-08-05): o reconcile diario tem um check de
   # STAGING_FRESHNESS pro par (garantis-ai-agents, garantis-ai-agents-staging),
