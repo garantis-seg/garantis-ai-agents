@@ -170,11 +170,6 @@ def _cabem_idx(pdf_bytes_list: list[bytes]) -> list[int]:
     return idx
 
 
-def _cabem(pdf_bytes_list: list[bytes]) -> list[bytes]:
-    """Os PDFs que sobem inline (a seleção é a de `_cabem_idx`)."""
-    return [pdf_bytes_list[i] for i in _cabem_idx(pdf_bytes_list)]
-
-
 def _build_pdf_parts(
     types, pdf_bytes_list: list[bytes], gate_out: Optional[dict] = None,
 ) -> list[Any]:
@@ -193,7 +188,7 @@ def _build_pdf_parts(
     if gate_out is not None:
         gate_out["n_nao_enviados_cap"] = n_dropados
         # QUAIS, além de quantos: a posição na lista recebida. Quem sabe de que documento é
-        # cada PDF é o caller (ver `_publica_cortados`).
+        # cada PDF é o caller (o `finally` de `call_l1_with_vision_fallback`).
         gate_out["idx_nao_enviados_cap"] = [
             i for i in range(len(pdf_bytes_list)) if i not in idx_cabem]
     if n_dropados:
@@ -325,7 +320,7 @@ async def _vision_em_lotes(
 ) -> Any:
     """O PDF acima do cap TOTAL, lido em lotes de páginas: 1 chamada Vision por lote.
 
-    O que cabe sobe na chamada de sempre, com a MESMA seleção (`_cabem`). Cada PDF acima
+    O que cabe sobe na chamada de sempre, com a MESMA seleção (`_cabem_idx`). Cada PDF acima
     do cap vira lotes que cabem nele (`ocr_gate.lotes_de_paginas`), cada lote numa chamada
     própria, com a parte dita no prompt. As chamadas rodam juntas, porque o engine dá ao
     L1 de doc-imagem o relógio de UMA chamada. Toda resposta lida vai para `lotes_out`, e
@@ -346,7 +341,8 @@ async def _vision_em_lotes(
     chamadas: list[tuple[Optional[int], list[bytes], str]] = (
         [(None, cabem, prompt)] if cabem else [])
     partidos: set[int] = set()  # PDF acima do cap com TODAS as páginas num lote que cabe
-    grandes = [b for b in pdf_bytes_list if len(b) > _INLINE_TOTAL_BYTES_CAP]
+    idx_grandes = [k for k, b in enumerate(pdf_bytes_list) if len(b) > _INLINE_TOTAL_BYTES_CAP]
+    grandes = [pdf_bytes_list[k] for k in idx_grandes]
     for i, grande in enumerate(grandes):
         try:
             partes = lotes_de_paginas(grande, _INLINE_TOTAL_BYTES_CAP)
@@ -382,7 +378,6 @@ async def _vision_em_lotes(
     lotes_out.extend(r for _d, r in lidas)
     if gate_out is not None:
         # Fora do corte: o que coube e o PDF grande que se partiu inteiro em lotes.
-        idx_grandes = [k for k, b in enumerate(pdf_bytes_list) if len(b) > _INLINE_TOTAL_BYTES_CAP]
         subiram = set(idx_cabem) | {idx_grandes[i] for i in partidos}
         gate_out.update({
             "n_lotes": len(chamadas),
@@ -402,21 +397,6 @@ async def _vision_em_lotes(
     if not lidas:
         raise next(r for r in res if isinstance(r, BaseException))
     return lidas[0][1]
-
-
-def _publica_cortados(gate_out: Optional[dict], pdf_urls: Optional[list[str]]) -> None:
-    """Troca as POSIÇÕES do corte (`idx_nao_enviados_cap`) pelo `gcs_url` de cada PDF
-    cortado (`nao_enviados_cap_gcs`).
-
-    ⛔ Só quando o teto cortou algum: o veredito vai pro `raw_ref` do card, e o
-    `content_hash` cobre o `raw_ref`. Uma chave nova em todo gate faria toda releitura
-    idêntica virar card novo, e o L2 pagaria de novo. Sem `pdf_urls` (o ramo sem gate por
-    documento, onde o fetch descarta URL e a lista desalinha), a chave também fica de fora."""
-    if gate_out is None:
-        return
-    idx = gate_out.pop("idx_nao_enviados_cap", None)
-    if pdf_urls is not None and idx:
-        gate_out["nao_enviados_cap_gcs"] = [pdf_urls[i] for i in idx]
 
 
 async def call_l1_with_vision_fallback(
@@ -468,7 +448,7 @@ async def call_l1_with_vision_fallback(
     `n_nao_enviados_cap` = quantos o cap dropou, e `nao_enviados_cap_gcs` = QUAIS (o
     `gcs_url` de cada um). Com 2 ou mais peças, só a URL diz se o PDF cortado é o que o
     operador mandou. Ela só existe no ramo com `docs_text` e só quando o cap cortou algum:
-    ausente = nada cortado, ou não medido (ver `_publica_cortados`). Quando a chamada Vision falha (o
+    ausente = nada cortado, ou não medido. Quando a chamada Vision falha (o
     Gemini recusa o payload, timeout, 400), o ramo de exceção acrescenta
     `n_falha_vision` (quantos o gate aprovou e o card não leu) + `erro_vision`
     (tipo + mensagem): é o que separa "nada coube" (`n_nao_enviados_cap>0`) de "o
@@ -640,7 +620,14 @@ async def call_l1_with_vision_fallback(
                 (gate_out or {}).get("n_nao_enviados_cap"), exc,
             )
         finally:
-            _publica_cortados(gate_out, pdf_urls)
+            # Troca as POSIÇÕES do corte pelo `gcs_url` de cada PDF cortado. ⛔ Só quando o
+            # teto cortou algum: o gate vai pro `raw_ref`, que o `content_hash` cobre, e chave
+            # nova em todo gate faria o L2 pagar de novo. Sem `pdf_urls` (o ramo sem gate por
+            # documento) a lista desalinha, e a chave também fica de fora.
+            if gate_out is not None:
+                idx_cortados = gate_out.pop("idx_nao_enviados_cap", None)
+                if pdf_urls is not None and idx_cortados:
+                    gate_out["nao_enviados_cap_gcs"] = [pdf_urls[i] for i in idx_cortados]
     elif gcs_urls:
         logger.warning(
             f"[VisionL1] {log_label}: 0 PDFs fetchados; fallback pra text-only",
