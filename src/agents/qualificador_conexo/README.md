@@ -1,15 +1,18 @@
 # S2c — qualificador do conexo
 
-Card 869ffv22t. Plano de 21/10/2026, Parte 3, S2c. Código em 22/10/2026.
+Card 869ffv22t. Plano de 21/10/2026, Parte 3, S2c. Código em 22/10/2026. A pergunta 3
+entrou em 23/10/2026 (v2).
 
-O agente responde 2 perguntas sobre um conexo. Cada resposta tem prova literal.
+O agente responde 3 perguntas sobre um conexo. Cada resposta tem prova literal.
 
 1. Cada processo é fiscal?
 2. Qual é o estado de cada garantia: `ativa`, `substituida`, `liberada` ou `sem_evidencia`?
+3. Qual é o estado processual de cada PA (CARF/TIT) e de cada processo judicial alvo?
 
 A S2 (`garantis_shared.fichas.contratos.classificar_tipo`) lê a resposta em
 `estados_s2c: {garantia_id: estado}`. A S0 (`prontidao.py`) lê `e_fiscal` em
-`SinalProcesso` e bloqueia a ficha com `processo_nao_fiscal`.
+`SinalProcesso` e bloqueia a ficha com `processo_nao_fiscal`. A S3b (esqueleto) lê
+`processos[].estado_processual` para montar a timeline e o termômetro.
 
 ## Rota
 
@@ -103,7 +106,7 @@ Notas da entrada:
   "chamadas_llm": 7,
   "modelo": "<model_for('ficha_calculo')>",
   "modelo_auditor": "<model_for('ficha_auditoria_evidencias')>",
-  "prompt_version": "qualificador_conexo_v1+<hash>"
+  "prompt_version": "qualificador_conexo_v2+<hash>"
 }
 ```
 
@@ -116,10 +119,10 @@ O LLM escreve só `processos`, `garantias` e `alertas_respondidos` (modelo
 | `requer_revisao` (item) | `true` quando o auditor diverge, ou quando um processo `capa` sai não fiscal |
 | `requer_revisao` (topo) | `true` quando um item tem `requer_revisao` |
 | `divergencias[]` | Uma por afirmação que o auditor não aceitou |
-| `alertas_gerados[]` | Alertas do código para a prontidão. No modo capa: `qualificacao_sem_documentos` |
+| `alertas_gerados[]` | Alertas do código para a prontidão: `{codigo, escopo, alvo}`. Ver a pergunta 3 e o modo capa |
 | `chamadas` | Chamadas de ferramenta na fase A |
 | `chamadas_llm` | Chamadas de LLM nas 3 fases |
-| `prompt_version` | `qualificador_conexo_v1` mais o hash de `prompts.py` e `schemas.py`. Compare por prefixo |
+| `prompt_version` | `qualificador_conexo_v2` mais o hash de `prompts.py` e `schemas.py`. Compare por prefixo |
 
 Tetos: `trecho` até 300 caracteres. `motivo` até 200 caracteres.
 
@@ -155,8 +158,9 @@ sem `documento_indexado`. Neste modo:
 - O código preenche as garantias: `estado="ativa"`, `confianca="baixa"`, `prova=null`,
   `documentos_lidos=[]`, `motivo="sem documentos legíveis: estado não verificado"`,
   `fonte="capa"`, `requer_revisao=true`.
-- A saída leva `alertas_gerados=[{"codigo": "qualificacao_sem_documentos", "escopo": "conexo"}]`.
-  O shared leva o alerta ao catálogo de prontidão.
+- A saída leva `alertas_gerados` com `qualificacao_sem_documentos` e
+  `estado_processual_sem_documentos`, os 2 com escopo `conexo` e `alvo=null`. O shared
+  leva os alertas ao catálogo de prontidão.
 - Decisão de 23/10/2026 (classe A): no modo capa, o agente não leu nada. Então ele não
   marca `sem_evidencia`. Esse estado fica reservado ao caso em que o agente leu
   documentos e não achou prova (regra 4).
@@ -167,6 +171,106 @@ Fora do modo capa, um processo sem documento próprio também sai com `fonte="ca
 `confianca="baixa"`, e a regra 2 não se aplica a ele. O processo "tem documento" quando
 um documento legível tem o mesmo `processo_numero`. Se nenhum documento legível tem
 `processo_numero`, o vínculo é desconhecido, e todo documento serve a todo processo.
+
+## Pergunta 3: estado processual
+
+Desde 23/10/2026 (v2). Motivo: na rodada do IRB 1481420 (23/10/2026), a S3b montou a
+timeline sem os sinais de decisão, porque eles só existem nos autos. O CARF saiu "Não
+disponível na fonte". A etapa atual saiu CSRF, porque o aggregate estava velho. A ficha
+aprovada dizia: "via esgotada: RE não conhecido em 24/06/2026, Cobrança, muito_quente".
+
+### Saída
+
+Cada processo leva `estado_processual`. Todo modelo usa `extra="forbid"`.
+
+```json
+"estado_processual": {
+  "origem": {"tipo": "auto_de_infracao|despacho_decisorio|aiim|null", "data": "2019-05-10|null"},
+  "decisoes": [
+    {"etapa": "DRJ|CARF|CSRF|DTJ|camara_julgadora|camara_superior|1a_instancia|2a_instancia|STJ|STF",
+     "resultado": "favoravel|desfavoravel|parcial",
+     "data": "2024-03-12",
+     "acordao": "1402-004.321|null",
+     "prova": {"doc_id": "carf:acordaos.pdf", "pagina": 2, "trecho": "<até 300 caracteres>"}}
+  ],
+  "recurso_pendente": {"tipo": "<TipoRecurso>|null", "de_quem": "contribuinte|fazenda|null",
+                       "data": "AAAA-MM-DD|null"} ,
+  "admissibilidade": {"recurso": "<TipoRecurso>",
+                      "resultado": "admitido|nao_admitido|nao_conhecido",
+                      "orgao": "presidencia_camara|presidencia_csrf|presidencia_camara_superior_tit|vice_presidencia_tribunal|STJ|STF|outro",
+                      "data": "2026-06-24|null",
+                      "prova": {"doc_id": "...", "pagina": 3, "trecho": "..."}},
+  "cabe_agravo": "true|false|null",
+  "via_esgotada": "true|false|null",
+  "esgotada_em": "2026-06-24|null",
+  "expedido_pgfn_em": "AAAA-MM-DD|null",
+  "voto_qualidade": "true|false|null",
+  "confianca": "alta|media|baixa",
+  "documentos_lidos": ["carf:acordaos.pdf"],
+  "requer_revisao": false
+}
+```
+
+Notas da saída:
+
+- `recurso_pendente` e `admissibilidade` podem ser `null`. Os booleanos são JSON
+  (`true`, `false`, `null`). O exemplo usa texto só para mostrar os valores.
+- `TipoRecurso`: `impugnacao`, `manifestacao_inconformidade`, `RV`, `RE`,
+  `recurso_oficio`, `recurso_ordinario`, `agravo`, `embargos`, `apelacao`,
+  `agravo_instrumento`, `recurso_especial`, `recurso_extraordinario`. `RV` e `RE` são os
+  recursos ADMINISTRATIVOS (CARF e TIT). `recurso_especial` (STJ) e
+  `recurso_extraordinario` (STF) são os recursos JUDICIAIS.
+- `resultado` é do ponto de vista do contribuinte.
+- `data` da decisão é a da SESSÃO de julgamento, não a da publicação (Livro da Ficha,
+  lição 34).
+- `requer_revisao` do estado: o CÓDIGO escreve. Ver "Auditor".
+- `ultima_decisao` não sai: o shared toma a decisão de `data` maior em `decisoes`.
+- O processo não fiscal pode sair com `estado_processual=null`.
+
+### As etapas
+
+| Trilho | Régua | `origem.tipo` | `decisoes[].etapa` |
+|---|---|---|---|
+| CARF (federal) | AI ou DD → DRJ → CARF → CSRF → PGFN | `auto_de_infracao`, `despacho_decisorio` | `DRJ`, `CARF`, `CSRF` |
+| TIT-SP (estadual) | AIIM → DTJ → Câmara Julgadora → Câmara Superior → UFC → PGE | `aiim` | `DTJ`, `camara_julgadora`, `camara_superior` |
+| Judicial | 1ª instância → 2ª instância → STJ → STF | `null` | `1a_instancia`, `2a_instancia`, `STJ`, `STF` |
+
+Sinais de esgotamento que o prompt ensina: RE não conhecido ou não admitido pela
+Presidência da CSRF, prazo de agravo, "enviado para cobrança", "expedido para PGFN",
+"Baixa definitiva no contencioso", "AIIM enviado para a UFC".
+
+### Regras duras da pergunta 3
+
+O código valida em `agent._validar_estado` e em `agent.validar_qualificacao`.
+
+1. `e_fiscal=true` exige `estado_processual`.
+2. Toda decisão e toda admissibilidade exigem `prova`. A prova segue a regra 6 geral:
+   `doc_id` do índice e trecho literal na página citada.
+3. Toda data é ISO `AAAA-MM-DD` e é uma data válida. O schema valida a data.
+4. `via_esgotada=true` exige `esgotada_em` e uma decisão ou admissibilidade com data até
+   `esgotada_em`. `esgotada_em` só vale com `via_esgotada=true`.
+5. `cabe_agravo` (`true` ou `false`) exige `admissibilidade.resultado=nao_admitido` e
+   `admissibilidade.data`. O código NÃO calcula o prazo de agravo (5 dias úteis). Ele
+   devolve a data, e o shared decide.
+6. A fase A leu cada doc_id de `documentos_lidos`.
+7. Alerta `aggregate_diz_<etapa>` exige `prova` nas 2 respostas (confirmado ou
+   refutado), quando o processo alvo tem documento legível.
+
+### Alertas da entrada que o LLM responde
+
+| Código | O que o chamador diz | O que o agente faz |
+|---|---|---|
+| `aggregate_diz_<etapa>` | A instância que o aggregate tem (ex.: `aggregate_diz_CSRF`) | Confirma ou refuta, com prova |
+| `sem_acordao_no_indice` | A base não achou acórdão no índice | Refuta com a prova do acórdão, ou confirma |
+
+### Sem documento
+
+- Modo capa: o código guarda só `origem.tipo`. O resto sai vazio ou `null`:
+  `decisoes=[]`, `confianca="baixa"`, `documentos_lidos=[]`. A saída leva
+  `alertas_gerados` com `estado_processual_sem_documentos`, escopo `conexo`.
+- Modo documentos, processo sem documento próprio e sem decisão provada: o estado sai
+  com `confianca="baixa"`. A saída leva `estado_processual_sem_documentos`, escopo
+  `processo`, `alvo` = número do processo.
 
 ## Fases
 
@@ -204,7 +308,7 @@ O budget nunca vira resposta sem prova: as regras duras continuam a valer na fas
 
 ## Prompt
 
-`prompts.py`, `PROMPT_VERSION = "qualificador_conexo_v1"`.
+`prompts.py`, `PROMPT_VERSION = "qualificador_conexo_v2"`.
 
 - Persona: "analista que confere, não escreve".
 - Pergunta 1, "é fiscal?". Fiscal: tributo federal, estadual ou municipal, execução
@@ -214,6 +318,8 @@ O budget nunca vira resposta sem prova: as regras duras continuam a valer na fas
 - Pergunta 2, por garantia: ativa, substituída (por qual), liberada (levantamento,
   desconstituição, baixa) ou sem evidência. Sempre com o trecho literal.
 - Regra de 28/09/2026: deduza pelos sinais óbvios antes de responder `sem_evidencia`.
+- Pergunta 3, por processo: as etapas, os sinais de esgotamento e a regra da data da
+  sessão. Ver a seção "Pergunta 3: estado processual".
 - Defesa contra injeção: todo dado de terceiro entra numa cerca com token aleatório
   por chamada (`<dados-{token}>`, `<achados-{token}>`). `json_sanitizado` neutraliza
   todo `<` que abre tag.
@@ -240,6 +346,15 @@ audita:
 - cada processo com `e_fiscal=false`.
 - cada garantia `substituida` ou `liberada`.
 - cada alerta `refutado`.
+- cada decisão e cada admissibilidade do estado processual (desde 23/10/2026).
+  O `auditor.py` não mudou: ele recebe afirmações genéricas com prova. O código monta
+  as afirmações em `agent._afirmacoes_auditaveis`.
+
+Divergência numa decisão ou na admissibilidade: o código marca SÓ o estado processual
+(`confianca="baixa"`, `requer_revisao=true`) e grava a divergência com
+`alvo_tipo="estado_processual"` e `codigo` = `decisoes[i]` ou `admissibilidade`. O
+`requer_revisao` do processo e o do topo não mudam. Esses 2 campos governam o bloqueio
+de não fiscal no shared (decisão de 23/10/2026, classe A).
 
 Divergência: o código rebaixa a `confianca` do item para `baixa`, marca
 `requer_revisao=true` e grava a divergência em `divergencias[]`. Silêncio não aprova:

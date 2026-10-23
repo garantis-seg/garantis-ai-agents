@@ -1,4 +1,5 @@
-"""QUALIFICADOR DO CONEXO (S2c) — é fiscal? e qual o estado de cada garantia?
+"""QUALIFICADOR DO CONEXO (S2c) — é fiscal? qual o estado de cada garantia?
+e qual o estado processual de cada processo?
 
 Plano de 21/10/2026, Parte 3, S2c. Card 869ffv22t.
 
@@ -23,8 +24,21 @@ Regras duras (no código, não no prompt):
    legível, o `trecho` tem de estar na página citada (comparação sem acento,
    sem caixa e sem espaço repetido).
 
-Exceção das regras 1, 2 e 4 (modo capa): o item não tem documento para citar.
-Ver `_modo_capa_do_processo`.
+Regras duras da pergunta 3, estado processual (23/10/2026, S2c v2):
+
+6. `e_fiscal=true` exige `estado_processual`.
+7. Toda decisão e toda admissibilidade exigem `prova` (regra 5 vale).
+8. Toda data é ISO `AAAA-MM-DD` (o schema confere).
+9. `via_esgotada=true` exige `esgotada_em` e uma decisão ou admissibilidade com
+   data até `esgotada_em`. `esgotada_em` só vale com `via_esgotada=true`.
+10. `cabe_agravo` (true ou false) exige `admissibilidade.resultado=nao_admitido`
+    com `data`. O código NÃO calcula o prazo de agravo: o shared decide.
+11. Alerta `aggregate_diz_<etapa>` exige prova na resposta (confirmado ou
+    refutado) quando o processo alvo tem documento legível.
+12. Os doc_id de `estado_processual.documentos_lidos` foram lidos na fase A.
+
+Exceção das regras 1, 2, 4, 6, 7 e 11 (modo capa): o item não tem documento
+para citar. Ver `_Contexto.processo_tem_documentos`.
 
 `sem_evidencia` não exige `prova`: a falta de prova é o próprio estado.
 """
@@ -56,6 +70,8 @@ from .schemas import (
     AlertaRespondido,
     Divergencia,
     ErroCampo,
+    EstadoProcessual,
+    EstadoProcessualQualificado,
     GarantiaQualificada,
     ProcessoQualificado,
     QualificacaoInvalidaBody,
@@ -88,10 +104,14 @@ _AQUI = Path(__file__).resolve().parent
 #: Modo capa (23/10/2026): motivo de toda garantia e alerta que a saída leva.
 MOTIVO_SEM_DOCUMENTOS = "sem documentos legíveis: estado não verificado"
 ALERTA_SEM_DOCUMENTOS = "qualificacao_sem_documentos"
+#: Pergunta 3 (23/10/2026): o estado processual saiu sem leitura de documento.
+ALERTA_ESTADO_SEM_DOCUMENTOS = "estado_processual_sem_documentos"
+#: Prefixo dos alertas do código sobre a instância que o aggregate diz.
+PREFIXO_ALERTA_AGGREGATE = "aggregate_diz_"
 
 
 def prompt_version() -> str:
-    """`qualificador_conexo_v1+<hash>`. O hash muda quando o prompt ou o schema muda."""
+    """`qualificador_conexo_v2+<hash>`. O hash muda quando o prompt ou o schema muda."""
     return versao_com_identidade(
         PROMPT_VERSION, str(_AQUI / "prompts.py"), str(_AQUI / "schemas.py"),
     )
@@ -261,10 +281,7 @@ async def qualificar_conexo(
         garantias=out["garantias"],
         alertas_respondidos=out["alertas"],
         divergencias=out["divergencias"],
-        alertas_gerados=(
-            [AlertaGerado(codigo=ALERTA_SEM_DOCUMENTOS, escopo="conexo")]
-            if ctx.modo_capa else []
-        ),
+        alertas_gerados=_alertas_gerados(out, ctx),
         requer_revisao=(
             any(p.requer_revisao for p in out["processos"])
             or any(g.requer_revisao for g in out["garantias"])
@@ -495,6 +512,70 @@ def _validar_prova(prova: Any, campo: str, ctx: _Contexto) -> list[dict[str, Any
     return erros
 
 
+def _validar_estado(
+    ep: EstadoProcessual, campo: str, ctx: _Contexto,
+) -> list[dict[str, Any]]:
+    """Regras 7, 9, 10 e 12 da pergunta 3. A regra 8 (data ISO) é do schema."""
+    erros: list[dict[str, Any]] = []
+    for j, d in enumerate(ep.decisoes):
+        c = f"{campo}.decisoes[{j}].prova"
+        if d.prova is None:
+            erros.append(_erro(c, "decisão exige prova", None))
+        erros += _validar_prova(d.prova, c, ctx)
+    adm = ep.admissibilidade
+    if adm is not None:
+        c = f"{campo}.admissibilidade.prova"
+        if adm.prova is None:
+            erros.append(_erro(c, "admissibilidade exige prova", None))
+        erros += _validar_prova(adm.prova, c, ctx)
+
+    if ep.via_esgotada is True:
+        if ep.esgotada_em is None:
+            erros.append(_erro(f"{campo}.esgotada_em",
+                               "via_esgotada=true exige esgotada_em", None))
+        else:
+            # Data ISO: a comparação de texto é a comparação de data.
+            datas = [d.data for d in ep.decisoes]
+            if adm is not None and adm.data:
+                datas.append(adm.data)
+            if not any(x <= ep.esgotada_em for x in datas):
+                erros.append(_erro(
+                    f"{campo}.via_esgotada",
+                    "via_esgotada=true exige uma decisão ou admissibilidade com data"
+                    " até esgotada_em", ep.esgotada_em,
+                ))
+    elif ep.esgotada_em is not None:
+        erros.append(_erro(f"{campo}.esgotada_em",
+                           "esgotada_em só vale com via_esgotada=true", ep.esgotada_em))
+
+    if ep.cabe_agravo is not None and (
+            adm is None or adm.resultado != "nao_admitido" or not adm.data):
+        erros.append(_erro(
+            f"{campo}.cabe_agravo",
+            "cabe_agravo exige admissibilidade com resultado nao_admitido e data",
+            ep.cabe_agravo,
+        ))
+
+    nao_lidos = [d for d in ep.documentos_lidos if d not in ctx.lidos]
+    if nao_lidos:
+        erros.append(_erro(f"{campo}.documentos_lidos",
+                           "documento que a fase A não leu", nao_lidos))
+    return erros
+
+
+def _estado_da_capa(bruto: Any) -> dict[str, Any]:
+    """Modo capa: o estado processual leva só o que a capa dá.
+
+    23/10/2026 (classe A): a capa não tem data nem decisão. O código guarda só
+    `origem.tipo`, que o tipo do item pode indicar (AIIM, auto, despacho). O
+    resto sai vazio ou null, com `confianca=baixa`.
+    """
+    tipo = None
+    if isinstance(bruto, dict) and isinstance(bruto.get("origem"), dict):
+        tipo = bruto["origem"].get("tipo")
+    return {"origem": {"tipo": tipo, "data": None}, "confianca": "baixa"}
+
+
 def validar_qualificacao(
     parsed: Any, ctx: _Contexto,
 ) -> tuple[Optional[QualificacaoLLM], list[dict[str, Any]]]:
@@ -511,6 +592,12 @@ def validar_qualificacao(
                     if isinstance(i, dict) else i
                     for i in itens
                 ]
+        if isinstance(parsed.get("processos"), list):
+            parsed["processos"] = [
+                {**i, "estado_processual": _estado_da_capa(i.get("estado_processual"))}
+                if isinstance(i, dict) else i
+                for i in parsed["processos"]
+            ]
     try:
         q = QualificacaoLLM.model_validate(parsed)
     except ValidationError as e:
@@ -538,6 +625,11 @@ def validar_qualificacao(
                 and ctx.processo_tem_documentos(p.numero)):
             erros.append(_erro(f"{campo}.prova", "e_fiscal=false exige prova", None))
         erros += _validar_prova(p.prova, f"{campo}.prova", ctx)
+        if p.e_fiscal and p.estado_processual is None and not ctx.modo_capa:
+            erros.append(_erro(f"{campo}.estado_processual",
+                               "e_fiscal=true exige estado_processual", None))
+        if p.estado_processual is not None:
+            erros += _validar_estado(p.estado_processual, f"{campo}.estado_processual", ctx)
 
     # Garantias: uma por garantia de entrada (fora do modo capa).
     if not ctx.modo_capa:
@@ -589,6 +681,11 @@ def validar_qualificacao(
             continue
         if a.resposta == "refutado" and a.prova is None and not ctx.modo_capa:
             erros.append(_erro(f"{campo}.prova", "alerta refutado exige prova", None))
+        elif (a.codigo.startswith(PREFIXO_ALERTA_AGGREGATE) and a.prova is None
+              and not ctx.modo_capa and ctx.processo_tem_documentos(a.alvo)):
+            erros.append(_erro(f"{campo}.prova",
+                               f"alerta {a.codigo} exige prova, confirmado ou refutado",
+                               None))
         erros += _validar_prova(a.prova, f"{campo}.prova", ctx)
 
     return (q if not erros else None), erros
@@ -604,11 +701,21 @@ def _montar_saida(q: QualificacaoLLM, ctx: _Contexto) -> dict[str, Any]:
         dados = p.model_dump()
         if capa:
             dados["confianca"] = "baixa"
+        ep = dados.pop("estado_processual", None)
+        if ctx.modo_capa and ep is None:
+            ep = _estado_da_capa(None)
+        if (ep is not None and capa and not ep.get("decisoes")
+                and ep.get("admissibilidade") is None):
+            # Sem documento próprio e sem decisão provada: nada sustenta o estado.
+            ep["confianca"] = "baixa"
         processos.append(ProcessoQualificado(
             **dados,
             fonte="capa" if capa else "documentos",
             # Um "não fiscal" sem prova bloqueia a ficha sem nada para conferir.
             requer_revisao=capa and not p.e_fiscal,
+            estado_processual=(
+                EstadoProcessualQualificado(**ep) if ep is not None else None
+            ),
         ))
 
     if ctx.modo_capa:
@@ -653,6 +760,39 @@ def _afirmacoes_auditaveis(out: dict[str, Any]) -> list[dict[str, Any]]:
                 "afirmacao": f"A garantia {g.id} foi {g.estado}{por}. {g.motivo}".strip(),
                 "prova": g.prova.model_dump(),
             })
+    # Pergunta 3: cada decisão e cada admissibilidade com prova. O auditor não
+    # mudou: ele recebe afirmações genéricas com prova.
+    for p in out["processos"]:
+        ep = p.estado_processual
+        if ep is None:
+            continue
+        for j, d in enumerate(ep.decisoes):
+            if d.prova is None:
+                continue
+            acordao = f" (acórdão {d.acordao})" if d.acordao else ""
+            afirmacoes.append({
+                "afirmacao_id": f"estado:{p.numero}:decisoes[{j}]",
+                "alvo_tipo": "estado_processual", "alvo": p.numero,
+                "codigo": f"decisoes[{j}]",
+                "afirmacao": (
+                    f"No processo {p.numero}, a etapa {d.etapa} decidiu em {d.data}"
+                    f"{acordao}, com resultado {d.resultado} para o contribuinte."
+                ),
+                "prova": d.prova.model_dump(),
+            })
+        adm = ep.admissibilidade
+        if adm is not None and adm.prova is not None:
+            quando = f" em {adm.data}" if adm.data else ""
+            afirmacoes.append({
+                "afirmacao_id": f"estado:{p.numero}:admissibilidade",
+                "alvo_tipo": "estado_processual", "alvo": p.numero,
+                "codigo": "admissibilidade",
+                "afirmacao": (
+                    f"No processo {p.numero}, o órgão {adm.orgao} julgou a"
+                    f" admissibilidade do recurso {adm.recurso}{quando}: {adm.resultado}."
+                ),
+                "prova": adm.prova.model_dump(),
+            })
     for a in out["alertas"]:
         if a.resposta == "refutado" and a.prova is not None:
             afirmacoes.append({
@@ -688,10 +828,35 @@ def _aplicar_vereditos(
             for g in out["garantias"]:
                 if g.id == af["alvo"]:
                     g.confianca, g.requer_revisao = "baixa", True
+        elif af["alvo_tipo"] == "estado_processual":
+            # 23/10/2026 (classe A): a divergência marca só o estado processual.
+            # O `requer_revisao` do processo e o do topo governam as perguntas 1
+            # e 2 no shared (bloqueio de não fiscal). Eles não mudam.
+            for p in out["processos"]:
+                if p.numero == af["alvo"] and p.estado_processual is not None:
+                    ep = p.estado_processual
+                    ep.confianca, ep.requer_revisao = "baixa", True
         else:
             for a in out["alertas"]:
                 if (a.codigo, a.alvo) == (af["codigo"], af["alvo"]):
                     a.requer_revisao = True
+
+
+def _alertas_gerados(out: dict[str, Any], ctx: _Contexto) -> list[AlertaGerado]:
+    """Alertas do código para o catálogo de prontidão do shared."""
+    if ctx.modo_capa:
+        return [
+            AlertaGerado(codigo=ALERTA_SEM_DOCUMENTOS, escopo="conexo"),
+            AlertaGerado(codigo=ALERTA_ESTADO_SEM_DOCUMENTOS, escopo="conexo"),
+        ]
+    alertas = []
+    for p in out["processos"]:
+        ep = p.estado_processual
+        if (ep is not None and p.fonte == "capa" and not ep.decisoes
+                and ep.admissibilidade is None):
+            alertas.append(AlertaGerado(codigo=ALERTA_ESTADO_SEM_DOCUMENTOS,
+                                        escopo="processo", alvo=p.numero))
+    return alertas
 
 
 def _custo(resp: Any) -> float:
@@ -699,9 +864,11 @@ def _custo(resp: Any) -> float:
 
 
 __all__ = [
+    "ALERTA_ESTADO_SEM_DOCUMENTOS",
     "ALERTA_SEM_DOCUMENTOS",
     "DEFAULT_MODEL",
     "MOTIVO_SEM_DOCUMENTOS",
+    "PREFIXO_ALERTA_AGGREGATE",
     "RODADAS_DE_CORRECAO",
     "QualificacaoInvalidaError",
     "prompt_version",

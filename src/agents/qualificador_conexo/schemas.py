@@ -2,7 +2,7 @@
 
 Molde "determinismo máximo" do plano de 21/10/2026 (Parte 1.2):
 
-1. Entrada mínima. O chamador manda só o que as 2 perguntas exigem.
+1. Entrada mínima. O chamador manda só o que as 3 perguntas exigem.
 2. Alertas do código. O chamador manda `alertas[]`. O LLM responde cada um.
 3. Schema fechado. Todo modelo usa `extra="forbid"`. Enum onde cabe.
    Campo livre só com teto de caracteres.
@@ -18,9 +18,11 @@ Há 3 grupos de modelos:
 """
 from __future__ import annotations
 
-from typing import Any, Literal, Optional, Union
+import re
+from datetime import date
+from typing import Annotated, Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 #: Tetos de texto livre (pedido de 22/10/2026).
 MAX_TRECHO = 300
@@ -34,6 +36,52 @@ Confianca = Literal["alta", "media", "baixa"]
 Fonte = Literal["documentos", "capa"]
 RespostaAlerta = Literal["confirmado", "refutado"]
 EscopoAlerta = Literal["processo", "garantia", "conexo"]
+
+# ── Pergunta 3: estado processual (23/10/2026, S2c v2) ──────────────────────
+
+#: Ato que abriu o caso. Processo judicial: null.
+TipoOrigem = Literal["auto_de_infracao", "despacho_decisorio", "aiim"]
+
+#: Instância que decidiu. CARF: DRJ, CARF, CSRF. TIT-SP: DTJ, camara_julgadora,
+#: camara_superior. Judicial: 1a_instancia, 2a_instancia, STJ, STF.
+EtapaDecisao = Literal[
+    "DRJ", "CARF", "CSRF",
+    "DTJ", "camara_julgadora", "camara_superior",
+    "1a_instancia", "2a_instancia", "STJ", "STF",
+]
+
+#: Resultado do ponto de vista do contribuinte.
+ResultadoDecisao = Literal["favoravel", "desfavoravel", "parcial"]
+
+#: Tipo do recurso. `RV` e `RE` são os recursos ADMINISTRATIVOS (CARF e TIT).
+#: `recurso_especial` (STJ) e `recurso_extraordinario` (STF) são JUDICIAIS.
+TipoRecurso = Literal[
+    "impugnacao", "manifestacao_inconformidade", "RV", "RE", "recurso_oficio",
+    "recurso_ordinario", "agravo", "embargos", "apelacao", "agravo_instrumento",
+    "recurso_especial", "recurso_extraordinario",
+]
+DeQuem = Literal["contribuinte", "fazenda"]
+ResultadoAdmissibilidade = Literal["admitido", "nao_admitido", "nao_conhecido"]
+OrgaoAdmissibilidade = Literal[
+    "presidencia_camara", "presidencia_csrf", "presidencia_camara_superior_tit",
+    "vice_presidencia_tribunal", "STJ", "STF", "outro",
+]
+
+_ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _data_iso(v: str) -> str:
+    """Regra dura: toda data do estado processual é ISO `AAAA-MM-DD` válida."""
+    if not _ISO_RE.match(v):
+        raise ValueError("data tem de ser ISO AAAA-MM-DD")
+    try:
+        date.fromisoformat(v)
+    except ValueError as e:
+        raise ValueError("data ISO inválida") from e
+    return v
+
+
+DataISO = Annotated[str, AfterValidator(_data_iso)]
 
 
 class _Fechado(BaseModel):
@@ -133,6 +181,64 @@ class Prova(_Fechado):
     trecho: str = Field(min_length=1, max_length=MAX_TRECHO)
 
 
+class Origem(_Fechado):
+    tipo: Optional[TipoOrigem] = None
+    data: Optional[DataISO] = None
+
+
+class Decisao(_Fechado):
+    """Uma decisão de mérito. `data` é a da SESSÃO ou do julgamento.
+
+    `prova` é `Optional` no schema. A regra dura do código exige a prova (o erro
+    volta ao LLM com uma mensagem clara, como nas outras regras).
+    """
+
+    etapa: EtapaDecisao
+    resultado: ResultadoDecisao
+    data: DataISO
+    acordao: Optional[str] = Field(default=None, max_length=80)
+    prova: Optional[Prova] = None
+
+
+class RecursoPendente(_Fechado):
+    tipo: Optional[TipoRecurso] = None
+    de_quem: Optional[DeQuem] = None
+    data: Optional[DataISO] = None
+
+
+class Admissibilidade(_Fechado):
+    recurso: TipoRecurso
+    resultado: ResultadoAdmissibilidade
+    orgao: OrgaoAdmissibilidade
+    data: Optional[DataISO] = None
+    prova: Optional[Prova] = None
+
+
+class EstadoProcessual(_Fechado):
+    """Pergunta 3: o estado processual do PA (CARF/TIT) ou do judicial alvo.
+
+    O código não calcula prazo. `cabe_agravo` é o que o documento diz. O prazo de
+    5 dias úteis é regra de negócio do shared.
+    """
+
+    origem: Origem = Field(default_factory=Origem)
+    decisoes: list[Decisao] = Field(default_factory=list)
+    recurso_pendente: Optional[RecursoPendente] = None
+    admissibilidade: Optional[Admissibilidade] = None
+    cabe_agravo: Optional[bool] = None
+    via_esgotada: Optional[bool] = None
+    esgotada_em: Optional[DataISO] = None
+    expedido_pgfn_em: Optional[DataISO] = None
+    voto_qualidade: Optional[bool] = None
+    confianca: Confianca = "baixa"
+    documentos_lidos: list[str] = Field(default_factory=list)
+
+    @field_validator("origem", mode="before")
+    @classmethod
+    def _origem_nula_vira_vazia(cls, v: Any) -> Any:
+        return {} if v is None else v
+
+
 class DebitoCoberto(_Fechado):
     processo_numero: str
     valor: Optional[float] = None
@@ -144,6 +250,8 @@ class ProcessoLLM(_Fechado):
     confianca: Confianca
     prova: Optional[Prova] = None
     motivo: str = Field(min_length=1, max_length=MAX_MOTIVO)
+    #: Pergunta 3. Obrigatório com `e_fiscal=true` (regra dura do código).
+    estado_processual: Optional[EstadoProcessual] = None
 
 
 class GarantiaLLM(_Fechado):
@@ -174,9 +282,21 @@ class QualificacaoLLM(_Fechado):
 # ── Saída ───────────────────────────────────────────────────────────────────
 
 
+class EstadoProcessualQualificado(EstadoProcessual):
+    """O estado processual na saída. O CÓDIGO escreve `requer_revisao`.
+
+    `requer_revisao=true` quando o auditor diverge de uma decisão ou da
+    admissibilidade. Esta marca NÃO muda o `requer_revisao` do processo nem o do
+    topo: esses 2 campos governam as perguntas 1 e 2 no shared.
+    """
+
+    requer_revisao: bool = False
+
+
 class ProcessoQualificado(ProcessoLLM):
     fonte: Fonte
     requer_revisao: bool = False
+    estado_processual: Optional[EstadoProcessualQualificado] = None
 
 
 class GarantiaQualificada(GarantiaLLM):
@@ -191,7 +311,7 @@ class AlertaRespondido(AlertaRespondidoLLM):
 class Divergencia(_Fechado):
     """Uma afirmação que o auditor não aceitou."""
 
-    alvo_tipo: Literal["processo", "garantia", "alerta"]
+    alvo_tipo: Literal["processo", "garantia", "alerta", "estado_processual"]
     alvo: str
     codigo: Optional[str] = None
     afirmacao: str
@@ -201,11 +321,17 @@ class Divergencia(_Fechado):
 class AlertaGerado(_Fechado):
     """Alerta que o CÓDIGO da S2c gera para o catálogo de prontidão do shared.
 
-    23/10/2026: hoje só existe `qualificacao_sem_documentos` (modo capa).
+    23/10/2026: há 2 códigos.
+
+    - `qualificacao_sem_documentos`: modo capa, escopo `conexo`.
+    - `estado_processual_sem_documentos`: o estado processual saiu sem leitura.
+      No modo capa, escopo `conexo`. No modo documentos, escopo `processo`, com
+      `alvo` = número do processo sem documento próprio e sem decisão provada.
     """
 
-    codigo: Literal["qualificacao_sem_documentos"]
+    codigo: Literal["qualificacao_sem_documentos", "estado_processual_sem_documentos"]
     escopo: EscopoAlerta
+    alvo: Optional[str] = None
 
 
 class ErroCampo(_Fechado):
@@ -250,18 +376,23 @@ class QualificacaoInvalidaBody(_Fechado):
 __all__ = [
     "MAX_MOTIVO",
     "MAX_TRECHO",
+    "Admissibilidade",
     "AlertaEntrada",
     "AlertaGerado",
     "AlertaRespondido",
     "AlertaRespondidoLLM",
     "DebitoCoberto",
+    "Decisao",
     "Divergencia",
     "DocumentoDoIndice",
     "Empresa",
     "ErroCampo",
+    "EstadoProcessual",
+    "EstadoProcessualQualificado",
     "GarantiaEntrada",
     "GarantiaLLM",
     "GarantiaQualificada",
+    "Origem",
     "ProcessoEntrada",
     "ProcessoLLM",
     "ProcessoQualificado",
@@ -270,4 +401,5 @@ __all__ = [
     "QualificacaoLLM",
     "QualificarConexoRequest",
     "QualificarConexoResponse",
+    "RecursoPendente",
 ]
