@@ -26,6 +26,7 @@ Quem confere a trilha e a prova é o CÓDIGO (`Autos.conferir_citacao`):
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 import unicodedata
@@ -87,6 +88,110 @@ def _texto_da_pagina(doc: Any, pagina: int) -> str:
     ).strip()
 
 
+# ── O núcleo legível no prompt (23/10/2026) ─────────────────────────────────
+#
+# O shared 1.826 manda as CDAs e os metadados como dicts aninhados. Em JSON cru, o
+# LLM lê mal um dict de 4 níveis. Aqui cada CDA vira uma linha, e cada metadado vira
+# uma linha `caminho: valor`. Os documentos entram com o texto inteiro.
+
+#: Profundidade máxima do caminho de um metadado. Abaixo dela, o valor vai em JSON.
+_MAX_PROF_METADADO = 4
+
+
+def _vazio(v: Any) -> bool:
+    return v is None or v == "" or v == [] or v == {}
+
+
+def _linha_de_item(item: Any) -> str:
+    """Um dict vira `chave: valor; chave: valor`. Os valores vazios ficam fora."""
+    if not isinstance(item, dict):
+        return str(item)
+    partes = []
+    for k, v in item.items():
+        if _vazio(v):
+            continue
+        if isinstance(v, (dict, list)):
+            v = json.dumps(v, ensure_ascii=False, default=str)
+        partes.append(f"{k}: {v}")
+    return "; ".join(partes) or "(sem dado)"
+
+
+def cdas_legiveis(cdas: Any) -> list[str]:
+    """As CDAs do núcleo, uma linha por item. Aceita a forma do shared e a lista antiga."""
+    if cdas is None:
+        return []
+    if isinstance(cdas, list):
+        return [f"CDA {i}: {_linha_de_item(c)}" for i, c in enumerate(cdas, 1)]
+    dados = cdas.model_dump(mode="json") if hasattr(cdas, "model_dump") else dict(cdas)
+    linhas: list[str] = []
+    da = dados.get("divida_ativa")
+    if isinstance(da, dict):
+        resumo = {k: v for k, v in da.items() if not isinstance(v, list)}
+        linhas.append(f"Dívida ativa (esqueleto): {_linha_de_item(resumo)}")
+        for k, v in da.items():
+            if isinstance(v, list):
+                linhas += [f"Dívida ativa, {k} {i}: {_linha_de_item(x)}"
+                           for i, x in enumerate(v, 1)]
+    elif da is not None:
+        linhas.append(f"Dívida ativa (esqueleto): {da}")
+    for i, m in enumerate(dados.get("inscricoes_membros") or [], 1):
+        linhas.append(f"Inscrição membro do conexo {i}: {_linha_de_item(m)}")
+    if dados.get("valor_cdas") is not None:
+        linhas.append(f"Valor das CDAs (R$): {dados['valor_cdas']}")
+    linhas.append(f"Dívida ativa verificada em: {dados.get('da_verificada_em') or 'sem data'}")
+    extras = {k: v for k, v in dados.items() if k not in (
+        "divida_ativa", "inscricoes_membros", "valor_cdas", "da_verificada_em")}
+    if extras:
+        linhas.append(f"Outros dados das CDAs: {_linha_de_item(extras)}")
+    return linhas
+
+
+def metadados_legiveis(meta: Any, prefixo: str = "", prof: int = 0) -> list[str]:
+    """Os metadados, uma linha `caminho: valor` por folha. Os vazios ficam fora."""
+    if _vazio(meta):
+        return []
+    if prof >= _MAX_PROF_METADADO or not isinstance(meta, (dict, list)):
+        valor = (json.dumps(meta, ensure_ascii=False, default=str)
+                 if isinstance(meta, (dict, list)) else meta)
+        return [f"{prefixo}: {valor}"]
+    itens = meta.items() if isinstance(meta, dict) else enumerate(meta)
+    linhas: list[str] = []
+    for k, v in itens:
+        caminho = (f"{prefixo}[{k}]" if isinstance(meta, list)
+                   else (f"{prefixo}.{k}" if prefixo else str(k)))
+        linhas += metadados_legiveis(v, caminho, prof + 1)
+    return linhas
+
+
+def nucleo_legivel(nucleo: Nucleo) -> dict[str, Any]:
+    """O núcleo do prompt: uma seção por item.
+
+    - `documentos`: cada documento com o texto inteiro.
+    - `cdas`: uma linha por CDA (`cdas_legiveis`).
+    - `metadados`: uma linha por dado (`metadados_legiveis`). Uma chave que já tem
+      seção própria no núcleo (`premissas_v3`) sai dos metadados.
+    - `premissas_v3` e `qualificacao`: o JSON do shared, como veio.
+    """
+    out: dict[str, Any] = {}
+    docs = [d.model_dump(include={"doc_id", "nome", "tipo", "papel", "processo", "data",
+                                  "marca", "texto"}, exclude_none=True)
+            for d in nucleo.documentos()]
+    if docs:
+        out["documentos"] = docs
+    cdas = cdas_legiveis(nucleo.cdas)
+    if cdas:
+        out["cdas"] = cdas
+    if nucleo.metadados:
+        meta = {k: v for k, v in nucleo.metadados.items()
+                if not (k == "premissas_v3" and nucleo.premissas_v3 is not None)}
+        out["metadados"] = metadados_legiveis(meta)
+    if nucleo.premissas_v3 is not None:
+        out["premissas_v3"] = nucleo.premissas_v3
+    if nucleo.qualificacao is not None:
+        out["qualificacao"] = nucleo.qualificacao
+    return out
+
+
 class Autos:
     """O que o agente pode ler e citar, e o que ele leu de fato."""
 
@@ -112,15 +217,15 @@ class Autos:
     # ── o que o LLM vê ─────────────────────────────────────────────────────
 
     def nucleo_para_llm(self) -> dict[str, Any]:
-        """O núcleo inteiro: a leitura obrigatória."""
-        return self.nucleo.model_dump(mode="json", exclude_none=True)
+        """O núcleo inteiro: a leitura obrigatória. Ver `nucleo_legivel`."""
+        return nucleo_legivel(self.nucleo)
 
     def indice_para_llm(self) -> list[dict[str, Any]]:
         """O índice SEM o conteúdo: só os metadados e se dá para abrir."""
         out = []
         for doc_id, d in self.indice.items():
             doc = self.legiveis.get(doc_id)
-            meta = d.model_dump(exclude={"documento_indexado"}, exclude_none=True)
+            meta = d.model_dump(exclude={"documento_indexado", "gcs_path"}, exclude_none=True)
             if doc is not None and d.paginas is None:
                 meta["paginas"] = len(doc.paginas())
             meta["legivel"] = doc is not None

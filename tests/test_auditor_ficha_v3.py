@@ -372,3 +372,21 @@ def test_9_o_v3_usa_o_papel_ficha_auditoria_texto(monkeypatch):
     assert v3_mod.DEFAULT_MODEL == model_for("ficha_auditoria_texto")
     assert {c["model"] for c in prov.chamadas} == {model_for("ficha_auditoria_texto")}
     assert r.modelo == model_for("ficha_auditoria_texto")
+
+
+# ── contrato com o shared 1.826 (23/10/2026) ───────────────────────────────
+
+
+def test_contrato_nucleo_do_shared_1826_valida_sem_erro(caplog):
+    from tests.test_ficha_writer_v5 import _shared_1826
+
+    real = _shared_1826()
+    with caplog.at_level("WARNING"):
+        req = AuditarFichaRequest(**_body(nucleo=real["nucleo"],
+                                          indice_navegavel=real["indice_navegavel"]))
+    assert "FICHA_NUCLEO_CHAVE_IGNORADA" not in caplog.text
+    assert req.modo_v3
+    assert req.nucleo.cdas.divida_ativa["data"] == "22/10/2026"
+    assert req.nucleo.metadados["conexo_id"] == 1481420
+    assert req.nucleo.documentos()[0].papel == "decisao_pa"
+    assert req.indice_navegavel[0].marca is None

@@ -41,6 +41,10 @@ from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, SerializeAsAny, model_validator
 
+# 23/10/2026: o auditor v3 usa os MESMOS modelos do redator v5. O `Nucleo` e o
+# `ItemIndice` seguem a forma do shared 1.826 (`v2.montar_nucleo` e
+# `v2.indice_navegavel`). O teste de contrato carrega
+# `tests/fixtures/nucleo_shared_1826.json` nos 2 schemas.
 from ..ficha_writer.schemas import ItemIndice, Nucleo, TrilhaItem
 
 Veredito = Literal["aprovada", "aprovada_com_correcoes", "retida"]
