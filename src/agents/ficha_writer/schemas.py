@@ -1,6 +1,10 @@
 """Schemas Pydantic do ficha_writer (S4, redação dos slots de texto da ficha).
 
-O contrato de wire tem 2 modos. O modo sai do request:
+O contrato de wire tem 3 modos. O modo sai do request:
+
+- **v5** (`nucleo` e `indice_navegavel` presentes, 23/10/2026): o v4 mais a leitura
+  dos autos. O núcleo entra inteiro no prompt. O agente abre os documentos do índice
+  com ferramentas. A saída leva `trilha_leitura[]`. Ver `agent_v5.py`.
 
 - **v4** (`esqueleto` presente): o request leva o tipo, o trilho, o esqueleto
   determinístico (fatos fixos), os alertas do código, as lições e os processos que o
@@ -148,6 +152,88 @@ class Esqueleto(BaseModel):
     model_config = {"extra": "allow"}
 
 
+# ── v5: o núcleo obrigatório, o índice navegável e a trilha de leitura ────────
+#
+# Decisão do Alfredo de 23/10/2026: "núcleo obrigatório + índice navegável". O
+# núcleo entra INTEIRO no prompt: é a leitura obrigatória. O índice diz o que mais
+# existe nos autos. O agente abre um documento do índice com as ferramentas do
+# investigador. O auditor v3 (`auditor_ficha`) usa os MESMOS modelos.
+
+#: Teto do `trecho_apoio` da trilha (pedido de 23/10/2026).
+MAX_TRECHO_APOIO = 200
+
+
+class DocNucleo(BaseModel):
+    """Um documento do núcleo: o texto inteiro já vem no request."""
+
+    doc_id: str = Field(min_length=1)
+    texto: str = Field(min_length=1)
+
+    model_config = _FORBID
+
+
+class AcordaoNucleo(DocNucleo):
+    """Um acórdão do núcleo. `processo` é o número do processo do acórdão."""
+
+    processo: Optional[str] = None
+
+
+class Nucleo(BaseModel):
+    """A leitura obrigatória do redator v5 e do auditor v3.
+
+    `cdas`, `premissas_v3` e `qualificacao_s2c` são dados do shared. Eles entram no
+    prompt como vieram (JSON), dentro da cerca.
+    """
+
+    acordaos: list[AcordaoNucleo] = Field(default_factory=list)
+    peticao_inicial: Optional[DocNucleo] = None
+    ultima_decisao: Optional[DocNucleo] = None
+    cdas: list[Any] = Field(default_factory=list)
+    premissas_v3: Optional[Any] = None
+    qualificacao_s2c: Optional[Any] = None
+
+    model_config = _FORBID
+
+    def documentos(self) -> list[DocNucleo]:
+        """Os documentos com texto do núcleo, na ordem: acórdãos, petição, decisão."""
+        docs: list[DocNucleo] = list(self.acordaos)
+        docs += [d for d in (self.peticao_inicial, self.ultima_decisao) if d is not None]
+        return docs
+
+
+class ItemIndice(BaseModel):
+    """Um documento do índice navegável (o que mais existe nos autos).
+
+    `documento_indexado` é o `to_dict()` do `DocumentoIndexado` do doc_indexer. Sem
+    ele, o agente vê o documento no índice, mas não consegue abrir o documento.
+    """
+
+    doc_id: str = Field(min_length=1)
+    nome: Optional[str] = None
+    tipo: Optional[str] = None
+    data: Optional[str] = None
+    processo: Optional[str] = None
+    paginas: Optional[int] = Field(default=None, ge=0)
+    n_chars: Optional[int] = Field(default=None, ge=0)
+    documento_indexado: Optional[dict[str, Any]] = None
+
+    model_config = _FORBID
+
+
+class TrilhaItem(BaseModel):
+    """O que o redator leu para escrever um slot.
+
+    `paginas` vazia vale para documento do núcleo (texto sem página).
+    """
+
+    slot: str = Field(min_length=1)
+    doc_id: str = Field(min_length=1)
+    paginas: list[int] = Field(default_factory=list)
+    trecho_apoio: str = Field(min_length=1, max_length=MAX_TRECHO_APOIO)
+
+    model_config = _FORBID
+
+
 class FichaWriteFieldsRequest(BaseModel):
     """Request do POST /ficha/write-fields."""
 
@@ -171,6 +257,10 @@ class FichaWriteFieldsRequest(BaseModel):
             "número de processo no texto reprova (regra de 28/09/2026)."
         ),
     )
+    nucleo: Optional[Nucleo] = Field(
+        default=None, description="v5: a leitura obrigatória. Com `indice_navegavel` = v5.")
+    indice_navegavel: Optional[list[ItemIndice]] = Field(
+        default=None, description="v5: o que mais existe nos autos. Com `nucleo` = v5.")
     provider: Optional[str] = Field(default=None, description="LLM provider override.")
     model: Optional[str] = Field(default=None, description="Model override.")
 
@@ -180,11 +270,25 @@ class FichaWriteFieldsRequest(BaseModel):
     def modo_v4(self) -> bool:
         return self.esqueleto is not None
 
+    @property
+    def modo_v5(self) -> bool:
+        return self.nucleo is not None and self.indice_navegavel is not None
+
     @model_validator(mode="after")
     def _contrato_v4(self) -> "FichaWriteFieldsRequest":
         codigos = [a.codigo for a in self.alertas]
         if len(codigos) != len(set(codigos)):
             raise ValueError("alertas: código repetido")
+        # 23/10/2026 (DECIDI-SOZINHO, classe A): meio v5 é contrato quebrado. Cair no
+        # v4 em silêncio jogaria fora a leitura que o shared mandou.
+        if (self.nucleo is None) != (self.indice_navegavel is None):
+            raise ValueError("v5 exige `nucleo` e `indice_navegavel` juntos")
+        if self.modo_v5:
+            if self.esqueleto is None:
+                raise ValueError("v5 (nucleo + indice_navegavel) exige esqueleto")
+            ids = [d.doc_id for d in self.indice_navegavel or []]
+            if len(ids) != len(set(ids)):
+                raise ValueError("indice_navegavel: doc_id repetido")
         if not self.modo_v4:
             return self
         if self.tipo_ficha is None:
@@ -242,3 +346,10 @@ class FichaWriteFieldsResponse(BaseModel):
     motivos_nao_aplicaveis: dict[str, str] = Field(default_factory=dict)
     #: Avisos do código que não reprovam (ex.: `renovacao_sem_bloco`, 23/10/2026).
     avisos: list[str] = Field(default_factory=list)
+    #: v5 (23/10/2026): a trilha dos slots aprovados. O auditor v3 recebe esta lista.
+    trilha_leitura: list[TrilhaItem] = Field(default_factory=list)
+    #: v5: os doc_id do índice que a fase A abriu com sucesso.
+    documentos_lidos: list[str] = Field(default_factory=list)
+    #: v5: chamadas de ferramenta da fase A e o estado do budget.
+    chamadas_ferramenta: int = 0
+    budget_esgotado: bool = False

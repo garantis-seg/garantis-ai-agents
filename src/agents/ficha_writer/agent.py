@@ -3,7 +3,11 @@
 Stateless. Usa o factory (provider default = Gemini) em JSON mode, sem schema
 estático: os slots mudam por request. O modelo sai do papel `ficha_redacao` do shared.
 
-Dois modos (ver `schemas.py`):
+Três modos (ver `schemas.py`):
+
+- **v5** (request com `nucleo` e `indice_navegavel`, 23/10/2026): o agente lê os autos
+  antes de escrever. Fase A com ferramentas, fase B no JSON do v4 mais a
+  `trilha_leitura`. Ver `agent_v5.py` e `README_v5.md`.
 
 - **v4** (request com `esqueleto`): resolve os slots pelo Livro (`livro.py`), monta o
   prompt v4 (`prompts_v4.py`), valida a saída (`validacao.py`) e corrige em até
@@ -253,6 +257,11 @@ async def write_ficha_fields(
         request = FichaWriteFieldsRequest(**request)
     provider = provider or request.provider or DEFAULT_PROVIDER
     model = model or request.model or DEFAULT_MODEL
+    if request.modo_v5:
+        # Import tardio: o agent_v5 importa helpers deste módulo.
+        from .agent_v5 import write_v5
+
+        return await write_v5(request, provider, model)
     if request.modo_v4:
         return await _write_v4(request, provider, model)
     return await _write_v3(request, provider, model)
