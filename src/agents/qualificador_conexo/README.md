@@ -92,6 +92,7 @@ Notas da entrada:
      "prova": null, "motivo": "...", "requer_revisao": false}
   ],
   "divergencias": [],
+  "alertas_gerados": [],
   "requer_revisao": false,
   "modo": "documentos",
   "auditado": true,
@@ -115,6 +116,7 @@ O LLM escreve só `processos`, `garantias` e `alertas_respondidos` (modelo
 | `requer_revisao` (item) | `true` quando o auditor diverge, ou quando um processo `capa` sai não fiscal |
 | `requer_revisao` (topo) | `true` quando um item tem `requer_revisao` |
 | `divergencias[]` | Uma por afirmação que o auditor não aceitou |
+| `alertas_gerados[]` | Alertas do código para a prontidão. No modo capa: `qualificacao_sem_documentos` |
 | `chamadas` | Chamadas de ferramenta na fase A |
 | `chamadas_llm` | Chamadas de LLM nas 3 fases |
 | `prompt_version` | `qualificador_conexo_v1` mais o hash de `prompts.py` e `schemas.py`. Compare por prefixo |
@@ -150,8 +152,14 @@ sem `documento_indexado`. Neste modo:
 - Não há fase A. O LLM recebe 1 prompt e responde pelos sinais da capa (classe CNJ,
   assunto, partes, tipo do item).
 - O código força `prova=null` e `confianca="baixa"` em todo processo e alerta.
-- O código preenche as garantias: `estado="sem_evidencia"`, `documentos_lidos=[]`,
-  `fonte="capa"`, `requer_revisao=true`. A regra 4 não se aplica: não há o que ler.
+- O código preenche as garantias: `estado="ativa"`, `confianca="baixa"`, `prova=null`,
+  `documentos_lidos=[]`, `motivo="sem documentos legíveis: estado não verificado"`,
+  `fonte="capa"`, `requer_revisao=true`.
+- A saída leva `alertas_gerados=[{"codigo": "qualificacao_sem_documentos", "escopo": "conexo"}]`.
+  O shared leva o alerta ao catálogo de prontidão.
+- Decisão de 23/10/2026 (classe A): no modo capa, o agente não leu nada. Então ele não
+  marca `sem_evidencia`. Esse estado fica reservado ao caso em que o agente leu
+  documentos e não achou prova (regra 4).
 - Processo não fiscal sai com `requer_revisao=true`.
 - O auditor não roda: não há prova para auditar.
 

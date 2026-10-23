@@ -52,6 +52,7 @@ from .prompts import (
     dados_do_conexo,
 )
 from .schemas import (
+    AlertaGerado,
     AlertaRespondido,
     Divergencia,
     ErroCampo,
@@ -83,6 +84,10 @@ _MAX_TRECHOS_POR_LEITURA = 8
 _MAX_CHARS_PAGINA = 6000
 
 _AQUI = Path(__file__).resolve().parent
+
+#: Modo capa (23/10/2026): motivo de toda garantia e alerta que a saída leva.
+MOTIVO_SEM_DOCUMENTOS = "sem documentos legíveis: estado não verificado"
+ALERTA_SEM_DOCUMENTOS = "qualificacao_sem_documentos"
 
 
 def prompt_version() -> str:
@@ -256,6 +261,10 @@ async def qualificar_conexo(
         garantias=out["garantias"],
         alertas_respondidos=out["alertas"],
         divergencias=out["divergencias"],
+        alertas_gerados=(
+            [AlertaGerado(codigo=ALERTA_SEM_DOCUMENTOS, escopo="conexo")]
+            if ctx.modo_capa else []
+        ),
         requer_revisao=(
             any(p.requer_revisao for p in out["processos"])
             or any(g.requer_revisao for g in out["garantias"])
@@ -603,14 +612,15 @@ def _montar_saida(q: QualificacaoLLM, ctx: _Contexto) -> dict[str, Any]:
         ))
 
     if ctx.modo_capa:
-        # 22/10/2026 (DECIDI-SOZINHO, classe A; o efeito na S2 é classe B no PR):
-        # sem documento, a S2c não tem fato sobre a garantia. O estado honesto é
-        # `sem_evidencia`, com `documentos_lidos` vazio e `fonte="capa"`. A regra
-        # "ler antes de desistir" não se aplica: não há o que ler.
+        # 23/10/2026 (classe A, decisão do coordenador): no modo capa, o agente
+        # não leu nada. Então ele não pode dizer `sem_evidencia`. Esse estado fica
+        # reservado ao caso em que o agente LEU documentos e não achou prova.
+        # Toda garantia sai `ativa` com confiança baixa, e a saída leva o alerta
+        # `qualificacao_sem_documentos` para o catálogo de prontidão do shared.
         garantias = [
             GarantiaQualificada(
-                id=g.id, estado="sem_evidencia", documentos_lidos=[],
-                confianca="baixa", motivo="conexo sem documento legível",
+                id=g.id, estado="ativa", prova=None, documentos_lidos=[],
+                confianca="baixa", motivo=MOTIVO_SEM_DOCUMENTOS,
                 fonte="capa", requer_revisao=True,
             )
             for g in ctx.request.garantias
@@ -689,7 +699,9 @@ def _custo(resp: Any) -> float:
 
 
 __all__ = [
+    "ALERTA_SEM_DOCUMENTOS",
     "DEFAULT_MODEL",
+    "MOTIVO_SEM_DOCUMENTOS",
     "RODADAS_DE_CORRECAO",
     "QualificacaoInvalidaError",
     "prompt_version",

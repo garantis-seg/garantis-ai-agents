@@ -198,6 +198,16 @@ class Divergencia(_Fechado):
     motivo: str = Field(max_length=MAX_MOTIVO)
 
 
+class AlertaGerado(_Fechado):
+    """Alerta que o CÓDIGO da S2c gera para o catálogo de prontidão do shared.
+
+    23/10/2026: hoje só existe `qualificacao_sem_documentos` (modo capa).
+    """
+
+    codigo: Literal["qualificacao_sem_documentos"]
+    escopo: EscopoAlerta
+
+
 class ErroCampo(_Fechado):
     """Erro estruturado da validação: o que volta ao LLM e ao chamador."""
 
@@ -212,6 +222,7 @@ class QualificarConexoResponse(_Fechado):
     garantias: list[GarantiaQualificada]
     alertas_respondidos: list[AlertaRespondido]
     divergencias: list[Divergencia] = Field(default_factory=list)
+    alertas_gerados: list[AlertaGerado] = Field(default_factory=list)
     requer_revisao: bool = False
     modo: Literal["documentos", "capa"]
     auditado: bool = False
@@ -240,6 +251,7 @@ __all__ = [
     "MAX_MOTIVO",
     "MAX_TRECHO",
     "AlertaEntrada",
+    "AlertaGerado",
     "AlertaRespondido",
     "AlertaRespondidoLLM",
     "DebitoCoberto",

@@ -372,6 +372,8 @@ def test_4c_sem_evidencia_com_leitura_real_passa(monkeypatch):
     r = _rodar(prov, monkeypatch)
     assert r.garantias[0].estado == "sem_evidencia"
     assert r.garantias[0].prova is None
+    # 23/10/2026: com leitura real, `sem_evidencia` vale, e o alerta de capa não sai
+    assert r.modo == "documentos" and r.alertas_gerados == []
 
 
 # ── (5) sem índice → modo capa ──────────────────────────────────────────────
@@ -388,8 +390,14 @@ def test_5_sem_indice_responde_pela_capa_com_confianca_baixa(monkeypatch):
         assert p.fonte == "capa" and p.confianca == "baixa" and p.prova is None
     assert r.processos[1].requer_revisao       # não fiscal sem prova
     assert not r.processos[0].requer_revisao
-    assert {g.estado for g in r.garantias} == {"sem_evidencia"}
-    assert all(g.fonte == "capa" and g.documentos_lidos == [] for g in r.garantias)
+    # 23/10/2026: sem leitura, nada de `sem_evidencia`. A garantia sai ativa e não verificada.
+    assert {g.estado for g in r.garantias} == {"ativa"}
+    for g in r.garantias:
+        assert g.fonte == "capa" and g.confianca == "baixa" and g.prova is None
+        assert g.documentos_lidos == []
+        assert g.motivo == "sem documentos legíveis: estado não verificado"
+    assert [a.model_dump() for a in r.alertas_gerados] == [
+        {"codigo": "qualificacao_sem_documentos", "escopo": "conexo"}]
     assert r.requer_revisao
     assert "<modo_capa>" in prov.prompts("B")[0]
 
@@ -398,6 +406,20 @@ def test_5b_indice_sem_conteudo_tambem_e_modo_capa(monkeypatch):
     prov = _Prov([], [_emissao_valida()])
     r = _rodar(prov, monkeypatch, req=_request(documentos_indexados=_indice(False)))
     assert r.modo == "capa" and prov.n["A"] == 0
+    assert {g.estado for g in r.garantias} == {"ativa"}
+    assert [a.codigo for a in r.alertas_gerados] == ["qualificacao_sem_documentos"]
+
+
+def test_5c_modo_capa_descarta_sem_evidencia_que_o_llm_mandar(monkeypatch):
+    prov = _Prov([], [_sem_evidencia([])])
+    r = _rodar(prov, monkeypatch, req=_request(documentos_indexados=[]))
+    assert "sem_evidencia" not in {g.estado for g in r.garantias}
+
+
+def test_1d_modo_documentos_nao_gera_alerta_de_capa(monkeypatch):
+    prov = _Prov(_leituras_padrao(), [_emissao_valida()], [_SUSTENTA])
+    r = _rodar(prov, monkeypatch)
+    assert r.alertas_gerados == []
 
 
 # ── (6) auditor diverge → requer_revisao ────────────────────────────────────
