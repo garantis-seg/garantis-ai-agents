@@ -104,6 +104,15 @@ def resolver_slots(
     return aplicaveis, nao_aplicaveis
 
 
+def motivos_nao_aplicaveis(chave: Optional[str], nomes: list[str]) -> dict[str, str]:
+    """slot -> motivo, para os slots que o Livro fecha no tipo. Exemplo: a regra 26
+    (23/10/2026) fecha `divida_ativa.detalhe` em todo tipo. Um shared velho que ainda
+    mande o slot recebe o nome e o motivo, sem erro."""
+    slots = carregar()["tipos"].get(chave or "", {}).get("slots") or {}
+    return {n: str((slots.get(n) or {}).get("motivo") or "O Livro não usa este slot neste tipo.")
+            for n in nomes}
+
+
 def descricao_tipo(chave: Optional[str]) -> str:
     return carregar()["tipos"].get(chave or "", {}).get("descricao", "")
 
@@ -118,6 +127,7 @@ __all__ = [
     "carregar",
     "chave_livro",
     "descricao_tipo",
+    "motivos_nao_aplicaveis",
     "proibicoes_globais",
     "resolver_slots",
 ]

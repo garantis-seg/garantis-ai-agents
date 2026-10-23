@@ -43,6 +43,10 @@ _PATHS_SLOTS: tuple[tuple[str, ...], ...] = (
 #: reprova na S5 (A57). `alerta` é bloco do humano, não fato do código.
 _CHAVES_FORA = ("metadata", "nota_interna", "alerta")
 
+#: Regra 25 (23/10/2026): com o valor de origem fixa, o shared escreve a descrição do
+#: valor no esqueleto. Ela é fato fixo: entra como `valor.descricao_fixa`, e o slot a copia.
+_ORIGENS_VALOR_FIXO = ("cda", "apolice_ou_fianca")
+
 
 # ── Persona ───────────────────────────────────────────────────────────────
 
@@ -77,6 +81,11 @@ def _persona(req: FichaWriteFieldsRequest, chave: Optional[str]) -> str:
 def _fatos_fixos(req: FichaWriteFieldsRequest) -> dict[str, Any]:
     """O esqueleto sem os slots de texto e sem a metadata."""
     fatos = req.esqueleto.model_dump(mode="json", exclude_none=True) if req.esqueleto else {}
+    valor = fatos.get("valor")
+    if isinstance(valor, dict) and valor.get("origem") in _ORIGENS_VALOR_FIXO:
+        fixa = str(valor.get("descricao") or "").strip()
+        if fixa:
+            valor["descricao_fixa"] = fixa
     for k in _CHAVES_FORA:
         fatos.pop(k, None)
     for path in _PATHS_SLOTS:
@@ -235,10 +244,13 @@ AS 10 REGRAS DO CONSTRUTOR (não negociáveis):
 9. Os nomes das etapas são os dos FATOS FIXOS. A instância, a turma e o acórdão vão no texto, nunca como etapa nova. A admissibilidade do recurso especial é da Presidência da Câmara (ou da Presidência da CSRF, no agravo): escreva "à Câmara Superior", nunca "não admitido pela Câmara Superior".
 10. Nunca cite dificuldade NOSSA de obter dados ("não localizado", "documentos não disponíveis", "a apurar"). Escreva o fato pelo processo: "não consta das informações processuais públicas", "será conhecido com a publicação do acórdão".
 
-DECISÕES DO ALFREDO (22/10/2026 e anteriores):
+DECISÕES DO ALFREDO (23/10/2026 e anteriores):
 - valor.descricao: ZERO cifra. Nada de "R$", faixa ou segundo total. O box mostra um número só (09/10/2026).
 - Empresa: a razão social completa, como está nos FATOS FIXOS (item 8).
 - Renovação: o texto nunca cita prêmio, limite (LMG) nem taxa (item 7).
+- Status da dívida ativa fica FORA do texto, em todo slot: nada de "ativa ajuizada", "ativa não ajuizada", "garantida por seguro", "SERPRO" ou "regularize". O status é fato do código (regra 26, 23/10/2026).
+- valor.descricao com valor.origem = cda ou apolice_ou_fianca: copie valor.descricao_fixa dos FATOS FIXOS, sem "estimado" nem "pode variar" (regra 25, 23/10/2026).
+- Renovação sem corretor no bloco renovacao dos FATOS FIXOS: o bullets[1] diz "Corretagem não identificada na base." Nunca invente corretor (23/10/2026).
 - Processo de outra empresa, ou fora da lista de citáveis, não aparece pelo número (28/09/2026).
 - Nunca afirme absoluto sobre o mundo do cliente: "apólice não identificada em consulta pública de DD/MM/AAAA", nunca "o cliente não tem apólice".
 - Nunca cite encanamento interno: engine, watchlist, snapshot, sistema, pipeline, score, modelo, nomes de fornecedor ou de base.
