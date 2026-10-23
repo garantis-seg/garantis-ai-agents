@@ -17,7 +17,7 @@ from .middleware import GeminiCallTimeoutMiddleware
 # de execucao-fiscal/frontend-api/services/court_presentation_inference_service.py.
 # Decisao do Elton: caminho de LLM para derivar FATO ESTRUTURAL do processo (tribunal,
 # estado) e para ser EVITADO — o fato vem do provider ou de derivacao deterministica.
-from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, doc_indexer, doc_reader, ficha_writer, health, merito_synthesis, mov_factsheet, processo_synthesis, prompts, verificador
+from .routes import apolice_lifecycle, auditor_ficha, calculo_ficha, doc_indexer, doc_reader, ficha_writer, health, merito_synthesis, mov_factsheet, processo_synthesis, prompts, qualificador_conexo, verificador
 
 # Carregar variáveis de ambiente
 load_dotenv()
@@ -70,6 +70,8 @@ app.include_router(ficha_writer.router)
 # sao o mesmo recurso em dois momentos); registrado DEPOIS dele so por ordem de
 # leitura, os paths nao colidem (`/write-fields` x `/auditar`).
 app.include_router(auditor_ficha.router)
+# S2c — qualificador do conexo (`/ficha/qualificar-conexo`). Mesmo prefixo `/ficha`.
+app.include_router(qualificador_conexo.router)
 app.include_router(calculo_ficha.router)
 # O VERIFICADOR CEGO do Agente Investigador (`/verificar-par`): mesmo prefixo
 # `/calculo-ficha` do `/auditar-evidencias`, em ROUTER separado — os dois modos
