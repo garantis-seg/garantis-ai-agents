@@ -1,126 +1,327 @@
-"""Schemas do AUDITOR DE FICHA (S6).
+"""Schemas do AUDITOR DE FICHA (S6), versao 2: dois baldes.
 
-O contrato de SAIDA nao e escolha deste repo: ele esta cravado no docstring de
-`garantis_shared.fichas.runner.auditar` e o ramo de reprovacao do workflow
-(`fichas/dbos_workflow.py`, S6) JA le `aprovado` e `reprovacoes`. Qualquer
-divergencia de forma aqui quebra o pipeline no dia em que ligarem
-`AUDITOR_ENABLED`:
+Decisao de 22/10/2026 (plano "ficha por IA", Parte 3, S6): o auditor deixa de
+devolver so `reprovacoes` e passa a devolver o veredito do Livro da Ficha
+(§10.2, regra de dois baldes):
 
-    {"aprovado": bool,
-     "auditor_enabled": True,
-     "modelo": str,
-     "reprovacoes": [{"campo": str, "motivo": str, "regra": str}],
-     "cost_usd": float}
+    {"veredito": "aprovada" | "aprovada_com_correcoes" | "retida",
+     "balde1": [{campo, motivo, regra, correcao_sugerida}],
+     "balde2": [{campo, pendencia, grau, evidencia, recomendacao}],
+     "nao_confirmado": [str],
+     "alertas_respondidos": [{codigo, resposta, motivo}],
+     "divergencias_gabarito": [{campo, ficha, gabarito, e_erro, motivo}]}
 
-**Reprovacao TIPADA, nunca nota/score** (PESQUISA-AGENTE-INVESTIGADOR-2026-08
-§4). Um score obriga o consumidor a escolher um corte arbitrario e nao diz o
-que corrigir; a tripla (campo, motivo, regra) diz onde, por que e com que
-autoridade. `campo` fala o MESMO idioma do `campos_com_erro` do harness (slots
-achatados: "merito.p1", "bullets[0]", "ultima_decisao.texto"), porque a
-reprovacao volta ao S4 como retry cirurgico por campo.
+- Balde 1: erro objetivo que o redator corrige. Volta ao S4.
+- Balde 2: juizo de substancia. NUNCA volta ao redator. Vai ao `meta` como
+  pendencia.
+
+O CODIGO calcula o veredito (ver `agent.calcular_veredito`). O modelo nao
+decide o veredito.
+
+COMPATIBILIDADE COM O SHARED (22/10/2026). O cliente atual
+(`garantis_shared/fichas/auditor_ficha.py`) manda `{ficha_json, dossie: dict,
+tipo}` e le `aprovado`, `reprovacoes` e `pendencias`. Por isso:
+
+1. A entrada aceita as 3 chaves antigas e as traduz (ver
+   `AuditarFichaRequest._aceitar_formato_v1`). Qualquer outra chave estranha
+   reprova (`extra="forbid"`).
+2. A saida mantem `aprovado` e `reprovacoes`, derivados:
+   `aprovado = veredito != "retida"` e `reprovacoes = balde1` (so as 3 chaves
+   do contrato). O shared migra para `veredito`/`balde1`/`balde2` na S6 do
+   worker. Depois disso, os campos derivados podem sair.
 """
 
-from typing import Any, Optional
+import json
+from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+Veredito = Literal["aprovada", "aprovada_com_correcoes", "retida"]
+Grau = Literal["alta", "media", "baixa"]
+RespostaAlerta = Literal["confirmado", "refutado"]
+
+#: Limite da correcao sugerida (pedido de 22/10/2026). O auditor aponta a
+#: correcao. Ele nao reescreve o campo inteiro.
+MAX_CORRECAO_SUGERIDA = 300
+
+_FECHADO = ConfigDict(extra="forbid")
 
 
-class Reprovacao(BaseModel):
-    """UMA reprovacao — o campo, o porque e a ancora no Livro.
+# ── Entrada ────────────────────────────────────────────────────────────────
 
-    Sem ancora nao ha reprovacao: `regra` e o que separa "o auditor achou feio"
-    de "o Livro proibe". E tambem o que torna o falso-positivo auditavel — da
-    pra ir na regra citada e discordar dela.
+
+class Alerta(BaseModel):
+    """Um fato que o CODIGO ja sabe e que o auditor tem de responder.
+
+    Exemplos: "a S5 avisou A31 em bullets[3]", "o valor e estimado", "o
+    gabarito diz data da sessao 24/06/2026". O auditor responde cada um com
+    `confirmado` ou `refutado`, e com o motivo (plano, Parte 1.2, item 2).
     """
 
-    campo: str = Field(
-        description=(
-            "Slot achatado da ficha, no idioma do `campos_com_erro` do harness "
-            "(ex.: 'merito.p1', 'bullets[0]', 'ultima_decisao.texto'). E por ele "
-            "que o S4 faz o retry cirurgico."
-        )
-    )
-    motivo: str = Field(
-        description=(
-            "UMA frase: o que esta errado e, quando cabe, o que o dossie diz no "
-            "lugar. Volta ao redator como instrucao de correcao."
-        )
-    )
-    regra: str = Field(
-        description=(
-            "ID da regra do Livro que sustenta a reprovacao (ex.: 'S7', 'S40', "
-            "'E14/S13', 'S15'). Reprovacao sem ancora e opiniao."
-        )
-    )
+    model_config = _FECHADO
 
-    model_config = {"extra": "ignore"}
+    codigo: str = Field(min_length=1, max_length=60)
+    texto: str = Field(min_length=1, max_length=1000)
+
+
+class AvisoS5(BaseModel):
+    """Um achado do validador deterministico (S5), no formato `Achado`.
+
+    O auditor recebe a lista para NAO repetir o que a S5 ja disse.
+    """
+
+    model_config = _FECHADO
+
+    id: str
+    nivel: str = "aviso"
+    campo: str = ""
+    mensagem: str = ""
+    valor: Any = None
 
 
 class AuditarFichaRequest(BaseModel):
-    """Request do POST /ficha/auditar.
+    """Request do POST /ficha/auditar (v2).
 
-    `ficha_json` e `dossie` sao AMBOS dado de terceiro (o primeiro saiu de um
-    LLM, o segundo de tribunal/provider) — os dois entram no prompt cercados
-    por fence com boundary aleatorio. Ver prompts.py.
+    `ficha`, `dossie`, `gabarito`, `licoes` e os textos dos alertas sao DADO.
+    O prompt cerca cada um com fence de boundary aleatorio (ver prompts.py).
     """
 
-    ficha_json: dict[str, Any] = Field(
-        description="A ficha redigida pelo S4, ja aprovada no S5 (deterministico)."
+    model_config = _FECHADO
+
+    ficha: dict[str, Any] = Field(
+        description="A ficha inteira, redigida pelo S4 e aprovada pela S5."
     )
-    dossie: dict[str, Any] = Field(
+    esqueleto: dict[str, Any] = Field(
         default_factory=dict,
-        description="Os FATOS congelados: a unica fonte contra a qual a prosa e conferida.",
+        description=(
+            "Os fatos que a S3b fixou com codigo: valor, datas, etapa, status, "
+            "tags. E a VERDADE FIXA da auditoria. A prosa que contradiz o "
+            "esqueleto vai ao balde 1."
+        ),
     )
-    tipo: Optional[str] = Field(
+    dossie: str = Field(
+        default="",
+        description="O dossie congelado, em texto. A fonte de verdade da prosa.",
+    )
+    tipo_ficha: Optional[str] = Field(
+        default=None,
+        description="Tipo da S2 (nova_apolice, substituicao_fianca, ...).",
+    )
+    trilho: Optional[str] = Field(
+        default=None,
+        description="carf, estadual, ef, acoes_contribuinte ou None.",
+    )
+    gabarito: Optional[dict[str, Any]] = Field(
         default=None,
         description=(
-            "Tipo da oportunidade (nova_apolice / substituicao_fianca / ...). "
-            "Muda quais proibicoes do Livro se aplicam por slot."
+            "Opcional. A ficha local aprovada do mesmo processo. O auditor "
+            "compara FATOS com ela, nunca a redacao."
         ),
+    )
+    alertas: list[Alerta] = Field(
+        default_factory=list,
+        description="O que o codigo ja sabe. O auditor responde cada alerta.",
+    )
+    relatorio_s5: list[AvisoS5] = Field(
+        default_factory=list,
+        description="Os avisos da S5. O auditor nao os repete.",
+    )
+    licoes: list[str] = Field(
+        default_factory=list,
+        description="Linhas do LICOES.md da etapa S6.",
     )
     provider: Optional[str] = None
     model: Optional[str] = Field(
         default=None,
         description=(
-            "Modelo do auditor. Precisa ser DIFERENTE do redator (S4): quem "
-            "confere nao pode ser quem escreveu — os erros se confirmariam."
+            "Override do modelo. O default e o papel `ficha_auditoria_texto`. "
+            "Quem confere nao pode ser o modelo que escreveu."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _aceitar_formato_v1(cls, data: Any) -> Any:
+        """Traduz o formato do cliente atual do shared para o formato v2.
+
+        Decisao de 22/10/2026: o shared manda `ficha_json`, `dossie` como dict
+        e `tipo`. Com `extra="forbid"` puro, a rota devolveria 422 para o
+        cliente de hoje. A traducao vale ate o shared migrar (S6 do worker).
+
+        Tambem aceita, por conveniencia do chamador:
+        - alerta como string simples. O codigo vira `AL1`, `AL2`, ...
+        - `relatorio_s5` como o objeto `Relatorio` serializado
+          (`{"erros": [...], "avisos": [...]}`).
+        """
+        if not isinstance(data, dict):
+            return data
+        d = dict(data)
+        if "ficha_json" in d:
+            if "ficha" in d:
+                raise ValueError("mande `ficha` ou `ficha_json`, nunca as duas")
+            d["ficha"] = d.pop("ficha_json")
+        if "tipo" in d:
+            if "tipo_ficha" in d:
+                raise ValueError("mande `tipo_ficha` ou `tipo`, nunca as duas")
+            d["tipo_ficha"] = d.pop("tipo")
+        dossie = d.get("dossie")
+        if isinstance(dossie, (dict, list)):
+            d["dossie"] = (
+                json.dumps(dossie, ensure_ascii=False, indent=2, default=str)
+                if dossie else ""
+            )
+        elif dossie is None:
+            d["dossie"] = ""
+        alertas = d.get("alertas")
+        if isinstance(alertas, list):
+            d["alertas"] = [
+                {"codigo": f"AL{i + 1}", "texto": a} if isinstance(a, str) else a
+                for i, a in enumerate(alertas)
+            ]
+        rel = d.get("relatorio_s5")
+        if isinstance(rel, dict):
+            d["relatorio_s5"] = list(rel.get("erros") or []) + list(rel.get("avisos") or [])
+        elif rel is None:
+            d["relatorio_s5"] = []
+        return d
+
+
+# ── Saida do modelo (e da rota) ────────────────────────────────────────────
+
+
+class ItemBalde1(BaseModel):
+    """Balde 1: erro objetivo, que o redator corrige.
+
+    Exemplos: data de publicacao no lugar da data da sessao, numero de
+    acordao trocado, fato que o dossie contradiz, vocabulario proibido em
+    contexto, duas versoes do mesmo fato, prosa que contradiz o esqueleto.
+    """
+
+    model_config = _FECHADO
+
+    campo: str = Field(description="Slot achatado: 'merito.p1', 'bullets[0]'.")
+    motivo: str = Field(description="UMA frase: o que esta errado e o que o dossie diz.")
+    regra: str = Field(description="ID do checklist (KC-*, H-*, V-*, ...) ou do Livro.")
+    correcao_sugerida: str = Field(
+        default="",
+        max_length=MAX_CORRECAO_SUGERIDA,
+        description="O fato certo, curto. Nao e o campo reescrito.",
+    )
+
+
+class ItemBalde2(BaseModel):
+    """Balde 2: juizo de substancia. NUNCA vai ao redator.
+
+    Exemplos: esgotamento duvidoso, valor do esqueleto que parece errado,
+    termometro discutivel, caso que talvez nao devesse existir (kill-check).
+    """
+
+    model_config = _FECHADO
+
+    campo: str
+    pendencia: str = Field(description="A afirmacao da ficha em disputa.")
+    grau: Grau
+    evidencia: str = Field(description="Citacao literal do dossie, com a fonte.")
+    recomendacao: str = Field(description="Acao que um humano executa.")
+
+
+class AlertaRespondido(BaseModel):
+    model_config = _FECHADO
+
+    codigo: str
+    resposta: RespostaAlerta
+    motivo: str
+
+
+class DivergenciaGabarito(BaseModel):
+    """Um ponto em que a ficha e o gabarito dizem coisas diferentes.
+
+    `e_erro=True` so para FATO (data, valor, etapa, fase, quem recorreu).
+    Redacao diferente com o mesmo fato e `e_erro=False`.
+    """
+
+    model_config = _FECHADO
+
+    campo: str
+    ficha: str
+    gabarito: str
+    e_erro: bool
+    motivo: str
+
+
+class SaidaAuditor(BaseModel):
+    """O JSON que o modelo devolve. Fechado: chave estranha reprova.
+
+    `veredito` e opcional e so informativo. O codigo calcula o veredito a
+    partir dos baldes (`agent.calcular_veredito`).
+    """
+
+    model_config = _FECHADO
+
+    veredito: Optional[Veredito] = None
+    balde1: list[ItemBalde1] = Field(default_factory=list)
+    balde2: list[ItemBalde2] = Field(default_factory=list)
+    nao_confirmado: list[str] = Field(default_factory=list)
+    alertas_respondidos: list[AlertaRespondido] = Field(default_factory=list)
+    divergencias_gabarito: list[DivergenciaGabarito] = Field(default_factory=list)
+
+
+class Reprovacao(BaseModel):
+    """O formato v1 da reprovacao: o contrato atual do runner do shared."""
+
+    campo: str
+    motivo: str
+    regra: str
 
     model_config = {"extra": "ignore"}
 
 
 class AuditarFichaResponse(BaseModel):
-    """Response do POST /ficha/auditar — envelope da casa + contrato do runner.
+    """Response do POST /ficha/auditar: o envelope da casa + o veredito v2 +
+    os campos v1 derivados.
 
-    O envelope da casa ({success, ..., model, cost_usd}) e o contrato do
-    `runner.auditar` ({aprovado, auditor_enabled, modelo, reprovacoes,
-    cost_usd}) convivem no MESMO objeto de proposito: o cliente HTTP do shared
-    repassa os campos do contrato sem remontar nada, e `success` continua
-    dizendo se a CHAMADA funcionou — que e pergunta diferente de `aprovado`
-    (se a FICHA passou).
-
-    ⚠️ Falha de chamada (`success=false`) NAO e aprovacao. Nesse caso
-    `aprovado` vem False e `auditor_enabled` False: o caller ve que nenhuma
-    auditoria aconteceu e trata como o stub trataria — nunca como ficha
-    auditada e limpa.
+    Atencao: uma falha de chamada (`success=false`) NAO e aprovacao. Nesse
+    caso `veredito` e None, `aprovado` e False e `auditor_enabled` e False.
     """
 
+    model_config = _FECHADO
+
     success: bool
+    veredito: Optional[Veredito] = None
+    balde1: list[ItemBalde1] = Field(default_factory=list)
+    balde2: list[ItemBalde2] = Field(default_factory=list)
+    nao_confirmado: list[str] = Field(default_factory=list)
+    alertas_respondidos: list[AlertaRespondido] = Field(default_factory=list)
+    divergencias_gabarito: list[DivergenciaGabarito] = Field(default_factory=list)
+
+    # Campos v1, derivados. O shared atual le estes. Ele migra na S6 do worker.
     aprovado: bool = False
     auditor_enabled: bool = False
     modelo: Optional[str] = None
     reprovacoes: list[dict[str, Any]] = Field(default_factory=list)
     pendencias: list[str] = Field(default_factory=list)
-    #: Espelho de `modelo` no idioma do envelope da casa ({success, model,
-    #: cost_usd}), pra rota do ai-agents parecer com todas as outras.
+
+    #: Erros da validacao da saida do modelo, no formato
+    #: `{campo, erro, valor_anterior}` (plano, Parte 1.2, item 4). Vem
+    #: preenchido quando a 2a rodada tambem falhou.
+    erros_validacao: list[dict[str, Any]] = Field(default_factory=list)
+    rodadas: int = 0
+    prompt_version: str = ""
     model: str = ""
     cost_usd: float = 0.0
     error: Optional[str] = None
 
 
 __all__ = [
+    "Alerta",
+    "AlertaRespondido",
     "AuditarFichaRequest",
     "AuditarFichaResponse",
+    "AvisoS5",
+    "DivergenciaGabarito",
+    "ItemBalde1",
+    "ItemBalde2",
+    "MAX_CORRECAO_SUGERIDA",
     "Reprovacao",
+    "SaidaAuditor",
 ]
