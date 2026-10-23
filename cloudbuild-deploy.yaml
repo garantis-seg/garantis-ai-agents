@@ -176,7 +176,11 @@ steps:
       # sem esse teto. Lido por garantis_shared.gemini_backend (default vertex no codigo).
       # Reverter: trocar pra aistudio aqui + redeploy. Requer SA com roles/aiplatform.user.
       # ⛔ Nenhuma env de modelo: o modelo e o papel em garantis_shared.llm_models (guarda: tests/test_modelo_vem_do_papel.py).
-      - 'DEFAULT_PROMPT_VERSION=v3,GEMINI_RATE_LIMIT_TIMEOUT_S=180,GEMINI_BACKEND=vertex'
+      # FICHAS_DOC_INDEXER_ENABLED=true (2026-10-23, card 869ffv22t, caderno item 14): liga o
+      # indexador de documentos (S2b) no servidor. Sem ele, o /doc-indexer/indexar responde
+      # `doc_indexer_desligado`, e a S2c (qualificador) e o C4 investigador rodam só pela capa.
+      # O worker lê a mesma flag no shared; ela vai no deploy do risk-engine-worker.
+      - 'DEFAULT_PROMPT_VERSION=v3,GEMINI_RATE_LIMIT_TIMEOUT_S=180,GEMINI_BACKEND=vertex,FICHAS_DOC_INDEXER_ENABLED=true'
       # Fase 3 vertex-sem-key (2026-07-21, OK Elton): GOOGLE_API_KEY=GEMINI_API_KEY:latest
       # REMOVIDO — auth e ADC do service account (GEMINI_BACKEND=vertex; provado em staging
       # 2026-07-21 rodando sem key nenhuma). --clear-secrets (e nao so tirar a flag) porque
