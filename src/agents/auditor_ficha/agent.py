@@ -13,8 +13,13 @@ FAIL-SAFE. Falha do agente devolve `success=false`, `veredito=None`,
 nem aprovacao. O par `aprovado=false + auditor_enabled=false` e o estado "nao
 auditada". O runner do shared decide bloquear ou seguir.
 
-Nao ha ferramenta aqui, de proposito: o verificador com ferramenta deu muito
+Nao ha ferramenta no v2, de proposito: o verificador com ferramenta deu muito
 mais falso-positivo. O dossie inteiro vai no contexto.
+
+v3 (23/10/2026, decisao do Alfredo): com `nucleo`, `indice_navegavel` ou
+`trilha_leitura` no request, o auditor vira agente com ferramentas sobre os autos
+e cada item dos baldes leva prova de documento. Ver `agent_v3.py` e
+`README_v3.md`. O v2 continua igual para o request antigo.
 """
 
 import logging
@@ -113,6 +118,28 @@ def _normalizar_baldes(saida: SaidaAuditor) -> tuple[list[ItemBalde1], list[Item
     return b1, b2
 
 
+def erros_de_alertas(saida: SaidaAuditor, request: AuditarFichaRequest) -> list[dict[str, Any]]:
+    """Todo alerta de entrada tem resposta, e nenhuma resposta e de alerta estranho."""
+    erros: list[dict[str, Any]] = []
+    codigos = [a.codigo for a in request.alertas]
+    respondidos = [r.codigo for r in saida.alertas_respondidos]
+    for cod in codigos:
+        if cod not in respondidos:
+            erros.append({
+                "campo": "alertas_respondidos",
+                "erro": f"alerta {cod} sem resposta (confirmado | refutado)",
+                "valor_anterior": None,
+            })
+    for cod in respondidos:
+        if cod not in codigos:
+            erros.append({
+                "campo": "alertas_respondidos",
+                "erro": f"codigo {cod} nao existe na lista de alertas",
+                "valor_anterior": cod,
+            })
+    return erros
+
+
 def validar_saida(
     parsed: Any, request: AuditarFichaRequest
 ) -> tuple[Optional[SaidaAuditor], list[dict[str, Any]]]:
@@ -139,24 +166,7 @@ def validar_saida(
             })
         return None, erros
 
-    erros: list[dict[str, Any]] = []
-
-    codigos = [a.codigo for a in request.alertas]
-    respondidos = [r.codigo for r in saida.alertas_respondidos]
-    for cod in codigos:
-        if cod not in respondidos:
-            erros.append({
-                "campo": "alertas_respondidos",
-                "erro": f"alerta {cod} sem resposta (confirmado | refutado)",
-                "valor_anterior": None,
-            })
-    for cod in respondidos:
-        if cod not in codigos:
-            erros.append({
-                "campo": "alertas_respondidos",
-                "erro": f"codigo {cod} nao existe na lista de alertas",
-                "valor_anterior": cod,
-            })
+    erros: list[dict[str, Any]] = erros_de_alertas(saida, request)
 
     if saida.divergencias_gabarito and not request.gabarito:
         erros.append({
@@ -245,6 +255,12 @@ async def auditar_ficha(
 
     provider = provider or request.provider or DEFAULT_PROVIDER
     model = model or request.model or DEFAULT_MODEL
+
+    if request.modo_v3:
+        # Import tardio: o agent_v3 importa as regras deste modulo.
+        from .agent_v3 import auditar_ficha_v3
+
+        return await auditar_ficha_v3(request, provider, model)
 
     if not request.ficha:
         return _falha("nenhuma ficha para auditar", model)
@@ -335,6 +351,7 @@ async def auditar_ficha(
 
 __all__ = [
     "auditar_ficha",
+    "erros_de_alertas",
     "calcular_veredito",
     "validar_saida",
     "DEFAULT_MODEL",

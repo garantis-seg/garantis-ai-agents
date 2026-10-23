@@ -29,12 +29,19 @@ tipo}` e le `aprovado`, `reprovacoes` e `pendencias`. Por isso:
    `aprovado = veredito != "retida"` e `reprovacoes = balde1` (so as 3 chaves
    do contrato). O shared migra para `veredito`/`balde1`/`balde2` na S6 do
    worker. Depois disso, os campos derivados podem sair.
+
+V3 (23/10/2026, decisao do Alfredo). Com `nucleo`, `indice_navegavel` ou
+`trilha_leitura`, o auditor vira agente sobre os autos. Cada item dos baldes traz
+`prova: {doc_id, pagina, trecho}` ou `sem_prova_no_doc: true`. A saida ganha
+`fatos_conferidos`. O v3 nunca recebe gabarito (Livro §10.2).
 """
 
 import json
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SerializeAsAny, model_validator
+
+from ..ficha_writer.schemas import ItemIndice, Nucleo, TrilhaItem
 
 Veredito = Literal["aprovada", "aprovada_com_correcoes", "retida"]
 Grau = Literal["alta", "media", "baixa"]
@@ -130,6 +137,18 @@ class AuditarFichaRequest(BaseModel):
         default_factory=list,
         description="Linhas do LICOES.md da etapa S6.",
     )
+    nucleo: Optional[Nucleo] = Field(
+        default=None,
+        description="v3: a leitura obrigatoria (o mesmo nucleo que o redator v5 leu).",
+    )
+    indice_navegavel: Optional[list[ItemIndice]] = Field(
+        default=None,
+        description="v3: o que mais existe nos autos. O auditor abre com ferramenta.",
+    )
+    trilha_leitura: Optional[list[TrilhaItem]] = Field(
+        default=None,
+        description="v3: o que o redator v5 leu para cada slot.",
+    )
     provider: Optional[str] = None
     model: Optional[str] = Field(
         default=None,
@@ -138,6 +157,28 @@ class AuditarFichaRequest(BaseModel):
             "Quem confere nao pode ser o modelo que escreveu."
         ),
     )
+
+    @property
+    def modo_v3(self) -> bool:
+        return (self.nucleo is not None or self.indice_navegavel is not None
+                or self.trilha_leitura is not None)
+
+    @model_validator(mode="after")
+    def _contrato_v3(self) -> "AuditarFichaRequest":
+        """Regras do v3 (23/10/2026).
+
+        - O v3 NUNCA recebe gabarito (Livro §10.2): o auditor que navega os autos
+          confere contra os documentos, nao contra a ficha local.
+        - O v3 exige `nucleo` e `indice_navegavel`. A `trilha_leitura` pode vir
+          vazia. Meio v3 e contrato quebrado (DECIDI-SOZINHO, classe A).
+        """
+        if not self.modo_v3:
+            return self
+        if self.gabarito is not None:
+            raise ValueError("v3 nunca recebe gabarito (Livro §10.2)")
+        if self.nucleo is None or self.indice_navegavel is None:
+            raise ValueError("v3 exige `nucleo` e `indice_navegavel` juntos")
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -249,6 +290,59 @@ class DivergenciaGabarito(BaseModel):
     motivo: str
 
 
+# ── v3: prova de documento em cada item (23/10/2026) ───────────────────────
+
+#: Teto do trecho da prova. O mesmo da S2c.
+MAX_TRECHO_PROVA = 300
+
+
+class ProvaDoc(BaseModel):
+    """A prova de um item: o trecho literal do documento que refuta a ficha."""
+
+    model_config = _FECHADO
+
+    doc_id: str = Field(min_length=1)
+    pagina: int = Field(ge=1)
+    trecho: str = Field(min_length=1, max_length=MAX_TRECHO_PROVA)
+
+
+class _ComProva(BaseModel):
+    """Cada item do v3 traz `prova` OU `sem_prova_no_doc=true`. Nunca os dois."""
+
+    model_config = _FECHADO
+
+    prova: Optional[ProvaDoc] = None
+    sem_prova_no_doc: bool = False
+
+    @model_validator(mode="after")
+    def _prova_ou_sem_prova(self):
+        if (self.prova is None) != self.sem_prova_no_doc:
+            raise ValueError(
+                "cada item traz `prova` {doc_id, pagina, trecho} OU "
+                "`sem_prova_no_doc: true`, nunca os dois e nunca nenhum"
+            )
+        return self
+
+
+class ItemBalde1V3(ItemBalde1, _ComProva):
+    pass
+
+
+class ItemBalde2V3(ItemBalde2, _ComProva):
+    pass
+
+
+class FatoConferido(BaseModel):
+    """O auditor conferiu UM fato da trilha do redator contra o documento."""
+
+    model_config = _FECHADO
+
+    slot: str = Field(min_length=1)
+    doc_id: str = Field(min_length=1)
+    confere: bool
+    motivo: str = Field(min_length=1, max_length=300)
+
+
 class SaidaAuditor(BaseModel):
     """O JSON que o modelo devolve. Fechado: chave estranha reprova.
 
@@ -264,6 +358,14 @@ class SaidaAuditor(BaseModel):
     nao_confirmado: list[str] = Field(default_factory=list)
     alertas_respondidos: list[AlertaRespondido] = Field(default_factory=list)
     divergencias_gabarito: list[DivergenciaGabarito] = Field(default_factory=list)
+
+
+class SaidaAuditorV3(SaidaAuditor):
+    """O JSON do modelo no v3: o do v2, com prova nos baldes e `fatos_conferidos`."""
+
+    balde1: list[ItemBalde1V3] = Field(default_factory=list)
+    balde2: list[ItemBalde2V3] = Field(default_factory=list)
+    fatos_conferidos: list[FatoConferido] = Field(default_factory=list)
 
 
 class Reprovacao(BaseModel):
@@ -288,8 +390,10 @@ class AuditarFichaResponse(BaseModel):
 
     success: bool
     veredito: Optional[Veredito] = None
-    balde1: list[ItemBalde1] = Field(default_factory=list)
-    balde2: list[ItemBalde2] = Field(default_factory=list)
+    # SerializeAsAny: no v3 os itens levam `prova` e `sem_prova_no_doc`. No v2 a
+    # saida fica igual (os itens sao ItemBalde1/ItemBalde2).
+    balde1: list[SerializeAsAny[ItemBalde1]] = Field(default_factory=list)
+    balde2: list[SerializeAsAny[ItemBalde2]] = Field(default_factory=list)
     nao_confirmado: list[str] = Field(default_factory=list)
     alertas_respondidos: list[AlertaRespondido] = Field(default_factory=list)
     divergencias_gabarito: list[DivergenciaGabarito] = Field(default_factory=list)
@@ -311,6 +415,13 @@ class AuditarFichaResponse(BaseModel):
     cost_usd: float = 0.0
     error: Optional[str] = None
 
+    #: v3 (23/10/2026): os fatos da trilha que o auditor conferiu no documento.
+    fatos_conferidos: list[FatoConferido] = Field(default_factory=list)
+    #: v3: os doc_id do indice que o auditor abriu, e o estado do budget.
+    documentos_lidos: list[str] = Field(default_factory=list)
+    chamadas_ferramenta: int = 0
+    budget_esgotado: bool = False
+
 
 __all__ = [
     "Alerta",
@@ -319,9 +430,15 @@ __all__ = [
     "AuditarFichaResponse",
     "AvisoS5",
     "DivergenciaGabarito",
+    "FatoConferido",
     "ItemBalde1",
+    "ItemBalde1V3",
     "ItemBalde2",
+    "ItemBalde2V3",
     "MAX_CORRECAO_SUGERIDA",
+    "MAX_TRECHO_PROVA",
+    "ProvaDoc",
     "Reprovacao",
     "SaidaAuditor",
+    "SaidaAuditorV3",
 ]

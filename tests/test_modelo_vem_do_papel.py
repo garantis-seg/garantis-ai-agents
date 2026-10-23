@@ -14,10 +14,12 @@ import src.agents.apolice_lifecycle.agent as apolice_lifecycle
 import src.agents.auditor_evidencias.agent as auditor_evidencias
 import src.agents.auditor_evidencias.verificador as verificador
 import src.agents.auditor_ficha.agent as auditor_ficha
+import src.agents.auditor_ficha.agent_v3 as auditor_ficha_v3
 import src.agents.calculo_ficha.agent as calculo_ficha
 import src.agents.doc_indexer.ocr as doc_indexer_ocr
 import src.agents.doc_reader.agent as doc_reader
 import src.agents.ficha_writer.agent as ficha_writer
+import src.agents.ficha_writer.agent_v5 as ficha_writer_v5
 import src.agents.merito_synthesis.agent as merito_synthesis
 import src.agents.merito_synthesis.redacao as merito_redacao
 import src.agents.mov_factsheet.agent as mov_factsheet
@@ -37,6 +39,9 @@ _PAPEIS = [
     (qualificador_auditor, "ficha_auditoria_evidencias"),
     (ficha_writer, "ficha_redacao"),
     (auditor_ficha, "ficha_auditoria_texto"),
+    # 23/10/2026: o redator v5 e o auditor v3 (agentes) leem o MESMO papel do v4 e do v2
+    (ficha_writer_v5, "ficha_redacao"),
+    (auditor_ficha_v3, "ficha_auditoria_texto"),
     (mov_triage, "engine_layer1"),
     (mov_factsheet, "engine_layer1"),
     (processo_synthesis, "engine_layer2"),
