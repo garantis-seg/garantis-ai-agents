@@ -24,12 +24,17 @@ import src.agents.mov_factsheet.agent as mov_factsheet
 import src.agents.mov_triage.agent as mov_triage
 import src.agents.peticao_confirmador.agent as peticao_confirmador
 import src.agents.processo_synthesis.agent as processo_synthesis
+import src.agents.qualificador_conexo.agent as qualificador_conexo
+import src.agents.qualificador_conexo.auditor as qualificador_auditor
 import src.providers.gemini as provider_gemini
 
 _PAPEIS = [
     (calculo_ficha, "ficha_calculo"),
     (auditor_evidencias, "ficha_auditoria_evidencias"),
     (verificador, "ficha_auditoria_evidencias"),
+    # S2c (22/10/2026): papeis provisorios ate o Elton registrar os papeis proprios
+    (qualificador_conexo, "ficha_calculo"),
+    (qualificador_auditor, "ficha_auditoria_evidencias"),
     (ficha_writer, "ficha_redacao"),
     (auditor_ficha, "ficha_auditoria_texto"),
     (mov_triage, "engine_layer1"),
