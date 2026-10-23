@@ -17,7 +17,8 @@ relógio nem a rede.
 2. O Livro da Ficha de 19/10/2026 (carf-pipeline@8c53e87). O compilado não cobre a
    renovação de congênere (§5.4 e §6.2, de 10/09/2026). Este script escreve essa
    guidance a partir do Livro, em `_RENOVACAO_CONGENERE`.
-3. As decisões do Alfredo de 22/10/2026 (caderno do plano, Parte 7), em `_DECISOES`.
+3. As decisões do Alfredo de 22/10/2026 (caderno do plano, Parte 7) e de 23/10/2026
+   (diagnóstico da ficha Claro), em `_DECISOES`.
 4. O exemplar canônico IRB (lote `carf_esgotados_2026-09-23`) e o BRIEF-BUILDER de
    01/10/2026. Eles dão exemplos que já seguem a regra de zero cifra.
 
@@ -28,6 +29,10 @@ relógio nem a rede.
   `fonte="herdado_de:<chave>"`.
 - Aplica as decisões de 22/10/2026: bullets por tipo, resumo até 500 chars, zero
   cifra em `valor.descricao`, razão social completa, sem prêmio na renovação.
+- Aplica as decisões de 23/10/2026: o mérito da renovação e da EF traz a tese,
+  `divida_ativa.detalhe` deixa de ser slot (regra 26), `valor.descricao` com origem fixa
+  copia a descrição do esqueleto (regra 25), o bullet 2 da renovação lê o bloco
+  `renovacao` e o status da dívida fica fora do texto.
 - Descarta o exemplo que viola uma regra nova (`_viola`). O número de descartes fica
   em `exemplos_descartados`. Um exemplo velho que ensina o erro é pior que nenhum.
 
@@ -49,7 +54,7 @@ PASTA = RAIZ / "src" / "agents" / "ficha_writer"
 FONTE_PADRAO = PASTA / "livro_fonte" / "guidance-por-slot-tipo.json"
 SAIDA_PADRAO = PASTA / "livro_guidance.json"
 
-VERSAO = "2026-10-22"
+VERSAO = "2026-10-23"
 LIVRO_REF = "carf-pipeline@8c53e87 docs/livro-da-ficha/LIVRO-DA-FICHA.md (19/10/2026)"
 
 SLOTS: tuple[str, ...] = (
@@ -181,6 +186,15 @@ _DECISOES: list[str] = [
     "01/10/2026, BRIEF-BUILDER: ultima_decisao é o acórdão de mérito. A admissibilidade do "
     "recurso especial é da Presidência, não da Câmara Superior.",
     "28/09/2026: processo de outra empresa fica fora dos lugares que citam número.",
+    "23/10/2026 (Alfredo, ficha Claro): na renovação, merito.p1 é a tese em discussão e "
+    "merito.p2 é a garantia atual e a eficiência da renovação. Na nova apólice EF, p1 é a "
+    "tese e p2 é a situação da EF.",
+    "23/10/2026, regra 26: divida_ativa.detalhe deixa de ser slot. O status da dívida "
+    "(SERPRO) é fato do código e não vai ao texto.",
+    "23/10/2026, regra 25: com o valor de origem cda ou apolice_ou_fianca, valor.descricao "
+    "copia a descrição fixa do esqueleto, sem \"estimado\" nem \"pode variar\".",
+    "23/10/2026: o bullet 2 da renovação lê o bloco renovacao do esqueleto. Sem o bloco, "
+    "\"corretagem não identificada na base\". Nunca inventar corretor.",
 ]
 
 _GUIA_VALOR_DESCRICAO = (
@@ -189,6 +203,10 @@ _GUIA_VALOR_DESCRICAO = (
     "total. A 1ª frase diz o que o número é, em palavras (auto integral, saldo mantido, CDA "
     "consolidada, valor de referência). Depois diga a origem auditável (CDA, acórdão, "
     "posição datada) e o que o número não inclui. Sem memória de cálculo. "
+    "Regra 25 (23/10/2026): quando os FATOS FIXOS trazem valor.origem = cda ou "
+    "apolice_ou_fianca, o valor é exato e a descrição é fixa. Copie valor.descricao_fixa "
+    "dos FATOS FIXOS, letra por letra. Não acrescente \"valor estimado\" nem \"pode "
+    "variar\". "
 )
 
 #: A guidance de valor.descricao do compilado manda citar a composição em reais (R$,
@@ -255,11 +273,6 @@ _GUIA_EXTRA: dict[tuple[str, str], str] = {
         " Regra de 01/10/2026: o p2 não fecha com \"segue para cobrança\", \"inscrição\" ou "
         "\"execução\". O esgotamento aparece uma vez só no corpo."
     ),
-    ("nova_apolice@carf", "divida_ativa.detalhe"): (
-        " Regra de 01/10/2026: sem CDA, o detalhe é UMA frase de posição (\"Sem inscrição em "
-        "dívida ativa vinculada a este processo (posição de DD/MM/AAAA).\"). Nunca \"segue para "
-        "cobrança\"."
-    ),
     ("nova_apolice@carf", "bullets[0]"): (
         " Regra de 01/10/2026: o esgotamento aparece UMA vez, aqui, com a data."
     ),
@@ -267,6 +280,55 @@ _GUIA_EXTRA: dict[tuple[str, str], str] = {
         " Regra de 01/10/2026: quando a via já esgotou e não há evento futuro datado, o 4º "
         "bullet é um fato específico do caso, nunca um aviso genérico de cobrança."
     ),
+}
+
+#: Guidance que TROCA a do compilado (decisão de 23/10/2026, diagnóstico da ficha Claro).
+#: A guidance velha da EF mandava descrever a execução no p1. O Alfredo quer a tese.
+_GUIA_TESE_FONTES = (
+    "As fontes ficam no dossiê: premissas_v3, qualificacao_s2c e "
+    "documentos_indexados[].resumo."
+)
+_GUIA_CONEXO_CITAVEL = (
+    "Identifique cada processo citado pela classe (\"Ação Anulatória\", \"Embargos à "
+    "Execução Fiscal\", \"PA\"). Cite o número só se ele está na lista de PROCESSOS QUE O "
+    "TEXTO PODE CITAR."
+)
+_GUIA_TROCA: dict[tuple[str, str], str] = {
+    ("nova_apolice@ef", "merito.p1"): (
+        "P1 na EF = a TESE (decisão do Alfredo, 23/10/2026). A tese vem do processo "
+        "administrativo de origem da CDA: o tributo, a infração ou a autuação e o que o "
+        "contribuinte contestou. Diga onde a discussão correu ou corre (PA no CARF ou ação "
+        "conexa). " + _GUIA_TESE_FONTES + " A execução e a CDA entram só para situar, em uma "
+        "frase. " + _GUIA_CONEXO_CITAVEL + " Se o dossiê não traz a tese, diga o débito de "
+        "origem em palavras e não invente argumento [§1.3 · CON-01; §7 · S41]."
+    ),
+    ("nova_apolice@ef", "merito.p2"): (
+        "P2 na EF = a SITUAÇÃO DA EF (decisão do Alfredo, 23/10/2026): a marcha da execução "
+        "(citação, embargos, penhora, suspensão) e o estado da garantia, com datas. Situe a "
+        "oportunidade pela fase (antes da citação, antes da penhora), sem prazo numérico. O "
+        "status da dívida ativa não vai ao texto: é fato do código (regra 26). Achado judicial "
+        "só contradiz a ficha se o polo passivo é a empresa E o processo se vincula àquele "
+        "crédito [§8.3 · S19]."
+    ),
+}
+
+#: Trechos do compilado que a regra 26 (23/10/2026) derruba: o status da dívida não vai
+#: ao texto. O trecho sai da guidance e a proibição que o exigia sai da lista.
+_TRECHOS_REGRA_26: list[tuple[str, str]] = [
+    (", mais o status da dívida [§1.3 · CON-01].",
+     " [§1.3 · CON-01]. O status da dívida não vai ao texto (regra 26, 23/10/2026)."),
+]
+_PROIBICOES_REGRA_26 = {"apresentar a EF sem dizer o status da dívida", "omitir o status da dívida"}
+
+#: Exemplos que TROCAM os do compilado e os de `_EXEMPLOS_NOVOS` (23/10/2026).
+_MOLDE_2310 = "molde de 23/10/2026 (forma; os fatos são ilustrativos)"
+_EXEMPLOS_TROCA: dict[tuple[str, str], list[tuple[str, str]]] = {
+    ("nova_apolice@ef", "merito.p1"): [
+        ("A CDA em execução vem de auto de infração de CIDE sobre remessas ao exterior por "
+         "contratos de licença de software. A fiscalização entendeu que as remessas pagam "
+         "transferência de tecnologia. A empresa sustenta que a licença de uso não transfere "
+         "tecnologia e contestou o lançamento no CARF, que manteve a exigência; a discussão "
+         "segue na Ação Anulatória conexa.", _MOLDE_2310)],
 }
 
 #: Substituição: a decisão de 22/10/2026 permite 2 a 4 bullets. O compilado fecha o
@@ -339,9 +401,6 @@ _EXEMPLOS_NOVOS: dict[tuple[str, str], list[tuple[str, str]]] = {
          "garantidores e por maioria quanto às demais variações cambiais. O recurso especial à "
          "Câmara Superior não foi admitido em 01/09/2026, encerrando a via administrativa.",
          _IRB)],
-    ("nova_apolice@carf", "divida_ativa.detalhe"): [
-        ("Sem inscrição em dívida ativa vinculada a este processo (posição de 23/09/2026).",
-         _BRIEF)],
     ("nova_apolice@estadual", "valor.descricao"): [
         ("Saldo consolidado da CDA PGE-SP 1466040244 (inscrita em 16/06/2026, consulta de "
          "03/08/2026). Origem: creditamento indevido de ICMS, com multa e juros.", _ADAPTADO),
@@ -442,9 +501,9 @@ _RENOVACAO_CONGENERE: dict[str, tuple[str, list[tuple[str, str]], list[str]]] = 
     ),
     "ultima_ocorrencia.texto": (
         "O último andamento datado da execução ou da dívida garantida, sem interpretação "
-        "comercial.",
-        [("Registro da PGFN confirma as quatro inscrições ajuizadas e garantidas por seguro "
-          "garantia.", _AMPLA)],
+        "comercial. O status da dívida ativa não vai ao texto (regra 26, 23/10/2026).",
+        [("Fazenda impugnou os embargos em 14/07/2026; nenhum andamento posterior até a "
+          "posição de 05/08/2026.", _MOLDE_2310)],
         ["§4"],
     ),
     "bullets[0]": (
@@ -457,9 +516,12 @@ _RENOVACAO_CONGENERE: dict[str, tuple[str, list[tuple[str, str]], list[str]]] = 
         ["§6.2"],
     ),
     "bullets[1]": (
-        "BULLET 2 = a CORRETAGEM: quem entrou, quem saiu e desde quando. Corretor novo num "
+        "BULLET 2 = a CORRETAGEM: quem entrou, quem saiu e desde quando. A fonte é o bloco "
+        "renovacao dos FATOS FIXOS: corretores, seguradora e fim_vigencia (23/10/2026). A "
+        "taxa_fmt fica no bloco roxo, fora do texto (22/10/2026, item 7). Corretor novo num "
         "endosso recente costuma significar conta em disputa. Nome curto do corretor, sem "
-        "razão social (§5.4).",
+        "razão social (§5.4). Sem o bloco renovacao, ou com a lista de corretores vazia, "
+        "escreva \"Corretagem não identificada na base.\" Nunca invente corretor.",
         [("Corretor atual da conta: Toyota Tsusho, corretora do próprio grupo.", _TOYOTA)],
         ["§6.2", "§5.4"],
     ),
@@ -470,23 +532,32 @@ _RENOVACAO_CONGENERE: dict[str, tuple[str, list[tuple[str, str]], list[str]]] = 
           "garantia segue exigida nos autos.", _TOYOTA)],
         ["§6.2"],
     ),
+    # 23/10/2026 (Alfredo, ficha Claro: "a descrição não traz nenhuma substância sobre o
+    # mérito"): o mérito passa ao V2. A proibição de narrar conexos (§6.2, V1) sai daqui.
     "merito.p1": (
-        "P1 descreve a dívida, o juízo e a execução fiscal: o que a CDA cobra, contra quem, em "
-        "que vara, e como a garantia entrou nos autos. A V1 não narra os conexos: o número "
-        "deles fica no cabeçalho, identificado pela classe (§6.2).",
-        [("Execução fiscal da Fazenda do Espírito Santo (EF 5000452-46.2025.8.08.0099, Núcleo "
-          "de Justiça 4.0) cobrando a CDA 0000008920-25 contra a Toyota do Brasil. A garantia "
-          "foi constituída ainda em tutela cautelar antecedente, com apólice de seguro garantia "
-          "da Tokio Marine emitida em 24/09/2024 e aceita nos autos.", _TOYOTA)],
+        "P1 = a TESE em discussão (decisão do Alfredo, 23/10/2026). Diga o tributo, a "
+        "infração ou a autuação, o que o contribuinte contesta e onde ele contesta (PA no "
+        "CARF ou ação conexa). " + _GUIA_TESE_FONTES + " " + _GUIA_CONEXO_CITAVEL + " Se o "
+        "dossiê não traz a tese, diga o débito garantido em palavras e não invente argumento.",
+        [("A dívida garantida vem de auto de infração de IRPJ e CSLL de 2016 por glosa da "
+          "amortização de ágio de uma incorporação. A fiscalização entendeu que o ágio não tinha "
+          "propósito negocial. A empresa sustenta que a operação foi real e contesta a glosa no "
+          "PA, com recurso especial pendente na Câmara Superior do CARF.", _MOLDE_2310)],
         ["§6.2", "§7"],
     ),
     "merito.p2": (
-        "P2 descreve o estado da própria execução fiscal (suspensa, embargada, em curso), com "
-        "datas. Fatos, nunca veredito. A régua da V1 é uma só: a execução não está encerrada, "
-        "então a garantia segue exigida. Sem prêmio, limite, taxa ou janela de vencimento.",
-        [("A empresa opôs embargos, a Fazenda impugnou e a execução está suspensa desde "
-          "07/08/2026, à espera do julgamento dos embargos.", _TOYOTA)],
-        ["§6.2"],
+        "P2 = a GARANTIA ATUAL e a eficiência da renovação (decisão do Alfredo, 23/10/2026). "
+        "Diga a seguradora, a vigência e como a apólice entrou nos autos (em que execução ou "
+        "ação, aceita em que data). Depois diga por que renovar é eficiente: a Lei 13.043/2014 "
+        "pôs o seguro garantia no art. 9º da Lei 6.830/1980, com o mesmo efeito da penhora, e "
+        "a renovação mantém o débito garantido sem bloqueio de caixa. Fatos com datas, nunca "
+        "veredito. Sem prêmio, limite nem taxa. O status da dívida ativa não vai ao texto "
+        "(regra 26).",
+        [("A apólice da Tokio Marine, vigente até 24/09/2027, foi aceita nos autos da execução "
+          "fiscal em 15/10/2024. A Lei 13.043/2014 pôs o seguro garantia no art. 9º da Lei "
+          "6.830/1980, com o mesmo efeito da penhora: renovar antes do fim da vigência mantém "
+          "o débito garantido sem bloqueio de caixa.", _MOLDE_2310)],
+        ["§6.2", "§5.4"],
     ),
     "observacao": (
         "Default vazio. Só para fato atípico do caso que o leitor precisa saber e que nenhum "
@@ -494,13 +565,6 @@ _RENOVACAO_CONGENERE: dict[str, tuple[str, list[tuple[str, str]], list[str]]] = 
         [("A execução cobra também a multa moratória, discutida em ação própria do contribuinte.",
           "molde do Livro §7 (fato atípico, sem conexo narrado)")],
         ["§7"],
-    ),
-    "divida_ativa.detalhe": (
-        "A(s) CDA(s) garantida(s): número completo, órgão, situação (ativa ajuizada, garantida "
-        "por seguro garantia) e a execução que as cobra, com a classe e a data da posição.",
-        [("CDA 0000008920-25 (SEFAZ-ES), R$ 32.567.461,46, cobrada na execução fiscal "
-          "5000452-46.2025.8.08.0099 e garantida pela apólice Tokio Marine.", _TOYOTA)],
-        ["§5.4", "§8"],
     ),
 }
 
@@ -562,6 +626,10 @@ _RE_TEXTO_PROIBIDO: list[tuple[str, re.Pattern]] = [
 ]
 _RE_A56 = re.compile(r"R\$\s*\d[\d.,]*(?:\s*(?:mil|milh[ãõ]o|milh[õo]es|bilh[ãõ]o|bilh[õo]es)\b)?")
 _RE_RENOVACAO = re.compile(r"pr[êe]mio|\blimite\b|\bLMG\b|\btaxa\b", re.I)
+#: Espelha `RE_STATUS_DIVIDA` de `validacao.py` (regra 26, 23/10/2026).
+_RE_STATUS_DIVIDA = re.compile(
+    r"\b(ativa\s+ajuizada|ativa\s+n[aã]o\s+ajuizada|garantida\s+por\s+seguro|serpro|regularize)\b",
+    re.I)
 _RE_CARF_BRIEF = re.compile(r"n[ãa]o admitid[oa] pela C[âa]mara Superior|segue para cobran[çc]a", re.I)
 
 
@@ -572,6 +640,8 @@ def _viola(texto: str, slot: str, chave: str, max_chars: int) -> str | None:
     for nome, rx in _RE_TEXTO_PROIBIDO:
         if rx.search(texto):
             return nome
+    if _RE_STATUS_DIVIDA.search(texto):
+        return "regra 26: status da dívida no texto"
     if slot == "valor.descricao" and _RE_A56.search(texto):
         return "A56 cifra em valor.descricao"
     if chave.startswith("renovacao") and _RE_RENOVACAO.search(texto):
@@ -618,9 +688,17 @@ def _monta_slot(chave: str, slot: str, base: dict, origem: str) -> dict:
     proibicoes = list(base.get("proibicoes") or [])
     livro_ids = list(base.get("livro_ids") or [])
 
-    exemplos_brutos: list[tuple[str, str]] = list(_EXEMPLOS_NOVOS.get((chave, slot), []))
-    exemplos_brutos += [(e, "compilado:" + origem.split(":", 1)[-1])
-                        for e in base.get("exemplos_bons") or []]
+    if (chave, slot) in _GUIA_TROCA:
+        guidance = _GUIA_TROCA[(chave, slot)]
+    for velho, novo in _TRECHOS_REGRA_26:
+        guidance = guidance.replace(velho, novo)
+    proibicoes = [x for x in proibicoes if x not in _PROIBICOES_REGRA_26]
+    if (chave, slot) in _EXEMPLOS_TROCA:
+        exemplos_brutos = list(_EXEMPLOS_TROCA[(chave, slot)])
+    else:
+        exemplos_brutos = list(_EXEMPLOS_NOVOS.get((chave, slot), []))
+        exemplos_brutos += [(e, "compilado:" + origem.split(":", 1)[-1])
+                            for e in base.get("exemplos_bons") or []]
 
     obrigatorio = slot != "observacao"
     m = re.match(r"bullets\[(\d)\]", slot)
@@ -711,6 +789,30 @@ def _herda(gerado: dict, chave: str, origem_chave: str) -> dict:
     return slots
 
 
+#: Regra 26 (Alfredo, 23/10/2026): o shared não pede mais `divida_ativa.detalhe`. O
+#: código escreve o fato da dívida ativa. O slot fica no JSON com aplicavel=false: um
+#: shared velho que ainda mande o slot recebe o nome em `campos_nao_aplicaveis`, sem erro.
+_FONTE_REGRA_26 = "regra 26, 23/10/2026: fato do código"
+_SLOTS_FORA: dict[str, str] = {
+    "divida_ativa.detalhe": (
+        "Regra 26 (23/10/2026): o código escreve o fato da dívida ativa. O shared não pede "
+        "mais este slot."
+    ),
+}
+
+
+def _fecha_slots(tipos: dict[str, dict]) -> None:
+    for tipo in tipos.values():
+        for slot, motivo in _SLOTS_FORA.items():
+            velho = tipo["slots"][slot]
+            tipo["slots"][slot] = {
+                "aplicavel": False, "obrigatorio": False, "max": velho["max"],
+                "guidance": "", "exemplos": [], "exemplos_origem": [],
+                "exemplos_descartados": 0, "proibicoes": [], "livro_ids": [],
+                "fonte": _FONTE_REGRA_26, "motivo": motivo,
+            }
+
+
 def gerar(compilado: dict, sha256: str) -> dict:
     tipos: dict[str, dict] = {}
     # 1ª passada: compilado e Livro. 2ª passada: herdados (a origem já existe).
@@ -733,6 +835,7 @@ def gerar(compilado: dict, sha256: str) -> dict:
                             "bullets": {"min": _BULLETS[chave][0], "max": _BULLETS[chave][1]},
                             "slots": _herda(tipos, chave, origem_chave)}
     tipos = {chave: tipos[chave] for chave in _MAPA}  # ordem estável = ordem do _MAPA
+    _fecha_slots(tipos)
 
     variante: dict[str, dict] = {}
     for slot in SLOTS:

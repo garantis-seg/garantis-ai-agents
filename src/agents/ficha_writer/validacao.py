@@ -12,6 +12,11 @@ agente sabe conferir com o que recebeu:
 6. Nenhum número de processo fora dos citáveis (regra de 28/09/2026: processo de outra
    empresa fica fora dos lugares que citam número).
 7. Todo alerta tem UMA resposta `acatado|refutado`, com motivo.
+8. Status da dívida ativa (SERPRO) fora de todo slot (regra 26, 23/10/2026).
+9. `valor.descricao` com origem fixa (cda, apolice_ou_fianca) sem "estimad" nem "pode
+   variar" (regra 25, 23/10/2026).
+10. Renovação sem corretor no esqueleto: o `bullets[1]` diz "corretagem não identificada"
+    (23/10/2026). O agente nunca inventa corretor.
 
 As mensagens de `max` começam por `"<slot> > <max> chars"`, o mesmo prefixo de
 `contratos.validar_ficha`. Assim o `_ERRO_PARA_CAMPO` do shared continua a casar.
@@ -47,6 +52,23 @@ RE_PROCESSO = re.compile(
     r")(?![\d])"
 )
 
+#: Regra 26 (Alfredo, 23/10/2026): o status da dívida ativa é fato do código e não vai ao
+#: texto. Vale em TODO slot, como a regra da cifra vale em valor.descricao.
+RE_STATUS_DIVIDA = re.compile(
+    r"\b(ativa\s+ajuizada|ativa\s+n[aã]o\s+ajuizada|garantida\s+por\s+seguro|serpro|regularize)\b",
+    re.I)
+
+#: Regra 25 (Alfredo, 23/10/2026): com o valor de origem fixa, a descrição do valor não
+#: fala em estimativa.
+ORIGENS_VALOR_FIXO = frozenset({"cda", "apolice_ou_fianca"})
+RE_VALOR_VARIAVEL = re.compile(r"estimad|pode\s+variar", re.I)
+
+#: A frase do bullet 2 da renovação sem corretor no esqueleto (23/10/2026).
+FRASE_SEM_CORRETOR = "Corretagem não identificada na base."
+_RE_SEM_CORRETOR = re.compile(r"corretagem\s+n[ãa]o\s+identificada", re.I)
+SLOT_CORRETAGEM = "bullets[1]"
+AVISO_RENOVACAO_SEM_BLOCO = "renovacao_sem_bloco"
+
 _MAX_MOTIVO = 400
 
 
@@ -74,14 +96,51 @@ def processos_citaveis_brutos(req: FichaWriteFieldsRequest) -> list[str]:
     return list(dict.fromkeys(str(n).strip() for n in nums if so_digitos(n)))
 
 
+def origem_valor(req: FichaWriteFieldsRequest) -> Optional[str]:
+    e = req.esqueleto
+    return (e.valor.origem or None) if e is not None else None
+
+
+def bloco_renovacao(req: FichaWriteFieldsRequest) -> Optional[dict]:
+    """O bloco `renovacao` do esqueleto (fe-api, 23/10/2026), ou None."""
+    e = req.esqueleto
+    bloco = getattr(e, "renovacao", None) if e is not None else None
+    return bloco if isinstance(bloco, dict) else None
+
+
+def renovacao_sem_corretor(req: FichaWriteFieldsRequest, chave: Optional[str]) -> bool:
+    """Renovação sem bloco `renovacao`, ou com a lista de corretores vazia."""
+    if not (chave or "").startswith("renovacao"):
+        return False
+    bloco = bloco_renovacao(req)
+    return not (bloco and bloco.get("corretores"))
+
+
+def avisos(req: FichaWriteFieldsRequest, chave: Optional[str],
+           slots: Iterable[SlotResolvido]) -> list[str]:
+    """Os avisos do código para o caller. Aviso não reprova: ele diz o que faltou."""
+    out: list[str] = []
+    nomes = {s.nome for s in slots}
+    if ((chave or "").startswith("renovacao") and SLOT_CORRETAGEM in nomes
+            and bloco_renovacao(req) is None):
+        logger.warning("FICHA_WRITER_V4 %s: o esqueleto não traz o bloco renovacao",
+                       AVISO_RENOVACAO_SEM_BLOCO)
+        out.append(AVISO_RENOVACAO_SEM_BLOCO)
+    return out
+
+
 def processos_no_texto(texto: str) -> list[str]:
     return [m.group(0) for m in RE_PROCESSO.finditer(texto or "")]
 
 
 def validar_campos(
-    parsed: Any, slots: Iterable[SlotResolvido], citaveis: Optional[set[str]]
+    parsed: Any, slots: Iterable[SlotResolvido], citaveis: Optional[set[str]],
+    *, origem_valor: Optional[str] = None, sem_corretor: bool = False,
 ) -> tuple[dict[str, str], list[ErroDeCampo]]:
-    """(slots aprovados, erros). `citaveis=None` desliga a regra 6."""
+    """(slots aprovados, erros). `citaveis=None` desliga a regra 6.
+
+    `origem_valor` liga a regra 9. `sem_corretor=True` liga a regra 10.
+    """
     if not isinstance(parsed, dict):
         return {}, [ErroDeCampo(campo=CAMPO_SAIDA, erro="a saída não é um objeto JSON")]
     campos = parsed.get("campos")
@@ -107,7 +166,7 @@ def validar_campos(
                 f"{s.nome}: deveria ser string, veio {type(v).__name__}"), valor_anterior=v))
             continue
         v = v.strip()
-        erro = _erro_do_texto(s, v, citaveis)
+        erro = _erro_do_texto(s, v, citaveis, origem_valor, sem_corretor)
         if erro:
             erros.append(ErroDeCampo(campo=s.nome, erro=erro, valor_anterior=v))
         else:
@@ -115,7 +174,9 @@ def validar_campos(
     return ok, erros
 
 
-def _erro_do_texto(s: SlotResolvido, v: str, citaveis: Optional[set[str]]) -> Optional[str]:
+def _erro_do_texto(s: SlotResolvido, v: str, citaveis: Optional[set[str]],
+                   origem_valor: Optional[str] = None,
+                   sem_corretor: bool = False) -> Optional[str]:
     if not v:
         return f"{s.nome}: slot obrigatório vazio" if s.obrigatorio else None
     if len(v) > s.max:
@@ -125,6 +186,19 @@ def _erro_do_texto(s: SlotResolvido, v: str, citaveis: Optional[set[str]]) -> Op
         if m:
             return (f'valor.descricao: cifra no texto do box: "{m.group(0)}". O número fica só '
                     "no box: diga em palavras o que ele é (regra de 09/10/2026)")
+        if origem_valor in ORIGENS_VALOR_FIXO:
+            m = RE_VALOR_VARIAVEL.search(v)
+            if m:
+                return (f'valor.descricao: o valor de origem {origem_valor} é exato: "{m.group(0)}" '
+                        "não vai ao texto. Copie valor.descricao_fixa dos FATOS FIXOS, sem "
+                        '"estimado" nem "pode variar" (regra 25, 23/10/2026)')
+    m = RE_STATUS_DIVIDA.search(v)
+    if m:
+        return (f'{s.nome}: status da dívida não vai ao texto: regra 26 ("{m.group(0)}"). O '
+                "status é fato do código. Tire o trecho e mantenha o resto")
+    if sem_corretor and s.nome == SLOT_CORRETAGEM and not _RE_SEM_CORRETOR.search(v):
+        return (f"{s.nome}: o esqueleto não traz corretor. Escreva "
+                f'"{FRASE_SEM_CORRETOR}" e nunca invente corretor (23/10/2026)')
     if citaveis is not None:
         fora = [p for p in processos_no_texto(v) if so_digitos(p) not in citaveis]
         if fora:
@@ -173,10 +247,19 @@ def validar_alertas(
 
 
 __all__ = [
+    "AVISO_RENOVACAO_SEM_BLOCO",
     "CAMPO_ALERTAS",
     "CAMPO_SAIDA",
+    "FRASE_SEM_CORRETOR",
+    "ORIGENS_VALOR_FIXO",
     "RE_CIFRA",
     "RE_PROCESSO",
+    "RE_STATUS_DIVIDA",
+    "RE_VALOR_VARIAVEL",
+    "avisos",
+    "bloco_renovacao",
+    "origem_valor",
+    "renovacao_sem_corretor",
     "processos_citaveis",
     "processos_citaveis_brutos",
     "processos_no_texto",

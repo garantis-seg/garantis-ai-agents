@@ -22,7 +22,7 @@ from garantis_shared.llm_models import model_for
 from ...providers import create_provider
 from ...providers.base import LLMResponse
 from ...utils.llm_json import parse_llm_json
-from .livro import SlotResolvido, chave_livro, resolver_slots
+from .livro import SlotResolvido, chave_livro, motivos_nao_aplicaveis, resolver_slots
 from .prompts import PROMPT_VERSION, PROMPT_VERSION_V3, build_write_fields_prompt
 from .prompts_v4 import build_prompt_v4
 from .schemas import (
@@ -34,8 +34,11 @@ from .schemas import (
 )
 from .validacao import (
     CAMPO_ALERTAS,
+    avisos,
+    origem_valor,
     processos_citaveis,
     processos_citaveis_brutos,
+    renovacao_sem_corretor,
     validar_alertas,
     validar_campos,
 )
@@ -153,6 +156,10 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
             tipo_livro=chave,
         )
     slots, nao_aplicaveis = resolver_slots(request, campos_alvo)
+    motivos = motivos_nao_aplicaveis(chave, nao_aplicaveis)
+    avisos_req = avisos(request, chave, slots)
+    origem = origem_valor(request)
+    sem_corretor = renovacao_sem_corretor(request, chave)
     citaveis = processos_citaveis(request)
     citaveis_txt = processos_citaveis_brutos(request)
 
@@ -173,7 +180,8 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
     if not slots and not pendentes_alertas:
         return FichaWriteFieldsResponse(
             success=True, model=model, prompt_version=PROMPT_VERSION, tipo_livro=chave,
-            campos_nao_aplicaveis=nao_aplicaveis,
+            campos_nao_aplicaveis=nao_aplicaveis, motivos_nao_aplicaveis=motivos,
+            avisos=avisos_req,
         )
 
     llm_provider = create_provider(provider)
@@ -195,7 +203,8 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
             erros_retry = erros
             continue
 
-        ok, erros_campos = validar_campos(parsed, pendentes_slots, citaveis)
+        ok, erros_campos = validar_campos(parsed, pendentes_slots, citaveis,
+                                          origem_valor=origem, sem_corretor=sem_corretor)
         ok_alertas, erros_alertas = validar_alertas(parsed, pendentes_alertas)
         aprovados.update(ok)
         respondidos.update({a.codigo: a for a in ok_alertas})
@@ -219,7 +228,8 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
             error=f"validação falhou após {rodada} rodada(s): {resumo}",
             prompt_version=PROMPT_VERSION, tipo_livro=chave,
             alertas_respondidos=alertas_ordenados, erros=erros, rodadas=rodada,
-            campos_nao_aplicaveis=nao_aplicaveis,
+            campos_nao_aplicaveis=nao_aplicaveis, motivos_nao_aplicaveis=motivos,
+            avisos=avisos_req,
         )
     # Os slots ficam na ordem do request.
     campos = {s.nome: aprovados[s.nome] for s in slots if s.nome in aprovados}
@@ -227,7 +237,8 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
         success=True, campos=campos, model=used_model, cost_usd=round(cost_total, 6),
         prompt_version=PROMPT_VERSION, tipo_livro=chave,
         alertas_respondidos=alertas_ordenados, rodadas=rodada,
-        campos_nao_aplicaveis=nao_aplicaveis,
+        campos_nao_aplicaveis=nao_aplicaveis, motivos_nao_aplicaveis=motivos,
+        avisos=avisos_req,
     )
 
 

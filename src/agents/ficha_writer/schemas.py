@@ -238,3 +238,7 @@ class FichaWriteFieldsResponse(BaseModel):
     erros: list[ErroDeCampo] = Field(default_factory=list)
     rodadas: int = 0
     campos_nao_aplicaveis: list[str] = Field(default_factory=list)
+    #: slot -> motivo, para cada nome de `campos_nao_aplicaveis` (23/10/2026).
+    motivos_nao_aplicaveis: dict[str, str] = Field(default_factory=dict)
+    #: Avisos do código que não reprovam (ex.: `renovacao_sem_bloco`, 23/10/2026).
+    avisos: list[str] = Field(default_factory=list)

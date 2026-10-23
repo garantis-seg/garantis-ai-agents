@@ -417,6 +417,7 @@ from pathlib import Path  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
 
 from src.agents.ficha_writer import livro as livro_mod  # noqa: E402
+from src.agents.ficha_writer import validacao as validacao_mod  # noqa: E402
 from src.agents.ficha_writer.agent import MAX_RODADAS  # noqa: E402
 from src.agents.ficha_writer.prompts import PROMPT_VERSION, PROMPT_VERSION_V3  # noqa: E402
 from src.agents.ficha_writer.prompts_v4 import build_prompt_v4  # noqa: E402
@@ -771,6 +772,8 @@ def test_guidance_vendorizada_cobre_cada_chave_e_slot(chave):
             assert v["guidance"], (chave, slot)
             assert v["exemplos"], (chave, slot)
             assert all(len(e) <= v["max"] for e in v["exemplos"]), (chave, slot)
+        if slot == "divida_ativa.detalhe":  # regra 26 (23/10/2026): fechado em todo tipo
+            continue
         if chave not in ("nova_apolice@carf", "nova_apolice@estadual", "nova_apolice@ef",
                          "substituicao_fianca", "renovacao_congenere"):
             assert v["fonte"].startswith("herdado_de:"), (chave, slot)
@@ -813,3 +816,195 @@ def test_script_e_idempotente(tmp_path):
     subprocess.run(cmd, check=True)
     assert saida.read_bytes() == primeira
     assert primeira == (_RAIZ / "src/agents/ficha_writer/livro_guidance.json").read_bytes()
+
+
+# ── Decisões de 23/10/2026 (diagnóstico da ficha Claro) ───────────────────
+
+_RENOVACOES = ["renovacao_congenere", "renovacao_interna"]
+_EFS = ["nova_apolice@ef", "nova_apolice@acoes_contribuinte"]
+
+
+@pytest.mark.parametrize("chave", _RENOVACOES + _EFS)
+def test_merito_p1_traz_a_tese(chave):
+    """Item 1: o p1 da renovação e da EF é a tese, com as fontes do dossiê."""
+    p1 = livro_mod.carregar()["tipos"][chave]["slots"]["merito.p1"]
+    assert "TESE" in p1["guidance"]
+    for fonte in ("premissas_v3", "qualificacao_s2c", "documentos_indexados[].resumo"):
+        assert fonte in p1["guidance"], (chave, fonte)
+    assert "PROCESSOS QUE O TEXTO PODE CITAR" in p1["guidance"]
+    assert "não narra os conexos" not in p1["guidance"]
+    assert "23/10/2026" in p1["exemplos_origem"][0]
+
+
+@pytest.mark.parametrize("chave", _RENOVACOES)
+def test_merito_p2_da_renovacao_e_a_garantia_e_a_eficiencia(chave):
+    p2 = livro_mod.carregar()["tipos"][chave]["slots"]["merito.p2"]
+    assert "GARANTIA ATUAL" in p2["guidance"] and "Lei 13.043/2014" in p2["guidance"]
+    assert "Lei 13.043/2014" in p2["exemplos"][0]
+
+
+@pytest.mark.parametrize("chave", _EFS)
+def test_merito_p2_da_ef_e_a_situacao_da_ef(chave):
+    p2 = livro_mod.carregar()["tipos"][chave]["slots"]["merito.p2"]
+    assert "SITUAÇÃO DA EF" in p2["guidance"] and "regra 26" in p2["guidance"]
+
+
+def _v4_renovacao(campos, renovacao=..., **kw) -> dict:
+    esq = _esqueleto(tags=["renovacao"])
+    if renovacao is not ...:
+        esq["renovacao"] = renovacao
+    body = _v4_req(tipo_ficha="renovacao_congenere", trilho=None, alertas=[],
+                   campos=campos, esqueleto=esq)
+    body.update(kw)
+    return body
+
+
+def test_prompt_da_renovacao_pede_a_tese_no_merito():
+    p = _prompt_v4(_v4_renovacao([{"nome": "merito.p1", "max": 600},
+                                  {"nome": "merito.p2", "max": 600}]))
+    slots = p[p.index("=== SLOTS A ESCREVER"):p.index("=== FORMATO DA SAÍDA")]
+    assert "P1 = a TESE" in slots and "P2 = a GARANTIA ATUAL" in slots
+
+
+@pytest.mark.parametrize("chave", _CHAVES)
+def test_divida_ativa_detalhe_nao_e_mais_slot(chave):
+    """Item 2: regra 26. O slot fica fechado em todo tipo, sem guidance nem exemplo."""
+    v = livro_mod.carregar()["tipos"][chave]["slots"]["divida_ativa.detalhe"]
+    assert v["aplicavel"] is False and v["obrigatorio"] is False
+    assert v["guidance"] == "" and v["exemplos"] == []
+    assert v["fonte"] == "regra 26, 23/10/2026: fato do código"
+    assert "Regra 26" in v["motivo"]
+
+
+def test_divida_ativa_detalhe_do_shared_velho_volta_nao_aplicavel_com_motivo(monkeypatch):
+    body = _v4_req(alertas=[], campos=[{"nome": "bullets[0]", "max": 150},
+                                       {"nome": "divida_ativa.detalhe", "max": 200}])
+    out, prov = _roda(monkeypatch, body, [_saida({"bullets[0]": _BOM["bullets[0]"]}, alertas=[])])
+    assert out.success is True, out.error
+    assert out.campos_nao_aplicaveis == ["divida_ativa.detalhe"]
+    assert "Regra 26" in out.motivos_nao_aplicaveis["divida_ativa.detalhe"]
+    assert '"divida_ativa.detalhe"' not in prov.prompts[0]
+    assert "divida_ativa.detalhe" not in out.campos
+
+
+def test_divida_ativa_detalhe_sozinho_nao_chama_o_llm(monkeypatch):
+    body = _v4_req(alertas=[], campos=[{"nome": "divida_ativa.detalhe", "max": 200}])
+    out, prov = _roda(monkeypatch, body, [])
+    assert out.success is True and prov.prompts == []
+    assert out.campos_nao_aplicaveis == ["divida_ativa.detalhe"]
+    assert "divida_ativa.detalhe" in out.motivos_nao_aplicaveis
+
+
+_FIXA = "Soma das CDAs inscritas, conforme a PGFN."
+
+
+def _v4_origem(origem: str) -> dict:
+    body = _v4_req(alertas=[], campos=[{"nome": "valor.descricao", "max": 250}])
+    body["esqueleto"]["valor"].update(origem=origem, grau="exato", descricao=_FIXA)
+    return body
+
+
+@pytest.mark.parametrize("origem", ["cda", "apolice_ou_fianca"])
+def test_valor_de_origem_fixa_vai_ao_prompt_como_descricao_fixa(origem):
+    """Item 3: regra 25. A descrição fixa do esqueleto é fato fixo."""
+    p = _prompt_v4(_v4_origem(origem))
+    fatos = p[p.index(f"<fatos-{_TOKEN}>"):p.index(f"</fatos-{_TOKEN}>")]
+    assert '"descricao_fixa"' in fatos and _FIXA in fatos
+    assert "regra 25" in p
+
+
+def test_valor_calculado_nao_tem_descricao_fixa():
+    p = _prompt_v4(_v4_origem("calculado"))
+    assert _FIXA not in p and '"descricao_fixa"' not in p
+
+
+@pytest.mark.parametrize("origem", ["cda", "apolice_ou_fianca"])
+@pytest.mark.parametrize("ruim", ["Valor estimado das CDAs inscritas.",
+                                  "Soma das CDAs; o montante pode variar."])
+def test_valor_de_origem_fixa_sem_estimado_nem_pode_variar(monkeypatch, origem, ruim):
+    out, prov = _roda(monkeypatch, _v4_origem(origem), [
+        _saida({"valor.descricao": ruim}, alertas=[]),
+        _saida({"valor.descricao": _FIXA}, alertas=[]),
+    ])
+    assert out.success is True and out.rodadas == 2
+    assert out.campos["valor.descricao"] == _FIXA
+    assert "regra 25" in prov.prompts[1]
+
+
+def test_valor_calculado_pode_dizer_estimado(monkeypatch):
+    out, _ = _roda(monkeypatch, _v4_origem("calculado"),
+                   [_saida({"valor.descricao": "Valor estimado das CDAs."}, alertas=[])])
+    assert out.success is True
+
+
+def test_guidance_valor_descricao_traz_a_regra_25():
+    for chave, tipo in livro_mod.carregar()["tipos"].items():
+        assert "Regra 25" in tipo["slots"]["valor.descricao"]["guidance"], chave
+
+
+@pytest.mark.parametrize("chave", _RENOVACOES)
+def test_guidance_do_bullet_2_da_renovacao_le_o_bloco(chave):
+    """Item 4: o bullet 2 lê o bloco renovacao do esqueleto."""
+    g = livro_mod.carregar()["tipos"][chave]["slots"]["bullets[1]"]["guidance"]
+    for k in ("corretores", "seguradora", "fim_vigencia", "taxa_fmt"):
+        assert k in g, k
+    assert "Corretagem não identificada na base." in g and "Nunca invente corretor" in g
+
+
+def test_renovacao_sem_bloco_avisa_e_nao_aceita_corretor_inventado(monkeypatch):
+    body = _v4_renovacao([{"nome": "bullets[1]", "max": 150}])
+    out, prov = _roda(monkeypatch, body, [
+        _saida({"bullets[1]": "Corretor atual da conta: XYZ Corretora."}, alertas=[]),
+        _saida({"bullets[1]": "Corretagem não identificada na base."}, alertas=[]),
+    ])
+    assert out.success is True and out.rodadas == 2
+    assert out.avisos == ["renovacao_sem_bloco"]
+    assert "nunca invente corretor" in prov.prompts[1]
+
+
+def test_renovacao_com_bloco_vazio_tambem_nao_aceita_corretor(monkeypatch):
+    body = _v4_renovacao([{"nome": "bullets[1]", "max": 150}],
+                         renovacao={"seguradora": "Tokio Marine", "corretores": []})
+    out, _ = _roda(monkeypatch, body, [_saida({"bullets[1]": "Corretor: XYZ."}, alertas=[])] * 3)
+    assert out.success is False and out.avisos == []
+    assert "não traz corretor" in out.erros[0].erro
+
+
+def test_renovacao_com_bloco_vai_ao_prompt_e_nao_avisa(monkeypatch):
+    bloco = {"corretores": ["Toyota Tsusho"], "seguradora": "Tokio Marine",
+             "fim_vigencia": "24/09/2027", "taxa_fmt": "0,35% a.a."}
+    body = _v4_renovacao([{"nome": "bullets[1]", "max": 150}], renovacao=bloco)
+    out, prov = _roda(monkeypatch, body,
+                      [_saida({"bullets[1]": "Corretor atual: Toyota Tsusho."}, alertas=[])])
+    assert out.success is True and out.avisos == []
+    fatos = prov.prompts[0][prov.prompts[0].index("=== FATOS FIXOS"):]
+    assert "Toyota Tsusho" in fatos and "fim_vigencia" in fatos
+
+
+def test_aviso_so_quando_o_bullet_2_e_pedido(monkeypatch):
+    body = _v4_renovacao([{"nome": "bullets[0]", "max": 150}])
+    out, _ = _roda(monkeypatch, body, [_saida({"bullets[0]": "Apólice emitida em 2024."}, alertas=[])])
+    assert out.success is True and out.avisos == []
+
+
+@pytest.mark.parametrize("slot", ["bullets[0]", "valor.descricao"])
+@pytest.mark.parametrize("trecho", ["ATIVA AJUIZADA", "ativa não ajuizada",
+                                    "garantida por seguro garantia", "consulta ao Serpro",
+                                    "a empresa regularize"])
+def test_status_do_serpro_reprova_em_todo_slot(monkeypatch, slot, trecho):
+    """Item 5: regra 26. O status da dívida não vai ao texto, em nenhum slot."""
+    ruim = dict(_BOM, **{slot: f"Texto com {trecho} no meio."})
+    out, prov = _roda(monkeypatch, _v4_req(), [_saida(ruim)] * MAX_RODADAS)
+    assert out.success is False
+    [erro] = out.erros
+    assert erro.campo == slot
+    assert "status da dívida não vai ao texto: regra 26" in erro.erro
+    assert "CORREÇÃO OBRIGATÓRIA" in prov.prompts[1]
+
+
+def test_status_da_divida_nao_aparece_em_guidance_nem_exemplo():
+    rx = validacao_mod.RE_STATUS_DIVIDA
+    for chave, tipo in livro_mod.carregar()["tipos"].items():
+        for slot, v in tipo["slots"].items():
+            for texto in [v["guidance"], *v["exemplos"]]:
+                assert not rx.search(texto), (chave, slot, texto[:80])

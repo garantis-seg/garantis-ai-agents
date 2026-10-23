@@ -28,7 +28,7 @@ exceção é o `esqueleto`: ele aceita chave nova, porque é a ficha inteira.
 | `tipo_ficha` | um dos 7 tipos do shared | Tipo da S2. `indefinido` dá 422 |
 | `tipo_livro` | chave do Livro (opcional) | Ausente: o agente usa `nova_apolice@<trilho>` ou o próprio `tipo_ficha` |
 | `trilho` | `carf`, `estadual`, `ef`, `acoes_contribuinte` | Obrigatório na nova apólice sem `tipo_livro` |
-| `esqueleto` | objeto | A ficha determinística: `empresa`, `cnpj`, `processo_id`, `pipeline[]`, `etapa_atual`, `valor{garantia, garantia_fmt, grau, origem, label}`, `termometro`, `tags`, `divida_ativa`, `ultima_decisao`, `processo_judicial` e outros blocos |
+| `esqueleto` | objeto | A ficha determinística: `empresa`, `cnpj`, `processo_id`, `pipeline[]`, `etapa_atual`, `valor{garantia, garantia_fmt, grau, origem, label, descricao}`, `termometro`, `tags`, `divida_ativa`, `ultima_decisao`, `processo_judicial`, `renovacao{corretores, seguradora, fim_vigencia, taxa_fmt}` e outros blocos |
 | `dossie` | texto ou objeto | Os fatos, já filtrados pelo shared |
 | `campos[]` | `CampoSpec` | `nome`, `path`, `max`, `obrigatorio`, `guidance`, `exemplos`, `proibicoes` |
 | `alertas[]` | `{codigo, texto}` | Os fatos que o código detectou. Código único por request |
@@ -49,7 +49,9 @@ sempre o do request, porque a S5 valida esse número.
   "alertas_respondidos": [{"codigo": "valor_estimado", "resposta": "acatado", "motivo": "..."}],
   "erros": [],
   "rodadas": 1,
-  "campos_nao_aplicaveis": [],
+  "campos_nao_aplicaveis": ["divida_ativa.detalhe"],
+  "motivos_nao_aplicaveis": {"divida_ativa.detalhe": "Regra 26 (23/10/2026): ..."},
+  "avisos": [],
   "tipo_livro": "nova_apolice@carf",
   "prompt_version": "ficha_writer_v4",
   "model": "...",
@@ -60,7 +62,13 @@ sempre o do request, porque a S5 valida esse número.
 
 - `campos` traz os slots aprovados, na ordem do request.
 - `campos_nao_aplicaveis` lista o slot pedido que o Livro fecha para o tipo (exemplo:
-  `bullets[3]` na renovação). Esse slot não vai ao LLM.
+  `bullets[3]` na renovação). Esse slot não vai ao LLM. Não é erro.
+- `motivos_nao_aplicaveis` diz o motivo de cada um desses slots (desde 23/10/2026).
+  Exemplo: um shared velho que ainda pede `divida_ativa.detalhe` recebe o motivo da
+  regra 26.
+- `avisos` lista o que faltou no request e não reprova. Hoje existe 1 aviso:
+  `renovacao_sem_bloco`, quando a renovação pede o `bullets[1]` e o esqueleto não traz o
+  bloco `renovacao` (desde 23/10/2026).
 - Em falha depois de 3 rodadas: `success=false`, `erros[]` no formato
   `{campo, erro, valor_anterior}` e `error` com o resumo. O caller não injeta nada.
 
@@ -78,6 +86,9 @@ só para o slot que reprovou.
 | Zero cifra `R$` em `valor.descricao` | 09/10/2026 | `valor.descricao: cifra no texto do box` |
 | Nenhum número de processo fora dos citáveis | 28/09/2026 | `<slot>: cita processo fora dos permitidos` |
 | Todo alerta tem UMA resposta `acatado` ou `refutado`, com motivo | 22/10/2026 | `alerta '<codigo>' sem resposta válida` |
+| Status da dívida ativa fora de TODO slot (regra 26) | 23/10/2026 | `<slot>: status da dívida não vai ao texto: regra 26` |
+| `valor.descricao` com origem `cda` ou `apolice_ou_fianca` sem "estimad" nem "pode variar" (regra 25) | 23/10/2026 | `valor.descricao: o valor de origem <origem> é exato` |
+| Renovação sem corretor no esqueleto: o `bullets[1]` diz "Corretagem não identificada na base." | 23/10/2026 | `bullets[1]: o esqueleto não traz corretor` |
 
 Notas:
 
@@ -88,6 +99,13 @@ Notas:
   `processos_judiciais[].numero` do esqueleto. A comparação usa só os dígitos. O regex
   pega CNJ (20 dígitos) e processo administrativo federal (15 ou 17 dígitos). Número de
   acórdão, CDA e AIIM não entram.
+- Regra 26: o regex é
+  `\b(ativa\s+ajuizada|ativa\s+n[aã]o\s+ajuizada|garantida\s+por\s+seguro|serpro|regularize)\b`,
+  sem diferença de maiúscula. O status da dívida é fato do código.
+- Regra 25: com o valor de origem `cda` ou `apolice_ou_fianca`, o prompt mostra
+  `valor.descricao` do esqueleto como `valor.descricao_fixa`, nos fatos fixos. O slot
+  copia esse texto. Sem o slot no request, nada muda.
+- "Sem corretor" = sem o bloco `renovacao` ou com `renovacao.corretores` vazio.
 - Limite conhecido: o validador não lê sentido. Um texto que contradiz o valor sem cifra
   passa aqui. Quem pega esse erro é a auditoria cega (S6).
 
@@ -127,7 +145,21 @@ não se aplica ao tipo.
 | `merito.p1` | obr · 600 · C | obr · 600 · C | obr · 600 · C | obr · 600 · H | obr · 600 · C | obr · 600 · H | obr · 600 · H | obr · 600 · L | obr · 600 · H |
 | `merito.p2` | obr · 600 · C | obr · 600 · C | obr · 600 · C | obr · 600 · H | obr · 600 · C | obr · 600 · H | obr · 600 · H | obr · 600 · L | obr · 600 · H |
 | `observacao` | opc · 250 · C | opc · 250 · C | opc · 250 · C | opc · 250 · H | opc · 250 · C | opc · 250 · H | opc · 250 · H | opc · 250 · L | opc · 250 · H |
-| `divida_ativa.detalhe` | obr · 200 · C | obr · 200 · C | obr · 200 · C | obr · 200 · H | obr · 200 · C | obr · 200 · H | obr · 200 · H | obr · 200 · L | obr · 200 · H |
+| `divida_ativa.detalhe` | não · R26 | não · R26 | não · R26 | não · R26 | não · R26 | não · R26 | não · R26 | não · R26 | não · R26 |
+
+`R26`: a regra 26 (23/10/2026) fecha o slot em todo tipo. O campo `fonte` diz
+`regra 26, 23/10/2026: fato do código`.
+
+O mérito por tipo (23/10/2026):
+
+| Tipo | `merito.p1` | `merito.p2` |
+|---|---|---|
+| `renovacao_congenere`, `renovacao_interna` | A tese em discussão: tributo, infração, o que o contribuinte contesta e onde (PA no CARF ou ação conexa) | A garantia atual (seguradora, vigência, como entrou nos autos) e a eficiência da renovação (Lei 13.043/2014) |
+| `nova_apolice@ef`, `nova_apolice@acoes_contribuinte` | A tese, do processo administrativo de origem | A situação da EF |
+| Outros | Sem mudança | Sem mudança |
+
+A tese vem do dossiê: `premissas_v3`, `qualificacao_s2c` e `documentos_indexados[].resumo`.
+Cada processo citado leva a classe. O número entra só se está em `processos_citaveis`.
 
 Herdados: `nova_apolice@acoes_contribuinte` vem de `nova_apolice@ef`.
 `substituicao_deposito` e `substituicao_penhora` vêm de `substituicao_fianca`
@@ -151,7 +183,7 @@ python scripts/gerar_livro_guidance.py
 ```
 
 Não edite o JSON à mão. O teste `test_guidance_vendorizada_bate_com_o_script` reprova
-um JSON que não sai do script. O script aplica as decisões de 22/10/2026:
+um JSON que não sai do script. O script aplica as decisões de 22/10/2026 e de 23/10/2026:
 
 1. Bullets por tipo: nova apólice 4, substituição 2 a 4, renovação 3.
 2. `processo_administrativo.resumo` até 500 chars (item 5).
@@ -160,9 +192,15 @@ um JSON que não sai do script. O script aplica as decisões de 22/10/2026:
 4. Razão social completa (item 8).
 5. Renovação sem prêmio, limite nem taxa no texto (item 7).
 6. As regras de 01/10/2026 do BRIEF-BUILDER no trilho CARF.
+7. O mérito da renovação e da EF traz a tese (23/10/2026). A proibição de narrar conexos
+   (Livro §6.2, V1) sai do mérito da renovação.
+8. `divida_ativa.detalhe` fechado em todo tipo (regra 26, 23/10/2026). O trecho do
+   compilado que pedia o status da dívida sai da guidance da EF.
+9. `valor.descricao` com origem fixa copia a descrição do esqueleto (regra 25, 23/10/2026).
+10. O bullet 2 da renovação lê o bloco `renovacao` (23/10/2026).
 
 O script descarta o exemplo que viola uma regra nova (os regex A28 a A30 e A50 a A56 da
-S5). O número de descartes fica em `exemplos_descartados`.
+S5, e o regex da regra 26). O número de descartes fica em `exemplos_descartados`.
 
 ## Prompt v4
 
@@ -276,10 +314,13 @@ AS 10 REGRAS DO CONSTRUTOR (não negociáveis):
 9. Os nomes das etapas são os dos FATOS FIXOS. A instância, a turma e o acórdão vão no texto, nunca como etapa nova. A admissibilidade do recurso especial é da Presidência da Câmara (ou da Presidência da CSRF, no agravo): escreva "à Câmara Superior", nunca "não admitido pela Câmara Superior".
 10. Nunca cite dificuldade NOSSA de obter dados ("não localizado", "documentos não disponíveis", "a apurar"). Escreva o fato pelo processo: "não consta das informações processuais públicas", "será conhecido com a publicação do acórdão".
 
-DECISÕES DO ALFREDO (22/10/2026 e anteriores):
+DECISÕES DO ALFREDO (23/10/2026 e anteriores):
 - valor.descricao: ZERO cifra. Nada de "R$", faixa ou segundo total. O box mostra um número só (09/10/2026).
 - Empresa: a razão social completa, como está nos FATOS FIXOS (item 8).
 - Renovação: o texto nunca cita prêmio, limite (LMG) nem taxa (item 7).
+- Status da dívida ativa fica FORA do texto, em todo slot: nada de "ativa ajuizada", "ativa não ajuizada", "garantida por seguro", "SERPRO" ou "regularize". O status é fato do código (regra 26, 23/10/2026).
+- valor.descricao com valor.origem = cda ou apolice_ou_fianca: copie valor.descricao_fixa dos FATOS FIXOS, sem "estimado" nem "pode variar" (regra 25, 23/10/2026).
+- Renovação sem corretor no bloco renovacao dos FATOS FIXOS: o bullets[1] diz "Corretagem não identificada na base." Nunca invente corretor (23/10/2026).
 - Processo de outra empresa, ou fora da lista de citáveis, não aparece pelo número (28/09/2026).
 - Nunca afirme absoluto sobre o mundo do cliente: "apólice não identificada em consulta pública de DD/MM/AAAA", nunca "o cliente não tem apólice".
 - Nunca cite encanamento interno: engine, watchlist, snapshot, sistema, pipeline, score, modelo, nomes de fornecedor ou de base.
@@ -315,6 +356,20 @@ LIÇÕES VIVAS DESTA ETAPA:
 | 3 rodadas internas | O erro mecânico volta ao LLM sem sair do agente (plano, S4) | 22/10/2026 |
 | Persona e as 10 regras do PROMPT-CONSTRUTOR | O prompt local é o que produz as fichas aprovadas | 22/10/2026 |
 | Lições vivas no prompt | Toda reprovação vira lição, e a lição alimenta o prompt (plano, Parte 1.3) | 21/10/2026 |
+
+## O que mudou em 23/10/2026, e por quê
+
+Fonte: o diagnóstico da ficha Claro (23/10/2026), achados 2 e 4.
+
+| Mudança | Por quê |
+|---|---|
+| O mérito da renovação traz a tese (p1) e a garantia atual com a eficiência da renovação (p2) | O Alfredo: "a descrição não traz nenhuma substância sobre o mérito". A guidance V1 (§6.2) proibia narrar os conexos |
+| O mérito da nova apólice EF traz a tese (p1) e a situação da EF (p2) | A mesma falta de substância. A tese vem do PA de origem |
+| `divida_ativa.detalhe` deixa de ser slot | Regra 26: o status da dívida é fato do código. O shared não pede mais o slot |
+| Status do SERPRO barrado em todo slot, no código | Regra 26. O texto copiava o status "ATIVA AJUIZADA - GARANTIA - SEGURO GARANTIA" |
+| `valor.descricao` de origem fixa copia a descrição do esqueleto | Regra 25: um valor de CDA ou de apólice é exato. "Estimado" e "pode variar" contradizem o box |
+| O bullet 2 da renovação lê o bloco `renovacao`. Sem o bloco, o aviso `renovacao_sem_bloco` | O texto não pode inventar corretor |
+| `motivos_nao_aplicaveis` e `avisos` na saída | O caller sabe por que um slot não voltou e o que faltou no request |
 
 ## Testes
 
