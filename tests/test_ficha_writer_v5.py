@@ -325,15 +325,16 @@ def test_2c_bullet_opcional_vazio_nao_exige_trilha(monkeypatch):
 @pytest.mark.parametrize(("item", "trecho_do_erro"), [
     ({"doc_id": "carf:nao-existe.pdf", "paginas": [], "trecho_apoio": "x"},
      "fora do núcleo e do índice"),
-    ({"doc_id": "carf:impugnacao.pdf", "paginas": [1],
-      "trecho_apoio": "Impugnação ao auto de infração de PIS."}, "não foi lido na fase A"),
+    # 23/10/2026: o código abre o documento não lido. Sem conteúdo indexado, reprova.
+    ({"doc_id": "carf:anexo.pdf", "paginas": [1], "trecho_apoio": "Anexo."},
+     "não foi lido na fase A, e o código não consegue abrir"),
     ({"doc_id": "carf:recurso.pdf", "paginas": [2],
       "trecho_apoio": "O recurso especial foi admitido."}, "não está, literal"),
-    ({"doc_id": "carf:recurso.pdf", "paginas": [9], "trecho_apoio": _TRECHO_RECURSO},
+    ({"doc_id": "carf:recurso.pdf", "paginas": [9], "trecho_apoio": "Trecho inventado."},
      "página que não existe"),
     ({"doc_id": "carf:acordao.pdf", "paginas": [],
       "trecho_apoio": "O CARF cancelou a exigência."}, "não está, literal"),
-], ids=["fora_do_indice", "nao_lido", "trecho_inventado", "pagina_inexistente",
+], ids=["fora_do_indice", "nao_lido_ilegivel", "trecho_inventado", "pagina_inexistente",
         "trecho_fora_do_nucleo"])
 def test_3_trilha_invalida_e_erro_do_slot(monkeypatch, item, trecho_do_erro):
     ruim = _emissao(trilha=[_trilha_ok()[0], {"slot": "bullets[0]", **item}])
@@ -608,3 +609,159 @@ def test_8d_o_prompt_leva_cdas_e_metadados_legiveis():
 def test_8e_cdas_em_lista_continua_valendo():
     n = Nucleo.model_validate({"cdas": [{"numero": "8061900012345", "valor": 10.0}]})
     assert ferr_mod.cdas_legiveis(n.cdas) == ["CDA 1: numero: 8061900012345; valor: 10.0"]
+
+
+
+# ── (9) determinismo máximo: o código conserta antes de reprovar (23/10/2026) ──
+#
+# Rodada real de 23/10/2026 (executor v2 do shared 1.827, ai-agents rev 00411):
+# IRB perdeu 3 rodadas por `trecho_apoio` acima de 200 caracteres; Claro citou 2
+# vezes um documento que a fase A não leu e saiu com 4 slots vazios.
+
+_LONGO_NUCLEO = (
+    _ACORDAO + " O relator votou pela manutenção integral do lançamento, com base na "
+    "jurisprudência da turma sobre a receita financeira das instituições."
+)
+
+
+def _nucleo_longo() -> dict:
+    n = _nucleo()
+    n["acordaos"] = [{"processo": "16327.721182/2019-21", "doc_id": "carf:acordao.pdf",
+                      "texto": _LONGO_NUCLEO}]
+    n["ultima_decisao"] = {"doc_id": "carf:acordao.pdf", "texto": _LONGO_NUCLEO}
+    return n
+
+
+def test_9a_cortar_trecho_no_fim_de_palavra():
+    from src.agents.ficha_writer.ferramentas import cortar_trecho
+
+    assert cortar_trecho("curto", 200) == "curto"
+    t = "palavra " * 40
+    c = cortar_trecho(t, 200)
+    assert len(c) <= 200 and t.startswith(c) and c.endswith("palavra")
+    assert cortar_trecho("a ... b" + "x" * 300, 4) == "a"     # sem "..." solto no fim
+    assert cortar_trecho(None, 200) is None                    # o schema dá o erro
+
+
+def test_9b_trecho_acima_de_200_e_cortado_e_aceito(monkeypatch):
+    """IRB: o modelo copiou o acórdão inteiro do núcleo. O código corta e aceita."""
+    assert len(_LONGO_NUCLEO) > 200
+    t = [{"slot": "merito.p1", "doc_id": "carf:acordao.pdf", "paginas": [],
+          "trecho_apoio": _LONGO_NUCLEO}, _trilha_ok()[1]]
+    prov = _Prov(_leituras(), [_emissao(trilha=t)])
+    r = _rodar(prov, monkeypatch, body=_body(nucleo=_nucleo_longo()))
+    assert r.success, r.erros
+    assert r.rodadas == 1
+    trecho = r.trilha_leitura[0].trecho_apoio
+    assert len(trecho) <= 200 and _LONGO_NUCLEO.startswith(trecho)
+    assert _LONGO_NUCLEO[len(trecho)] == " "                  # fim de palavra
+
+
+def test_9c_prefixo_de_120_caracteres_basta(monkeypatch):
+    trecho = _ACORDAO[:130] + " e o resto foi parafraseado"
+    t = [{"slot": "merito.p1", "doc_id": "carf:acordao.pdf", "paginas": [],
+          "trecho_apoio": trecho}, _trilha_ok()[1]]
+    prov = _Prov(_leituras(), [_emissao(trilha=t)])
+    assert _rodar(prov, monkeypatch).success
+    # Abaixo de 120 caracteres certos, o prefixo não casa.
+    ruim = [{**t[0], "trecho_apoio": _ACORDAO[:60] + " e o resto foi parafraseado"}, t[1]]
+    prov = _Prov(_leituras(), [_emissao(trilha=ruim)])
+    r = _rodar(prov, monkeypatch)
+    assert r.success is False and "não está, literal" in r.erros[0].erro
+
+
+@pytest.mark.parametrize(("paginas", "esperado"), [
+    (None, [2]), ([], [2]), ([1], [2]), ([9], [2]), (2, [2]),
+], ids=["nula", "vazia", "errada", "inexistente", "inteiro"])
+def test_9d_o_codigo_acha_a_pagina_do_documento_do_indice(monkeypatch, paginas, esperado):
+    t = [_trilha_ok()[0], {"slot": "bullets[0]", "doc_id": "carf:recurso.pdf",
+                           "paginas": paginas, "trecho_apoio": _TRECHO_RECURSO}]
+    prov = _Prov(_leituras(), [_emissao(trilha=t)])
+    r = _rodar(prov, monkeypatch)
+    assert r.success, r.erros
+    assert r.trilha_leitura[1].paginas == esperado
+
+
+def test_9e_paginas_opcional_no_documento_do_nucleo(monkeypatch):
+    t = [{"slot": "merito.p1", "doc_id": "carf:acordao.pdf", "paginas": None,
+          "trecho_apoio": _TRECHO_NUCLEO},
+         {"slot": "bullets[0]", "doc_id": "carf:acordao.pdf", "paginas": [7],
+          "trecho_apoio": "Sessão de 17/06/2026."}]
+    prov = _Prov([_FIM], [_emissao(trilha=t)])
+    r = _rodar(prov, monkeypatch)
+    assert r.success, r.erros
+    assert r.trilha_leitura[0].paginas == []
+
+
+def test_9f_documento_nao_lido_o_codigo_abre_e_aceita(monkeypatch):
+    """Claro: o modelo citou um documento que a fase A não leu. O código abre o
+    documento, acha o trecho e aceita. O aviso registra a verificação."""
+    t = [_trilha_ok()[0], {"slot": "bullets[0]", "doc_id": "carf:impugnacao.pdf",
+                           "paginas": [], "trecho_apoio": "Impugnação ao auto de infração"}]
+    prov = _Prov([_FIM], [_emissao(trilha=t)])
+    r = _rodar(prov, monkeypatch)
+    assert r.success, r.erros
+    assert r.documentos_lidos == []                         # a fase A não leu
+    assert r.trilha_leitura[1].doc_id == "carf:impugnacao.pdf"
+    assert r.trilha_leitura[1].paginas == [1]
+    assert any(a.startswith("verificado_pelo_codigo: bullets[0]") and
+               "carf:impugnacao.pdf" in a for a in r.avisos)
+
+
+def test_9g_documento_nao_lido_sem_achar_da_a_lista_de_citaveis(monkeypatch):
+    t = [_trilha_ok()[0], {"slot": "bullets[0]", "doc_id": "carf:impugnacao.pdf",
+                           "paginas": [], "trecho_apoio": "O REsp foi provido."}]
+    prov = _Prov(_leituras(), [_emissao(trilha=t), _emissao()])
+    r = _rodar(prov, monkeypatch)
+    assert r.success and r.rodadas == 2
+    retry = prov.prompts("B")[1]
+    assert "o código abriu o documento, e o trecho não está nele" in retry
+    assert 'Cite só documentos desta lista: ["carf:acordao.pdf", "carf:recurso.pdf"]' in retry
+    # O prompt repete a lista num bloco próprio, na 1ª rodada e no retry.
+    for p in prov.prompts("B"):
+        assert ('DOCUMENTOS QUE VOCÊ PODE CITAR NA TRILHA ===\nCite só estes doc_id (o '
+                'núcleo e o que você leu com as ferramentas):\n'
+                '["carf:acordao.pdf", "carf:recurso.pdf"]') in p
+
+
+def test_9h_budget_de_verificacao_de_5_documentos_por_ficha():
+    from src.agents.ficha_writer.ferramentas import MAX_VERIFICACOES, Autos
+
+    assert MAX_VERIFICACOES == 5
+    req = FichaWriteFieldsRequest(**_body())
+    autos = Autos(req.nucleo, req.indice_navegavel, max_verificacoes=1)
+    ok = autos.verificar("carf:impugnacao.pdf", [], "Impugnação ao auto de infração de PIS.")
+    assert ok.erro is None and ok.verificado_pelo_codigo
+    # O mesmo documento não gasta o budget de novo.
+    assert autos.verificar("carf:impugnacao.pdf", [1], "auto de infração").erro is None
+    sem = autos.verificar("carf:recurso.pdf", [2], _TRECHO_RECURSO)
+    assert "o código já abriu 1 documentos" in sem.erro
+    assert "Cite só documentos desta lista" in sem.erro
+    assert autos.lidos == set()                             # a fase A não muda
+
+
+def test_9i_slot_vazio_na_ultima_rodada_diz_o_motivo_anterior(monkeypatch):
+    """Claro: os 4 slots vazios saíram com erro genérico. Agora o erro diz o slot e
+    o motivo da rodada anterior."""
+    r1 = _emissao(trilha=[{"slot": "merito.p1", "doc_id": "carf:anexo.pdf", "paginas": [],
+                           "trecho_apoio": "Anexo."}, _trilha_ok()[1]])
+    vazio = _emissao(campos={"merito.p1": ""}, trilha=[], alertas=[])
+    prov = _Prov(_leituras(), [r1, vazio, vazio])
+    r = _rodar(prov, monkeypatch)
+    assert r.success is False and r.rodadas == 3
+    [e] = r.erros
+    assert e.campo == "merito.p1"
+    assert e.erro.startswith("merito.p1: slot obrigatório vazio na rodada 3.")
+    assert "Motivo da rodada anterior: merito.p1: trilha_leitura:" in e.erro
+    assert "carf:anexo.pdf" in e.erro
+    assert "Motivo da rodada anterior" in prov.prompts("B")[2]
+
+
+def test_9j_slot_vazio_usa_o_motivo_que_veio_do_shared(monkeypatch):
+    body = _body(campos_com_erro=[{"nome": "merito.p1", "erro": "S5: tese sem documento",
+                                   "valor_anterior": "x"}])
+    vazio = _emissao(campos={**_CAMPOS, "merito.p1": ""}, trilha=[_trilha_ok()[1]])
+    prov = _Prov(_leituras(), [vazio])
+    r = _rodar(prov, monkeypatch, body=body)
+    erro = {e.campo: e.erro for e in r.erros}["merito.p1"]
+    assert "Motivo da rodada anterior: S5: tese sem documento" in erro
