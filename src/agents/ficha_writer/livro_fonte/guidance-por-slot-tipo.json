@@ -1,0 +1,867 @@
+{
+  "_meta": {
+    "artefato": "guidance-por-slot-tipo",
+    "versao": "1.0.0",
+    "gerado_em": "13/08/2026",
+    "origem": [
+      "docs/livro-da-ficha/LIVRO-DA-FICHA.md (P1-P5, Apêndices A e B)",
+      "docs/livro-da-ficha/validadores-apendice-a.mjs (LIMITES + travas executáveis)",
+      "execucao-fiscal@origin/master:frontend-api/services/ficha_generation/schema.py (FICHA_FIELD_CONTRACTS, 13 slots)",
+      "gabarito real: envios/LOTE_2026-08-03, envios/LOTE_2026-08-05, envios/SUBSTITUICAO_FIANCA_2026-08-03"
+    ],
+    "doutrina": "B25 — o acervo enviado é a suíte de regressão. Guidance que reprova ficha enviada está errada; corrige-se a guidance, não a ficha.",
+    "slots": 13,
+    "tipos": 6,
+    "como_usar": "Para cada slot que o LLM redige, monte o prompt com: guidance (do par slot×tipo) + exemplos_bons + proibicoes + max_chars. Slots com aplicavel=false não vão ao prompt. As regras MECÂNICAS (enum, char-limit, regex, lista negra) NÃO são responsabilidade do prompt — são travas do Apêndice A; a guidance existe para o que o validador não vê.",
+    "campo_tipo_no_schema": "O acervo grava `tipo` como \"nova_apolice\" (sem sufixo) e a ORIGEM (carf/tit/ef) deriva do prefixo do nome do arquivo (origemDe()). Os tipos nova_apolice_carf|tit|ef deste arquivo são a chave de COMPILAÇÃO do prompt, não um valor de campo novo.",
+    "transversais": {
+      "persona": "Subscritor/broker de seguradora que já conhece o cliente e lê cada palavra. Toda frase sobrevive a \"como você sabe disso?\" (§7 · S49, S15).",
+      "fonte": "Nome do ÓRGÃO (PGFN, PGE-SP, Receita Federal, CARF, TIT, Diário Eletrônico) — nunca o encanamento (§7 · S14, B05-12).",
+      "ausencia": "Nunca absoluto sobre o mundo do cliente. Escopar em consulta pública datada. Exceção: dívida ativa consultada, com fonte oficial e data (§7, §8.1 · S15, S16).",
+      "linguagem": "Probabilística sempre: \"pode\", \"é possível que\", \"cenário em que\". Nunca \"tende a\", \"deverá\", \"será necessária\", \"certamente\", \"só cresce\" (§6 · S13/E14).",
+      "datas": "DD/MM/AAAA em todo campo visível; ISO é bug de template (§4 · S23). Data de decisão é a da SESSÃO, não da publicação (§4 · S7).",
+      "tom": "Comentário factual, seco, técnico. Sem IA \"agregando valor\", sem venda, sem prognóstico numérico de prazo (§7 · B05-09, B05-10)."
+    }
+  },
+
+  "proibicoes_globais": {
+    "_nota": "Aplicam-se a TODO slot de texto do cliente. As três primeiras famílias são mecanizadas (A28/A29/A30 do Apêndice A) — não duplicar em validador novo, apenas repetir no prompt para prevenir.",
+    "linguagem_deterministica_E14": {
+      "trava": "A28",
+      "livro": ["§6 · S13"],
+      "frases": ["tende a", "tendem a", "deverá", "deverão", "será necessária", "será necessário", "certamente", "só cresce", "iminente (como previsão de prazo)"]
+    },
+    "vocabulario_interno_E19": {
+      "trava": "A29",
+      "livro": ["§7 · S14", "§7 · B05-12"],
+      "frases": ["ia_inferido", "poc_v1", "motor_v2", "engine", "pipeline (como nossa esteira)", "watchlist", "snapshot", "banda plausível", "Piso sem Selic", "base IA-inferida", "Serpro", "nosso sistema", "datalake", "BigQuery", "harness", "a CEO pediu", "prioridade do lote"]
+    },
+    "taxa_premio_cosseguro": {
+      "trava": "A30",
+      "livro": ["§9 · CON-05", "§11.2 · S44"],
+      "frases": ["taxa de referência", "taxa de mercado", "taxa do prêmio", "taxa comercial", "prêmio de seguro", "cosseguro", "X,X% a.a."],
+      "excecao": "\"taxa Selic\" / \"juros pela Selic\" é legítimo — §2.3 manda citar a Selic."
+    },
+    "absoluto_sobre_ausencia": {
+      "trava": "A31 (AVISO — 9/11 enviadas disparam; o gap é real, §8.4)",
+      "livro": ["§7 · S15", "§8.4 · S17"],
+      "frases_nuas_proibidas": ["não tem apólice", "não há ação judicial", "não existe garantia", "sem execução fiscal (sem data e sem fonte)"],
+      "forma_correta": "\"não identificada em consulta pública de DD/MM/AAAA\" / \"sem inscrição … até a última posição (consulta PGFN de DD/MM/AAAA)\"."
+    },
+    "venda": {
+      "trava": "nenhuma (juízo — cai no auditor S6)",
+      "livro": ["§7 · B05-09", "§7 · B05-10"],
+      "frases": ["janela típica de contratação", "oportunidade ímpar", "oportunidade única", "não pode perder", "excelente oportunidade", "altamente recomendável"]
+    },
+    "obviedade": {
+      "trava": "nenhuma (juízo)",
+      "livro": ["§6 · B07"],
+      "frases": ["é usuário de seguro garantia", "empresa de grande porte do setor", "conhecida no mercado"]
+    }
+  },
+
+  "slots": {
+    "descricao_infracao": {
+      "path": "descricao_infracao",
+      "max_chars": 50,
+      "limite_fonte": "LIMITES.descricao_infracao (validadores-apendice-a.mjs) · trava A15",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "Rótulo curtíssimo da infração federal: é LEGENDA, não frase. Nome do fato gerador autuado, sem valores, sem datas, sem venda. Não repete o tributo — o header já compõe `tributo · descricao` [§1 · S48, S22]; repetir é aviso A15b, tolerado só quando a semântica exige (\"Glosa de créditos de PIS/COFINS não cumulativos\": 4/11 enviadas repetem por necessidade).",
+          "exemplos_bons": [
+            "Erro de classificação fiscal de perfumaria",
+            "Glosa de créditos de PIS/COFINS não cumulativos",
+            "Simulação de etapa de circulação — IPI"
+          ],
+          "proibicoes": ["frase com verbo conjugado", "valor em R$", "data", "nome da empresa", "adjetivo comercial"],
+          "livro_ids": ["§1 · S48", "§1 · S22", "A15", "A15b"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Igual ao CARF, mas no vocabulário do ICMS/AIIM: a legenda nomeia a infração do art. 85 da Lei 6.374/89 pela sua descrição fática, não pela alínea. Se a autuação tem múltiplos itens, a legenda nomeia o de maior peso [§2.6 · S27].",
+          "exemplos_bons": [
+            "Creditamento indevido e falta de pagamento",
+            "Creditamento indevido — fornecedor inidôneo",
+            "Dedução indevida de juros Selic de parcelamento"
+          ],
+          "proibicoes": ["citar alínea crua (\"art. 85, II, j\") sem tradução fática", "valor em R$", "data"],
+          "livro_ids": ["§1 · S48", "§2.6 · S27", "A15"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Na EF a legenda nomeia o objeto da CDA em execução, não o rito. Quando a origem administrativa não é rastreável, a legenda continua sendo o tributo/fato — a declaração da lacuna vai em `valor.descricao` ou no resumo, nunca na legenda [§1.4 · A04].",
+          "exemplos_bons": [
+            "Execução fiscal de IRPJ/CSLL sem garantia",
+            "CDA de ICMS em execução — creditamento indevido"
+          ],
+          "proibicoes": ["\"execução fiscal\" sozinho, sem o objeto", "número de processo", "valor"],
+          "livro_ids": ["§1.3 · CON-01", "§1.4 · A04", "A15"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "Na substituição a legenda descreve a SITUAÇÃO DE GARANTIA, não a infração: o acervo pratica a forma fixa \"Execução fiscal garantida por fiança bancária\" (8/8 fichas de 03/08). Não é o momento de qualificar a carta nem o débito.",
+          "exemplos_bons": [
+            "Execução fiscal garantida por fiança bancária"
+          ],
+          "proibicoes": ["nome do banco (ele vive no badge do header e em fianca.banco)", "qualquer juízo sobre suficiência da carta", "valor de face"],
+          "livro_ids": ["§1.2 · A13", "§5.3 · A43", "§5.3 · A45"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Renovação/captura sai do lote de fichas — vira lead com data de vencimento, e o artefato desse lead não está definido no acervo (§0.2 · B05-20, TIP-12; lacuna B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Idêntico ao tipo de origem (CARF/TIT/EF) — a triagem muda o SLOT CENTRAL, não a legenda da infração [§5.2 · A01]. A incerteza é sobre a garantia, não sobre o que foi autuado.",
+          "exemplos_bons": [
+            "Glosa de créditos de PIS/COFINS não cumulativos"
+          ],
+          "proibicoes": ["hedge na legenda (\"possível autuação de…\")"],
+          "livro_ids": ["§5.2 · A01", "A15"]
+        }
+      }
+    },
+
+    "valor.descricao": {
+      "path": "valor.descricao",
+      "max_chars": 250,
+      "limite_fonte": "LIMITES.valor_descricao · trava A16",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "A PRIMEIRA FRASE DIZ O QUE O NÚMERO É — auto integral? saldo mantido? CDA consolidada? piso? [§2.5 · S4/E22]. Depois vem a ORIGEM auditável: alguém que não escreveu a ficha tem que reproduzir o número a partir da fonte citada [§2.1 · VAL-15]. Nomeie o degrau da cascata que sustentou o número (CDA inscrita > premissas > recálculo próprio) [§2.1 · VAL-01]. Composição por rubrica quando cabe (principal + multa nomeada + Selic), sempre com centavos, jamais \"R$ 63,0 M\" [§2.3 · B05-02; §2.5 · VAL-10]. Observação de cálculo curta, 1-2 linhas, linguagem de broker — comercial sem ser idiota [§2.5 · B05-04, B17]. Se o valor não é cravável, é \"Desconhecido\" com teto explicado, nunca R$ 0,00 nem número redondo com cara de exato [§2.4 · S3; §2.2 · VAL-08]. NUNCA memória de cálculo, fator de motor, ou nome de esteira [§7 · S14].",
+          "exemplos_bons": [
+            "Consolidado no auto de infração, transcrito no Acórdão 3202-001.959: IPI R$ 513.950.010,76 + juros até 31/12/2021 R$ 63.748.035,82 + multa proporcional R$ 385.462.507,88 + multa isolada R$ 1.286.787,51. A CDA definirá o exigível.",
+            "Valores cravados no Acórdão CSRF 9303-016.933: principal R$ 29.650.679,44 (PIS R$ 5.289.040,11 + COFINS R$ 24.361.639,33) + multa de 75% R$ 22.238.009,58 + juros Selic (fator 3,4315, dez/2012 a jul/2026). Garantia estimada; a CDA definirá o exigível.",
+            "Valor a confirmar na inscrição. O Acórdão 3402-012.334 registra crédito lançado de R$ 1.928.025.356,40 com multa de 150%, mas o Acórdão 3402-013.321 reduziu a multa para 100% sem recalcular nem abrir o IPI por rubrica."
+          ],
+          "proibicoes": ["ia_inferido", "banda plausível", "Piso sem Selic", "R$ 0,00", "valor redondo apresentado como exato", "R$ 63,0 M (abreviação sem centavos como o número principal)", "presumir Selic futura"],
+          "nota_calibracao": "\"Valor a confirmar\" é placeholder BANIDO em `garantia_fmt` (A5) mas LEGÍTIMO em `valor.descricao` — CARF_15746720852202022 (enviada 03/08) abre exatamente assim, e é a redação honesta quando o acórdão reduziu a multa sem recalcular.",
+          "livro_ids": ["§2.5 · S4", "§2.1 · VAL-15", "§2.1 · VAL-01", "§2.3 · B05-02", "§2.5 · VAL-10", "§2.5 · B05-04", "§2.4 · S3", "§2.2 · VAL-08", "§7 · S14"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Tudo de CARF, mais a regra dura do TIT: a MULTA vem da alínea exata do art. 85 da Lei 6.374/89, lida alínea por alínea, e a base muda com ela — \"j\" = 100% do crédito indevido (base = imposto); \"c\" = 35% do valor da operação (base ~8,7× maior) [§2.6 · S27]. Nomeie a base sobre a qual a multa incide, porque é ali que a IA erra. Quando a CDA da PGE-SP já existe e casa pelo número do processo, ela é a âncora e sobrescreve o cálculo [§8 · TIP-13; §2.1 · VAL-02].",
+          "exemplos_bons": [
+            "Imposto exigido no AIIM (R$ 38,61 mi) mais multas legais (R$ 38,33 mi): 100% sobre créditos indevidos, 75% sobre a falta de pagamento e 10% sobre obrigações acessórias. Não inclui juros/atualização; a CDA definirá o exigível.",
+            "Imposto creditado indevidamente (R$ 8,69 mi) mais multa legal de 35% sobre o valor das operações documentadas (R$ 75,57 mi), que resulta em R$ 26,45 mi. Não inclui juros/atualização; a CDA definirá o exigível.",
+            "Saldo consolidado da CDA PGE-SP 1466040244 (inscrita em 16/06/2026, consulta de 03/08/2026). Origem: creditamento indevido de ICMS (créditos glosados de R$ 35,7 mi, com multa e juros)."
+          ],
+          "proibicoes": ["aplicar percentual de multa sem nomear a alínea/base", "confundir art. 85-B (redução por confissão, 35% do imposto) com art. 85 \"c\" (35% da operação)", "usar base de mercadorias como se fosse imposto"],
+          "livro_ids": ["§2.6 · S27", "§8 · TIP-13", "§2.1 · VAL-02", "§2.2 · S2", "§2.5 · S4"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Na EF o valor é o da CDA em execução [§0.2, tabela de tipos]. A descrição ancora no número da CDA e na data de inscrição/consulta, e explica a relação com o processo administrativo de origem quando ele existe [§1.3 · CON-01]. Se a origem administrativa não consta na base esperada, DECLARE a ausência — é informação comercial, não lacuna a esconder [§1.4 · A04].",
+          "exemplos_bons": [
+            "Dívida ativa consolidada pela PGFN (CDA 80 6 17 007637-70, posição de 03/08/2026), objeto da execução fiscal em curso. Origem administrativa: PA 10166.732864/2018-92.",
+            "Saldo consolidado das duas CDAs em execução (posição PGFN de 04/08/2026). A origem administrativa não consta na base do CARF consultada."
+          ],
+          "proibicoes": ["estimar quando a CDA existe (viola a cascata §2.1)", "somar CDAs de outros processos do mesmo CNPJ"],
+          "livro_ids": ["§0.2 (tabela)", "§1.3 · CON-01", "§1.4 · A04", "§8 · TIP-13", "§2.1 · VAL-01"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "O número grande da ficha é o VALOR DA OPORTUNIDADE, não a face da carta [§5.3 · A12/A13; trava A44-fiança]. A descrição abre nomeando isso (\"Valor de referência da oportunidade — …\") e ancora na fonte do consolidado (CDA/PGFN datada), citando depois a carta vigente: banco, número, face e vigência [§2.8 · VAL-11 — exato, com centavos, nunca faixa]. Enquadre como \"o valor que entendemos ter oportunidade\": sem hedge explícito e sem asserção de que o valor atual está errado [§2.8 · A14/S44]. PROIBIDO afirmar que a carta é insuficiente, inadequada ou \"não cobre\" — a substituição é ofertada por EFICIÊNCIA (custo, liberação de limite bancário) [§5.3 · A45; trava A45-fiança].",
+          "exemplos_bons": [
+            "Valor de referência da oportunidade — dívida ativa consolidada pela PGFN (CDA 80 6 17 007637-70, 03/08/2026). Carta de fiança Safra nº 422.010-6 de R$ 116,5 mi, vigente até 15/02/2027.",
+            "Valor de referência da oportunidade — dívida ativa consolidada pela PGFN (CDA 70 2 02 001791-04, 03/08/2026). Carta de fiança Bradesco de R$ 24,69 mi, prazo indeterminado, apresentada em 2011 e aditada em 2014.",
+            "Valor de face atualizado da carta de fiança (Selic, 1º aditamento) — referência da oportunidade. Dívida consolidada pela PGFN (CDAs 31 2 24 005929-01 e 31 6 24 018431-41, posição de 04/08/2026): R$ 271,1 mi."
+          ],
+          "proibicoes": ["a garantia atual é insuficiente", "não cobre o débito", "garantia inadequada", "gap de cobertura", "o valor atual está errado", "temos certeza", "sem dúvida", "garantimos que", "faixa/estimativa no lugar do número exato"],
+          "livro_ids": ["§5.3 · A12", "§5.3 · A13", "§2.8 · VAL-11", "§2.8 · A14", "§5.3 · A45", "§5.3 · A46"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); o artefato do lead de renovação não tem anatomia definida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "A descrição do valor segue a cascata do tipo de origem — a incerteza da triagem é sobre A GARANTIA EXISTIR, não sobre o valor [§5.2 · A01]. Se o valor está fechado em CDA confirmada, ele é cravado normalmente e a tag `triagem` NÃO se aplica (foi removida do BSB exatamente por isso) [§1.1 · S43]. A descrição não repete o texto do bloco de triagem.",
+          "exemplos_bons": [
+            "Soma das CDAs inscritas em 15/06/2026 vinculadas a este processo administrativo, posição PGFN de 19/06/2026. A existência de garantia já apresentada não foi confirmada nos conexos."
+          ],
+          "proibicoes": ["afirmar que não existe garantia (ausência de evidência ≠ evidência de ausência, §5.2 · A02)", "usar a incerteza de garantia para rebaixar o valor"],
+          "livro_ids": ["§5.2 · A01", "§5.2 · A02", "§1.1 · S43", "§2.1 · VAL-01"]
+        }
+      }
+    },
+
+    "processo_administrativo.resumo": {
+      "path": "processo_administrativo.resumo",
+      "max_chars": 300,
+      "limite_fonte": "LIMITES.processo_admin_resumo (S22) · AVISO A21 — 6/11 enviadas estouram (máx. medido 585 em TIT); o validador canônico NÃO checa este campo",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "Narrativa técnica curta do TRÂMITE: autuação → DRJ → CARF → CSRF/embargos → inscrição. Cite acórdãos e datas dos andamentos brutos, e feche dizendo em que ponto o contencioso parou (\"Contencioso administrativo esgotado na CSRF\"). É resumo de RITO, não de mérito — o mérito vive em merito.p1/p2 e não se repete aqui [§7 · S49]. Sem prognóstico numérico.",
+          "exemplos_bons": [
+            "Auto de infração de IPI lavrado em 30/12/2021 por erro de classificação fiscal na saída de perfumes, águas-de-colônia e cremes de beleza, tributados a alíquotas menores que as devidas, nos anos de 2017 a 2020. Contencioso administrativo esgotado na CSRF.",
+            "Auto de infração de PIS/COFINS não cumulativos por glosa de créditos (fretes de produto acabado, operações logísticas/portuárias na exportação e classificação fiscal de carnes), fatos geradores de out a dez/2012. Contencioso administrativo esgotado na CSRF."
+          ],
+          "proibicoes": ["\"RECEBER - ORIGEM CARF - TRIAGEM\" e outros trâmites internos como se fossem atos decisórios", "rótulo de instância da API sem conferir o número do acórdão", "prognóstico de prazo"],
+          "livro_ids": ["§3.4 · S10", "§3.4 · TER-06", "§7 · S49", "§7 · S22", "A21"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Trâmite do TIT: AIIM → DTJ → Câmara Julgadora → Câmara Superior/Recurso Especial → Unidade Fiscal da Cobrança/Dívida Ativa. Nomeie a DTJ e a Câmara pelo número/cidade, e diga o desfecho de admissibilidade do RE (indeferido/inadmitido) com a data — é ele que sinaliza esgotamento no TIT [§5.1 · B05-26]. Atenção ao SUJEITO: Recurso de Ofício e Representação Fiscal são da Fazenda; barrá-los é favorável ao contribuinte [§3.4 · S30].",
+          "exemplos_bons": [
+            "AIIM de ICMS lavrado em 2024 (fatos de 2020 e 2021) por falta de pagamento, creditamento indevido e falhas de escrituração. Julgado procedente na DTJ, mantido pela 1ª Câmara Julgadora e com Recurso Especial inadmitido pela Presidência do TIT.",
+            "AIIM de ICMS lavrado em 30/05/2025 por creditamento indevido em notas fiscais de fornecedor declarado inidôneo, referentes a operações de 2021 e 2022. Julgado procedente na DTJ, mantido pela 7ª Câmara Julgadora e com Recurso Especial inadmitido pela Presidência do TIT."
+          ],
+          "proibicoes": ["ler \"RO não conhecido\" como vitória do contribuinte", "tratar decurso de prazo como decisão de mérito sem dizer que foi decurso"],
+          "livro_ids": ["§5.1 · B05-26", "§3.4 · S30", "§3.4 · S9", "A21"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "A ficha de EF exibe os TRÊS números e explica: EF, processo administrativo (CARF/TIT) e dívida ativa, mais o status da dívida [§1.3 · CON-01]. Este resumo é o lugar de amarrar administrativo→CDA→execução. Quando o administrativo não é rastreável, declare [§1.4 · A04]. Numa EF o mérito raramente está na própria EF — está nos conexos, e a decisão sobre onde eles entram é obrigatória [§7 · S41, B21].",
+          "exemplos_bons": [
+            "Auto de infração federal encerrado no CARF em 2024, inscrito em dívida ativa (CDA 80 4 26 719385-16) e ajuizado em execução fiscal na 5ª VEF/SP. Execução sem garantia constituída até a posição de 03/08/2026."
+          ],
+          "proibicoes": ["omitir um dos três números quando ele existe", "apresentar a EF sem dizer o status da dívida"],
+          "livro_ids": ["§1.3 · CON-01", "§1.4 · A04", "§7 · S41", "§7 · B21", "A21"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": false,
+          "motivo": "Ausente em 9/10 fichas de substituição enviadas (só HOSPITAL-SAO-DOMINGOS-XP traz, com 189 chars). Na substituição o rito administrativo já se exauriu e a narrativa vive em merito.p1 (execução + carta). Exigir este slot reprovaria 9/10 enviadas — B25.",
+          "se_presente": "Quando houver, é o rito que levou à CDA executada, ≤300 chars, sem repetir merito.p1.",
+          "livro_ids": ["§10.6 · B25", "§5.3 · A12"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Igual ao tipo de origem, com um acréscimo: se a classificação depende de conexos ainda não varridos, o resumo diz que a varredura de conexos está em curso — é o vão que o bloco de triagem cobre [§5.2 · B21].",
+          "exemplos_bons": [
+            "Auto de infração de IPI encerrado na CSRF em 24/06/2026 e expedido para a PGFN. Conexos (anulatória/cautelar) ainda em varredura para confirmar se há garantia já apresentada."
+          ],
+          "proibicoes": ["afirmar que não há conexos quando a varredura não fechou"],
+          "livro_ids": ["§5.2 · B21", "§5.2 · A02", "A21"]
+        }
+      }
+    },
+
+    "ultima_decisao.texto": {
+      "path": "ultima_decisao.texto",
+      "max_chars": 250,
+      "limite_fonte": "LIMITES.ultima_decisao_texto · trava A17",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "O DISPOSITIVO da última decisão relevante, com o QUÓRUM POR MATÉRIA — unanimidade × maioria × voto de qualidade [§2.7 · S28]. \"Por maioria\" NÃO é voto de qualidade: VQ é empate 3×3 desempatado pelo presidente, e só ele autoriza excluir multa do trecho decidido, nunca globalmente. Cite o número do acórdão e a turma. A data que acompanha este campo é a da SESSÃO, não da publicação — a publicação entra no texto (\"sessão de DD/MM/AAAA, publicado em DD/MM/AAAA\") [§4 · S7], e o texto não pode contradizer o campo de data [§4 · S40]. Derrota se descreve tecnicamente, sem dramatizar nem celebrar. \"Não conhecido/não admitido\" ≠ \"negado no mérito\" — a diferença governa o termômetro [§5.1 · TER-04].",
+          "exemplos_bons": [
+            "Acórdão CSRF 9303-017.455 (3ª Turma): por unanimidade, não conheceu do Recurso Especial do contribuinte por ausência de prequestionamento e de similitude fática, mantendo o Acórdão 3202-001.959 que já havia negado provimento ao Recurso Voluntário.",
+            "Acórdão 3402-013.321 (4ª Câmara/2ª Turma, sessão de 19/06/2026, publicado em 14/07/2026): embargos acolhidos em parte, com efeitos infringentes, para aplicar de ofício o Tema 863 do STF e reduzir a multa de 150% para 100%. Mérito mantido."
+          ],
+          "proibicoes": ["chamar \"por maioria\" de voto de qualidade", "zerar multa globalmente por VQ de uma matéria", "usar a data de publicação como data da decisão", "copiar `ia.resumo` sem conferir o dispositivo", "confundir resolução (diligência) com acórdão (mérito)"],
+          "livro_ids": ["§2.7 · S28", "§4 · S7", "§4 · S40", "§4 · S9", "§5.1 · TER-04", "§3.4 · TER-06", "§3.4 · S29"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Dispositivo do TIT com o órgão nomeado (DTJ-N/cidade, Nª Câmara Julgadora, Presidência do TIT) e a fundamentação da inadmissão quando é ela que encerra. O par que separa os mundos: \"Indefiro o processamento do recurso interposto\" + \"AIIM enviado para a Unidade Fiscal da Cobrança\" = esgotado; \"Defiro o processamento do Recurso Especial\" = vivo [§3.4 · S46]. Leia a peça INTEIRA — despacho que começa com \"indeferido\" pode terminar com \"defiro\". Decurso de prazo é forma legítima de esgotamento, mas diga que foi decurso.",
+          "exemplos_bons": [
+            "A Presidência do TIT INDEFERIU o processamento do Recurso Especial do contribuinte (despacho de 17/03/2026, publicado no DOE ed. 3584), por contrariedade às Súmulas Vinculantes 6 e 9 e ausência de cotejo analítico. Encerra a via administrativa.",
+            "DTJ-3 (São José do Rio Preto) julgou o AIIM integralmente MANTIDO; publicação em 24/02/2026 com prazo de 30 dias para recurso — não houve recurso ordinário, esgotando a via administrativa por decurso de prazo."
+          ],
+          "proibicoes": ["decidir por trecho da peça", "usar status.percentual como sinal de esgotamento", "tratar intimação/registro como data da decisão"],
+          "livro_ids": ["§3.4 · S46", "§3.4 · S8", "§4 · S7", "§5.1 · B05-26"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Na EF a \"última decisão\" é o último ato DECISÓRIO do juízo (despacho de citação, decisão sobre garantia/penhora, sentença de embargos) — nunca movimento de fila (distribuição, conclusão, juntada) [§3.4 · TER-06]. Nomeie o juízo/vara. A peça judicial prevalece sobre o cache da API [§8.3 · PRO-15].",
+          "exemplos_bons": [
+            "Juízo da 5ª VEF/SP determinou a citação e, não havendo pagamento nem garantia, autorizou o prosseguimento da execução; sem penhora efetivada até a posição consultada."
+          ],
+          "proibicoes": ["usar movimento de fila como decisão", "afirmar ausência de decisão porque a API não trouxe"],
+          "livro_ids": ["§3.4 · TER-06", "§8.3 · PRO-15", "§8.3 · TIP-17"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "A última decisão relevante é a que toca A GARANTIA ou a marcha da execução: homologação de aditamento, aceitação da carta, indeferimento de penhora, suspensão por embargos. Descreva de forma NEUTRA — na substituição a etapa passada não é \"desfavorável\", é só passada (é por isso que existe o status `concluido` neutro) [§3.2, decisão do Alfredo 15/07]. Proibido sugerir que a decisão revela fragilidade da carta [§5.3 · A45] ou afirmar convicção absoluta sobre o que o juízo fará [§5.3 · A46].",
+          "exemplos_bons": [
+            "Homologado o aditamento de prorrogação da carta de fiança, 'considerando a regularidade da garantia'; execução permanece no arquivo, sem baixa.",
+            "Juízo da execução fiscal indeferiu o pedido da União de penhora da carta de fiança nº 6177; a garantia permanece hígida sustentando o feito.",
+            "Feito mantido suspenso em razão dos embargos à execução e da Medida Cautelar 22986/RJ, em trâmite no STJ."
+          ],
+          "proibicoes": ["a garantia atual é insuficiente", "não cobre", "temos certeza", "garantimos que", "o juízo certamente aceitará a substituição", "tom de derrota sobre etapa passada"],
+          "livro_ids": ["§3.2 (status concluido neutro)", "§5.3 · A45", "§5.3 · A46", "§6.1 · A21"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Igual ao tipo de origem. A incerteza sobre garantia não entra aqui — ela vive no bloco de triagem, e os dois não se repetem [§5.2 · A01].",
+          "exemplos_bons": [
+            "Acórdão CSRF 9303-017.455 (3ª Turma): por unanimidade, não conheceu do Recurso Especial do contribuinte, mantendo o acórdão recorrido."
+          ],
+          "proibicoes": ["repetir o texto do bloco de triagem", "hedgear o dispositivo"],
+          "livro_ids": ["§5.2 · A01", "§4 · S7"]
+        }
+      }
+    },
+
+    "ultima_ocorrencia.texto": {
+      "path": "ultima_ocorrencia.texto",
+      "max_chars": 150,
+      "limite_fonte": "LIMITES.ultima_ocorrencia_texto · trava A18",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "O ÚLTIMO ANDAMENTO BRUTO datado, do jeito que aparece no processo — é registro, não interpretação. Escala pós-CARF a respeitar: 'Em Encerramento'/CENCOP/COJUL = formalização; 'Expedido para PGFN' = inscrição a caminho; CDA inscrita = dívida ativa [§3.3 · S12]. Não promova um estágio ao seguinte. Ausência sempre escopada e datada; nunca \"até hoje\" [§8.2 · S39].",
+          "exemplos_bons": [
+            "Processo em 'Em Encerramento' desde 17/07/2026 e expedido para a PGFN, esfera administrativa esgotada e sem inscrição em dívida ativa.",
+            "ED do contribuinte não admitidos; processo passa a 'Em Encerramento', esfera administrativa esgotada e sem inscrição em dívida ativa."
+          ],
+          "proibicoes": ["até hoje", "atualmente (sem data)", "chamar CENCOP de inscrição em dívida ativa", "interpretação comercial do andamento"],
+          "livro_ids": ["§3.3 · S12", "§3.4 · TER-06", "§8.2 · S39", "§4 · S23"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Último andamento bruto do TIT/PGE-SP. O sinal mastigado do TIT: \"enviado para cobrança administrativa/UFC\" já significa perdeu + pré-inscrição [§5.1 · B05-26]. Se não houve movimento posterior, diga isso com a data da posição consultada.",
+          "exemplos_bons": [
+            "AIIM enviado para a Unidade Fiscal da Cobrança na mesma data da inadmissão do recurso. Sem movimentação posterior até 05/08/2026.",
+            "Liminar em MS sustou apenas o protesto da CDA, sem exigência de garantia; exigibilidade preservada. MS concluso para sentença em 05/08/2026."
+          ],
+          "proibicoes": ["até hoje", "afirmar ausência de EF estadual com base na API judicial (§8.4 · S17)"],
+          "livro_ids": ["§5.1 · B05-26", "§8.4 · S17", "§8.2 · S39"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Último andamento da execução, bruto e datado (citação, penhora, embargos, suspensão, arquivamento). Distinga movimento de fila de ato relevante e diga a posição da consulta [§3.4 · TER-06; §8.2 · S39].",
+          "exemplos_bons": [
+            "Citação cumprida; sem garantia apresentada e sem penhora efetivada até a posição de 03/08/2026."
+          ],
+          "proibicoes": ["até hoje", "movimento de fila apresentado como fato relevante"],
+          "livro_ids": ["§3.4 · TER-06", "§8.2 · S39"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "Andamento mais recente da execução onde a carta vive — inclusive andamento de rotina (inspeção anual, certidão de suspensão), porque na substituição o que importa é demonstrar que O FEITO SEGUE VIVO e vai demorar (item 6 das 6 perguntas canônicas) [§6.1 · A21]. Diga a data-limite do acervo consultado; o acervo de autos costuma estar defasado.",
+          "exemplos_bons": [
+            "Despacho de inspeção anual; execução viva, no arquivo, sem baixa.",
+            "Certidão registra o feito suspenso por recebimento dos embargos à execução.",
+            "Decisão inicial da execução fiscal; na ação onde está a garantia, autos conclusos para sentença desde 28/08/2025."
+          ],
+          "proibicoes": ["até hoje", "afirmar que a carta já venceu sem a peça", "convicção sobre o desfecho"],
+          "livro_ids": ["§6.1 · A21", "§8.2 · S39", "§5.3 · A46"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Igual ao tipo de origem. Se o último andamento é justamente o que gera a dúvida de garantia (ex.: menção a caução em conexo), registre o andamento bruto e deixe a leitura para o bloco de triagem [§5.2 · A01].",
+          "exemplos_bons": [
+            "Processo expedido para a PGFN em 20/07/2026; consulta a conexos em curso na posição de 03/08/2026."
+          ],
+          "proibicoes": ["até hoje", "concluir sobre garantia neste slot"],
+          "livro_ids": ["§5.2 · A01", "§8.2 · S39"]
+        }
+      }
+    },
+
+    "bullets[0]": {
+      "path": "bullets[0]",
+      "max_chars": 150,
+      "limite_fonte": "LIMITES.bullet · travas A20 (nova apólice: exatamente 4) e A20f (substituição: 2-4)",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "BULLET 1 = O GATILHO/ANCORAGEM: por que este caso é oportunidade AGORA. No acervo CARF a forma dominante abre pelo esgotamento datado (\"Contencioso administrativo esgotado: …\") ou pela ancoragem do valor. Uma linha, autocontido (legível fora da ficha), traduzindo o que aconteceu + o que significa para a garantia/janela [§6 · S49]. Sem juridiquês, sem venda, sem o óbvio sobre o cliente [§6 · B07].",
+          "exemplos_bons": [
+            "Contencioso administrativo esgotado: o Recurso Especial do contribuinte não foi conhecido pela CSRF em 24/06/2026, tornando o lançamento definitivo.",
+            "Contencioso esgotado: CSRF 9303-016.933 negou o RE do contribuinte e proveu o RE da Fazenda, mantendo as glosas de frete e operações logísticas.",
+            "Valor ancorado nas CDAs (não estimativa); CP patronal e Terceiros, Banco ABC Brasil."
+          ],
+          "proibicoes": ["tende a", "deverá", "certamente", "só cresce", "é usuário de seguro garantia", "janela típica de contratação"],
+          "livro_ids": ["§6 · B05-37", "§6 · S49", "§6 · S13", "§6 · B07"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Igual ao CARF, com o vocabulário do TIT: o esgotamento se diz pela inadmissão do RE ou pelo decurso, seguido do encaminhamento à Unidade Fiscal da Cobrança — que é o sinal mastigado de pré-inscrição [§5.1 · B05-26].",
+          "exemplos_bons": [
+            "Via administrativa esgotada: Recurso Especial inadmitido em 18/03/2026 e AIIM já encaminhado à Unidade Fiscal da Cobrança.",
+            "Via administrativa esgotada por decurso (DTJ manteve o AIIM em 20/02/2026, sem recurso); CDA inscrita em 16/06/2026 — sem garantia constituída."
+          ],
+          "proibicoes": ["tende a", "deverá", "afirmar ausência de execução estadual sem hedge (§8.4)"],
+          "livro_ids": ["§5.1 · B05-26", "§6 · S49", "§8.4 · S17"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Na EF o gatilho é a execução ajuizada SEM garantia — diga a EF, o juízo e o estado da garantia, com data da posição [§0.2 (tabela); §1.3 · CON-01].",
+          "exemplos_bons": [
+            "Execução fiscal ajuizada em 03/2026 (5ª VEF/SP) sem garantia constituída até a posição de 03/08/2026 — janela antes da penhora."
+          ],
+          "proibicoes": ["tende a", "deverá", "afirmar ausência de garantia sem data/fonte"],
+          "livro_ids": ["§0.2 (tabela)", "§1.3 · CON-01", "§6 · S49"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "BULLET 1 na substituição responde a VIGÊNCIA/JANELA (perguntas 1 e 3 das 6 canônicas): quando a carta foi apresentada, se está ativa e qual é a janela natural (vencimento, renovação, mudança de controle) [§6.1 · A21]. A tese é EFICIÊNCIA — custo de renovação, liberação de limite bancário — nunca insuficiência da carta [§5.3 · A45].",
+          "exemplos_bons": [
+            "Fiança Safra vence em 15/02/2027 — janela natural: propor seguro garantia no lugar da renovação da carta.",
+            "EF de 2002 ainda suspensa por embargos e medida cautelar no STJ — contencioso de mais de duas décadas, longe do fim.",
+            "Hospital vendido pelo grupo DASA em 12/2025 (fato público) — a fiança veio da gestão anterior; momento natural de rever a garantia."
+          ],
+          "proibicoes": ["a garantia atual é insuficiente", "não cobre o débito", "temos certeza", "garantimos que", "tende a", "deverá"],
+          "livro_ids": ["§6.1 · A21", "§6.1 · A20f", "§5.3 · A45", "§5.3 · A46"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Igual ao tipo de origem no conteúdo; o bullet 1 continua sendo o gatilho. A incerteza de garantia é assunto do bloco de triagem, e o convite à validação é dele, não do bullet [§5.2 · A01, A02].",
+          "exemplos_bons": [
+            "Contencioso administrativo esgotado em 24/06/2026; crédito definitivo e ainda sem inscrição identificada até 03/08/2026."
+          ],
+          "proibicoes": ["não existe garantia", "tende a", "deverá"],
+          "livro_ids": ["§5.2 · A01", "§5.2 · A02", "§6 · S13"]
+        }
+      }
+    },
+
+    "bullets[1]": {
+      "path": "bullets[1]",
+      "max_chars": 150,
+      "limite_fonte": "LIMITES.bullet · A20/A20f",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "BULLET 2 = O HISTÓRICO PROCESSUAL que sustenta o gatilho — a trajetória de derrotas/ganhos com acórdão nomeado, ou o próximo marco formal já disparado (expedição para PGFN). Só entra se muda valor, temperatura, tipo ou timing; achado que não muda nada não vira bullet [§6 · B05-43, CON-11].",
+          "exemplos_bons": [
+            "Derrota integral nas duas instâncias do CARF — o Acórdão 3202-001.959 já havia negado provimento ao Recurso Voluntário por unanimidade.",
+            "No CARF, o Acórdão 3201-005.725 (25/09/2019) havia revertido parte das glosas, ganho depois superado na CSRF.",
+            "Processo expedido para a PGFN em 14/07/2026 — inscrição em dívida ativa é o próximo passo formal."
+          ],
+          "proibicoes": ["reforço narrativo de argumento de venda", "repetir o bullet 1 com outras palavras", "tende a", "deverá"],
+          "livro_ids": ["§6 · B05-43", "§6 · CON-11", "§6 · S49"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Igual ao CARF. No TIT a forma que funciona é quantificar a trajetória (\"oito decisões, todas mantendo o AIIM\") ou nomear o efeito prático de uma medida judicial paralela sobre a exigibilidade.",
+          "exemplos_bons": [
+            "Histórico integralmente desfavorável ao contribuinte — oito decisões, todas mantendo o AIIM, sem redução de multa ou de juros.",
+            "Dívida de R$ 100,5 mi executável: a liminar obtida pela empresa suspendeu apenas o protesto da CDA, sem tocar na exigibilidade."
+          ],
+          "proibicoes": ["tratar liminar sobre protesto como suspensão de exigibilidade", "tende a", "deverá"],
+          "livro_ids": ["§6 · S49", "§3.4 · S9", "§6 · S13"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Histórico que explica por que a garantia ainda não existe (ou por que a existente não serve ao caso), com o marco processual datado [§7 · S41 — na EF o mérito está nos conexos].",
+          "exemplos_bons": [
+            "Execução sem embargos opostos até a posição de 03/08/2026; a matéria de fundo corre na anulatória 1002xxx-xx.2025.4.03.6100."
+          ],
+          "proibicoes": ["tende a", "deverá", "afirmar ausência de conexos sem varredura"],
+          "livro_ids": ["§7 · S41", "§7 · B21", "§6 · S13"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "BULLET 2 responde às MOVIMENTAÇÕES da fiança e à LONGEVIDADE do processo (perguntas 2 e 6) [§6.1 · A21]: aditamentos homologados, pedidos da Fazenda sobre a carta, tempo de feito. É o bullet que sustenta \"vai demorar muito, e a carta continua consumindo limite\".",
+          "exemplos_bons": [
+            "Aditamento de prorrogação já reconhecido pelo juízo em 2022, após manifestação favorável da Procuradoria.",
+            "Fiança no feito desde 2011, com aditamento em 2014 — posição antiga, candidata a revisão com cobertura dimensionada ao consolidado atual.",
+            "União pressiona a garantia: averbou na dívida ativa e pediu penhora da carta (indeferido em 02/2026); principal concluso p/ sentença desde 08/2025."
+          ],
+          "proibicoes": ["a carta é insuficiente", "não cobre", "o banco errou", "temos certeza", "tende a"],
+          "livro_ids": ["§6.1 · A21", "§5.3 · A45", "§5.3 · A46"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "BULLET 2 mantém o histórico processual do tipo de origem — a incerteza de garantia não muda a trajetória do contencioso, muda só o slot central [§5.2 · A01]. Se a varredura de conexos está em curso, este é o bullet onde o processo-irmão/anulatória aparece como FATO nomeado, sem conclusão sobre garantia [§5.2 · B21; §7 · S41]. Só entra se mudar valor, temperatura, tipo ou timing [§6 · B05-43].",
+          "exemplos_bons": [
+            "Derrota integral nas duas instâncias do CARF, sem redução do crédito lançado.",
+            "Há anulatória conexa em curso (TJ/SP), ainda em varredura — pode conter garantia já apresentada."
+          ],
+          "proibicoes": ["tende a", "deverá", "concluir que o conexo tem ou não tem garantia", "não existe garantia"],
+          "livro_ids": ["§5.2 · A01", "§5.2 · B21", "§7 · S41", "§6 · B05-43", "§6 · S13"]
+        }
+      }
+    },
+
+    "bullets[2]": {
+      "path": "bullets[2]",
+      "max_chars": 150,
+      "limite_fonte": "LIMITES.bullet · A20/A20f",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "BULLET 3 = ESTADO DA GARANTIA E DA DÍVIDA ATIVA, ou a particularidade de valor que muda o número (multa qualificada, Tema 863, VQ). A ausência se escreve escopada e datada — é o dado mais perecível da ficha [§8.2 · S39; §7 · S15]. Quando há multa de 150% ou VQ, é aqui que a implicação sobre o valor aparece [§2.7 · S28].",
+          "exemplos_bons": [
+            "Sem inscrição em dívida ativa na PGFN até 17/06/2026 — não há apólice, garantia, suspensão nem parcelamento.",
+            "Crédito lançado de R$ 1.928.025.356,40 com multa de 150%; a redução para 100% pelo Tema 863 do STF diminui o saldo, ainda não recalculado."
+          ],
+          "proibicoes": ["não tem apólice (nu, sem data/fonte)", "não há ação judicial", "até hoje", "tende a"],
+          "livro_ids": ["§8.2 · S39", "§7 · S15", "§2.7 · S28", "§8.1 · S16"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Igual ao CARF, com a ressalva estrutural do TIT: \"sem execução fiscal\" é INFERÊNCIA, não verificação — o TJSP não é enxergado pela base judicial. Redija com hedge e declare o gap na nota interna [§8.4 · S17].",
+          "exemplos_bons": [
+            "Débito de R$ 76,9 mi entre imposto e multa, sem garantia constituída, sem parcelamento e sem contencioso judicial da empresa.",
+            "Observação: no MS (TJSP 1012150-95.2026.8.26.0224) a empresa alega recurso pendente no TIT; sentença iminente pode reabrir a pressão."
+          ],
+          "proibicoes": ["afirmar categoricamente ausência de EF estadual", "até hoje", "tende a"],
+          "livro_ids": ["§8.4 · S17", "§8.2 · S39", "§7 · S15"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Estado da garantia dentro da execução (sem penhora/sem caução/sem seguro), com data da posição, e o vínculo do achado judicial com AQUELE crédito — achado que não se vincula não contradiz a ficha [§8.3 · S19].",
+          "exemplos_bons": [
+            "Sem penhora, caução ou seguro garantia nos autos até 03/08/2026; a empresa tem garantia em outra EF, de débito distinto."
+          ],
+          "proibicoes": ["usar garantia de outro débito como se fechasse este caso", "até hoje"],
+          "livro_ids": ["§8.3 · S19", "§8.3 · S18", "§8.2 · S39"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "OPCIONAL — 2/10 enviadas usam o terceiro bullet (nenhuma usa quatro). Reserve-o para o fato que muda a abordagem: sucessão no polo passivo, aditamento não conferido, corresponsáveis. Só entra se mudar valor, tipo, timing ou destinatário [§6 · B05-43; §6.1 · A20f].",
+          "exemplos_bons": [
+            "Carta 6177 (Banco XP) possui 2º aditamento ainda não conferido nos autos — face de referência conforme o 1º; conferir antes da emissão.",
+            "Devedora sucedida por Merck Sharp & Dohme Farmacêutica no polo passivo do feito."
+          ],
+          "proibicoes": ["encher linguiça para chegar a 3 bullets", "a carta é insuficiente", "temos certeza"],
+          "livro_ids": ["§6.1 · A20f", "§6 · B05-43", "§1 · A23 (quem é o devedor hoje)"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Aqui o bullet nomeia O QUE FALTA CONFIRMAR sobre garantia, em forma de fato ('não identificada até o momento'), nunca de negativa absoluta [§5.2 · A02; §7 · S15]. O convite à validação em si é do bloco de triagem.",
+          "exemplos_bons": [
+            "Garantia não identificada nos autos e nos conexos varridos até 03/08/2026; anulatória em apuração."
+          ],
+          "proibicoes": ["não existe garantia", "não tem apólice", "até hoje"],
+          "livro_ids": ["§5.2 · A02", "§7 · S15", "§8.2 · S39"]
+        }
+      }
+    },
+
+    "bullets[3]": {
+      "path": "bullets[3]",
+      "max_chars": 150,
+      "limite_fonte": "LIMITES.bullet · A20 (nova apólice exige exatamente 4)",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "BULLET 4 = O AVISO DE TIMING: o que acontece a seguir (inscrição da CDA, publicação, ajuizamento) e por que isso define a janela [§6 · B05-37, A20]. É o bullet onde \"tende a\" nasce, porque o template vem com a frase pronta — escreva SEMPRE em linguagem probabilística: \"pode ocorrer\", \"é possível que\", \"cenário em que\" [§6 · S13/E14]. Todo caso com evento futuro conhecido carrega esse evento; é o que dá utilidade comercial a uma ficha morna.",
+          "exemplos_bons": [
+            "Processo expedido para a PGFN em 20/07/2026; a inscrição em dívida ativa e a definição sobre garantia podem ocorrer em seguida.",
+            "Aguarda-se a Inscrição em Dívida Ativa (PGFN); a definição sobre garantia pode ocorrer após esse marco.",
+            "Sem CDA, apólice, garantia ou parcelamento identificados até 03/08/2026; Unilever Brasil Ltda responde solidariamente."
+          ],
+          "proibicoes": ["tende a", "tendem a", "deverá", "será necessária", "certamente", "iminente (como prazo)", "só cresce", "prazo numérico (\"em 30 dias\")"],
+          "livro_ids": ["§6 · B05-37", "§6 · A20", "§6 · S13", "§10.3 · S40"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Igual ao CARF, no rito estadual: o próximo marco é a inscrição na PGE-SP e, depois, a execução — a janela de abordagem é antes da exigência de garantia [§5.1 · B05-39 — pré-inscrição é janela válida].",
+          "exemplos_bons": [
+            "Inscrição em Dívida Ativa é o próximo marco e antecede a execução fiscal — janela de abordagem antes da exigência de garantia.",
+            "Com o ajuizamento da execução fiscal, a apresentação de garantia pode ser exigida — janela de abordagem antes desse marco."
+          ],
+          "proibicoes": ["tende a", "deverá", "será necessária", "prazo numérico"],
+          "livro_ids": ["§5.1 · B05-39", "§6 · S13", "§6 · B05-37"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Na EF o timing é a marcha da execução: citação → prazo de garantia → penhora. Diga o próximo ato possível sem cravar prazo [§6 · S13].",
+          "exemplos_bons": [
+            "Com a citação cumprida, a penhora pode ser determinada a qualquer momento — cenário em que a garantia passa a ser exigida."
+          ],
+          "proibicoes": ["tende a", "deverá", "será necessária", "prazo numérico", "iminente"],
+          "livro_ids": ["§6 · S13", "§6 · B05-37"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": false,
+          "motivo": "O 4º bullet de timing é do regime de NOVA APÓLICE. Na substituição a tese comercial vive no bloco CARTA DE FIANÇA ATUAL, e 12/12 fichas enviadas usam 2-3 bullets — nenhuma usa 4. Aplicar os 4 aqui reprovava 12/12 enviadas (§6.1 · A20f).",
+          "livro_ids": ["§6.1 · A20f", "§10.6 · B25", "§5.3 · A12"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Mantém o aviso de timing do tipo de origem — a triagem não suprime o 4º bullet, porque a ficha continua sendo de nova apólice em regime de incerteza de garantia [§5.2 · A01; §6 · A20].",
+          "exemplos_bons": [
+            "A inscrição em dívida ativa pode ocorrer a seguir; a confirmação de garantia junto ao cliente define o encaminhamento."
+          ],
+          "proibicoes": ["tende a", "deverá", "certamente", "prazo numérico"],
+          "livro_ids": ["§5.2 · A01", "§6 · A20", "§6 · S13"]
+        }
+      }
+    },
+
+    "merito.p1": {
+      "path": "merito.p1",
+      "max_chars": 600,
+      "limite_fonte": "LIMITES.merito_p1 · trava A19",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "P1 = A AUTUAÇÃO. O que foi lançado, contra quem, a base legal, os valores originais e a matéria — terminando na fase administrativa inicial (AI/DRJ). Âncoras VERIFICÁVEIS: números e citações conferíveis no acórdão [§7 · S49]. Distinga sempre o que o DISPOSITIVO decidiu × o que a PARTE alegou × o que NÓS inferimos — citar número que está na síntese das alegações como se fosse da decisão queima credibilidade (caso PDL) [§7 · S15]. Resolva quem é juridicamente o devedor HOJE (incorporação, venda de ativo) [§1 · A23]. Tom técnico, factual, sem venda e sem IA agregando valor [§7 · B05-09].",
+          "exemplos_bons": [
+            "Auto de infração de IPI lavrado em 30/12/2021 contra a Botica Comercial Farmacêutica (O Boticário), por erro de classificação fiscal nas saídas de perfumaria e cosméticos entre 2017 e 2020. A fiscalização apurou que perfumes (NCM 3303.00.10, alíquota de 42%) foram classificados como águas-de-colônia (12%) ou desodorantes (7%) […] além de saídas em demonstração sem tributação do IPI.",
+            "Auto de infração de PIS/COFINS no regime não cumulativo contra a BRF S.A., por glosa de créditos considerados indevidos: fretes de produto acabado, operações logísticas/portuárias na exportação e classificação fiscal de carnes, com fatos geradores de out a dez/2012."
+          ],
+          "proibicoes": ["atribuir à decisão número que está nas alegações da defesa", "base de cálculo apresentada como crédito tributário", "\"o maior valor do documento\" como valor da autuação", "juridiquês sem tradução", "oportunidade ímpar", "janela típica de contratação"],
+          "livro_ids": ["§7 · S49", "§7 · S15", "§1 · A23", "§7 · B05-09", "§2.2 · S2"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "P1 do AIIM: número do AIIM, data de lavratura, itens autuados com os valores por item, e o período dos fatos geradores. Se há múltiplos itens, some corretamente — pegar só o maior item é o segundo erro mais comum (Granbrasil pegou só o item 2; Krenak, só a multa) [§2.2 · S2]. Transcreva a capitulação e a alínea quando ela define a multa [§2.6 · S27]. Registre quando o contribuinte confessou parte.",
+          "exemplos_bons": [
+            "O AIIM 5.052.377-6 foi lavrado contra a Granbrasil por onze itens de ICMS relativos a 2020 e 2021: falta de pagamento do imposto por notas fiscais de saída não escrituradas (R$ 1,96 mi), creditamento indevido em seis itens (R$ 36,65 mi […]) e quatro itens de falta de registro em meio magnético. O contribuinte confessou o item 11 e impugnou os demais.",
+            "O AIIM 5.055.703-8 foi lavrado em 30/05/2025 contra a Copper Barras por creditamento indevido de ICMS de R$ 8.689.249,66, nos períodos de setembro a dezembro de 2021 e janeiro a julho de 2022."
+          ],
+          "proibicoes": ["somar só o item de maior valor", "usar o valor das operações como se fosse imposto", "alínea sem subsunção fática"],
+          "livro_ids": ["§2.2 · S2", "§2.6 · S27", "§7 · S15", "§7 · S49"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "P1 na EF: a execução (número CNJ, juízo), a CDA que ela cobra, e a origem administrativa do débito quando rastreável — os três números da regra CON-01 [§1.3]. O mérito de fundo raramente está na própria EF; se está num conexo, diga qual e decida explicitamente onde ele entra [§7 · S41, B21].",
+          "exemplos_bons": [
+            "Execução fiscal 0018095-44.2017.4.03.6182 (5ª VEF/SP) cobra a CDA 80 6 17 007637-70, originada do PA 10166.732864/2018-92 (CARF), referente a CIDE sobre remessas ao exterior. A matéria de fundo é discutida na anulatória conexa."
+          ],
+          "proibicoes": ["descrever a EF sem dizer o que é o débito", "omitir a CDA quando ela existe"],
+          "livro_ids": ["§1.3 · CON-01", "§7 · S41", "§7 · B21", "§1.4 · A04"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "P1 na substituição é O RETRATO DA GARANTIA ATUAL dentro da execução: EF (número, juízo), dívida consolidada pela PGFN com a CDA, e a carta — banco, número, face, vigência, aditamentos, quando foi aceita pelo juízo. Responde às perguntas 1-3 das 6 canônicas [§6.1 · A21]. Estado processual descrito de forma neutra. PROIBIDO afirmar gap/insuficiência da carta [§5.3 · A45] e convicção absoluta [§5.3 · A46].",
+          "exemplos_bons": [
+            "Execução fiscal de CIDE sobre remessas ao exterior (EF 0018095-44.2017.4.03.6182, 5ª VEF/SP) com dívida consolidada pela PGFN de R$ 138,0 mi (CDA 80 6 17 007637-70), garantida por carta de fiança do Safra (nº 422.010-6, R$ 116,5 mi), com vigência até 15/02/2027 e aditamento de prorrogação homologado em 16/05/2022. […] a execução segue viva, no arquivo, sem baixa.",
+            "Execução fiscal de IRPJ e CSLL (EF 1070831-72.2025.4.01.3700, Seção Judiciária do Maranhão) com dívida consolidada pela PGFN de R$ 271,1 mi, tendo o Hospital São Domingos como devedor principal e Ímpar, Diagnósticos da América e DASA Real Estate como corresponsáveis. A garantia é a carta de fiança nº 6177 do Banco XP […] e aceita pelo juízo em 28/11/2024."
+          ],
+          "proibicoes": ["a garantia atual é insuficiente", "não cobre o débito", "garantia inadequada", "o banco emissor errou", "temos certeza", "sem dúvida", "garantimos que"],
+          "livro_ids": ["§6.1 · A21", "§5.3 · A43", "§5.3 · A45", "§5.3 · A46", "§1.2 · A13"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Igual ao tipo de origem. Se a incerteza de garantia nasce de um conexo, o conexo é nomeado aqui como fato, sem conclusão [§7 · S41; §5.2 · B21].",
+          "exemplos_bons": [
+            "Auto de infração de IPI lavrado em 30/12/2021 contra a empresa […]. Há anulatória conexa (TJ/SP 100xxxx-xx.2024.8.26.0053) cuja existência de garantia não foi confirmada."
+          ],
+          "proibicoes": ["concluir sobre garantia", "não existe garantia"],
+          "livro_ids": ["§5.2 · B21", "§7 · S41", "§5.2 · A02"]
+        }
+      }
+    },
+
+    "merito.p2": {
+      "path": "merito.p2",
+      "max_chars": 600,
+      "limite_fonte": "LIMITES.merito_p2 · trava A19",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "P2 = A DECISÃO + A FASE ATUAL. Fundamento, quóruns POR MATÉRIA, recursos (quem recorreu — contribuinte, solidário, Fazenda, de ofício [§3.4 · S30]) e onde o caso está agora. Embargos: o verbo do dispositivo decide — acolhidos COM efeitos infringentes reabrem; rejeitados/não conhecidos são transparentes [§3.4 · S29]. Pode situar a oportunidade (\"fase anterior à citação\", \"momento em que a garantia pode ser exigida\") sem prazo numérico e sem venda. Coerência obrigatória com pipeline, valor, termômetro e datas — a mesma história em todos os campos [§10.3 · S40].",
+          "exemplos_bons": [
+            "A impugnação foi julgada improcedente pela DRJ. Em 20/08/2024, o Acórdão 3202-001.959 conheceu em parte do Recurso Voluntário e, na parte conhecida, negou-lhe provimento por unanimidade […]. O Recurso Especial, admitido em parte após agravo, foi julgado em 24/06/2026: o Acórdão CSRF 9303-017.455 não o conheceu, por unanimidade, por falta de prequestionamento. O processo foi expedido para a PGFN em 20/07/2026 — momento em que a garantia pode ser exigida.",
+            "Em 16/10/2024, o Acórdão 3402-012.334 […] negou provimento ao Recurso Voluntário por maioria […]; por voto de qualidade, manteve a multa de ofício em 150%. […] o Acórdão 3402-013.321 os acolheu em parte com efeitos infringentes, aplicando de ofício o Tema 863 do STF para reduzir a multa qualificada de 150% para 100% do IPI, sem recalcular os valores."
+          ],
+          "proibicoes": ["tende a", "deverá", "será necessária", "prazo numérico de julgamento", "atribuir recurso da Fazenda ao contribuinte", "tratar diligência como decisão de mérito", "afirmar esgotamento com agravo/RE ainda vivo"],
+          "livro_ids": ["§3.4 · S30", "§3.4 · S29", "§3.3 · S11", "§10.3 · S40", "§6 · S13", "§2.7 · S28"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "P2 do TIT: decisões da DTJ e da Câmara com o teor das teses rejeitadas, o despacho de admissibilidade do RE e o encaminhamento à Cobrança/inscrição. Se há medida judicial paralela (MS, anulatória), diga exatamente O QUE ela suspendeu — protesto ≠ exigibilidade [§3.4 · S46; §10.3 · S40]. Hedge obrigatório sobre execução estadual [§8.4 · S17].",
+          "exemplos_bons": [
+            "A DTJ julgou o AIIM procedente em 25/03/2025 […]. A 1ª Câmara Julgadora conheceu e negou provimento ao recurso ordinário, rejeitando as teses de bis in idem, multa confiscatória e juros abusivos […]. Em 18/03/2026 a Presidência do TIT inadmitiu o Recurso Especial e o AIIM seguiu para a Unidade Fiscal da Cobrança.",
+            "A CDA 1466040244 foi inscrita na PGE-SP em 16/06/2026 […] a liminar de 15/07/2026 sustou o protesto sem exigir garantia e sem suspender a exigibilidade — a execução fiscal pode ser ajuizada a qualquer momento […]"
+          ],
+          "proibicoes": ["tende a", "deverá", "confundir suspensão de protesto com suspensão de exigibilidade", "afirmar ausência de EF no TJSP"],
+          "livro_ids": ["§3.4 · S46", "§8.4 · S17", "§10.3 · S40", "§6 · S13"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "P2 na EF: marcha da execução e estado da garantia, mais o status da dívida (CON-01). Situa a oportunidade pela fase (antes da citação, antes da penhora) sem prazo numérico. Achado judicial só contradiz a ficha se o polo passivo é a empresa E o processo se vincula àquele crédito [§8.3 · S19].",
+          "exemplos_bons": [
+            "Citada a executada, não houve pagamento nem oferta de garantia até a posição de 03/08/2026; a penhora pode ser determinada a seguir, cenário em que a apresentação de seguro garantia passa a ser o caminho natural."
+          ],
+          "proibicoes": ["tende a", "deverá", "usar garantia de outro débito como se fechasse este", "prazo numérico"],
+          "livro_ids": ["§8.3 · S19", "§1.3 · CON-01", "§6 · S13", "§10.3 · S40"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "P2 na substituição é A TESE COMERCIAL: por que substituir AGORA — vencimento marcado da carta, ciclo de renovação pago ao banco, liberação de limite bancário, longevidade do feito (pergunta 6), mudança de controle. Base legal: Lei 13.043/2014. Enquadre como \"o valor que entendemos ter oportunidade\", sem hedge explícito e sem asserção de que o valor atual está errado [§2.8 · A14]. PROIBIDO alegar insuficiência da carta [§5.3 · A45] e convicção absoluta sobre o deferimento judicial da substituição [§5.3 · A46].",
+          "exemplos_bons": [
+            "Diferente das fianças de prazo indeterminado, esta carta tem vencimento marcado: 15/02/2027. A cada ciclo a devedora paga a renovação ao banco — e o próximo ciclo é a oportunidade de substituir a carta por seguro garantia (Lei 13.043/2014), com cobertura dimensionada à necessidade atual da execução e sem novo consumo de limite bancário.",
+            "Vinte e três anos de execução sem desfecho, com discussão ainda pendente no STJ, fazem deste caso o retrato da garantia de longo prazo: a fiança consome limite bancário há mais de uma década. A substituição por seguro garantia (Lei 13.043/2014) libera esse limite […] em um único movimento processual."
+          ],
+          "proibicoes": ["a garantia atual é insuficiente", "não cobre o débito", "garantia inadequada", "temos certeza", "sem dúvida", "garantimos que", "o juízo aceitará", "tende a", "deverá", "taxa/prêmio/cosseguro"],
+          "livro_ids": ["§5.3 · A45", "§5.3 · A46", "§2.8 · A14", "§6.1 · A21", "§11.2 · S44"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Igual ao tipo de origem, fechando com o estado da varredura de conexos: enquanto o conexo não fecha, a oportunidade está em mapeamento — e é isso que o bloco de triagem comunica [§5.2 · B21, A01].",
+          "exemplos_bons": [
+            "[…] O processo foi expedido para a PGFN em 20/07/2026. A varredura de conexos (anulatória/cautelar) ainda não confirmou se há garantia apresentada — o encaminhamento depende dessa validação."
+          ],
+          "proibicoes": ["não existe garantia", "tende a", "deverá"],
+          "livro_ids": ["§5.2 · B21", "§5.2 · A01", "§5.2 · A02"]
+        }
+      }
+    },
+
+    "observacao": {
+      "path": "observacao",
+      "max_chars": 250,
+      "limite_fonte": "LIMITES.observacao · trava A23 (ausente em 21/21 do gabarito)",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "default": "",
+          "guidance": "DEFAULT É VAZIO — 21/21 fichas do gabarito não têm este campo. Só entra fato ATÍPICO relevante a quem aborda: processo irmão, fração a apurar, responsabilidade solidária de terceiro, risco de parcelamento histórico. NUNCA comunicação interna, cosseguro, limites operacionais, diário de QA ou ressalva de subscrição — essas vivem em metadata.nota_interna [§10.4 · S38, A24; §6 · CON-04].",
+          "exemplos_bons": [
+            "Processo irmão 10340.720069/2022-70 trata da mesma matéria em outro ano-calendário e é oportunidade adicional.",
+            "Unilever Brasil Ltda responde solidariamente pelo crédito (art. 124, I, do CTN)."
+          ],
+          "proibicoes": ["capital social × dívida (é nota interna)", "cosseguro", "taxa", "dúvida metodológica", "\"conferir antes de enviar\"", "qualquer instrução para a nossa equipe"],
+          "livro_ids": ["§10.4 · S38", "§10.4 · A24", "§6 · CON-04", "A23"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "default": "",
+          "guidance": "Igual ao CARF. No TIT o candidato mais frequente a observação é a existência de medida judicial paralela (MS/anulatória) que muda a abordagem — desde que seja fato dos autos, não inferência nossa [§8.3 · S19].",
+          "exemplos_bons": [
+            "A empresa impetrou mandado de segurança restrito ao protesto da CDA; a exigibilidade segue preservada."
+          ],
+          "proibicoes": ["declarar o gap TJSP ao cliente (é nota interna, §8.4)", "ressalva de subscrição"],
+          "livro_ids": ["§8.3 · S19", "§8.4 · S17", "§10.4 · S38", "A23"]
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "default": "",
+          "guidance": "Igual ao CARF. Na EF a observação típica é o conexo que carrega o mérito, quando ele é oportunidade adicional em vez de explicação do caso [§7 · S41].",
+          "exemplos_bons": [
+            "A matéria de fundo é discutida em anulatória conexa, que pode gerar oportunidade adicional de garantia."
+          ],
+          "proibicoes": ["ressalva de subscrição", "instrução interna"],
+          "livro_ids": ["§7 · S41", "§10.4 · S38", "A23"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "default": "",
+          "guidance": "Default vazio (10/10 enviadas sem o campo). Se houver, é fato atípico do feito — sucessão societária, corresponsáveis, aditamento pendente de conferência. Nunca ressalva sobre a carta nem instrução interna [§5.3 · A45; §10.4 · S38].",
+          "exemplos_bons": [
+            "Devedora sucedida por Merck Sharp & Dohme Farmacêutica no polo passivo do feito."
+          ],
+          "proibicoes": ["a carta é insuficiente", "conferir aditamento antes de emitir (é nota interna)", "cosseguro", "taxa"],
+          "livro_ids": ["§5.3 · A45", "§10.4 · S38", "A23"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "default": "",
+          "guidance": "Default vazio. A incerteza de garantia NÃO vai aqui — ela é o bloco de triagem, que tem slot próprio e hierarquia visual própria [§5.2 · A01, A03].",
+          "exemplos_bons": [],
+          "proibicoes": ["repetir o bloco de triagem", "instrução interna"],
+          "livro_ids": ["§5.2 · A01", "§5.2 · A03", "A23"]
+        }
+      }
+    },
+
+    "divida_ativa.detalhe": {
+      "path": "divida_ativa.detalhe",
+      "max_chars": 200,
+      "limite_fonte": "LIMITES.divida_ativa_detalhe · trava A22 (com A26/A26b guardando `cda`/`tem`)",
+      "por_tipo": {
+        "nova_apolice_carf": {
+          "aplicavel": true,
+          "guidance": "CERTEZA DATADA com fonte oficial: é a ÚNICA afirmação de ausência permitida como absoluto, porque a PGFN é fonte oficial e integral — desde que escopada e datada [§7 · S15; §8.1 · S16]. Três estados, e a redação muda com eles: (a) consultado e sem inscrição → \"Não há\", com data; (b) consultado mas defasado em relação ao evento → diga o que a consulta de DD/MM mostrou e sinalize internamente; (c) NUNCA consultado → \"sem registro na base consultada\", JAMAIS \"não tem\". A DA da ficha é a que casa pelo NÚMERO DO PROCESSO ADMINISTRATIVO daquela ficha, não qualquer CDA do CNPJ [§8 · TIP-13]. Revalidar ausência com mais de ~30 dias ou anterior ao evento terminal [§8.2 · S39].",
+          "exemplos_bons": [
+            "Sem inscrição em dívida ativa na PGFN em consulta de 17/06/2026, sem apólice ou garantia. O processo foi expedido para a PGFN em 20/07/2026 — a inscrição é a próxima etapa esperada.",
+            "Sem inscrição em dívida ativa localizada na PGFN até 03/08/2026 (CNPJ sem registro na base consultada). Sem apólice, garantia ou parcelamento. Expedido para PGFN em 14/07/2026.",
+            "Três CDAs inscritas em 15/06/2026, todas ATIVA A SER COBRADA (total R$ 54.468.098,18). Sem garantia, suspensão ou execução fiscal ajuizada até a última posição. Consulta PGFN de 19/06/2026."
+          ],
+          "proibicoes": ["\"não tem\" quando o CNPJ nunca foi consultado", "\"confirmar com o cliente se há CDA\" (passa insegurança na nossa fonte — Rulebook T5)", "somar CDAs de outros processos do mesmo CNPJ", "consulta sem data", "até hoje"],
+          "livro_ids": ["§8.1 · S16", "§8 · TIP-13", "§8.2 · S39", "§7 · S15", "§8 · TIP-14"]
+        },
+        "nova_apolice_tit": {
+          "aplicavel": true,
+          "guidance": "Mesma doutrina, fonte PGE-SP. Diga a data da consulta e, quando ela for ANTERIOR ao evento de cobrança, diga isso explicitamente (\"consulta de 01/04/2026, anterior à cobrança\") — é o padrão honesto do acervo [§8.2 · S39]. A ausência de EF estadual não se afirma [§8.4 · S17].",
+          "exemplos_bons": [
+            "Sem CDA localizada na PGE-SP (consulta de 01/04/2026, anterior à cobrança). O AIIM foi enviado à Unidade Fiscal da Cobrança em 18/03/2026 — inscrição em Dívida Ativa é o próximo marco.",
+            "CDA PGE-SP 1466040244, inscrita em 16/06/2026, saldo R$ 100.534.610,29, sem apólice, sem parcelamento e sem execução fiscal identificada na consulta de 03/08/2026."
+          ],
+          "proibicoes": ["afirmar ausência de EF estadual sem hedge", "consulta sem data", "até hoje"],
+          "livro_ids": ["§8.1 · S16", "§8.4 · S17", "§8.2 · S39"],
+          "nota_calibracao": "TIT_5059644 (enviada) escreve \"sem execução fiscal identificada na consulta de 03/08/2026\" — o hedge é \"identificada\" + data. É a forma praticada e aceita; a forma nua (\"sem execução fiscal\") é que dispara A31."
+        },
+        "nova_apolice_ef": {
+          "aplicavel": true,
+          "guidance": "Na EF o detalhe nomeia a CDA em execução, o juízo e o estado da cobrança (ativa ajuizada, garantida, suspensa), com a data da posição. É aqui que o \"status da dívida\" exigido pela CON-01 aparece [§1.3].",
+          "exemplos_bons": [
+            "CDA 80 6 17 007637-70 em execução na 5ª VEF/SP, situação ATIVA AJUIZADA; sem garantia constituída até a posição PGFN de 03/08/2026."
+          ],
+          "proibicoes": ["omitir o status da dívida", "consulta sem data"],
+          "livro_ids": ["§1.3 · CON-01", "§8.1 · S16", "§8.2 · S39"]
+        },
+        "substituicao_fianca": {
+          "aplicavel": true,
+          "guidance": "Na substituição este campo carrega o RETRATO DA EXECUÇÃO onde a carta vive: número da EF, juízo, estado do feito (suspenso, no arquivo, sem baixa) e o que sustenta a longevidade — é insumo direto da pergunta 6 [§6.1 · A21]. `divida_ativa.tem` é `true` e `cda` traz o número real (A26/A26b). Estado descrito de forma neutra, sem juízo sobre a carta [§5.3 · A45].",
+          "exemplos_bons": [
+            "EF 0018095-44.2017.4.03.6182 (5ª VEF/SP). Embargos julgados improcedentes em 20/07/2021, com embargos de declaração rejeitados; execução viva, no arquivo, sem baixa.",
+            "EF 0541769-88.2002.4.02.5101 (4ª VFEF/RJ), autuada em 2002. Suspensa por embargos à execução e pela Medida Cautelar 22986/RJ no STJ.",
+            "EF 1070831-72.2025.4.01.3700 (SJ/MA). Dívida em nome do Hospital São Domingos — confirmada na consulta pública PGFN (Regularize) em 04/08/2026; Ímpar, DASA e DASA Real Estate corresponsáveis."
+          ],
+          "proibicoes": ["a garantia atual não cobre a dívida", "gap entre CDA e face da carta como argumento (§2.8 · A14 — não construir a peça sobre gaps de registro PGFN)", "temos certeza"],
+          "livro_ids": ["§6.1 · A21", "§5.3 · A45", "§2.8 · A14", "§8.5 (A26/A26b)"]
+        },
+        "renovacao": {
+          "aplicavel": false,
+          "motivo": "Fora do lote de fichas (§0.2 · B05-20); anatomia indefinida (B11).",
+          "livro_ids": ["§0.2 · B05-20", "B11"]
+        },
+        "triagem": {
+          "aplicavel": true,
+          "guidance": "Igual ao tipo de origem. Atenção à interação com a tag: se o valor está fechado em CDA CONFIRMADA, não há incerteza real de garantia e a tag `triagem` deve sair — foi exatamente o erro corrigido no BSB [§1.1 · S43].",
+          "exemplos_bons": [
+            "Sem inscrição em dívida ativa na PGFN em consulta de 17/06/2026. A existência de garantia em conexos não foi confirmada até esta posição."
+          ],
+          "proibicoes": ["não existe garantia", "confirmar com o cliente se há CDA", "consulta sem data"],
+          "livro_ids": ["§1.1 · S43", "§8.1 · S16", "§5.2 · A02"]
+        }
+      }
+    }
+  }
+}
