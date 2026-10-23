@@ -22,7 +22,11 @@ from .._utils.prompt_fence import json_sanitizado as _json_dossie_sanitizado
 from .._utils.prompt_fence import neutralizar as _neutralizar
 from .schemas import CampoSpec, FichaWriteFieldsRequest
 
-PROMPT_VERSION = "ficha_writer_v3"
+#: Versão do prompt que o agente usa quando o request traz `esqueleto` (v4, 22/10/2026).
+#: O prompt v4 mora em `prompts_v4.py`. Este módulo guarda o prompt v3, que só serve o
+#: request sem `esqueleto` até o shared ligar o v4 (ver `schemas.py`).
+PROMPT_VERSION = "ficha_writer_v4"
+PROMPT_VERSION_V3 = "ficha_writer_v3"
 
 
 # ── Persona + regras de redacao (VERBATIM) ─────────────────────────────────
@@ -204,4 +208,4 @@ def build_write_fields_prompt(
     return "\n".join(parts)
 
 
-__all__ = ["build_write_fields_prompt", "gerar_fence_token", "PROMPT_VERSION"]
+__all__ = ["build_write_fields_prompt", "gerar_fence_token", "PROMPT_VERSION", "PROMPT_VERSION_V3"]
