@@ -23,6 +23,19 @@ Quem confere a trilha e a prova é o CÓDIGO (`Autos.conferir_citacao`):
    conta como lido: ele está inteiro no prompt.
 3. Com o texto disponível, o trecho está no documento (nas páginas citadas, se
    há páginas). A comparação ignora acento, caixa e espaço repetido.
+
+Determinismo máximo (plano 1.2, rodada real de 23/10/2026): o que o código
+consegue consertar ou verificar, ele conserta ou verifica. Só reprova o que não
+consegue (`Autos.verificar`):
+
+- Trecho longo: o código corta o trecho no fim de palavra (`cortar_trecho`). O
+  trecho casa se ele inteiro, ou os primeiros 120 caracteres normalizados, estão
+  no documento.
+- Documento do núcleo: `paginas` é opcional. O código confere o texto inteiro.
+- Documento do índice com página errada ou sem página: o código acha a página.
+- Documento do índice que a fase A não leu: o código abre o documento (até 5
+  documentos por ficha) e confere o trecho. Sem sucesso, o erro dá a lista dos
+  documentos que o agente pode citar.
 """
 from __future__ import annotations
 
@@ -47,6 +60,13 @@ _MAX_TRECHOS_POR_LEITURA = 8
 
 #: Caracteres de uma página crua devolvida ao agente.
 _MAX_CHARS_PAGINA = 6000
+
+#: Prefixo normalizado do trecho que basta para a citação casar (23/10/2026).
+PREFIXO_TRECHO = 120
+
+#: Documentos não lidos na fase A que o código abre para conferir uma citação,
+#: por ficha (23/10/2026). Budget separado do budget da fase A.
+MAX_VERIFICACOES = 5
 
 
 @dataclass
@@ -80,6 +100,52 @@ def normalizar(texto: str) -> str:
         c for c in unicodedata.normalize("NFKD", texto or "") if not unicodedata.combining(c)
     )
     return re.sub(r"\s+", " ", sem_acento.casefold()).strip()
+
+
+def cortar_trecho(texto: Any, limite: int) -> Any:
+    """Corta o trecho em `limite` caracteres, no fim de palavra (23/10/2026).
+
+    Um valor que não é texto volta igual: o schema dá o erro dele. O código nunca
+    reprova um trecho por tamanho. Um prefixo do trecho literal continua literal.
+    """
+    if not isinstance(texto, str):
+        return texto
+    t = texto.strip()
+    if len(t) <= limite:
+        return t
+    corte = t[:limite]
+    if not t[limite].isspace():
+        m = re.search(r"\s\S*$", corte)
+        if m and m.start() > 0:
+            corte = corte[:m.start()]
+    # Um "..." cortado no meio deixa um pedaço que não está no documento.
+    return corte.rstrip(" \t\n.…") or t[:limite]
+
+
+def trecho_casa(trecho: str, base_normalizada: str) -> bool:
+    """O trecho está no texto: todos os pedaços entre "...", ou o prefixo de 120."""
+    pedacos = [p for p in re.split(r"\.\.\.|…", trecho or "") if p.strip()]
+    if not pedacos:
+        return False
+    if all(normalizar(p) in base_normalizada for p in pedacos):
+        return True
+    prefixo = normalizar(trecho)[:PREFIXO_TRECHO].strip()
+    return bool(prefixo) and prefixo in base_normalizada
+
+
+@dataclass
+class Conferencia:
+    """O resultado de `Autos.verificar`. `erro=None` quer dizer citação aceita.
+
+    `paginas` são as páginas certas do trecho (o código corrige a página errada).
+    `verificado_pelo_codigo=True`: a fase A não leu o documento, e o código abriu o
+    documento e achou o trecho.
+    """
+
+    erro: Optional[str] = None
+    paginas: list[int] = field(default_factory=list)
+    verificado_pelo_codigo: bool = False
+    paginas_corrigidas: bool = False
 
 
 def _texto_da_pagina(doc: Any, pagina: int) -> str:
@@ -195,7 +261,10 @@ def nucleo_legivel(nucleo: Nucleo) -> dict[str, Any]:
 class Autos:
     """O que o agente pode ler e citar, e o que ele leu de fato."""
 
-    def __init__(self, nucleo: Nucleo, indice: list[ItemIndice]) -> None:
+    def __init__(
+        self, nucleo: Nucleo, indice: list[ItemIndice],
+        max_verificacoes: int = MAX_VERIFICACOES,
+    ) -> None:
         from garantis_shared.calculo_fichas.documento import DocumentoIndexado
 
         self.nucleo = nucleo
@@ -203,6 +272,11 @@ class Autos:
         self.indice: dict[str, ItemIndice] = {d.doc_id: d for d in indice}
         self.legiveis: dict[str, Any] = {}
         self.lidos: set[str] = set()
+        #: Documentos que o código abriu para conferir uma citação (23/10/2026).
+        self.abertos_pelo_codigo: set[str] = set()
+        #: Os abertos em que o código achou o trecho citado.
+        self.verificados: set[str] = set()
+        self.max_verificacoes = max_verificacoes
         for d in indice:
             if not d.documento_indexado:
                 continue
@@ -241,33 +315,97 @@ class Autos:
     def foi_lido(self, doc_id: str) -> bool:
         return doc_id in self.textos_nucleo or doc_id in self.lidos
 
+    def citaveis(self) -> list[str]:
+        """Os doc_id que o agente pode citar: o núcleo, os lidos e os verificados."""
+        out = list(self.textos_nucleo)
+        out += sorted((self.lidos | self.verificados) - set(out))
+        return out
+
+    def _erro_com_lista(self, motivo: str) -> str:
+        return (f"{motivo}. Cite só documentos desta lista: "
+                f"{json.dumps(self.citaveis(), ensure_ascii=False)}")
+
+    def _localizar(self, doc: Any, trecho: str) -> list[int]:
+        """As páginas do documento em que o trecho está. Vazia: não achou."""
+        return [p for p in sorted(set(doc.paginas()))
+                if trecho_casa(trecho, normalizar(_texto_da_pagina(doc, p)))]
+
+    def _abrir_para_verificar(self, doc_id: str) -> Optional[str]:
+        """Abre um documento do índice que a fase A não leu. Devolve o erro, ou None."""
+        if doc_id in self.abertos_pelo_codigo:
+            return None
+        if doc_id not in self.legiveis:
+            return self._erro_com_lista(
+                f"o documento {doc_id!r} não foi lido na fase A, e o código não consegue "
+                "abrir o documento (sem conteúdo indexado)")
+        if len(self.abertos_pelo_codigo) >= self.max_verificacoes:
+            return self._erro_com_lista(
+                f"o documento {doc_id!r} não foi lido na fase A, e o código já abriu "
+                f"{self.max_verificacoes} documentos para conferir citações nesta ficha")
+        self.abertos_pelo_codigo.add(doc_id)
+        logger.info("FICHA_AUTOS_VERIFICACAO doc=%s n=%d", doc_id, len(self.abertos_pelo_codigo))
+        return None
+
+    def verificar(self, doc_id: str, paginas: list[int], trecho: str) -> Conferencia:
+        """Confere a citação e conserta o que dá para consertar (23/10/2026).
+
+        Ordem: o doc_id existe; o documento foi lido (ou o código abre o documento);
+        o trecho está no documento. Ver o docstring do módulo.
+        """
+        paginas = list(paginas or [])
+        if not self.existe(doc_id):
+            return Conferencia(erro=self._erro_com_lista(
+                f"doc_id fora do núcleo e do índice: {doc_id!r}"))
+        pelo_codigo = not self.foi_lido(doc_id)
+        if pelo_codigo:
+            erro = self._abrir_para_verificar(doc_id)
+            if erro:
+                return Conferencia(erro=erro)
+
+        # Documento do núcleo: o texto inteiro. `paginas` é opcional e não conta.
+        texto_nucleo = self.textos_nucleo.get(doc_id, "")
+        doc = self.legiveis.get(doc_id)
+        if texto_nucleo.strip() or doc is None:
+            if trecho_casa(trecho, normalizar(texto_nucleo)):
+                return Conferencia(paginas=paginas)
+            return Conferencia(erro="o trecho não está, literal, no documento citado")
+
+        # Documento do índice: as páginas citadas e, se não casar, o código acha a página.
+        existentes = set(doc.paginas())
+        citadas = [p for p in paginas if p in existentes]
+        if citadas and len(citadas) == len(paginas) and trecho_casa(
+                trecho, normalizar(" ".join(_texto_da_pagina(doc, p) for p in citadas))):
+            conf = Conferencia(paginas=citadas)
+        else:
+            achadas = self._localizar(doc, trecho)
+            todas = " ".join(_texto_da_pagina(doc, p) for p in sorted(existentes))
+            if not achadas and trecho_casa(trecho, normalizar(todas)):
+                # O trecho cruza a quebra de página.
+                achadas = citadas or sorted(existentes)
+            if not achadas:
+                motivo = ("o código abriu o documento, e o trecho não está nele"
+                          if pelo_codigo else "o trecho não está, literal, no documento citado")
+                if paginas:
+                    motivo += f" (páginas citadas {paginas}"
+                    fora = [p for p in paginas if p not in existentes]
+                    motivo += (f"; página que não existe no documento {doc_id!r}: {fora})"
+                               if fora else ")")
+                return Conferencia(erro=(self._erro_com_lista(motivo) if pelo_codigo
+                                         else motivo))
+            conf = Conferencia(paginas=achadas, paginas_corrigidas=achadas != paginas)
+            if conf.paginas_corrigidas:
+                logger.info("FICHA_AUTOS_PAGINA_CORRIGIDA doc=%s de=%s para=%s",
+                            doc_id, paginas, achadas)
+        if pelo_codigo:
+            self.verificados.add(doc_id)
+            conf.verificado_pelo_codigo = True
+        return conf
+
     def conferir_citacao(
         self, doc_id: str, paginas: list[int], trecho: str,
     ) -> Optional[str]:
-        """Devolve o erro da citação, ou None. Ver as 3 regras no docstring do módulo."""
-        if not self.existe(doc_id):
-            return f"doc_id fora do núcleo e do índice: {doc_id!r}"
-        if not self.foi_lido(doc_id):
-            return (f"o documento {doc_id!r} não foi lido na fase A. Cite só o núcleo ou "
-                    "um documento que você abriu com uma ferramenta")
-        doc = self.legiveis.get(doc_id)
-        if doc is not None:
-            existentes = set(doc.paginas())
-            fora = [p for p in paginas if p not in existentes]
-            if fora:
-                return f"página que não existe no documento {doc_id!r}: {fora}"
-            if paginas:
-                base = " ".join(_texto_da_pagina(doc, p) for p in paginas)
-            else:
-                base = " ".join(_texto_da_pagina(doc, p) for p in sorted(existentes))
-        else:
-            base = self.textos_nucleo.get(doc_id, "")
-        alvo = normalizar(base)
-        pedacos = [p for p in re.split(r"\.\.\.|…", trecho or "") if p.strip()]
-        if not pedacos or any(normalizar(p) not in alvo for p in pedacos):
-            return ("o trecho não está, literal, no documento citado"
-                    + (f" (páginas {paginas})" if paginas and doc is not None else ""))
-        return None
+        """Devolve o erro da citação, ou None. Ver `verificar`."""
+        return self.verificar(doc_id, paginas, trecho).erro
 
 
 # ── As ferramentas ──────────────────────────────────────────────────────────
@@ -480,13 +618,18 @@ def custo_da_resposta(resp: Any) -> float:
 __all__ = [
     "FERRAMENTAS",
     "MAX_FALHAS_DE_PROTOCOLO",
+    "MAX_VERIFICACOES",
+    "PREFIXO_TRECHO",
     "Autos",
     "BudgetNavegacao",
     "CircuitBreaker",
+    "Conferencia",
     "ResultadoNavegacao",
+    "cortar_trecho",
     "custo_da_resposta",
     "navegar",
     "normalizar",
     "perguntar_via_doc_reader",
     "resumir_via_doc_reader",
+    "trecho_casa",
 ]

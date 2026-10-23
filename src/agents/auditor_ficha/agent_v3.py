@@ -26,6 +26,17 @@ Regras duras (no codigo):
    nao aprova. Todo `confere=false` tem item no balde 1 ou 2 do mesmo campo.
 5. O v3 nunca recebe gabarito (Livro §10.2): o schema recusa o request.
 
+Determinismo maximo (plano 1.2, 23/10/2026), o mesmo do redator v5: antes de
+reprovar uma prova, o codigo conserta ou verifica (`_reparar_provas` e
+`Autos.verificar`):
+
+- `prova.trecho` longo: o codigo corta em 300 caracteres, no fim de palavra.
+- `prova.pagina` ausente: para documento do nucleo, o codigo usa 1 (o nucleo nao
+  tem pagina, e o codigo confere o texto inteiro). Para documento do indice, o
+  codigo acha a pagina do trecho. Pagina errada: o codigo corrige.
+- Documento que a fase A nao leu: o codigo abre o documento (ate 5 por ficha) e
+  confere o trecho. Sem sucesso, o erro da a lista dos documentos citaveis.
+
 FAIL-SAFE, como no v2: falha vira `success=false`, `aprovado=false` e
 `auditor_enabled=false` ("nao auditada").
 """
@@ -41,7 +52,13 @@ from ...providers import create_provider
 from ...utils.llm_json import parse_llm_json
 from .._utils.llm_seed import seed_for
 from .._utils.prompt_identity import versao_com_identidade
-from ..ficha_writer.ferramentas import Autos, BudgetNavegacao, custo_da_resposta, navegar
+from ..ficha_writer.ferramentas import (
+    Autos,
+    BudgetNavegacao,
+    cortar_trecho,
+    custo_da_resposta,
+    navegar,
+)
 from ..ficha_writer.schemas import Nucleo
 from .agent import (
     MAX_RODADAS,
@@ -55,6 +72,7 @@ from .checklist import SO_BALDE_2
 from .prompts import build_prompt_de_correcao
 from .prompts_v3 import PROMPT_VERSION, build_prompt_navegacao_v3, build_prompt_v3
 from .schemas import (
+    MAX_TRECHO_PROVA,
     AuditarFichaRequest,
     AuditarFichaResponse,
     ItemBalde1V3,
@@ -87,6 +105,49 @@ def prompt_version() -> str:
 # ── Validacao ──────────────────────────────────────────────────────────────
 
 
+def _pagina_valida(p: Any) -> bool:
+    return isinstance(p, int) and not isinstance(p, bool) and p >= 1
+
+
+def _reparar_provas(parsed: Any, autos: Autos) -> Any:
+    """Conserta a forma das provas antes do schema (23/10/2026). Nao reprova nada.
+
+    - `trecho` longo: corte em `MAX_TRECHO_PROVA`, no fim de palavra.
+    - `pagina` ausente ou invalida: 1 no documento do nucleo. No documento do
+      indice legivel, a pagina em que o codigo acha o trecho.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    out = dict(parsed)
+    for balde in ("balde1", "balde2"):
+        itens = out.get(balde)
+        if not isinstance(itens, list):
+            continue
+        novos = []
+        for it in itens:
+            prova = it.get("prova") if isinstance(it, dict) else None
+            if not isinstance(prova, dict):
+                novos.append(it)
+                continue
+            prova = dict(prova)
+            if "trecho" in prova:
+                prova["trecho"] = cortar_trecho(prova["trecho"], MAX_TRECHO_PROVA)
+            pagina = prova.get("pagina")
+            if isinstance(pagina, str) and pagina.strip().isdigit():
+                pagina = prova["pagina"] = int(pagina)
+            if not _pagina_valida(pagina):
+                doc_id = str(prova.get("doc_id") or "")
+                if doc_id in autos.textos_nucleo:
+                    prova["pagina"] = 1
+                elif doc_id in autos.legiveis and isinstance(prova.get("trecho"), str):
+                    conf = autos.verificar(doc_id, [], prova["trecho"])
+                    if conf.erro is None and conf.paginas:
+                        prova["pagina"] = conf.paginas[0]
+            novos.append({**it, "prova": prova})
+        out[balde] = novos
+    return out
+
+
 def validar_saida_v3(
     parsed: Any, request: AuditarFichaRequest, autos: Autos,
 ) -> tuple[Optional[SaidaAuditorV3], list[dict[str, Any]]]:
@@ -97,6 +158,7 @@ def validar_saida_v3(
             "campo": "_raiz", "erro": "a resposta tem de ser um objeto JSON",
             "valor_anterior": type(parsed).__name__,
         }]
+    parsed = _reparar_provas(parsed, autos)
     try:
         saida = SaidaAuditorV3.model_validate(parsed)
     except ValidationError as e:
@@ -118,10 +180,18 @@ def validar_saida_v3(
         for i, it in enumerate(itens):
             if it.prova is None:
                 continue
-            erro = autos.conferir_citacao(it.prova.doc_id, [it.prova.pagina], it.prova.trecho)
-            if erro:
-                erros.append({"campo": f"{balde}[{i}].prova", "erro": erro,
+            no_nucleo = it.prova.doc_id in autos.textos_nucleo
+            conf = autos.verificar(it.prova.doc_id, [] if no_nucleo else [it.prova.pagina],
+                                   it.prova.trecho)
+            if conf.erro:
+                erros.append({"campo": f"{balde}[{i}].prova", "erro": conf.erro,
                               "valor_anterior": it.prova.model_dump()})
+                continue
+            if conf.paginas_corrigidas and conf.paginas:
+                it.prova = it.prova.model_copy(update={"pagina": conf.paginas[0]})
+            if conf.verificado_pelo_codigo:
+                logger.info("AUDITOR_FICHA_V3_VERIFICADO_PELO_CODIGO %s[%d] doc=%s",
+                            balde, i, it.prova.doc_id)
 
     # Regra 4: todo slot da trilha conferido; todo `confere=false` acusado.
     for i, f in enumerate(saida.fatos_conferidos):

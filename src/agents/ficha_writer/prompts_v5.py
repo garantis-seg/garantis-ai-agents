@@ -199,16 +199,30 @@ def _bloco_formato_v5(slots: list[SlotResolvido], alertas: list[Alerta]) -> str:
     )
 
 
+def _bloco_docs_citaveis(docs: list[str]) -> str:
+    """A lista fechada dos doc_id que a trilha pode citar (23/10/2026).
+
+    Na rodada Claro de 23/10/2026, o modelo citou 2 vezes um documento que a fase A
+    não leu. O código repete a lista aqui, no turno de escrita e no retry.
+    """
+    return (
+        "=== DOCUMENTOS QUE VOCÊ PODE CITAR NA TRILHA ===\n"
+        "Cite só estes doc_id (o núcleo e o que você leu com as ferramentas):\n"
+        + json.dumps([_n(d) for d in docs], ensure_ascii=False)
+    )
+
+
 def _bloco_regras_trilha() -> str:
     return f"""<regras_da_trilha>
 1. Todo slot de mérito (merito.p1, merito.p2), ultima_decisao.texto, descricao_infracao e
    todo bullet com texto tem PELO MENOS UMA entrada em "trilha_leitura".
-2. `doc_id` é um documento do NÚCLEO ou um documento do ÍNDICE que você ABRIU com uma
-   ferramenta. Documento do índice que você não abriu não vai à trilha.
-3. `trecho_apoio` é cópia LITERAL do documento, no máximo {MAX_TRECHO_APOIO} caracteres. Use
-   "..." para juntar 2 pedaços do mesmo documento. Não parafraseie.
-4. `paginas` são as páginas do trecho, quando o documento tem página (os trechos das
-   leituras trazem a página). Para documento do núcleo, use [].
+2. `doc_id` é um item da lista DOCUMENTOS QUE VOCÊ PODE CITAR: um documento do NÚCLEO ou
+   um documento do ÍNDICE que você ABRIU com uma ferramenta.
+3. `trecho_apoio` é cópia LITERAL do documento. Copie uma frase curta, até
+   {MAX_TRECHO_APOIO} caracteres: o código corta o resto. Use "..." para juntar 2 pedaços do
+   mesmo documento. Não parafraseie.
+4. `paginas` são as páginas do trecho de um documento do ÍNDICE (os trechos das leituras
+   trazem a página). Para documento do núcleo, use [].
 5. A trilha prova o slot. Um fato do slot sem documento que o sustente sai do slot.
 </regras_da_trilha>"""
 
@@ -226,9 +240,11 @@ def build_prompt_escrita(
     erros_retry: Optional[list[ErroDeCampo]] = None,
     aprovados: Optional[dict[str, str]] = None,
     fence_token: Optional[str] = None,
+    docs_citaveis: Optional[list[str]] = None,
 ) -> str:
     """O turno de escrita. `slots` e `alertas` são os ALVO da rodada (no retry, só os
-    que reprovaram). `fence_token` explícito só em teste."""
+    que reprovaram). `docs_citaveis`: os doc_id que a trilha pode citar. `fence_token`
+    explícito só em teste."""
     token = fence_token or gerar_fence_token()
     partes = [
         _persona_v5(req, chave),
@@ -244,6 +260,8 @@ def build_prompt_escrita(
     ]
     if erros_retry:
         partes.append(_bloco_retry(erros_retry, aprovados or {}))
+    if docs_citaveis is not None:
+        partes.append(_bloco_docs_citaveis(docs_citaveis))
     partes.append(_bloco_regras_trilha())
     partes.append(_bloco_regras(req.licoes))
     return "\n\n".join(partes)

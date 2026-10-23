@@ -25,6 +25,19 @@ Regras duras (no código, não no prompt):
    lido de fato na fase A.
 4. Com o texto disponível, o `trecho_apoio` está no documento (literal, sem
    acento, sem caixa e sem espaço repetido).
+
+Determinismo máximo (plano 1.2, rodada real de 23/10/2026). O código conserta ou
+verifica antes de reprovar:
+
+- `trecho_apoio` acima de 200 caracteres: o código corta o trecho no fim de
+  palavra antes de validar (rodada IRB: 3 rodadas perdidas pelo tamanho).
+- `paginas` é opcional para documento do núcleo. Para documento do índice, o
+  código acha a página do trecho.
+- Documento do índice que a fase A não leu: o código abre o documento (budget de
+  5 documentos por ficha) e confere o trecho (rodada Claro). O aviso
+  `verificado_pelo_codigo` registra o caso. Sem sucesso, o erro dá a lista dos
+  documentos citáveis, e o prompt do retry repete a lista.
+- Slot obrigatório vazio ou ausente: o erro diz o motivo da rodada anterior.
 """
 
 from __future__ import annotations
@@ -41,7 +54,7 @@ from ...utils.llm_json import parse_llm_json
 from .._utils.llm_seed import seed_for
 from .._utils.prompt_identity import versao_com_identidade
 from .agent import _resolve_campos_alvo
-from .ferramentas import Autos, BudgetNavegacao, custo_da_resposta, navegar
+from .ferramentas import Autos, BudgetNavegacao, cortar_trecho, custo_da_resposta, navegar
 from .livro import SlotResolvido, chave_livro, motivos_nao_aplicaveis, resolver_slots
 from .prompts_v5 import (
     PROMPT_VERSION,
@@ -53,6 +66,7 @@ from .schemas import (
     AlertaRespondido,
     ErroDeCampo,
     FichaWriteFieldsRequest,
+    MAX_TRECHO_APOIO,
     FichaWriteFieldsResponse,
     Nucleo,
     TrilhaItem,
@@ -81,6 +95,12 @@ BUDGET_POR_DOC = 5
 
 #: O campo do erro de uma entrada da trilha sem slot reconhecível.
 CAMPO_TRILHA = "trilha_leitura"
+
+#: Os erros genéricos do v4 para slot sem texto. O v5 junta o motivo anterior.
+_ERROS_DE_SLOT_VAZIO = ("slot obrigatório vazio", "slot ausente na resposta")
+
+#: O aviso de um documento que o código abriu e conferiu (23/10/2026).
+AVISO_VERIFICADO = "verificado_pelo_codigo"
 
 _AQUI = Path(__file__).resolve().parent
 
@@ -113,6 +133,8 @@ def _trilha_valida(
         if slot and slot not in slots_da_rodada:
             logger.warning("FICHA_WRITER_V5 trilha de slot fora da rodada descartada: %r", slot)
             continue
+        if isinstance(b, dict):
+            b = _reparar_entrada(b)
         try:
             item = TrilhaItem.model_validate(b)
         except ValidationError as e:
@@ -130,23 +152,65 @@ def _trilha_valida(
     return por_slot, erros
 
 
+def _reparar_entrada(b: dict[str, Any]) -> dict[str, Any]:
+    """Conserta a forma de uma entrada da trilha antes do schema (23/10/2026).
+
+    - `trecho_apoio` longo: o código corta em 200 caracteres, no fim de palavra.
+    - `paginas` nula vira `[]`. Um inteiro solto vira `[n]`.
+    """
+    b = dict(b)
+    if "trecho_apoio" in b:
+        b["trecho_apoio"] = cortar_trecho(b["trecho_apoio"], MAX_TRECHO_APOIO)
+    pag = b.get("paginas", [])
+    if pag is None:
+        b["paginas"] = []
+    elif isinstance(pag, int) and not isinstance(pag, bool):
+        b["paginas"] = [pag]
+    return b
+
+
 def _erros_da_trilha(
     slot: str, texto: str, itens: list[TrilhaItem], autos: Autos,
-) -> list[ErroDeCampo]:
-    """As regras 2, 3 e 4 sobre UM slot já aprovado no texto."""
+) -> tuple[list[ErroDeCampo], list[TrilhaItem], list[str]]:
+    """As regras 2, 3 e 4 sobre UM slot já aprovado no texto.
+
+    Devolve `(erros, itens com as páginas corrigidas, avisos de verificação)`.
+    """
     if not itens:
         return [ErroDeCampo(campo=slot, erro=(
-            f"{slot}: slot sem trilha_leitura. Diga o doc_id, as páginas e o trecho literal "
-            "que sustentam o slot (decisão de 23/10/2026)"), valor_anterior=texto)]
-    erros = []
+            f"{slot}: slot sem trilha_leitura. Diga o doc_id e o trecho literal que "
+            "sustentam o slot (decisão de 23/10/2026). Documentos que você pode citar: "
+            f"{autos.citaveis()}"), valor_anterior=texto)], [], []
+    erros: list[ErroDeCampo] = []
+    reparados: list[TrilhaItem] = []
+    avisos_slot: list[str] = []
     for t in itens:
-        erro = autos.conferir_citacao(t.doc_id, t.paginas, t.trecho_apoio)
-        if erro:
+        conf = autos.verificar(t.doc_id, t.paginas, t.trecho_apoio)
+        if conf.erro:
             erros.append(ErroDeCampo(
-                campo=slot, erro=f"{slot}: trilha_leitura: {erro}",
+                campo=slot, erro=f"{slot}: trilha_leitura: {conf.erro}",
                 valor_anterior=t.model_dump(),
             ))
-    return erros
+            continue
+        reparados.append(t.model_copy(update={"paginas": conf.paginas}))
+        if conf.verificado_pelo_codigo:
+            avisos_slot.append(
+                f"{AVISO_VERIFICADO}: {slot}: a fase A não leu o documento {t.doc_id}. "
+                "O código abriu o documento e achou o trecho")
+    return erros, reparados, avisos_slot
+
+
+def _com_motivo_anterior(e: ErroDeCampo, rodada: int, motivos: dict[str, str]) -> ErroDeCampo:
+    """Slot obrigatório vazio ou ausente: o erro diz o motivo da rodada anterior.
+
+    Na rodada Claro de 23/10/2026, o erro final só dizia "slot obrigatório vazio".
+    """
+    if not any(g in e.erro for g in _ERROS_DE_SLOT_VAZIO):
+        return e
+    anterior = motivos.get(e.campo)
+    detalhe = (f" Motivo da rodada anterior: {anterior}" if anterior
+               else " Não há motivo anterior registrado para este slot.")
+    return e.model_copy(update={"erro": f"{e.erro} na rodada {rodada}.{detalhe}"})
 
 
 # ── Ponto de entrada ────────────────────────────────────────────────────────
@@ -219,6 +283,9 @@ async def write_v5(
     ]
     pendentes_slots: list[SlotResolvido] = list(slots)
     pendentes_alertas = list(request.alertas)
+    # slot -> o último motivo de reprovação que não é "vazio" (23/10/2026).
+    motivos: dict[str, str] = {e.campo: e.erro for e in erros_retry}
+    avisos_codigo: list[str] = []
     aprovados: dict[str, str] = {}
     trilha: dict[str, list[TrilhaItem]] = {}
     respondidos: dict[str, AlertaRespondido] = {}
@@ -231,6 +298,7 @@ async def write_v5(
             request, chave=chave, slots=pendentes_slots, alertas=pendentes_alertas,
             citaveis=citaveis_txt, nucleo=nucleo_llm, indice=indice_llm,
             achados=nav.achados, erros_retry=erros_retry, aprovados=aprovados,
+            docs_citaveis=autos.citaveis(),
         )
         resp = await llm.agenerate(
             prompt=prompt, model=model, temperature=0.0,
@@ -256,16 +324,23 @@ async def write_v5(
         for slot in list(ok):
             if not exige_trilha(slot) or not ok[slot]:
                 continue
-            e_slot = erros_trilha.pop(slot, []) or _erros_da_trilha(
-                slot, ok[slot], por_slot.get(slot, []), autos)
+            e_slot = erros_trilha.pop(slot, [])
+            if not e_slot:
+                e_slot, reparados, av = _erros_da_trilha(
+                    slot, ok[slot], por_slot.get(slot, []), autos)
             if e_slot:
                 del ok[slot]
                 erros_campos += e_slot
             else:
-                trilha[slot] = por_slot[slot]
+                trilha[slot] = reparados
+                avisos_codigo += [a for a in av if a not in avisos_codigo]
         # Erro de trilha de slot que já reprovou no texto: o erro do texto basta.
         # Erro de trilha sem slot: vai ao LLM como erro da saída.
         erros_campos += erros_trilha.pop(CAMPO_TRILHA, [])
+        erros_campos = [_com_motivo_anterior(e, rodada, motivos) for e in erros_campos]
+        for e in erros_campos:
+            if not any(g in e.erro for g in _ERROS_DE_SLOT_VAZIO):
+                motivos[e.campo] = e.erro
         ok_alertas, erros_alertas = validar_alertas(parsed, pendentes_alertas)
         aprovados.update(ok)
         respondidos.update({a.codigo: a for a in ok_alertas})
@@ -281,6 +356,8 @@ async def write_v5(
         pendentes_alertas = [a for a in pendentes_alertas if a.codigo not in respondidos]
         erros_retry = erros
 
+    if avisos_codigo:
+        base["avisos"] = [*base["avisos"], *avisos_codigo]
     alertas_ordenados = [respondidos[a.codigo] for a in request.alertas if a.codigo in respondidos]
     trilha_ordenada = [t for s in slots for t in trilha.get(s.nome, [])]
     if erros:
@@ -300,6 +377,7 @@ async def write_v5(
 
 
 __all__ = [
+    "AVISO_VERIFICADO",
     "BUDGET_POR_DOC",
     "BUDGET_POR_FICHA",
     "CAMPO_TRILHA",
