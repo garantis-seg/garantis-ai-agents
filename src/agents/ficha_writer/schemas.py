@@ -21,13 +21,21 @@ desconhecida dá 422. Antes, `extra="ignore"` descartava o `tipo_ficha` em silê
 (defeito 7 do plano de 21/10/2026). A exceção é o `esqueleto`: ele é a ficha
 determinística inteira, e um bloco novo do esqueleto (fiança, renovação) tem de chegar
 ao prompt como fato fixo sem um deploy coordenado.
+
+Decisão de 23/10/2026 (422 da rodada IRB 1481420): o `nucleo` e o item do
+`indice_navegavel` também são exceção. Eles seguem a forma do shared
+(`garantis_shared.fichas.v2`). Uma chave desconhecida dentro deles vira log
+(`FICHA_NUCLEO_CHAVE_IGNORADA`), não 422. O topo do request continua fechado.
 """
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Literal, Optional, Union
 
 from pydantic import AliasChoices, BaseModel, Field, model_validator
+
+logger = logging.getLogger(__name__)
 
 # Os 7 tipos do shared (`garantis_shared.fichas.contratos.TIPOS_FICHA`).
 TipoFicha = Literal[
@@ -163,49 +171,126 @@ class Esqueleto(BaseModel):
 MAX_TRECHO_APOIO = 200
 
 
-class DocNucleo(BaseModel):
-    """Um documento do núcleo: o texto inteiro já vem no request."""
+# ── Contrato do núcleo: a forma que o shared manda (23/10/2026) ───────────────
+#
+# Defeito de 23/10/2026 (rodada real, IRB 1481420): o shared 1.826.0 mandou o
+# núcleo de `garantis_shared.fichas.v2.montar_nucleo`, e o redator v5 respondeu
+# HTTP 422 (`nucleo.cdas` não era lista, `nucleo.metadados` era chave extra). Dois
+# agentes construíram os 2 lados em paralelo, e os lados divergiram. O contrato que
+# vale é o do shared, que produz o dado.
+#
+# Regra (23/10/2026): o topo do request continua `extra="forbid"`. Dentro do núcleo
+# e no item do índice, uma chave desconhecida NÃO dá 422: o schema ignora a chave e
+# registra um log `FICHA_NUCLEO_CHAVE_IGNORADA`. O núcleo é dado do shared. Uma chave
+# nova do shared não pode derrubar a redação sem um deploy coordenado.
+# A forma real fica em `tests/fixtures/nucleo_shared_1826.json` (teste de contrato).
+
+
+def _chaves_aceitas(modelo: type[BaseModel]) -> set[str]:
+    """O nome e os aliases de cada campo do modelo."""
+    chaves: set[str] = set()
+    for nome, campo in modelo.model_fields.items():
+        chaves.add(nome)
+        alias = campo.validation_alias
+        if isinstance(alias, AliasChoices):
+            chaves.update(c for c in alias.choices if isinstance(c, str))
+        elif isinstance(alias, str):
+            chaves.add(alias)
+    return chaves
+
+
+class _DadoDoShared(BaseModel):
+    """Modelo de dado do shared: chave desconhecida vira log, não 422."""
+
+    model_config = {"extra": "ignore", "populate_by_name": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def _logar_chave_desconhecida(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            fora = sorted(set(data) - _chaves_aceitas(cls))
+            if fora:
+                logger.warning("FICHA_NUCLEO_CHAVE_IGNORADA modelo=%s chaves=%s",
+                               cls.__name__, fora)
+        return data
+
+
+class DocNucleo(_DadoDoShared):
+    """Um documento do núcleo: o texto inteiro já vem no request.
+
+    A forma do shared (`montar_nucleo`) é `{doc_id, nome, tipo, data, processo, papel,
+    movimento_ref, texto_completo, n_chars, marca, fonte}`. O texto chega em
+    `texto_completo` (shared) ou em `texto` (forma antiga). O texto pode vir vazio
+    quando o documento é imagem (`marca = "sem_texto_imagem"`).
+    """
 
     doc_id: str = Field(min_length=1)
-    texto: str = Field(min_length=1)
-
-    model_config = _FORBID
+    texto: str = Field(default="", validation_alias=AliasChoices("texto_completo", "texto"))
+    nome: Optional[str] = None
+    tipo: Optional[str] = None
+    data: Optional[str] = None
+    processo: Optional[str] = None
+    papel: Optional[str] = None
+    movimento_ref: Optional[str] = None
+    n_chars: Optional[int] = Field(default=None, ge=0)
+    marca: Optional[str] = None
+    fonte: Optional[str] = None
 
 
 class AcordaoNucleo(DocNucleo):
-    """Um acórdão do núcleo. `processo` é o número do processo do acórdão."""
-
-    processo: Optional[str] = None
+    """Forma antiga: um acórdão do núcleo. `processo` é o número do processo."""
 
 
-class Nucleo(BaseModel):
-    """A leitura obrigatória do redator v5 e do auditor v3.
+class CdasNucleo(_DadoDoShared):
+    """As CDAs do núcleo, na forma do shared (`v2._cdas_do_payload`).
 
-    `cdas`, `premissas_v3` e `qualificacao_s2c` são dados do shared. Eles entram no
-    prompt como vieram (JSON), dentro da cerca.
+    `divida_ativa` é o bloco do esqueleto. `inscricoes_membros` são os membros do
+    conexo do tipo inscrição. `valor_cdas` é a soma em reais.
     """
 
+    divida_ativa: Optional[dict[str, Any]] = None
+    inscricoes_membros: list[dict[str, Any]] = Field(default_factory=list)
+    valor_cdas: Optional[float] = None
+    da_verificada_em: Optional[str] = None
+
+
+class Nucleo(_DadoDoShared):
+    """A leitura obrigatória do redator v5 e do auditor v3.
+
+    A forma do shared 1.826 (`v2.montar_nucleo`) é `{metadados, cdas, premissas_v3,
+    qualificacao, documentos}`. O schema também aceita a forma antiga: `acordaos`,
+    `peticao_inicial` e `ultima_decisao` separados, `cdas` como lista e
+    `qualificacao_s2c` no lugar de `qualificacao`.
+    """
+
+    metadados: Optional[dict[str, Any]] = None
+    #: A chave do shared é `documentos`. O campo tem outro nome porque `documentos()`
+    #: é o método que o redator e o auditor chamam.
+    docs: list[DocNucleo] = Field(
+        default_factory=list, validation_alias=AliasChoices("documentos", "docs"),
+        serialization_alias="documentos")
     acordaos: list[AcordaoNucleo] = Field(default_factory=list)
     peticao_inicial: Optional[DocNucleo] = None
     ultima_decisao: Optional[DocNucleo] = None
-    cdas: list[Any] = Field(default_factory=list)
+    cdas: Union[CdasNucleo, list[Any], None] = None
     premissas_v3: Optional[Any] = None
-    qualificacao_s2c: Optional[Any] = None
-
-    model_config = _FORBID
+    qualificacao: Optional[Any] = Field(
+        default=None, validation_alias=AliasChoices("qualificacao", "qualificacao_s2c"))
 
     def documentos(self) -> list[DocNucleo]:
-        """Os documentos com texto do núcleo, na ordem: acórdãos, petição, decisão."""
-        docs: list[DocNucleo] = list(self.acordaos)
+        """Todo documento do núcleo, na ordem: `documentos`, acórdãos, petição, decisão."""
+        docs: list[DocNucleo] = list(self.docs) + list(self.acordaos)
         docs += [d for d in (self.peticao_inicial, self.ultima_decisao) if d is not None]
         return docs
 
 
-class ItemIndice(BaseModel):
+class ItemIndice(_DadoDoShared):
     """Um documento do índice navegável (o que mais existe nos autos).
 
-    `documento_indexado` é o `to_dict()` do `DocumentoIndexado` do doc_indexer. Sem
-    ele, o agente vê o documento no índice, mas não consegue abrir o documento.
+    A forma do shared é `v2.indice_navegavel`: o `DocumentoDoIndice` do qualificador
+    do conexo mais `processo`, `n_chars` e `marca`. `documento_indexado` é o
+    `to_dict()` do `DocumentoIndexado` do doc_indexer. Sem ele, o agente vê o
+    documento no índice, mas não consegue abrir o documento.
     """
 
     doc_id: str = Field(min_length=1)
@@ -213,11 +298,16 @@ class ItemIndice(BaseModel):
     tipo: Optional[str] = None
     data: Optional[str] = None
     processo: Optional[str] = None
+    processo_numero: Optional[str] = None
     paginas: Optional[int] = Field(default=None, ge=0)
     n_chars: Optional[int] = Field(default=None, ge=0)
+    marca: Optional[str] = None
+    ancora: Optional[Union[str, dict[str, Any]]] = None
+    gcs_path: Optional[str] = None
+    movimento_ref: Optional[str] = None
+    grau: Optional[str] = None
+    fls: Optional[str] = None
     documento_indexado: Optional[dict[str, Any]] = None
-
-    model_config = _FORBID
 
 
 class TrilhaItem(BaseModel):

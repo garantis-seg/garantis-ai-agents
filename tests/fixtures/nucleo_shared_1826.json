@@ -1,0 +1,734 @@
+{
+ "_fonte": "Rodada real de 23/10/2026, IRB 1481420 (conexo), shared 1.826.0: entrada da S4 (montar_nucleo + indice_navegavel). O redator v5 respondeu HTTP 422 a esta forma.",
+ "nucleo": {
+  "metadados": {
+   "conexo_id": 1481420,
+   "conexo": {
+    "id": 1481420,
+    "titulo": "IRB-BRASIL RESSEGUROS S.A.",
+    "descricao": "Processo administrativo de COFINS e PIS no CARF, no valor de R$ 182,8 milhões, em instância de CSRF; última movimentação em 30/09/2026.",
+    "tipo_principal": "tributario",
+    "processo_principal": null,
+    "cnpj_principal": "33376989000191",
+    "cnpj_basico": "33376989",
+    "razao_social": "IRB-BRASIL RESSEGUROS S.A.",
+    "valor_causa_total": null,
+    "data_inicio": null,
+    "data_ultimo_evento": null,
+    "has_apolice": false,
+    "has_autos": false,
+    "status_consolidado": null,
+    "oportunidade_principal": null
+   },
+   "membros": [
+    {
+     "item_ref": "16327721182201921",
+     "item_type": "processo_carf",
+     "role": "principal",
+     "instancia_grau": null,
+     "processo_numero": null,
+     "tribunal": null,
+     "classe_cnj_code": null
+    }
+   ],
+   "aggregate": {
+    "id": "16327.721182/2019-21",
+    "source": "carf",
+    "temperatura": "muito_quente",
+    "tag_oportunidade": "prioridade_4",
+    "valor_cdas": 0.0,
+    "valor_garantia": 182787942.5,
+    "valor_causa": 182787942.5,
+    "data_ultimo_evento": "2026-09-30",
+    "raw_json": {
+     "id": "16327.721182/2019-21",
+     "_source": "carf",
+     "materia": "COFINS, PIS",
+     "favoravel": "fazenda",
+     "percentual": 85,
+     "_valor_cdas": 0.0,
+     "cnpj_basico": "33376989",
+     "temperatura": "muito_quente",
+     "valor_causa": 182787942.5,
+     "divida_ativa": {
+      "source": "pgfn",
+      "inscrita": false,
+      "inscricoes": [],
+      "tem_apolice": false,
+      "valor_total": 0,
+      "data_consulta": "2026-10-22",
+      "total_inscricoes": 0
+     },
+     "razao_social": "IRB-BRASIL RESSEGUROS S.A.",
+     "classified_at": "2026-10-11",
+     "valor_garantia": 182787942.5,
+     "instancia_atual": "CSRF",
+     "_tag_oportunidade": "prioridade_4",
+     "_tem_divida_ativa": false,
+     "_detail_fetched_at": 1792775845.873689,
+     "_divida_ativa_full": {
+      "source": "pgfn",
+      "inscrita": false,
+      "inscricoes": [],
+      "tem_apolice": false,
+      "valor_total": 0,
+      "data_consulta": "2026-10-22",
+      "total_inscricoes": 0
+     },
+     "data_ultimo_evento": "2026-09-30",
+     "valor_garantia_fmt": "R$ 182.8M",
+     "oportunidade_garantia": "alta",
+     "valor_garantia_certeza": 5
+    }
+   },
+   "classificacao": {
+    "grupo_id": "conexo:1481420",
+    "conexo_id": 1481420,
+    "cnpj_basico": "33376989",
+    "razao_social": "IRB-Brasil Resseguros S.A.",
+    "tag_oportunidade": "pendente",
+    "temperatura": "frio",
+    "reason": "admin_carf_ainda_no_carf",
+    "has_guarantee": false,
+    "guarantee_coverage": "not_extracted",
+    "guarantee_verdict": "nao_aplicavel",
+    "garantia_nossa": false,
+    "garantia_terceiro": false,
+    "n_garantias_ativas": 0,
+    "valor_garantia": null,
+    "valor_causa": "397375903.30",
+    "alvo_entity_type": "processo_carf",
+    "alvo_code": "16327721182201921",
+    "n_membros": 1,
+    "event": "resolved",
+    "classified_at": "2026-10-08T17:09:26.119566Z",
+    "updated_at": "2026-10-23T17:30:01.601344Z",
+    "seed_codes": "16327.721182/2019-21",
+    "seed_sources": "manual",
+    "seed_codes_cnpj": null,
+    "seed_sources_cnpj": null,
+    "seed_tipos": "carf",
+    "seed_tipos_cnpj": null,
+    "conexo_updated_at": "2026-10-08T17:00:48.822085Z",
+    "tag_classificada": "pendente",
+    "temperatura_classificada": "frio",
+    "watchlist_tags": [
+     "100MI",
+     "daycoval"
+    ],
+    "incerto_motivo": null,
+    "incerto_motivo_frase": null,
+    "leitura_limitada": null,
+    "cnpj_basico_app": "33376989",
+    "razao_social_app": "IRB-BRASIL RESSEGUROS S.A.",
+    "tem_lastro_nosso": true,
+    "origem": "nossa_seed",
+    "valor_subdimensionado": false,
+    "n_membros_sem_valor": 0,
+    "valor_garantia_origem": null,
+    "ressalva": null,
+    "ressalva_frase": null,
+    "fase": "CSRF",
+    "fase_detalhe": null,
+    "fase_fonte": "carf_timeline",
+    "fase_data": "2026-10-11",
+    "fase_daycoval": null,
+    "fase_motivo": null,
+    "fase_processo_principal": "16327721182201921",
+    "fundamentos": {
+     "tipo": "pendente",
+     "regra": "admin_carf_ainda_no_carf",
+     "valor": {
+      "base": null,
+      "origem": null,
+      "garantias": [],
+      "superadas": [],
+      "valor_garantia": null
+     },
+     "versao": 1,
+     "dividas": [],
+     "incerto": null,
+     "leitura": {
+      "ressalva": null,
+      "veredito": "nao_aplicavel",
+      "cobertura": "not_extracted",
+      "leitura_parcial": false
+     },
+     "processo": {
+      "data": "2026-09-30",
+      "tipo": "processo_carf",
+      "numero": "16327721182201921",
+      "data_tipo": "ultimo_ato",
+      "tipo_frase": "Processo administrativo (CARF)"
+     },
+     "garantias": [],
+     "referencia": "2026-10-23",
+     "regra_frase": "O processo administrativo ainda está em julgamento no CARF, e a cobrança está suspensa.",
+     "temperatura": "frio",
+     "rule_version": "v25",
+     "valor_divida": null,
+     "sem_fundamento": {
+      "frase": "A análise ainda não concluiu o tipo deste Lead.",
+      "motivo": "classificacao_pendente"
+     },
+     "via_administrativa": {
+      "processo": "16327721182201921",
+      "conclusao": "ainda_no_carf"
+     },
+     "temperatura_fundamento": {
+      "frase": "A temperatura fica fria enquanto o Lead está pendente.",
+      "regra": "pendente"
+     }
+    },
+    "members": [
+     {
+      "code": "16327721182201921",
+      "role": null,
+      "entity_type": "processo_carf"
+     }
+    ],
+    "guarantees": [],
+    "debt_value": null,
+    "monitoring": false,
+    "callback_via": "parceiro",
+    "fases_processos": [
+     {
+      "code": "16327721182201921",
+      "fase": "CSRF",
+      "fase_data": "2026-10-11",
+      "principal": true,
+      "fase_fonte": "carf_timeline",
+      "entity_type": "processo_carf",
+      "fase_motivo": null,
+      "fase_detalhe": null,
+      "fase_daycoval": null
+     }
+    ],
+    "fase_calculada_em": "2026-10-23T17:33:54.771792Z"
+   },
+   "da_verificada_em": null,
+   "premissas_v3": {
+    "processo": "16327.721182/2019-21",
+    "operacoes": [
+     {
+      "id": "pis_credito_consolidado",
+      "nota": "Valor total da exigência para PIS/Pasep mencionada no relatório, incluindo multa e juros até 12/2018",
+      "tipo": "dado",
+      "valor": 35773520.56,
+      "origem": "extraida",
+      "confianca": 5,
+      "fonte_trecho": "exigência da Contribuição para o PIS/Pasep (R$ 35.773.520,56)",
+      "fonte_documento": "Acórdão 3102-004.203",
+      "fonte_localizacao": "p. 2, Relatório"
+     },
+     {
+      "id": "cofins_credito_consolidado",
+      "nota": "Valor total da exigência para COFINS mencionada no relatório, incluindo multa e juros até 12/2018",
+      "tipo": "dado",
+      "valor": 220144744.34,
+      "origem": "extraida",
+      "confianca": 5,
+      "fonte_trecho": "e da COFINS (R$ 220.144.744,34)",
+      "fonte_documento": "Acórdão 3102-004.203",
+      "fonte_localizacao": "p. 2, Relatório"
+     },
+     {
+      "id": "pis_pct_multa",
+      "nota": "Multa de ofício padrão de 75%",
+      "tipo": "dado",
+      "valor": 0.75,
+      "origem": "extraida",
+      "confianca": 5,
+      "fonte_trecho": "incluindo multa de ofício de 75%",
+      "fonte_documento": "Acórdão 3102-004.203",
+      "fonte_localizacao": "p. 2, Relatório"
+     },
+     {
+      "id": "cofins_pct_multa",
+      "nota": "Multa de ofício padrão de 75%",
+      "tipo": "dado",
+      "valor": 0.75,
+      "origem": "extraida",
+      "confianca": 5,
+      "fonte_trecho": "incluindo multa de ofício de 75%",
+      "fonte_documento": "Acórdão 3102-004.203",
+      "fonte_localizacao": "p. 2, Relatório"
+     },
+     {
+      "id": "pis_data_fato_gerador",
+      "nota": "Início do período de apuração fiscalizado",
+      "tipo": "dado",
+      "valor": "2015-01",
+      "origem": "extraida",
+      "confianca": 5,
+      "fonte_trecho": "relativa aos períodos de 01/2015 a 12/2016",
+      "fonte_documento": "Acórdão 3102-004.203",
+      "fonte_localizacao": "p. 2, Relatório"
+     },
+     {
+      "id": "cofins_data_fato_gerador",
+      "nota": "Início do período de apuração fiscalizado",
+      "tipo": "dado",
+      "valor": "2015-01",
+      "origem": "extraida",
+      "confianca": 5,
+      "fonte_trecho": "relativa aos períodos de 01/2015 a 12/2016",
+      "fonte_documento": "Acórdão 3102-004.203",
+      "fonte_localizacao": "p. 2, Relatório"
+     },
+     {
+      "id": "pis_data_constituicao",
+      "nota": "Data estimada baseada no número do processo (2019) e no cálculo de juros até 12/2018",
+      "tipo": "dado",
+      "valor": "2019-01",
+      "origem": "assumida",
+      "confianca": 3,
+      "ressalvas": "Data exata do auto de infração não consta no trecho, mas o processo é de 2019."
+     },
+     {
+      "id": "cofins_data_constituicao",
+      "nota": "Data estimada baseada no número do processo (2019) e no cálculo de juros até 12/2018",
+      "tipo": "dado",
+      "valor": "2019-01",
+      "origem": "assumida",
+      "confianca": 3,
+      "ressalvas": "Data exata do auto de infração não consta no trecho, mas o processo é de 2019."
+     },
+     {
+      "id": "pis_voto_qualidade",
+      "nota": "O mérito principal (ativos garantidores) foi decidido por voto de qualidade contra o contribuinte",
+      "tipo": "dado",
+      "valor": 1,
+      "origem": "extraida",
+      "confianca": 5,
+      "fonte_trecho": "por voto de qualidade, para: a) negar-lhe provimento quanto à exclusão da incidência das contribuições referentes às receitas financeiras dos ativos garantidores",
+      "fonte_documento": "Acórdão 3102-004.203",
+      "fonte_localizacao": "p. 2, Decisão"
+     },
+     {
+      "id": "cofins_voto_qualidade",
+      "nota": "O mérito principal (ativos garantidores) foi decidido por voto de qualidade contra o contribuinte",
+      "tipo": "dado",
+      "valor": 1,
+      "origem": "extraida",
+      "confianca": 5,
+      "fonte_trecho": "por voto de qualidade, para: a) negar-lhe provimento quanto à exclusão da incidência das contribuições referentes às receitas financeiras dos ativos garantidores",
+      "fonte_documento": "Acórdão 3102-004.203",
+      "fonte_localizacao": "p. 2, Decisão"
+     },
+     {
+      "id": "pis_principal",
+      "nota": "Decomposição do valor consolidado em 2018 para encontrar o principal original.",
+      "tipo": "formula",
+      "confianca": 3,
+      "expressao": "pis_credito_consolidado / ((1 + pis_pct_multa) * selic(pis_data_fato_gerador, '2018-12'))",
+      "depende_de": [
+       "pis_credito_consolidado",
+       "pis_pct_multa",
+       "pis_data_fato_gerador"
+      ]
+     },
+     {
+      "id": "cofins_principal",
+      "nota": "Decomposição do valor consolidado em 2018 para encontrar o principal original.",
+      "tipo": "formula",
+      "confianca": 3,
+      "expressao": "cofins_credito_consolidado / ((1 + cofins_pct_multa) * selic(cofins_data_fato_gerador, '2018-12'))",
+      "depende_de": [
+       "cofins_credito_consolidado",
+       "cofins_pct_multa",
+       "cofins_data_fato_gerador"
+      ]
+     },
+     {
+      "id": "pis_multa_oficio",
+      "nota": "Exclusão da multa de ofício devido ao desempate por voto de qualidade (Lei 14.689/2023).",
+      "tipo": "formula",
+      "confianca": 5,
+      "expressao": "se(pis_voto_qualidade, 0, pis_principal * pis_pct_multa)",
+      "depende_de": [
+       "pis_voto_qualidade",
+       "pis_principal",
+       "pis_pct_multa"
+      ]
+     },
+     {
+      "id": "cofins_multa_oficio",
+      "nota": "Exclusão da multa de ofício devido ao desempate por voto de qualidade (Lei 14.689/2023).",
+      "tipo": "formula",
+      "confianca": 5,
+      "expressao": "se(cofins_voto_qualidade, 0, cofins_principal * cofins_pct_multa)",
+      "depende_de": [
+       "cofins_voto_qualidade",
+       "cofins_principal",
+       "cofins_pct_multa"
+      ]
+     },
+     {
+      "id": "pis_debito_sem_juros",
+      "tipo": "formula",
+      "confianca": 5,
+      "expressao": "pis_principal + pis_multa_oficio",
+      "depende_de": [
+       "pis_principal",
+       "pis_multa_oficio"
+      ]
+     },
+     {
+      "id": "cofins_debito_sem_juros",
+      "tipo": "formula",
+      "confianca": 5,
+      "expressao": "cofins_principal + cofins_multa_oficio",
+      "depende_de": [
+       "cofins_principal",
+       "cofins_multa_oficio"
+      ]
+     },
+     {
+      "id": "pis_juros",
+      "tipo": "formula",
+      "confianca": 4,
+      "expressao": "pis_debito_sem_juros * (selic(pis_data_constituicao, '2026-07') - 1)",
+      "depende_de": [
+       "pis_debito_sem_juros",
+       "pis_data_constituicao"
+      ]
+     },
+     {
+      "id": "cofins_juros",
+      "tipo": "formula",
+      "confianca": 4,
+      "expressao": "cofins_debito_sem_juros * (selic(cofins_data_constituicao, '2026-07') - 1)",
+      "depende_de": [
+       "cofins_debito_sem_juros",
+       "cofins_data_constituicao"
+      ]
+     },
+     {
+      "id": "pis_garantia",
+      "tipo": "formula",
+      "confianca": 5,
+      "expressao": "pis_debito_sem_juros + pis_juros",
+      "depende_de": [
+       "pis_debito_sem_juros",
+       "pis_juros"
+      ]
+     },
+     {
+      "id": "cofins_garantia",
+      "tipo": "formula",
+      "confianca": 5,
+      "expressao": "cofins_debito_sem_juros + cofins_juros",
+      "depende_de": [
+       "cofins_debito_sem_juros",
+       "cofins_juros"
+      ]
+     },
+     {
+      "id": "garantia_total",
+      "tipo": "formula",
+      "confianca": 5,
+      "expressao": "pis_garantia + cofins_garantia",
+      "depende_de": [
+       "pis_garantia",
+       "cofins_garantia"
+      ]
+     }
+    ],
+    "problemas_conversao_pdf": []
+   }
+  },
+  "cdas": {
+   "divida_ativa": {
+    "tem": false,
+    "cda": null,
+    "status": null,
+    "detalhe": "",
+    "data": "22/10/2026",
+    "inscricoes": []
+   },
+   "inscricoes_membros": [],
+   "valor_cdas": 0.0,
+   "da_verificada_em": null
+  },
+  "premissas_v3": {
+   "processo": "16327.721182/2019-21",
+   "operacoes": [
+    {
+     "id": "pis_credito_consolidado",
+     "nota": "Valor total da exigência para PIS/Pasep mencionada no relatório, incluindo multa e juros até 12/2018",
+     "tipo": "dado",
+     "valor": 35773520.56,
+     "origem": "extraida",
+     "confianca": 5,
+     "fonte_trecho": "exigência da Contribuição para o PIS/Pasep (R$ 35.773.520,56)",
+     "fonte_documento": "Acórdão 3102-004.203",
+     "fonte_localizacao": "p. 2, Relatório"
+    },
+    {
+     "id": "cofins_credito_consolidado",
+     "nota": "Valor total da exigência para COFINS mencionada no relatório, incluindo multa e juros até 12/2018",
+     "tipo": "dado",
+     "valor": 220144744.34,
+     "origem": "extraida",
+     "confianca": 5,
+     "fonte_trecho": "e da COFINS (R$ 220.144.744,34)",
+     "fonte_documento": "Acórdão 3102-004.203",
+     "fonte_localizacao": "p. 2, Relatório"
+    },
+    {
+     "id": "pis_pct_multa",
+     "nota": "Multa de ofício padrão de 75%",
+     "tipo": "dado",
+     "valor": 0.75,
+     "origem": "extraida",
+     "confianca": 5,
+     "fonte_trecho": "incluindo multa de ofício de 75%",
+     "fonte_documento": "Acórdão 3102-004.203",
+     "fonte_localizacao": "p. 2, Relatório"
+    },
+    {
+     "id": "cofins_pct_multa",
+     "nota": "Multa de ofício padrão de 75%",
+     "tipo": "dado",
+     "valor": 0.75,
+     "origem": "extraida",
+     "confianca": 5,
+     "fonte_trecho": "incluindo multa de ofício de 75%",
+     "fonte_documento": "Acórdão 3102-004.203",
+     "fonte_localizacao": "p. 2, Relatório"
+    },
+    {
+     "id": "pis_data_fato_gerador",
+     "nota": "Início do período de apuração fiscalizado",
+     "tipo": "dado",
+     "valor": "2015-01",
+     "origem": "extraida",
+     "confianca": 5,
+     "fonte_trecho": "relativa aos períodos de 01/2015 a 12/2016",
+     "fonte_documento": "Acórdão 3102-004.203",
+     "fonte_localizacao": "p. 2, Relatório"
+    },
+    {
+     "id": "cofins_data_fato_gerador",
+     "nota": "Início do período de apuração fiscalizado",
+     "tipo": "dado",
+     "valor": "2015-01",
+     "origem": "extraida",
+     "confianca": 5,
+     "fonte_trecho": "relativa aos períodos de 01/2015 a 12/2016",
+     "fonte_documento": "Acórdão 3102-004.203",
+     "fonte_localizacao": "p. 2, Relatório"
+    },
+    {
+     "id": "pis_data_constituicao",
+     "nota": "Data estimada baseada no número do processo (2019) e no cálculo de juros até 12/2018",
+     "tipo": "dado",
+     "valor": "2019-01",
+     "origem": "assumida",
+     "confianca": 3,
+     "ressalvas": "Data exata do auto de infração não consta no trecho, mas o processo é de 2019."
+    },
+    {
+     "id": "cofins_data_constituicao",
+     "nota": "Data estimada baseada no número do processo (2019) e no cálculo de juros até 12/2018",
+     "tipo": "dado",
+     "valor": "2019-01",
+     "origem": "assumida",
+     "confianca": 3,
+     "ressalvas": "Data exata do auto de infração não consta no trecho, mas o processo é de 2019."
+    },
+    {
+     "id": "pis_voto_qualidade",
+     "nota": "O mérito principal (ativos garantidores) foi decidido por voto de qualidade contra o contribuinte",
+     "tipo": "dado",
+     "valor": 1,
+     "origem": "extraida",
+     "confianca": 5,
+     "fonte_trecho": "por voto de qualidade, para: a) negar-lhe provimento quanto à exclusão da incidência das contribuições referentes às receitas financeiras dos ativos garantidores",
+     "fonte_documento": "Acórdão 3102-004.203",
+     "fonte_localizacao": "p. 2, Decisão"
+    },
+    {
+     "id": "cofins_voto_qualidade",
+     "nota": "O mérito principal (ativos garantidores) foi decidido por voto de qualidade contra o contribuinte",
+     "tipo": "dado",
+     "valor": 1,
+     "origem": "extraida",
+     "confianca": 5,
+     "fonte_trecho": "por voto de qualidade, para: a) negar-lhe provimento quanto à exclusão da incidência das contribuições referentes às receitas financeiras dos ativos garantidores",
+     "fonte_documento": "Acórdão 3102-004.203",
+     "fonte_localizacao": "p. 2, Decisão"
+    },
+    {
+     "id": "pis_principal",
+     "nota": "Decomposição do valor consolidado em 2018 para encontrar o principal original.",
+     "tipo": "formula",
+     "confianca": 3,
+     "expressao": "pis_credito_consolidado / ((1 + pis_pct_multa) * selic(pis_data_fato_gerador, '2018-12'))",
+     "depende_de": [
+      "pis_credito_consolidado",
+      "pis_pct_multa",
+      "pis_data_fato_gerador"
+     ]
+    },
+    {
+     "id": "cofins_principal",
+     "nota": "Decomposição do valor consolidado em 2018 para encontrar o principal original.",
+     "tipo": "formula",
+     "confianca": 3,
+     "expressao": "cofins_credito_consolidado / ((1 + cofins_pct_multa) * selic(cofins_data_fato_gerador, '2018-12'))",
+     "depende_de": [
+      "cofins_credito_consolidado",
+      "cofins_pct_multa",
+      "cofins_data_fato_gerador"
+     ]
+    },
+    {
+     "id": "pis_multa_oficio",
+     "nota": "Exclusão da multa de ofício devido ao desempate por voto de qualidade (Lei 14.689/2023).",
+     "tipo": "formula",
+     "confianca": 5,
+     "expressao": "se(pis_voto_qualidade, 0, pis_principal * pis_pct_multa)",
+     "depende_de": [
+      "pis_voto_qualidade",
+      "pis_principal",
+      "pis_pct_multa"
+     ]
+    },
+    {
+     "id": "cofins_multa_oficio",
+     "nota": "Exclusão da multa de ofício devido ao desempate por voto de qualidade (Lei 14.689/2023).",
+     "tipo": "formula",
+     "confianca": 5,
+     "expressao": "se(cofins_voto_qualidade, 0, cofins_principal * cofins_pct_multa)",
+     "depende_de": [
+      "cofins_voto_qualidade",
+      "cofins_principal",
+      "cofins_pct_multa"
+     ]
+    },
+    {
+     "id": "pis_debito_sem_juros",
+     "tipo": "formula",
+     "confianca": 5,
+     "expressao": "pis_principal + pis_multa_oficio",
+     "depende_de": [
+      "pis_principal",
+      "pis_multa_oficio"
+     ]
+    },
+    {
+     "id": "cofins_debito_sem_juros",
+     "tipo": "formula",
+     "confianca": 5,
+     "expressao": "cofins_principal + cofins_multa_oficio",
+     "depende_de": [
+      "cofins_principal",
+      "cofins_multa_oficio"
+     ]
+    },
+    {
+     "id": "pis_juros",
+     "tipo": "formula",
+     "confianca": 4,
+     "expressao": "pis_debito_sem_juros * (selic(pis_data_constituicao, '2026-07') - 1)",
+     "depende_de": [
+      "pis_debito_sem_juros",
+      "pis_data_constituicao"
+     ]
+    },
+    {
+     "id": "cofins_juros",
+     "tipo": "formula",
+     "confianca": 4,
+     "expressao": "cofins_debito_sem_juros * (selic(cofins_data_constituicao, '2026-07') - 1)",
+     "depende_de": [
+      "cofins_debito_sem_juros",
+      "cofins_data_constituicao"
+     ]
+    },
+    {
+     "id": "pis_garantia",
+     "tipo": "formula",
+     "confianca": 5,
+     "expressao": "pis_debito_sem_juros + pis_juros",
+     "depende_de": [
+      "pis_debito_sem_juros",
+      "pis_juros"
+     ]
+    },
+    {
+     "id": "cofins_garantia",
+     "tipo": "formula",
+     "confianca": 5,
+     "expressao": "cofins_debito_sem_juros + cofins_juros",
+     "depende_de": [
+      "cofins_debito_sem_juros",
+      "cofins_juros"
+     ]
+    },
+    {
+     "id": "garantia_total",
+     "tipo": "formula",
+     "confianca": 5,
+     "expressao": "pis_garantia + cofins_garantia",
+     "depende_de": [
+      "pis_garantia",
+      "cofins_garantia"
+     ]
+    }
+   ],
+   "problemas_conversao_pdf": []
+  },
+  "qualificacao": {
+   "modo": "capa",
+   "processos": [
+    {
+     "numero": "16327721182201921",
+     "e_fiscal": true,
+     "confianca": "baixa",
+     "fonte": "capa",
+     "requer_revisao": false,
+     "prova": null,
+     "motivo": "Processo administrativo no CARF, órgão que julga recursos de matéria tributária federal."
+    }
+   ],
+   "garantias": []
+  },
+  "documentos": [
+   {
+    "doc_id": "carf:raw/carf/ano=2026/mes=10/dia=10/cnpj=33376989/16327721182201921/anexos/Decisao_16327721182201921_3102-004203.PDF",
+    "nome": "Decisao_16327721182201921_3102-004203.PDF",
+    "tipo": "decisao",
+    "data": null,
+    "processo": "16327721182201921",
+    "papel": "decisao_pa",
+    "movimento_ref": null,
+    "texto_completo": "DOCUMENTO VALIDADO \nMINISTÉRIO DA FAZENDA \nConselho Administrativo de Recursos Fiscais \nPROCESSO  \n16327.721182/2019-21  \nACÓRDÃO \n3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA    \nSESSÃO DE \n17 de junho de 2026 \nRECURSO \nVOLUNTÁRIO \nRECORRENTE \nIRB – BRASIL RESSEGUROS S.A. \nINTERESSADO \nFAZENDA NACIONAL \nAssunto: Contribuição para o Financiamento da Seguridade Social - Cofins \nAno-calendário: 2015, 2016 \nRECEITAS FINANCEIRAS. RESERVAS TÉCNICAS. INVESTIMENTO. INCIDÊNCIA. \nAs receitas financeiras decorrentes de investimentos das reservas técnicas \nsão receitas operacionais relacionadas ao objeto social e às atividades \noperacionais das empresas seguradoras, razão pela qual sobre elas incidem \nas contribuições cumulativas. \nREGIME CUMULATIVO. VARIAÇÕES CAMBIAIS. ESPÉCIE DE RECEITAS \nFINANCEIRAS. SEGURADORAS.  \nAs variações cambiais relacionadas às operações de seguro, cosseguro, \nresseguro e retrocessão, operações típicas de entidades seguradoras, como \nespécies de receitas financeiras, integram a base de cálculo da Cofins das \nsociedades seguradoras, inexistindo previsão para suas exclusões. \nAssunto: Contribuição para o PIS/Pasep \nAno-calendário: 2015, 2016 \nPIS/PASEP. APLICAÇÃO DECORRENTE DA MESMA MATÉRIA FÁTICA. \nAplica-se ao PIS/PASEP o decidido em relação à COFINS a partir da mesma \nmatéria fática. \nACÓRDÃO \nVistos, relatados e discutidos os presentes autos \nAcordam os membros do colegiado em votar da seguinte forma: i) por unanimidade \nde votos, em conhecer do recurso voluntário e negar-lhe provimento quanto à exclusão da \nincidência das contribuições referentes às receitas de variações cambiais decorrentes de prêmios \nde seguros; ii) por voto de qualidade, para: a) negar-lhe provimento quanto à exclusão da \nFl. 1094\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 2 \nincidência das contribuições referentes às receitas financeiras dos ativos garantidores. Vencidos os \nconselheiros Jorge Luís Cabral, Wilson Antônio de Souza Corrêa e Joana Maria de Oliveira \nGuimarães; e b) recusar a proposta de diligência feita pela conselheira Joana Maria de Oliveira \nGuimarães. Vencidos os conselheiros Joana Maria de Oliveira Guimarães, Sabrina Coutinho \nBarbosa e Wilson Antônio de Souza Corrêa; e iii) por maioria de votos, para negar-lhe provimento \nquanto à exclusão da incidência das contribuições referentes às demais receitas de variação \ncambial. Vencidos os conselheiros Joana Maria de Oliveira Guimarães e Wilson Antônio de Souza \nCorrêa, que mantinham a incidência das contribuições apenas referentes às receitas de variações \ncambiais decorrentes de prêmios de seguros, excluindo a incidência das contribuições referentes \nàs demais receitas de variação cambial. A conselheira Sabrina Coutinho Barbosa manifestou \ninteresse em declarar voto.  \nAssinado Digitalmente \nFábio Kirzner Ejchel – Relator \nAssinado Digitalmente \nPedro Sousa Bispo – Presidente \nParticiparam da sessão de julgamento os conselheiros Jorge Luis Cabral, Joana \nMaria de Oliveira Guimaraes, Wilson Antonio de Souza Correa, Fabio Kirzner Ejchel, Sabrina  \nCoutinho  Barbosa, Pedro  Sousa  Bispo  (Presidente). \n \nRELATÓRIO \nTrata o presente de autos de infração lavrados junto à empresa em tela para \nexigência da Contribuição para o PIS/Pasep (R$ 35.773.520,56) e da COFINS (R$ 220.144.744,34), \nno regime de incidência cumulativa, relativa aos períodos de 01/2015 a 12/2016, no valor total de \nR$ 255.918.264,90, incluindo multa de ofício de 75% e juros de mora calculados até 12/2018, em \nvirtude da falta/insuficiência de recolhimento das contribuições.  \nO Relatório Fiscal do Auto de Infração (REFISC) resume que: \n3.3.5 Para as seguradoras, os rendimentos de renda fixa ou variável auferidos em \ninvestimentos compulsórios, vinculados a ativos garantidores de reservas \ntécnicas, são receitas operacionais por serem oriundas do exercício de uma \natividade típica, habitual e exclusiva dessas entidades, prevista em lei e nos \nrespectivos atos constitutivos. \n3.3.6 As reservas técnicas têm o fim específico de formar um fundo destinado a \ngarantir a capacidade de cumprimento de todas as obrigações da seguradora, \ncujos recursos deverão, obrigatoriamente, ser aplicados conforme as diretrizes do \nConselho Monetário Nacional, tendo presentes as condições de liquidez, \nsegurança, rentabilidade e solvência. E são justamente os rendimentos financeiros \nFl. 1095\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 3 \ndas reservas técnicas que dão ensejo às receitas financeiras auferidas pelas \nentidades seguradoras e de previdência complementar aberta. \n3.3.7 Desse modo, sem os rendimentos decorrentes das reservas técnicas, essas \nentidades ficariam impedidas de desenvolver suas atividades, às quais, os \naludidos rendimentos são parcelas indissociáveis. Portanto, em se tratando de \nentidade seguradora, a receita bruta compreende a totalidade das atividades \nenvolvidas em torno do seu objeto social, seja aquele previsto em seu estatuto \nsocial, seja o legalmente tipificado. \nO REFISC prossegue:  \n4.3 Haja vista toda a fundamentação apresentada neste relatório, em especial no \nitem 3, resta incontroverso que a base de cálculo do PIS e da COFINS nos regimes \ncumulativos abrange qualquer receita auferida em razão da atividade ou objeto \nprincipal da pessoa jurídica, consoante o art. 12 do Decreto-Lei nº 1.598 de 1977. \nTanto é assim, que para suportar a sua tese de que as receitas financeiras não \ncompõem a base de cálculo das referidas contribuições sociais, a fiscalizada, \nexplicitamente, indicou redação legal que não se encontra vigente para o período \nfiscalizado, qual seja, de janeiro de 2015 a dezembro de 2016. \n4.4 Por fim, neste mesmo documento supracitado, a fiscalizada conclui que \napesar de entender que as receitas financeiras provenientes dos ativos \ngarantidores não representam receitas operacionais, em razão do entendimento \ncontrário da Receita Federal, a fiscalizada optou por oferecer referidas receitas à \ntributação do PIS/COFINS a partir de março de 2016. Sem apresentar qualquer \njustificativa para não incluir as receitas financeiras do ano calendário de 2015 bem \ncomo dos meses de janeiro e fevereiro do ano-calendário de 2016. \n4.5 Portanto, na apuração do PIS e da COFINS nos períodos fiscalizados foi \nverificada a não inclusão, nas respectivas bases de cálculo, (i) das receitas \nfinanceiras auferidas em investimentos compulsórios para as seguradoras, isto é, \nna aplicação dos ativos garantidores das reservas técnicas; e (ii) das receitas \nfinanceiras auferidas nas variações ou oscilações cambiais relacionadas às \noperações de seguro, cosseguro, resseguro e retrocessão no período de janeiro de \n2015 a fevereiro de 2016. \n(...) \n4.9.1 Verificou-se a não inclusão na base de cálculo do PIS e da COFINS de receitas \ndecorrentes de variações ou oscilações cambiais ativas ocorridas em direitos de \ncrédito e em obrigações da fiscalizada, vinculados a operações de seguro, \ncosseguro, resseguro e retrocessão para todo o ano calendário de 2015 e para os \nmeses de janeiro de fevereiro do ano calendário de 2016. \nFinalmente, o REFISC conclui: \n5.8 Dada as considerações anteriores, passou a apuração da correta base de \ncálculo. O valor a ser tributado é representado pela receita operacional total, \nFl. 1096\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 4 \nincluindo as receitas financeiras auferidas nos investimentos compulsórios (Anexo \nI para o ano-calendário de 2015 e Anexo III para o ano-calendário de 2016) e as \nvariações ou oscilações cambiais vinculadas a operações de seguro, cosseguro, \nresseguro e retrocessão (Anexo II para o ano-calendário de 2015 e anexo IV para o \nano-calendário de 2016).  \nA empresa apresentou impugnação aos lançamentos, que foi analisada e julgada \nimprocedente, por unanimidade de votos, pela 11ª Turma da Delegacia de Julgamento da Receita \nFederal do Brasil em Ribeirão Preto (DRJ/RPO) conforme Acórdão 14-106.947, cuja ementa está \ntranscrita abaixo: \nACÓRDÃO Nº 14-106.947 - 11ª TURMA DA DRJ/RPO  \nDATA DA SESSÃO 07 DE MAIO DE 2020  \nPROCESSO Nº 16327.721182/2019-21  \nINTERESSADO IRB-BRASIL RESSEGUROS S.A. \nCNPJ/CPF 33.376.989/0001-91  \nASSUNTO: PROCESSO ADMINISTRATIVO FISCAL  \nPeríodo de apuração: 01/01/2015 a 31/12/2016  \nDECISÕES JUDICIAIS E ADMINISTRATIVAS. EFEITOS. \nAs decisões judiciais e administrativas relativas a terceiros não possuem eficácia \nnormativa, uma vez que não integram a legislação tributária de que tratam os \nartigos 96 e 100 do Código Tributário Nacional. \nPROVAS. \nA prova documental deve ser apresentada no momento da impugnação, a menos \nque demonstrado, justificadamente, o preenchimento de um dos requisitos \nconstantes do art. 16, § 4º, do Decreto nº 70.235, de 1972, o que não se logrou \natender neste caso. \nDILIGÊNCIA. PERÍCIA. \nIndefere-se o pedido de diligência ou perícia quando se trata de matéria passível \nde prova documental a ser apresentada no momento da impugnação, bem como \nquando presentes elementos suficientes para a formação da convicção para \njulgamento. \nALEGAÇÃO DE ERRO NA APURAÇÃO FISCAL. \nDescrito pela Fiscalização, e não refutado pela defesa, que a apuração dos valores \nautuados decorre de registros da escrituração em contas contábeis utilizadas pela \nprópria Contribuinte na apuração da base de cálculo de alguns períodos \nanalisados no procedimento fiscal, a alegação de erro, desacompanhada das \ncorrespondentes provas documentais, não é hábil a alterar o lançamento nem a \njustificar pedido de diligência ou perícia. \nFl. 1097\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 5 \nASSUNTO: CONTRIBUIÇÃO PARA O FINANCIAMENTO DA SEGURIDADE SOCIAL - \nCOFINS  \nPeríodo de apuração: 01/01/2015 a 31/12/2016  \nALARGAMENTO DA BASE DE CÁLCULO. DECISÃO JUDICIAL. \nA declaração de inconstitucionalidade, pelo STF, do § 1º do art. 3º da Lei nº 9.718, \nde 1998, que ensejou a posterior extirpação desse parágrafo por efeito da Lei nº \n11.941, de 2009, não alterou, em particular, o critério definidor da base de \nincidência da Contribuição para o PIS/Pasep e da Cofins, que continua a ser o \nfaturamento. Pelo contrário, apenas firmou o entendimento de que não é \nqualquer receita que pode ser considerada faturamento para fins de incidência \ndessas contribuições sociais, mas apenas aquelas vinculadas à atividade mercantil \ntípica da empresa, afastando a incidência sobre receitas não operacionais. \nBASE \nDE \nCÁLCULO. \nRECEITAS \nFINANCEIRAS. \nATIVIDADE \nEMPRESARIAL. \nSEGURADORAS. \nAs receitas financeiras oriundas das atividades empresariais (econômicas) da \npessoa jurídica, obtidas a partir de investimentos necessários para o exercício da \natividade fim, integram o seu faturamento e, portanto, compõem a base de \ncálculo, não se justificando sua exclusão. \nVARIAÇÕES CAMBIAIS. ESPÉCIE DE RECEITAS FINANCEIRAS. SEGURADORAS  \nAs variações cambiais relacionadas às operações de seguro, cosseguro, resseguro \ne retrocessão, operações típicas de entidades seguradoras, como espécies de \nreceitas financeiras, integram a base de cálculo da contribuição ao PIS e da Cofins, \ninexistindo previsão para sua exclusão. \nASSUNTO: CONTRIBUIÇÃO PARA O PIS/PASEP  \nPeríodo de apuração: 01/01/2015 a 31/12/2016  \nALARGAMENTO DA BASE DE CÁLCULO. DECISÃO JUDICIAL. \nA declaração de inconstitucionalidade, pelo STF, do § 1º do art. 3º da Lei nº 9.718, \nde 1998, que ensejou a posterior extirpação desse parágrafo por efeito da Lei nº \n11.941, de 2009, não alterou, em particular, o critério definidor da base de \nincidência da Contribuição para o PIS/Pasep e da Cofins, que continua a ser o \nfaturamento. Pelo contrário, apenas firmou o entendimento de que não é \nqualquer receita que pode ser considerada faturamento para fins de incidência \ndessas contribuições sociais, mas apenas aquelas vinculadas à atividade mercantil \ntípica da empresa, afastando a incidência sobre receitas não operacionais. \nBASE \nDE \nCÁLCULO. \nRECEITAS \nFINANCEIRAS. \nATIVIDADE \nEMPRESARIAL. \nSEGURADORAS. \nAs receitas financeiras oriundas das atividades empresariais (econômicas) da \npessoa jurídica, obtidas a partir de investimentos necessários para o exercício da \nFl. 1098\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 6 \natividade fim, integram o seu faturamento e, portanto, compõem a base de \ncálculo, não se justificando sua exclusão. \nVARIAÇÕES CAMBIAIS. ESPÉCIE DE RECEITAS FINANCEIRAS. SEGURADORAS  \nAs variações cambiais relacionadas às operações de seguro, cosseguro, resseguro \ne retrocessão, operações típicas de entidades seguradoras, como espécies de \nreceitas financeiras, integram a base de cálculo da contribuição ao PIS e da Cofins, \ninexistindo previsão para sua exclusão. \nImpugnação Improcedente  \nCrédito Tributário Mantido  \nTendo tomado ciência da decisão de 1ª instância em 16/07/2020, por via postal, a \nempresa apresentou, em 28/09/2020, recurso voluntário em que solicita: \n149. Ante todo o exposto, o Recorrente requer seja dado provimento ao presente \nRecurso Voluntário, para que seja reformada a r. decisão recorrida, com o \nconsequente cancelamento integral dos autos de infração originários. \n150. Contudo, caso assim não se entenda, o Recorrente requer que seja \ndeterminada a perícia técnica contábil para a verificação do erro de base de \ncálculo, nos termos expostos no item anterior. \n151. Por fim, caso venha a ser mantida qualquer parcela dos lançamentos – o que \nse admite apenas para fins de argumentação, o Recorrente requer que seja \nreconhecida a impossibilidade de exigência de juros de mora sobre a multa de \nofício lançada, em razão do disposto no artigo 161, do Código Tributário Nacional, \nconforme já decidido pela 1ª Turma da Câmara Superior de Recursos Fiscais, no \njulgamento do recurso especial interposto nos autos do processo administrativo \nnº 10680.002472/2007-23, realizado na sessão do dia 09.11.2010. \nA Procuradoria da Fazenda Nacional apresentou Contrarrazões ao Recurso \nVoluntário  datada de 24/11/20. \nEm 10/12/21, a empresa apresentou petição requerendo a juntada de arquivos com \ntraduções juramentadas.  \nFinalmente, em 20/05/26, a recorrente solicitou a juntada de laudo contábil, \nincluído às fls. 1070/1093. \nÉ o relatório. \n \nVOTO \nConselheiro Fábio Kirzner Ejchel, Relator  \nO Recurso Voluntário é tempestivo e atende os demais requisitos de \nadmissibilidade, devendo, então, ser conhecido. \nFl. 1099\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 7 \nConforme relatado, trata-se de autos de infração de PIS e Cofins relativos aos anos \nde 2015 e 2016 lavrados porque a fiscalização entendeu que a empresa deixou de incluir na base \nde cálculo das contribuições os rendimentos financeiros oriundos dos ativos garantidores das \nprovisões técnicas e as receitas financeiras auferidas nas variações ou oscilações cambiais \nrelacionadas às operações de seguro, cosseguro, resseguro e retrocessão.  \nO recurso voluntário traz questões de mérito sobre as receitas financeiras \ndecorrentes de seus ativos garantidores; sobre erro na base de cálculo referente às receitas \nfinanceiras e sobre a não incidência do PIS e da COFINS sobre variações ou oscilações cambiais \nrelacionadas às operações de seguro, cosseguro, resseguro e retrocessão e erro de base de \ncálculo. Por fim expõe a necessidade de realização de perícia e a impossibilidade de exigência de \njuros de mora sobre a multa de ofício lançada.   \nTodos esses assuntos passam a ser tratados em seguida. \nA) Receitas financeiras decorrentes de ativos garantidores \nNeste tópico, a empresa argumenta que as receitas financeiras decorrentes de \ninvestimentos compulsórios em ativos garantidores não devem ser computadas para \ndeterminação da base de cálculo do PIS e da Cofins. Abaixo, excertos do recurso: \n20. Conforme mencionado anteriormente, o acórdão proferido pela 11ª Turma de \nJulgamento da DRJ/RPO, decisão ora recorrida, entendeu que as receitas \nfinanceiras das provisões técnicas dos ativos garantidores deveriam ser tributadas \npelo PIS e COFINS. \n21. Contudo, antes de adentrarmos aos argumentos utilizados pela decisão \nrecorrida para a manutenção dos referidos autos de infração, é necessário \nfazermos alguns esclarecimentos iniciais quanto à atividade do Recorrente. \nVejamos. \n22. O Recorrente tem por objeto efetuar operações de resseguro e retrocessão no \nPaís e no exterior, não podendo explorar qualquer outro ramo de atividade \nempresarial, nem subscrever seguros diretos, conforme artigo 2º de seu Estatuto \nSocial. \n(...) \n30. Portanto, seja em decorrência do estatuto social do Recorrente, seja em \ndecorrência da vedação expressa do artigo 73 do Decreto-lei nº 73/1996, ou, \nainda, em decorrência do entendimento do Supremo Tribunal Federal que deu \norigem à Sumula nº 32 acima mencionada, resta evidente que a atividade \noperacional do Recorrente deve se restringir às atividades de seguro/resseguros. \n(...) \n36. A esse respeito, inclusive, vale esclarecer que o Recorrente obteve provimento \njurisdicional favorável nos autos da Ação Ordinária nº 2006.51.01.010496-3. \nNessa oportunidade foi assegurado ao Recorrente o direito de recolher o PIS e a \nFl. 1100\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 8 \nCOFINS incidentes sobre seu faturamento (entendido como a receita bruta \noriunda do desenvolvimento de suas atividades empresariais), sendo indevida a \nexigência de tais contribuições sobre receitas não operacionais.  \n(...) \n39. Considerando-se a decisão acima transcrita, o que se verifica é que a decisão é \nbastante ampla, aplicando-se a todas e quaisquer receitas que não sejam \ndecorrentes das atividades econômicas desenvolvidas pelo Recorrente. Assim, \nmuito embora a legislação tenha sido alterada pela Lei nº 12.973/2014, o espírito \nda norma continua o mesmo, devendo sempre ser interpretado à luz da decisão \ndo STF quanto à inconstitucionalidade do parágrafo 1º, do artigo 3º da Lei nº \n9.718/1998. \n40. Nesse sentido, a despeito do alegado no r. acórdão ora recorrido, a decisão \nobtida pelo Recorrente no Processo Judicial acima mencionado ainda é aplicável \nao caso ora em comento, pois somente reforça o entendimento de que apenas os \nvalores que efetivamente representem e decorram das atividades empresariais \ntípicas do Recorrente - o que não é o caso das receitas objeto da autuação – \npodem ser incluídos na base de cálculo da contribuição ao PIS e da COFINS. \n41. Portanto, diferentemente do que exposto na r. decisão recorrida, é \nincontroverso que as contribuições ao PIS e à COFINS não poderão incidir sobre \nreceitas que não sejam enquadradas como operacionais. \n(...) \n44. O posicionamento acima foi confirmado por meio da edição do Parecer \nPGFN/CAT nº 2.773/2007, que não apenas afastou a incidência da contribuição ao \nPIS e da COFINS sobre as receitas financeiras das seguradoras, mas foi expresso \nno sentido de que “ serviços para as seguradoras abarcam as receitas advindas do \nrecebimento de prêmios”. Em outras palavras, diferentemente do que aborda o r. \nacórdão recorrido, cristalizou-se o entendimento de que quaisquer receitas \ndiferentes das receitas de prêmio não deveriam ser incluídas na base de cálculo \nda contribuição ao PIS e da COFINS. \n(...) \n55. Por esse motivo, inclusive, o Recorrente entende que continuam \nintegralmente válidas as decisões judiciais que transitaram em julgado nos autos \nda Ação Ordinária nº 2006.51.01.010496-3. \n(...) \n57. Mas exatamente à luz do acima exposto é que as receitas ora autuadas não \npodem sofrer a incidência da contribuição ao PIS e da COFINS, na medida em que \nnão constituem receitas vinculadas à atividade mercantil típica do Recorrente, \núnicas que poderiam sofrer a incidência de tais contribuições. \n58. Portanto, resta inconteste que, seja no período anterior à alteração \nintroduzida pela Lei nº 12.973/2014 no conceito de receita bruta, seja no período \nFl. 1101\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 9 \natual, somente poderão ser incluídas na base de cálculo da contribuição ao PIS e \nda COFINS receitas operacionais que decorram intrinsecamente das atividades \noperacionais do Recorrente, que, conforme amplamente demonstrado acima, são \nos prêmios decorrentes das atividades de seguros.  \n(...) \n62. Da análise dos normativos acima comentados depreende-se que os critérios \nde aplicação dos recursos das reservas são extremamente rígidos, com vistas a \ngarantir a manutenção do necessário equilíbrio econômico-financeiro e atuarial \nentre ativos e passivos, tendo em vista as características das obrigações \nassumidas nesse tipo de atividade. \n(...) \n65. Nesse sentido, diferentemente do que aduz o acórdão recorrido, a natureza \ncompulsória da aplicação financeira em tela não pode ser usada para caracterizar \ntal atividade como sendo atividade empresarial das sociedades seguradoras, \ndevendo ser entendida somente como uma forma de garantir liquidez às \nseguradoras/resseguradoras. \n(...) \n78. Desse modo, considerando que o investimento em ativos garantidores \ndecorre de uma imposição legal, diferentemente do que aponta o r. acórdão \nrecorrido, as receitas financeiras auferidas pelo Recorrente não podem ser \nconsideradas como receita operacional do Recorrente. \n(...) \n104. Ante o exposto, as receitas financeiras (rendimentos financeiros) decorrentes \ndos ativos garantidores das provisões técnicas obtidas pelo Recorrente são \nreceitas financeiras atípicas não enquadráveis como operacionais pelo simples \nfato de que não são originadas da exploração de seu objeto social, mas sim \ndecorrentes da natureza da atividade desenvolvida que demanda a adoção de \nmecanismos(exigidos legalmente) para atenuar risco de desequilíbrio econômico-\nfinanceiro num cenário de contingências futuras. \n105. Por essas razões, deverá ser dado provimento ao presente recurso \nvoluntário, com a reforma do r. acórdão recorrido e o consequente cancelamento \ndos autos de infração originários. \nNão assiste razão à recorrente. \nO cerne da questão está no tratamento a ser dado às receitas financeiras \ndecorrentes de reservas técnicas compulsórias da empresa. \nA recorrente entende que tais receitas não estão sujeitas à incidência do PIS e \nCofins, trazendo diversos elementos corroborando tal entendimento.  \nFl. 1102\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 10 \nA fiscalização, bem como o acórdão recorrido, entende que tais receitas devem, \nsim,  ser incluídas na base de cálculo das contribuições. \nPois bem.  \nIRB-Brasil Resseguros S.A. é uma sociedade anônima de capital aberto, regida pelo \nseu Estatuto Social e pela legislação vigente que lhe for aplicável. A Sociedade tem por objetivo \nefetuar operações de resseguro e retrocessão no País e no exterior, não podendo explorar \nqualquer outro ramo de atividade empresarial, nem subscrever seguros diretos. Está sujeita à \nincidência cumulativa do PIS/Cofins. \nTal incidência tem como fundamento legal a Lei nº 9.718/1998, da qual se \ntranscrevem os seguintes dispositivos: \nArt. 2° As contribuições para o PIS/PASEP e a COFINS, devidas pelas pessoas \njurídicas de direito privado, serão calculadas com base no seu faturamento, \nobservadas a legislação vigente e as alterações introduzidas por esta Lei. \nArt. 3º O faturamento a que se refere o art. 2º compreende a receita bruta de que \ntrata o art. 12 do Decreto-Lei nº 1.598, de 26 de dezembro de 1977. \n§ 2º Para fins de determinação da base de cálculo das contribuições a que se \nrefere o art. 2º, excluem-se da receita bruta: \nI - as vendas canceladas e os descontos incondicionais concedidos; \nII - as reversões de provisões e recuperações de créditos baixados como perda, \nque não representem ingresso de novas receitas, o resultado positivo da avaliação \nde investimento pelo valor do patrimônio líquido e os lucros e dividendos \nderivados de participações societárias, que tenham sido computados como \nreceita bruta; \n(...) \nIV - as receitas de que trata o inciso IV do caput do art. 187 da Lei no 6.404, de 15 \nde dezembro de 1976, decorrentes da venda de bens do ativo não circulante, \nclassificado como investimento, imobilizado ou intangível;  \n(...) \nVI - a receita reconhecida pela construção, recuperação, ampliação ou \nmelhoramento da infraestrutura, cuja contrapartida seja ativo intangível \nrepresentativo de direito de exploração, no caso de contratos de concessão de \nserviços públicos. \n(...) \n§ 5º Na hipótese das pessoas jurídicas referidas no § 1º do art. 22 da Lei nº 8.212, \nde 24 de julho de 1991, serão admitidas, para os efeitos da COFINS, as mesmas \nexclusões e deduções facultadas para fins de determinação da base de cálculo da \ncontribuição para o PIS/PASEP. \nFl. 1103\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 11 \n§ 6º Na determinação da base de cálculo das contribuições para o PIS/PASEP e \nCOFINS, as pessoas jurídicas referidas no § 1º do art. 22 da Lei no 8.212, de \n1991, além das exclusões e deduções mencionadas no § 5º, poderão excluir ou \ndeduzir: \n(...) \nII - no caso de empresas de seguros privados, o valor referente às indenizações \ncorrespondentes aos sinistros ocorridos, efetivamente pago, deduzido das \nimportâncias recebidas a título de cosseguro e resseguro, salvados e outros \nressarcimentos. (negritos nossos) \nA base de cálculo das contribuições é o faturamento, que abrange o produto da \nvenda de bens nas operações de conta própria, o preço da prestação de serviços em geral, o \nresultado auferido nas operações de conta alheia e outras receitas da atividade ou objeto principal \nda pessoa jurídica. Em relação às seguradoras, a lei prevê a exclusão da base de cálculo somente \nem relação às indenizações dos sinistros ocorridos. \nA Lei nº 9.701/1998, que dispõe sobre a base de cálculo da Contribuição para o PIS \ndevida pelas instituições financeiras, abrangendo as seguradoras, assim dispõe: \nArt. 1º Para efeito de determinação da base de cálculo da Contribuição para o \nPrograma de Integração Social - PIS, de que trata o inciso V do art. 72 do Ato das \nDisposições Constitucionais Transitórias, as pessoas jurídicas referidas no § 1º do \nart. 22 da Lei nº 8.212, de 24 de julho de 1991, poderão efetuar as seguintes \nexclusões ou deduções da receita bruta operacional auferida no mês: \nI - reversões de provisões operacionais e recuperações de créditos baixados como \nprejuízo, que não representem ingresso de novas receitas, o resultado positivo da \navaliação de investimentos pelo valor do patrimônio líquido e os lucros e \ndividendos derivados de investimentos avaliados pelo custo de aquisição, que \ntenham sido computados como receita; \n(...) \nIV - no caso de empresas de seguros privados: \na) cosseguro e resseguro cedidos; \nb) valores referentes a cancelamentos e restituições de prêmios que houverem \nsido computados como receitas; \nc) a parcela dos prêmios destinada à constituição de provisões ou reservas \ntécnicas; \n(...) \n§ 1º É vedada a dedução de qualquer despesa administrativa. (Redação dada pela \nMedida Provisória nº 2158-35, de 2001) \n(...) \nFl. 1104\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 12 \n§ 3º As exclusões e deduções previstas neste artigo restringem-se a operações \nautorizadas às empresas ou entidades nele referidas, desde que realizadas dentro \ndos limites operacionais previstos na legislação pertinente. (negritos nossos)  \nNota-se que a lei prevê a dedução da base de cálculo da contribuição para o PIS da \nparcela dos prêmios destinada à constituição de provisões ou reservas técnicas, nada dizendo \nsobre os rendimentos financeiros delas decorrentes. \nNo recurso voluntário, a recorrente traz alguns julgados do Supremo Tribunal \nFederal (STF) e menciona ação ordinária da própria empresa que garantiria o seu direito de \nrecolher o PIS e a Cofins sobre seu faturamento, sendo indevida a exigência de tais contribuições \nsobre receitas não operacionais.    \nNeste ponto, deve-se ressaltar que se encontra sub judice no STF, sob o regime da \nrepercussão geral (Tema 1.309), o Recurso Extraordinário (RE) 1479774, em que se discute a \nincidência ou não das contribuições PIS/Cofins sobre as receitas oriundas de aplicações financeiras \ndas reservas técnicas de empresas seguradoras, tendo-se em conta a controvérsia sobre a \nnatureza dessas receitas, ainda sem decisão do Plenário (abaixo, último andamento do processo): \n \nPor outro lado, em dezembro de 2023, a 2ª Turma do Superior Tribunal de Justiça \n(STJ) decidiu manter a exigência de PIS e Cofins sobre as receitas financeiras das reservas técnicas \ndas seguradoras (REsp 2.052.215), cuja ementa assim dispõe: \nTRIBUTÁRIO. PIS. COFINS. INCIDÊNCIA. RECEITA FINANCEIRA. RESERVA TÉCNICA. \nFATURAMENTO. SEGURADORA. OBJETO SOCIAL LEGALMENTE TIPIFICADO. \nFl. 1105\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 13 \nI - No julgamento dos Recursos Extraordinários n. 390.840-5/MG, 358.273-9/RS, \n357.950-9/RS e 346.840-5/MG, o Supremo Tribunal Federal, ao analisar a \nampliação da base de cálculo do PIS e da COFINS decorrente do §1º do art. 3º da \nLei n. 9.718/1998, concluiu que tais contribuições devem incidir sobre o resultado \nda atividade empresarial, sendo consagrada a sinonímia \"faturamento/receita \nbruta\". \nII - De acordo com o quanto decidido nos leading cases, faturamento é o \nsomatório dos ingressos decorrentes da exploração do objeto social da pessoa \njurídica, sendo rechaçada a ideia de que o conceito estaria limitado ao produto da \nvenda de mercadoria e/ou prestação de serviços.  \n(...) \nIII - No Superior Tribunal de Justiça, a compreensão acerca daquilo que se \nconsidera faturamento para fins de incidência de PIS e COFINS foi perfeitamente \nincorporada na jurisprudência, conforme se verifica nos seguintes julgados:  \n(...) \nV - No caso em tela, as recorrentes são pessoas jurídicas atuantes no segmento de \nseguros das mais variadas espécies. Por óbvio, as receitas auferidas com a \nexploração desse negócio estão sujeitas à incidência do PIS e da COFINS. Ocorre \nque as recorrentes se insurgem, nos presentes autos, especificamente com \nrelação à tributação dos rendimentos auferidos dos ativos garantidores atrelados \nàs reservas técnicas. \nVI - As empresas seguradoras são equiparadas a instituições financeiras e, diante \nda relevância de sua atuação empresarial no cenário econômico do Brasil, estão \nsujeitas a um maior rigor legislativo e regulatório, de modo que a descrição do \nobjeto social não se resume àquela constante nos estatutos sociais. Não raro, as \ncompanhias indicam em seus estatutos que a exploração da atividade no ramo de \nseguros será realizada de acordo com as regras estabelecidas pela legislação \npertinente. \nVII - A partir dessa característica especial e sensível das companhias seguradoras, \npassou-se a adotar nos Tribunais Pátrios a expressão \"objeto social legalmente \ntipificado\", a qual consiste na discriminação por lei das atividades compreendidas \nna exploração do ramo de seguros, incluindo aquelas que possuem caráter \ncogente. É dizer: o objeto social legalmente tipificado é aquele que abrange \nobrigatoriamente todas as atividades correlacionadas à atividade empresarial. \nVIII - O Decreto-Lei n. 73/1996, ao dispor sobre o Sistema Nacional de Seguros \nPrivados e regular as operações de seguros e resseguros, sob a perspectiva desse \nobjeto social legalmente tipificado, determina a obrigatoriedade do investimento \ndo capital para a formação das chamadas \"reservas técnicas\" ou \"reservas \nobrigatórias\". \nFl. 1106\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 14 \nIX - As operações financeiras destinadas à rentabilidade do capital auferido para \nmaior segurança das operações contratadas pelos clientes é uma das principais \natividades operacionais de uma companhia seguradora. Diante da importância \ndo investimento financeiro para a atuação dessas sociedades, a legislação \ncorrelata impõe que a atividade empresarial típica compreenda o investimento \nmínimo de capital relacionado às reservas técnicas, que nada mais são do que \nparcelas deduzidas do lucro sujeitas obrigatoriamente à rentabilidade. \nX - As receitas financeiras advindas dos investimentos das reservas técnicas são \nreceitas operacionais relacionadas ao conjunto de negócios ou operações das \nempresas seguradoras no desempenho das atividades que lhe são próprias, \nrazão pela qual é mister que façam parte da base de cálculo do PIS e da COFINS, \nnos termos dos arts. 2º e 3º, caput, da Lei n. 9.718, de 1998. \nXI - Recurso especial improvido. (negritos nossos) \nTodos os ministros da 2ª Turma seguiram o entendimento do relator, ministro \nFrancisco Falcão. Saliento e adoto como razões de decidir os seguintes trechos: “As operações \nfinanceiras destinadas à rentabilidade do capital auferido para maior segurança das operações \ncontratadas pelos clientes é uma das principais atividades operacionais de uma companhia \nseguradora”. Assim, “as receitas financeiras advindas dos investimentos das reservas técnicas \nsão receitas operacionais relacionadas ao conjunto de negócios ou operações das empresas \nseguradoras no desempenho das atividades que lhe são próprias, razão pela qual é mister que \nfaçam parte da base de cálculo do PIS e da COFINS”. \nEsse julgamento do STJ encontra-se, desde agosto de 2024, suspenso por força do \njulgamento ainda em andamento no STF do Tema 1.309. \nO Tribunal Regional Federal da 3ª Região (TRF3) também já decidiu nesses termos: \nTRIBUTÁRIO. RESSEGURADORA. PIS E COFINS. BASE DE CÁLCULO. RESERVAS \nTÉCNICAS. FATURAMENTO. ARTS. 2º E 3º, CAPUT E §§ 5º E 6º, DA LEI Nº 9.718/98. \nINCIDÊNCIA. POSSIBILIDADE. APELAÇÃO NÃO PROVIDA. \n1. Quanto ao tema em análise, o Supremo Tribunal Federal declarou \ninconstitucional a base de cálculo das contribuições sociais PIS e COFINS trazida \npela Lei nº 9.718/98, conforme julgados proferidos nos Recursos Extraordinários \n357.950, 390.840, 358.273 e 346.084, afirmando que faturamento é somente a \nvenda de mercadorias, de serviços ou de mercadorias e serviços e não a \ntotalidade das receitas auferidas por pessoas jurídicas, independentemente da \natividade por elas desenvolvida e da classificação contábil adotada. \n2. Por se sujeitarem a regramento próprio (arts. 2º e 3º, caput e §§ 5º e 6º, da Lei \nnº 9.718/98), as seguradoras (e as resseguradoras, a quem se aplicam as \nmesmas \nregras \ntributárias) \nnão \nse \nbeneficiaram \nda \ndeclaração \nde \ninconstitucionalidade do § 1º do art. 3º da Lei nº 9.718/98, pelo Supremo \nTribunal Federal. \nFl. 1107\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 15 \n3. Com efeito, para as seguradoras (ou resseguradoras) a base de cálculo do PIS \ne da COFINS continuou sendo o faturamento (art. 2º), assim entendido como \"a \nreceita bruta da pessoa jurídica\" (caput, art. 3º), com as exclusões contidas nos \n§§ 5º e 6º do artigo 3º da Lei nº 9.718/98. \n4. Ademais, o critério definidor da base de incidência do PIS e da COFINS como o \nresultado econômico da atividade empresarial vinculada aos seus objetivos sociais \nnão foi alterado com a declaração de inconstitucionalidade supracitada. \n5. A esse respeito, o Ministro Cezar Peluso, no julgamento do RE 400.479-AgR/RJ, \nde sua relatoria, assim se manifestou: “Seja qual for a classificação que se dê às \nreceitas oriundas dos contratos de seguro, denominadas prêmios, o certo é que \ntal não implica na sua exclusão da base de incidência das contribuições para o PIS \ne COFINS, mormente após a declaração de inconstitucionalidade do art. 3º, § 1º \nda Lei nº 9.718/98 dada pelo Plenário do STF. É que, (...), o conceito de receita \nbruta sujeita à exação tributária em comento envolve, não só aquela decorrente \nda venda de mercadorias e da prestação de serviços, mas a soma das receitas \noriundas do exercício das atividades empresariais.”. \n6. Ressalte-se que no referido julgamento não se firmou entendimento sobre a \ndefinição das reservas técnicas como elementos não integrantes do faturamento. \nApenas houve manifestação individual dos Ministros Dias Toffoli e Roberto \nBarroso sobre esse assunto. Na oportunidade, o Min. Edson Fachin considerou \nque a análise da referida controvérsia não teria sido objeto do feito originário e a \ndiscussão pela Corte Suprema representaria verdadeiro julgamento extra petita. \nDesta feita, denota-se que tais posicionamentos dos Ministros não refletem o \nentendimento do plenário do STF ou mesmo de algum dos seus órgãos \nfracionários. Sobre o tema, a Segunda Turma do STJ proferiu acórdão, no qual, \nreitera que as reservas técnicas integram o faturamento das empresas \nseguradoras (e, em consequência, das resseguradoras). \n7. Ainda sobre a discussão dos autos, com a edição da Lei nº 12.973/2014, que \nalterou o artigo 3º da Lei nº 9.718/98, o conceito de faturamento foi ampliado, \nnos mesmos moldes adotados pela legislação de regência do imposto de renda. \n8. Em acréscimo, observa-se que a aplicação financeira de valores pelas \nseguradoras e resseguradoras, para fim de constituição de reservas técnicas à \ngarantia de suas obrigações, é investimento compulsório, determinado pela \nlegislação de regência da matéria, nos termos do Decreto-Lei 73/1966. \n9. Destarte, o estabelecimento de reserva técnica é atividade típica da \nseguradora (ou resseguradora), receita que se afigura de cunho operacional, \nrepresentando atividade inerente ao seu exercício empresarial. \n10. Assim, a incidência das contribuições ao PIS e à COFINS sobre as receitas \nfinanceiras decorrentes do investimento das reservas técnicas é legítima, eis que \ntais valores resultam da atividade empresarial típica da seguradora (ou \nFl. 1108\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 16 \nresseguradora), por se tratar de requisito para sua operacionalidade, \nintegrando, portanto, o seu faturamento. \n11. Apelação não provida.  \n(5023007-41.2023.4.03.6100 - ApCiv - APELAÇÃO CÍVEL - 3ª Turma - Relator(a): \nDesembargador Federal NERY DA COSTA JUNIOR -Julgamento: 03/09/2024) \n(negritos nossos) \nTRIBUTÁRIO. CONSTITUCIONAL. PIS E COFINS. LEI Nº 9.718/98. SEGURADORA. \nART. 22, § 1º, LEI 8.212/91. BASE DE CÁLCULO. ATIVOS GARANTIDORES DE \nRESERVA TÉCNICA. RECEITA BRUTA OPERACIONAL. INCIDÊNCIA. SOLUÇÃO DE \nCONSULTA Nº 91 DA SRF EM SÃO PAULO. \n1. Em relação à aplicação da Lei nº 9.718/98 às empresas de seguros privados, \ncomo é o caso da impetrante, o C. STF manteve incólume o caput do art. 3º, nos \ntermos do RE 357.950. \n2. Em suma, as seguradoras não são beneficiadas pela declaração de \ninconstitucionalidade do parágrafo 1º do art. 3º da Lei 9.718/98, pelo Supremo \nTribunal Federal, por se sujeitarem a regramento próprio (arts. 2º e 3º, caput e \nparágrafos 5º e 6º, da Lei 9.718/98). \n3. Especificamente no caso de empresas de seguros privados, cumpre ressaltar, \nque a própria Lei nº 9.718/98, em seu art. 3º, § 6º, II, prevê quais são as deduções \ne exclusões possíveis na determinação da base de cálculo do PIS e da Cofins, a \nsaber: o valor referente às indenizações correspondentes aos sinistros ocorridos, \nefetivamente pago, deduzido das importâncias recebidas a título de cosseguro e \nresseguro, salvados e outros ressarcimentos. \n4. Na hipótese dos autos, a incidência das contribuições ao PIS e à Cofins sobre as \nreceitas financeiras oriundas dos Ativos Garantidores de Reservas Técnicas é \nmedida que se impõe, pois tais valores resultam da atividade empresarial típica \nda seguradora, resultantes de parte dos prêmios captados de seus clientes e \ninvestidos no mercado financeiro, integrando, desta feita, o seu faturamento. \n5. Tal entendimento restou consignado na Solução de Consulta nº 91, publicada \npela Superintendência da Receita Federal em São Paulo, segundo a qual as \nreceitas de seguradoras geradas com a aplicação de valores reservados ao \npagamento de sinistros são tributadas pelo PIS e pela Cofins. \n6. Segundo interpretação dada pela Receita Federal, o rendimento proveniente \ndas reservas técnicas é resultado de uma obrigação inerente ao negócio das \nseguradoras e, portanto, faz parte das receitas operacionais, sobre as quais incide \nPIS e Cofins.  \n(AMS 00195390920134036100, Desembargadora Federal Consuelo Yoshida, 6ª \nTurma do TRF3 (negritos nossos) \nDiversos acórdãos do CARF – inclusive da sua CSRF - seguem na mesma linha do STJ \ne TRF3. Abaixo, alguns deles: \nFl. 1109\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 17 \nPROCESSO 16327.909923/2011-47  \nACÓRDÃO 9303-016.018 – CSRF/3ª TURMA  \nSESSÃO DE 8 de outubro de 2024  \nRECURSO ESPECIAL DO CONTRIBUINTE  \nRECORRENTE BRADESCO VIDA E PREVIDÊNCIA S.A. \nINTERESSADO FAZENDA NACIONAL  \nAssunto: Processo Administrativo Fiscal  \nData do fato gerador: 14/11/2000  \nSEGURADORAS. ATIVIDADES TÍPICAS. CONCEITO DE RECEITA E FATURAMENTO. \nSão devidas a contribuição ao PIS e a COFINS pelas empresas seguradoras e \nresseguradoras sobre as receitas decorrentes das aplicações financeiras \ncompulsórias de valores de reservas técnicas, fundos e/ou garantia de provisões \ntécnicas, uma vez que tais valores resultam das operações desenvolvidas no \ndesempenho da atividade econômica destas empresas e integram o seu \nfaturamento. \nPROCESSO 16327.720872/2018-82  \nACÓRDÃO 3201-012.205 – 3ª SEÇÃO/2ª CÂMARA/1ª TURMA ORDINÁRIA  \nSESSÃO DE 28 de novembro de 2024  \nRECURSO VOLUNTÁRIO  \nRECORRENTE BRASILSEG COMPANHIA DE SEGUROS (NOVA DENOMINAÇÃO DA \nCOMPANHIA DE SEGUROS ALIANÇA DO BRASIL) \nINTERESSADO FAZENDA NACIONAL  \nAssunto: Contribuição para o Financiamento da Seguridade Social - Cofins  \nPeríodo de apuração: 01/01/2014 a 31/12/2016  \nREGIME CUMULATIVO. FATURAMENTO. RECEITA BRUTA. ABRANGÊNCIA. \nCompõem o faturamento ou receita bruta no regime cumulativo das \ncontribuições as receitas operacionais intrinsecamente conectadas ao objeto \nsocial da pessoa jurídica, ou seja, ínsitas a sua atividade principal. \nRECEITAS FINANCEIRAS. RESERVAS TÉCNICAS. INVESTIMENTO. INCIDÊNCIA. \nAs receitas financeiras decorrentes de investimentos das reservas técnicas são \nreceitas operacionais relacionadas ao objeto social e às atividades operacionais \ndas empresas seguradoras, razão pela qual sobre elas incidem as contribuições \ncumulativas. \nAssunto: Contribuição para o PIS/Pasep  \nPeríodo de apuração: 01/01/2014 a 31/12/2016  \nFl. 1110\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 18 \nREGIME CUMULATIVO. FATURAMENTO. RECEITA BRUTA. ABRANGÊNCIA. \nCompõem o faturamento ou receita bruta no regime cumulativo das \ncontribuições as receitas operacionais intrinsecamente conectadas ao objeto \nsocial da pessoa jurídica, ou seja, ínsitas a sua atividade principal. \nRECEITAS FINANCEIRAS. RESERVAS TÉCNICAS. INVESTIMENTO. INCIDÊNCIA. \nAs receitas financeiras decorrentes de investimentos das reservas técnicas são \nreceitas operacionais relacionadas ao objeto social e às atividades operacionais \ndas empresas seguradoras, razão pela qual sobre elas incidem as contribuições \ncumulativas. \nProcesso nº 16327.720236/2014-27  \nRecurso Especial do Contribuinte  \nAcórdão nº 9303-009.949 – CSRF / 3ª Turma  \nSessão de 21 de janeiro de 2020  \nRecorrente ITAU SEGUROS DE AUTO E RESIDENCIA S.A. \nInteressado FAZENDA NACIONAL  \nASSUNTO: CONTRIBUIÇÃO PARA O PIS/PASEP  \nPeríodo de apuração: 01/10/2009 a 31/12/2010  \nPIS/COFINS. REGIME CUMULATIVO. SEGURADORAS. RECEITAS FINANCEIRAS. \nINVESTIMENTOS COMPULSÓRIOS. INCIDÊNCIA. \nA declaração de inconstitucionalidade, do §1º do art. 3º da Lei nº 9.718, de 1998, \nfirmou o entendimento de que não é qualquer receita que pode ser considerada \nfaturamento para fins de incidência dessas contribuições sociais, mas aquelas \nvinculadas à atividade típica da empresa. As receitas financeiras integram a base \nde cálculo do PIS, quando decorrentes da atividade objeto da entidade. \nNo caso das seguradoras, seus investimentos compulsórios por disposição legal, \nou seja, quando originados das “reserva técnicas, fundos especiais e provisões”, \nalém das “reservas e fundos determinados em leis especiais”, constituídos, na \ndicção do Decreto Lei nº 73, de 1966, “para garantia de todas as suas \nobrigações”, devem ter os correspondentes rendimentos tributados, porque \nintegram o conjunto dos negócios ou operações desenvolvidas por essas \nempresas no desempenho de suas atividades econômicas peculiares. (negritos \nnossos) \nAssim, a decisão de piso deve ser mantida nesse tópico. \nB) Erro na base de cálculo referente às receitas financeiras  \nNo presente tópico, a recorrente argumenta que houve erro na base de cálculo das \ncontribuições. Abaixo, trechos do recurso voluntário: \nFl. 1111\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 19 \n106. Caso sejam ultrapassados os argumentos anteriores, prevalecendo o \nentendimento de que as receitas financeiras decorrentes de aplicações \nobrigatórias devem ser incluídas na base de cálculo do PIS e da COFINS, o que se \nadmite apenas a título de argumentação, o Recorrente demonstrou em sua \nImpugnação que haveria nítido erro na base de cálculos das referidas \ncontribuições. \n(..) \n109. Isto porque, por meio de uma análise preliminar das contas contábeis que \nforam autuadas pela fiscalização quanto às receitas financeiras incluídas na base \nde cálculo dos autos de infração originários, é possível identificar valores que se \nreferem efetivamente a Receitas Financeiras sem relação com a atividade do \nRecorrente ou com a Remuneração de Ativos Garantidores. Como exemplo, entre \ntantas outras, citamos: \n(...) \n111. A alegação do erro de base de cálculo foi o motivo pelo qual o Recorrente \nrequereu a realização de perícia contábil ou que o processo foi convertido em \ndiligência, justamente para apurar os valores que foram incluídos na base de \ncálculo dos autos de infração originários. \n112. Contudo, o r. acórdão recorrido indeferiu o referido pleito sob argumento de \nque o Recorrente não teria gerado a prova necessária. Tal argumentação não faz \nqualquer sentido, vez que o pedido de perícia/diligência era justamente para que \nhouvesse a comprovação do erro da base de cálculo apontado pelo Recorrente. \n(...) \n115. Ou seja, como o Recorrente possui o dever de informar a relação dos ativos \ngarantidores à SUSEP, ainda que se entendesse que os ativos garantidores \ndeveriam ser tributados, somente poderia existir a tributação das contas \ncontábeis referentes aos ativos informados à SUSEP e não diversas contas e \nvalores que foram autuados pela autoridade lançadora, inclusive conforme já \napontado pelo Recorrente. \n116. Como as contribuições ao PIS e a COFINS são calculadas mensalmente, é \nnecessário (caso o entendimento seja o de que os rendimentos dos ativos \ngarantidores são tributáveis) que seja identificado, mês a mês, o total desses \nativos garantidores e quais foram os rendimentos financeiros deles decorrentes. \nSomente sobre esta parcela haveria a incidência tributária. Com isso, fica mais \nevidente o erro de base de cálculo, com a autuação de valores que não possuem \nrelação com os ativos garantidores do Recorrente. \n(...) \n119. Dessa forma, caso este i. CARF entenda que as receitas financeiras \ndecorrentes de aplicações obrigatórias devem ser incluídas na base de cálculo do \nPIS/COFINS, o que fazemos apenas pelo critério da eventualidade, o Recorrente \nFl. 1112\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 20 \npugna para que seja dado provimento ao presente recurso voluntário e, por via de \nconsequência, seja deferido o pedido de perícia técnica contábil, ou no limite \ndeterminado a realização de diligência, para a correta identificação dos ativos de \naplicações obrigatórias e para identificar quais as receitas financeiras delas \ndecorrentes, sendo certo que os demais valores sejam excluídos da base de \ncálculo por não serem decorrentes da atividade fim e por serem simplesmente \nreceitas financeiras que não são de ativos garantidores (não se caracterizando \ncomo receita bruta). \nAlém disso, como relatado, a empresa apresentou, em 20/05/26, laudo da empresa \nGEAM Consultoria Empresarial Ltda que trata das bases de cálculo utilizadas nos lançamentos. \nNão assiste razão à recorrente. \nA empresa alega, neste tópico, que a fiscalização incluiu indevidamente valores \ncomo receitas decorrentes de aplicações obrigatórias, descritas no item anterior. Discorre que o \ntrabalho a ser feito pela fiscalização seria identificar os ativos de aplicações obrigatórias para, \nem seguida, identificar quais seriam as receitas financeiras deles decorrentes. Para tanto, solicita \nperícia contábil ou diligência. \nO relatório fiscal descreve como a fiscalização chegou às bases de cálculo objeto dos \nlançamentos: \n5.1 Conforme informado pela própria fiscalizada em resposta o TIPF e nas \ninformações prestadas no ambiente SPED EFD-contribuições, não foi considerado \nna apuração da base de cálculo do PIS e da Confins as Receitas Financeiras do \nperíodo de janeiro de 2015 a fevereiro de 2016. Sendo que para o período de \nmarço de 2016 a dezembro de 2016 a fiscalizada incluiu as contas de receita \nfinanceira na apuração da base de cálculo. \n5.2 Sendo assim, considerando que a legislação em vigor para o período de 2016 é \na mesma para o período de 2015, não há qualquer amparo legal que justifique a \ndesconsideração das contas contábeis para o período de janeiro de 2015 a \nfevereiro de 2016. \n5.3 Desta forma, ante a divergência apontada, o Anexo I, deste relatório, relaciona \npor conta contábil e por mês, os montantes das receitas que são base de cálculo \ndo PIS e da COFINS nos períodos de apuração de janeiro de 2015 a dezembro de \n2015. As contas contábeis presentes no Anexo I decorrem das contas que foram \nconsideradas como base de cálculo das referidas contribuições para o período de \n2016 (quadro “APURACAO PIS COFINS 2016.xlsx” anexo ao TIPF às fls 05) sendo os \nsaldos, os valores informados pela fiscalizada na Escrituração Contábil Digital – \nECD (Registro I155 – Detalhe dos Saldos Periódicos – doc. anexo às fls. 58 a 194) \ndos períodos de apuração de janeiro de 2015 a dezembro de 2015. \n(....) \n5.5 O Anexo III, deste relatório, relaciona por conta contábil e por mês, os \nmontantes das receitas que são base de cálculo do PIS e da COFINS nos períodos \nFl. 1113\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 21 \nde apuração de janeiro de 2016 a dezembro de 2016. As contas contábeis \npresentes no Anexo III decorrem das contas que foram consideradas pela \nfiscalizada como base de cálculo das referidas contribuições para o período de \n2016 (quadro “APURACAO PIS COFINS 2016.xlsx” anexo ao TIPF às fls 05) sendo os \nsaldos, os valores informados pela fiscalizada na Escrituração Contábil Digital – \nECD (Registro I155 – Detalhe dos Saldos Periódicos – doc. anexo às fls. 195 a 270) \ndos períodos de apuração de janeiro de 2016 a dezembro de 2016. \nImportante salientar esse ponto. A fiscalização intimou especificamente a empresa \na informar o valor dos rendimentos dos ativos financeiros garantidores das reservas técnicas (fls. \n53/54): \n \nA empresa atendeu a intimação, apresentando os balancetes dos anos de 2015 e \n2016 com as contas que compõem tais rendimentos e informando que  contabilizou e incluiu as \nreceitas financeiras relativas a ativos garantidores na base de cálculo do PIS e da Cofins no período \ncompreendido entre março e dezembro/16 (fls. 55/57): \n \nFl. 1114\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 22 \n   \nPara esse período, de março/16 em diante, a empresa considerou como base de \ncálculo das contribuições a soma de várias contas contábeis, descritas à fl.05 e ilustradas abaixo:  \n \n \nPois bem. Para os períodos de janeiro/2015 a fevereiro/2016, a fiscalização \nconsiderou AS MESMAS CONTAS que a própria empresa usou no período subsequente.  \nOs valores dessas mesmas contas foram obtidos a partir da escrituração contábil \ndigital da própria recorrente (fls. 58 a 270).   \nOu seja: o critério utilizado foi o mesmo que a própria recorrente utilizou e os \nvalores utilizados foram os constantes na ECD  da própria empresa. \nA recorrente alega que a fiscalização utilizou contas sem relação com a \nremuneração de ativos financeiros, citando 04 como exemplo: contas contábeis 3619250001 - \nRECEITA ATUAL. CREDITOS TRIBUTARIOS; 3619450001 - RECEITA JR C. MONETARIA DEPOS; Conta \nContábil 3619450002 - RECEITA ATUAL. MONETARIA DEPOS e  3612120001 - ATUALIZAÇÃO BCO \nECONOMICO.  \nOcorre que essas 04 contas foram utilizadas por ela própria (recorrente) para \ncalcular as suas receitas financeiras sobre ativos financeiros de março a dezembro/2016, conforme \nplanilha de fl. 05: \nR0395 \nR0395 - RECEITA FINANCEIRA \n3611210001 \nJUROS APL MERC AB EXT- INVESTIMENTO \nFl. 1115\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 23 \n3612110007 \nJUROS TIME DEPOSIT - HSBC \n3612110008 \nJUROS TIME DEPOSIT - BOFA \n3617350003 \nRECUP ATUALIZ MONET PSL JUDICIAL PAIS - \n3617350009 \nRECUP ATUALIZ MONET PSL JUDICIAL \nSEGURA \n3612120001 \nATUALIZAÇÃO BCO ECONOMICO \n3617350001 \nRECUP ATUALIZ MONET PSL JUDICIAL PAIS - \n3617350002 \nRECUP ATUALIZ MONET PSL JUDICIAL PAIS - \n3617350003 \nRECUP ATUALIZ MONET PSL JUDICIAL PAIS - \n3617350009 \nRECUP ATUALIZ MONET PSL JUDICIAL \nSEGURA \n3617350010 \nRECUP ATUALIZ MONET PSL JUD \nSEGURADORA \n3619250001 \nRECEITA ATUAL. CREDITOS TRIBUTARIOS \n3619450001 \nRECEITA JR C.MONETARIA DEPOS. JUDICIAIS \n3619450002 \nRECEITA ATUAL. MONETARIA DEPOS. JUDICIA \nA fiscalização simplesmente utilizou o mesmo critério adotado pela empresa. \nA fiscalização agiu corretamente, utilizando as informações que a empresa \napresentou após ser intimada, partindo da premissa de que a contabilidade da empresa está \ncorreta e que os critérios adotados para o cálculo dos rendimentos de  ativos financeiros foram \nadequados, adotando para o seu cálculo os mesmos critérios. \nAgir diferente disso, utilizando outra metodologia para cálculo dos rendimentos, \nsignificaria dizer que a contabilidade da empresa está incorreta e imprestável para utilização - e a \nfiscalização não alegou isso. \nNesse contexto, não faz sentido a argumentação de que a fiscalização deveria \nlevantar cada ativo de aplicação obrigatória e calcular qual seria o rendimento de cada um deles, \njá que, quando intimada, a própria recorrente trouxe os elementos que entendia relevantes para a \ndefinição dos valores de tais rendimentos e utilizou, ela mesma, esses mesmos elementos.  \nReitere-se: a fiscalização não poderia desconsiderar a contabilidade e as \ninformações fornecidas pela empresa – a não ser que motivadamente considerasse a \ncontabilidade  imprestável e as informações fornecidas, não fidedignas.  \nPois bem: na impugnação e no recurso voluntário, a recorrente indiretamente alega \nque sua contabilidade estava errada, que as informações que forneceu estavam erradas e que a \nfiscalização teria que adotar outro critério para calcular o valor dos rendimentos das reservas \ntécnicas – qual seja: levantar cada uma das reservas e verificar qual o seu rendimento. \nArgumenta textualmente que teriam que ser identificados, mês a mês, o total dos \nativos garantidores e quais seriam os rendimentos financeiros dele decorrentes. Pede que “seja \ndeferido o pedido de perícia técnica contábil, ou no limite determinado a realização de diligência, \npara a correta identificação dos ativos de aplicações obrigatórias e para identificar quais as \nreceitas financeiras delas decorrentes, sendo certo que os demais valores sejam excluídos da base \nde cálculo por não serem decorrentes da atividade fim e por serem simplesmente receitas \nfinanceiras que não são de ativos garantidores (não se caracterizando como receita bruta)”. \nFl. 1116\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 24 \nOra: se a recorrente entende que o cálculo da fiscalização está incorreto (o que é \nbastante paradoxal já que, como descrito acima, o critério utilizado pela fiscalização foi \nEXATAMENTE o mesmo utilizado pela própria empresa), deveria, ela, no momento da \nimpugnação, trazer o cálculo que entende correto. Mas, pelo contrário, na impugnação e no \nrecurso, a empresa se limita a solicitar uma perícia ou diligência para que a fiscalização faça tal \nlevantamento. Saliente-se que não foram apresentados, com a impugnação e nem com o recurso \nvoluntário, esclarecimentos ou documentos que justifiquem a alegação de que os cálculos feitos \npela fiscalização e – ressalte-se, mais uma vez - pela própria empresa no período subsequente \nestejam incorretos e nem tampouco quais seriam os valores corretos na visão da recorrente.  \nO transcrito § 4º do art. 16 do Decreto nº 70.235/72 estabelece que as provas \ndevem ser apresentadas juntamente com a impugnação: \n§ 4º A prova documental será apresentada na impugnação, precluindo o direito \nde o impugnante fazê-lo em outro momento processual, a menos que: (Redação \ndada pela Lei nº 9.532, de 1997) (Produção de efeito) \na) fique demonstrada a impossibilidade de sua apresentação oportuna, por \nmotivo de força maior; (Redação dada pela Lei nº 9.532, de 1997) (Produção de \nefeito) \nb) refira-se a fato ou a direito superveniente; (Redação dada pela Lei nº 9.532, de \n1997) (Produção de efeito) \nc) destine-se a contrapor fatos ou razões posteriormente trazidas aos autos. \n(Redação dada pela Lei nº 9.532, de 1997) (Produção de efeito) \nPois bem: ainda conforme relatado, em 20/05/26, a recorrente apresentou laudo \ncontábil elaborado por empresa independente tratando exatamente das bases de cálculo das \ncontribuições. \nMesmo que tenha ocorrido a preclusão para entrega de novos documentos, que \ndeveriam ser apresentados com a impugnação, como já colocado acima, importante analisar, em \nobediência ao princípio da verdade material, se existe algum elemento muito significativo que \npudesse mudar a conclusão do voto.  \nCuriosamente, no entanto, tal laudo limita-se novamente a alegar que a fiscalização \nincluiu indevidamente nos autos de infração contas que não teriam relação nem com \ninvestimentos compulsórios e nem com variações cambiais, trazendo listagem das contas que \nteriam que ser desconsideradas exclusivamente por conta de sua nomenclatura.   \nEfetivamente a nomenclatura de algumas contas sugere tratarem de rendimentos \nvinculados a provisões de sinistros a liquidar (PSL) e outras rubricas. \nO laudo, porém, não adotou as providências que a própria recorrente \ninsistentemente alegou que deveriam ser as adotadas pela fiscalização, quando solicitava perícia – \nquais sejam, “seja deferido o pedido de perícia técnica contábil, ou no limite determinado a \nrealização de diligência, para a correta identificação dos ativos de aplicações obrigatórias e para \nFl. 1117\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 25 \nidentificar quais as receitas financeiras delas decorrentes, sendo certo que os demais valores \nsejam excluídos da base de cálculo por não serem decorrentes da atividade fim e por serem \nsimplesmente receitas financeiras que não são de ativos garantidores (não se caracterizando como \nreceita bruta)”. \n Como ressaltado em várias oportunidades neste voto, a fiscalização simplesmente \nutilizou as mesmas contas utilizadas pela empresa, adotando os valores constantes na sua \nprópria contabilidade e informados por ela quando intimada a informar os valores dos \nrendimentos das aplicações obrigatórias. \nO laudo também não demonstrou que a contabilidade da empresa estava errada. \nSe estivesse errada,  acionistas teriam sido prejudicados, diretores deveriam ser \nresponsabilizados, atitudes precisariam ser tomadas. A contabilidade e os resultados financeiros \nteriam obrigatoriamente que ser retificados. Pelo contrário, tratando-se de companhia aberta, \nseus resultados são públicos e as análises de auditorias externas confirmam a regularidade dos \nlançamentos e demonstrações contábeis: \n \n Assim entendo que ocorreu preclusão de entrega de documentos que \nefetivamente comprovem a inexatidão dos valores lançados e que o laudo, mesmo que \nintempestivo, não traz nenhuma nova comprovação efetiva de irregularidade na ação fiscal e nos \nseus resultados. Entendo, então, que não é  cabível a realização de perícia ou diligência e que o \nacórdão recorrido não merece reparos neste tópico.  \nFl. 1118\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 26 \nC) Não incidência do PIS e da COFINS sobre variações ou oscilações cambiais \nrelacionadas às operações de seguro, cosseguro, resseguro e retrocessão e erro de base de \ncálculo \nNeste tópico, a recorrente discorre sobre as receitas de variações cambiais ativas \nvinculadas às suas operações e sobre a  base de cálculo utilizada. Abaixo, trechos do recurso: \n120. No entender da fiscalização, o Recorrente teria indevidamente também \ndeixado de incluir na base de cálculo das contribuições do PIS e da COFINS \nreceitas decorrentes de variações cambiais ativas vinculadas a operações de \nseguro, resseguro e cosseguro (contas contábeis descritas nas fls. 304/308), \nconforme se depreende do trecho abaixo: \n(...) \n123. De acordo com o artigo 9º da Lei nº 9.718/1998, as receitas decorrentes de \nvariações cambiais de créditos e obrigações são consideradas, para fins de \nincidência da contribuição ao PIS e da COFINS, como receitas ou despesas \nfinanceiras.  \n124. Nesse sentido, como já amplamente demonstrado, tratando-se de receita \nfinanceira, as variações cambiais auferidas pelo Recorrente não podem ser \ntratadas como receita operacional, passível de tributação pela contribuição ao PIS \ne pela COFINS. \n(...) \n129. Ante o exposto, diferentemente do que aduz o r. acórdão recorrido, em \nespecial o fato de que as receitas de variação cambial ativa são definidas como \nreceitas financeiras do Recorrente, evidente que não se configuram como receitas \noperacionais passíveis de tributação pela contribuição ao PIS e pela COFINS, \nmotivo pelo qual deverá ser dado provimento ao presente recurso voluntário e \nreformada a r. decisão recorrida, o consequente cancelamento do crédito \ntributário. \n(...) \n130. Além disso, ainda que se considere que as referidas receitas de variação \ncambial ativa devam ser tributadas pelo PIS e COFINS, a título de argumentação, o \nRecorrente demonstrou em sua impugnação administrativa que a autoridade \nfiscal acabou por autuar diversas contas contábeis que não possuem natureza de \nvariações ou oscilações cambiais ativas, o que demonstrava também o erro da \nbase de cálculo no referido caso. \n(...) \n136. Tendo em vista o volume de informações e de contas, cujos lançamentos \ntotais ultrapassam centenas de milhares, o Recorrente apresentou, a título de \namostragem, algumas situações cujo saldo final foi credor, mas não se configuram \ncomo receita. Vejamos: \nFl. 1119\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 27 \n(...) \n140. Contudo, caso assim não se entenda, a relevância dos números \napresentados, ultrapassando a cifra de um e dois bilhões de reais, demonstra a \nnecessidade de ser determinado a perícia técnica contábil, ou no limite, \ndeterminar a conversão do presente caso em diligência, para que a autoridade \nfiscal identifique, nos períodos em que houve saldo credor incluído na base de \ncálculo dos autos de infração originários, se os referidos lançamentos se referem \na receitas efetivamente auferidas ou apenas a correções de erros (estornos), \nreclassificações ou implantação de saldos. \n(...) \n141. Nesse sentido, equivocou-se o r. acordão recorrido quando menciona que o \nRecorrente não comprovou por documentos hábeis o erro de base de cálculo, \npois o que pretendeu o Recorrente foi demonstrar o erro via amostragem, tendo \nem vista a enorme quantidade de contas contábeis envolvidas. Com a indicação \ndo erro, o Recorrente pretendia em sede de perícia/diligência, demonstrar todos \nos erros envolvidos. \n142. Dessa forma, deverá ser dado provimento ao presente recurso voluntário, \npara que seja reconhecido o erro de base de cálculo, ou caso assim não se \nentenda, seja deferido o pedido de perícia técnica contábil para a apuração e \nrecomposição da base de cálculo do PIS e COFINS e, por via de consequência, para \nque sejam excluídas as contas que não possuem natureza de receitas de variações \nou oscilações cambiais ativas \nNão assiste razão à recorrente. \nO ponto central desta questão está no tratamento a ser dado às variações cambiais \nativas relativas às operações de seguro, cosseguro, resseguro e retrocessão desenvolvidas pela \nempresa. A fiscalização e o acórdão recorrido entendem que, tratando-se de operações típicas de \nseguradoras, tais variações sujeitam-se à incidência do PIS e Cofins no regime cumulativo. A \nempresa, por outro lado, argumenta que tratam-se de receitas financeiras que não podem ser \ntratadas como receitas operacionais sujeitas às contribuições.  \nImportante salientar que de março a dezembro de 2016 a recorrente incluiu essas \nreceitas na base de cálculo do PIS e da Cofins.  \nA fiscalização adotou, para o período de janeiro/15 a fevereiro/16,  as mesmas \ncontas utilizadas pela empresa para calcular as variações positivas de março a dezembro/16, \nconsiderando o resultado positivo de cada mês. Assim, existe tributação apenas quando os \nresultados positivos superam os negativos. As contas e valores utilizados pela fiscalização estão \nnos anexos II (fls. 315-318) e IV (fls. 320-323). \nA recorrente alega, ainda, que existem erros na base de cálculo. \nPois bem.  \nFl. 1120\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 28 \nIRB-Brasil é sociedade anônima de capital aberto cujo objeto, definido em seu \nestatuto social (fls. 6-52), é o de efetuar operações de resseguro e retrocessão no país e no \nexterior.  \nAssim, não existem dúvidas de que as atividades que geraram os ganhos cambiais \nem questão são típicas da empresa. \nConstituindo-se de atividade empresarial própria, porquanto tipificada legalmente \ncomo inerente e imperiosa ao desenvolvimento das operações que compõem o seu objeto social, \na exploração de tal atividade subsume-se ao conceito de faturamento, assim entendido como a \nreceita bruta obtida pela pessoa jurídica no exercício daquilo que representa seu objeto social.  \nCom relação às variações cambiais de sociedades seguradoras, a Solução de \nConsulta Costi nº 126/18 explicitou que: \n20. Desta forma, na esteira dos argumentos expendidos nos itens anteriores, \npode-se afirmar que sendo as variações cambiais positivas classificadas como \nreceitas financeiras, sempre que apuradas em operações típicas das sociedades \nseguradoras, a exemplo do resseguro no exterior e da contratação de apólices no \nexterior, devem compor o faturamento e, assim, integrar suas bases de cálculo \nda Cofins e da Contribuição para o PIS/Pasep. \n21. Registra-se por fim que desde que vinculadas a operações típicas das \nsociedades seguradoras, o mesmo tratamento deve recair sobre as receitas de \nvariação cambial ativa que, segundo a consulente, representariam, na verdade, \nrecuperação da variação cambial passiva registrada anteriormente sobre a \nmesma operação. Tal conclusão assenta-se no fato de que tal hipótese não se \nencontra contemplada entre os itens passíveis de exclusão da base de cálculo da \nContribuição para o PIS/Pasep e da Cofins no regime de apuração cumulativo, \nconstantes do § 2º do art. 3º da Lei nº 9.718, de 1998, e tampouco entre as \nexclusões específicas tabuladas no § 6º do referido artigo, para as pessoas \njurídicas referidas no § 1º do art. 22 da Lei nº 8.212, de 1991. (negritos nossos) \nAssim, entendo que todas as variações cambiais positivas classificadas como \nreceitas financeiras, sempre que estiverem relacionadas a operações típicas das sociedades \nseguradoras, estão sujeitas à incidência das contribuições (PIS e Cofins).  \nRecente decisão do CARF também adotou exatamente esse entendimento: \nPROCESSO 16327.720083/2022-28  \nACÓRDÃO 3101-004.267 – 3ª SEÇÃO/1ª CÂMARA/1ª TURMA ORDINÁRIA  \nSESSÃO DE 12 de novembro de 2025  \nRECURSO VOLUNTÁRIO  \nRECORRENTE TRADITIO COMPANHIA DE SEGUROS  \nINTERESSADO FAZENDA NACIONAL  \nFl. 1121\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 29 \nAssunto: Contribuição para o Financiamento da Seguridade Social - Cofins  \nPeríodo de apuração: 01/01/2017 a 31/12/2017  \nREGIME CUMULATIVO. SOCIEDADES SEGURADORAS. PARCELAMENTO DO VALOR \nDOS PRÊMIOS. INCIDÊNCIA. \nOs juros relativos ao parcelamento do valor dos prêmios de seguros não \nconstituem receita financeira, sendo, de fato, parte integrante do preço do seguro \nnegociado. Portanto, como complemento do preço de venda, compõem a base de \ncálculo da Cofins das sociedades seguradoras. \nREGIME \nCUMULATIVO. \nVARIAÇÕES \nCAMBIAIS. \nESPÉCIE \nDE \nRECEITAS \nFINANCEIRAS. SEGURADORAS. \nAs variações cambiais relacionadas às operações de seguro, cosseguro, \nresseguro e retrocessão, operações típicas de entidades seguradoras, como \nespécies de receitas financeiras, integram a base de cálculo da Cofins das \nsociedades seguradoras, inexistindo previsão para suas exclusões. \nREGIME \nCUMULATIVO. \nMULTAS \nCONTRATUAIS. \nJUROS \nMORATÓRIOS. \nSEGURADORAS. \nAs multas contratuais e os juros moratórios recebidos de clientes por atraso no \npagamento são acréscimos à receita de venda e, portanto, sendo receitas \nresultantes do exercício da atividade empresarial/principal do contribuinte, \nsujeitam-se à incidência da Cofins no regime de apuração cumulativa. (negrito \nnosso) \nA decisão de piso não merece, então, reparos neste aspecto.  \nCom relação aos alegados erros na base de cálculo, transcrevo abaixo e adoto como \nrazões de decidir os seguintes trechos do acórdão recorrido, que tratou dessa questão de forma \ndetalhada e precisa, salientando que, assim como no item anterior, as contas e os critérios \nadotados pela fiscalização foram os mesmos do que os adotados pela própria empresa na sua \ncontabilidade, sendo, assim, emblemática a alegação de que os cálculos estão incorretos:  \nQuanto a variações ou oscilações cambiais, a Impugnante também alega \nexistência de erro, fazendo referência, como amostragem, a duas contas \ncontábeis, as quais reproduz-se novamente:  \n \nFl. 1122\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 30 \n \nNesse aspecto, observe-se que também em relação a variações cambiais foram \nconsideradas pela Fiscalização (nos Anexos II e IV) as mesmas contas \ncontempladas pela Contribuinte para os períodos de março a dezembro/2016, \nsendo incluídas na base de cálculo as variações positivas que superam as \nvariações negativas (item 5.10 do Relatório Fiscal). \n(...) \n- Apuração da Contribuinte para 2015 (excerto de Planilha juntada pelo Termo de \nfls. 05): \n \nConfirma-se, nos destaques das planilhas acima, que as contas questionadas na \npeça de defesa (3617370031 e 3617370026) foram incluídas pela própria \nContribuinte na apuração que apresentou para períodos de março a \ndezembro/2016. \nObserva-se, também, que para janeiro e fevereiro de 2015 o Anexo II elaborado \npela Fiscalização reflete a inexistência de lançamento na conta 3617370031, \nconforme excerto a seguir:   \nFl. 315 (excerto do Anexo II elaborado pela Fiscalização):  \nFl. 1123\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 31 \n \nContudo, o fato de a conta não possuir lançamento nesses meses de janeiro e \nfevereiro de 2015 não comprova que o lançamento de março de 2015 seria \nreferente a meses anteriores ou a receitas já tributadas em meses anteriores. E \nnão se identifica, nos autos, prova documental nesse sentido. \nQuanto a alegação relativa a conta 3617170031, de estorno em abril/2015 de \nvalor registrado em janeiro, também não se identifica esclarecimento acerca do \nmotivo do estorno, nem prova do alegado reconhecimento anterior da receita, \nobservando-se que, para janeiro/2015, a Fiscalização não indicou valor na referida \nconta contábil (conforme excerto reproduzido acima de fls.315). \nOu seja, alegações de que, em alguns meses de 2015, contas contábeis conteriam \nvalores já tributados em meses anteriores ou estornos de valores contabilizados \nem meses anteriores, é acompanhada apenas de arquivos não pagináveis \njuntados como Docs. nºs 05 e 06 e que, dissociados de documentos de suporte, \nnão permitem comprovar o alegado.  \nAdemais, necessária seria a perfeita identificação das operações alegadas como \nmotivadoras de erro, para verificação se a hipótese se encontraria, ou não, \ncontemplada entre os itens passíveis de exclusão da base de cálculo da \nContribuição para o PIS/Pasep e da Cofins no regime de apuração cumulativo, \nconstantes do § 2º do art. 3º da Lei nº 9.718, de 1998, ou das exclusões \nespecíficas do § 6º do referido artigo, para as pessoas jurídicas referidas no § 1º \ndo art. 22 da Lei nº 8.212, de 1991 - disposições que, implicando exoneração \ntributária, não comportam interpretação extensiva, a teor do art. 111 do Código \nTributário Nacional. \n(...) \nNesse ponto, pertinente reiterar que, tendo a Fiscalização se pautado em \nregistros contábeis da Contribuinte e utilizado, na composição da base de cálculo \nreferente a receitas financeiras e variações cambiais, as mesmas contas contábeis \nFl. 1124\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 32 \nconsideradas pela Contribuinte na apuração da base de cálculo de alguns períodos \nde 2016, a alegação de existência de valores que não representariam receitas \ntributáveis deveria ser acompanhada de identificação individualizada e \nrespectivas provas documentais.  \n(...) \nCumpre registrar, acerca da produção de provas, que, nos termos dispostos no \nart. 923 do RIR/1999 e art. 967 do RIR/2018, a escrituração mantida com \nobservância das disposições legais faz prova a favor da Contribuinte dos fatos nela \nregistrados e comprovados por documentos hábeis, segundo sua natureza, ou \nassim definidos em preceitos legais.  \n No recurso, a recorrente ainda traz a seguinte questão, não colocada quando da \nimpugnação: \n137. Pelo acesso ao site do Banco Central do Brasil, na parte de consulta às taxas \nde câmbio (https://www.bcb.gov.br/estabilidadefinanceira/historicocotacoes), é \npossível verificar que, em 01 de março de 2015, a taxa de câmbio (US$ x R$) era \nde R$ 2,8649 e em 31 de março, R$ 3,2074, uma variação positiva de R$ 0,3425. \nPor sua vez, em 01 de abril de 2015 era de R$ 3,1549 e em 30 de abril de 2015 de \nR$ 2,9930, uma variação negativa de R$ 0,1619. \n138. Sendo as duas contas acima de Receita de Variação Cambial, aplicável sobre \nRetrocessões Cedidas (ativos), como explicar que, mesmo a taxa de câmbio tendo \ndiminuído entre março e abril ocorra um ganho cambial de mais de dois bilhões \nde reais?  \nA pergunta não é cabível. Como já exposto, os valores são os que estão na \ncontabilidade da própria empresa.  \nNos meses de março e abril/15, foram quase 180 contas com variações ou \noscilações cambiais, dezenas com resultados positivos e dezenas com resultados negativos em \ncada mês, conforme extrato abaixo: \nFl. 1125\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 33 \n \nNo mês de março/15, quando, como exposto pela empresa, o câmbio teve variação \npositiva, algumas contas de variação cambial tiveram resultado positivo e outras, negativo. O \nmesmo ocorreu em abril, quando o câmbio teve variação negativa. Os motivos pelos quais isso \naconteceu devem ser respondidos não pela fiscalização, mas pela própria empresa, que \napresentou essa informação em sua contabilidade. \nComo disposto no tópico “B”, presume-se correta a contabilidade, especialmente \nnuma sociedade de capital aberto como a IRB-Brasil, que tem suas contas frequentemente \nauditadas e que precisam, obrigatoriamente, ser fidedignas e espelhar a realidade.   \nA fiscalização limitou-se a usar os dados informados pela própria recorrente. \nMesmo procedimento utilizado por ela mesma nos meses de março a dezembro/16.  \nCom relação ao laudo apresentado em 20/05/26, trouxe argumentos não \napresentados na impugnação e nem no recurso voluntário relativos à forma de contabilização de \nvariações cambiais, que devem ser considerados preclusos. Traz, também de forma intempestiva, \nlistagem de contas que não seriam relativas a variações cambiais de operações referentes a \natividades-fim da empresa, desacompanhadas de qualquer documentação comprobatória, que, na \nsua visão, deveriam ser excluídas da base de cálculo do lançamento. Aplicam-se, para todas essas \nalegações, as mesmas considerações abordadas no tópico “B”. \nNesse contexto, também incabível pedido de diligência ou perícia. Os elementos \ncolocados no processo são suficientes para o julgamento. \nFl. 1126\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 34 \nA decisão de piso deve, assim, ser mantida. \nD) Realização de perícia  \n Neste tópico, a empresa mais uma vez solicita a realização de perícia e apresenta \nquesitos: \n143. Por fim, o pedido do Recorrente para a realização de perícia/diligência \ntambém foi indeferido pela a Turma julgadora, com base nas seguintes razões: \n(...) \n144. Ocorre que os argumentos utilizados para indeferir a perícia/diligência \nrequerida pelo Recorrente não possuem qualquer embasamento legal. Primeiro, \nporque essa prova é essencial para o presente caso; segundo, porque o \nargumento de que o Recorrente “não demonstrou por amostragem” não procede, \npois foram juntadas cópia das Contas Contábil nº 3617370031 e nº 3617370026 \nextraídas da contabilidade do Recorrente, por exemplo, a título de amostragem; \nterceiro, porque o Recorrente apontou justamente o que seriam os erros de base \ne demonstrou que a perícia/diligência seria necessária para a recomposição de \ngigantesca e complexa contabilidade do Recorrente (maior ressegurador do país). \n(...) \n146. Para tanto, em cumprimento a legislação pátria, o Recorrente ratifica as \ninformações já prestadas em sede de impugnação, e indica como seu assistente \ntécnico o Sr. \"Antonio Cesar Valério da Silva, brasileiro, casado, RG nº 06713713-\n3, CPF/ME nº 857.235.257-00, e-mail: pbrantsil@gmail.com, com escritório a Rua \nTeofilo Otoni, nº 82, 10º andar, Centro, CEP. 20.090-080, Rio de Janeiro -RJ, \ntelefone(21) 98665-7285. \nO pedido não é cabível.  \nComo já exposto nos itens acima, todos os elementos utilizados pela fiscalização \nforam obtidos a partir da contabilidade da própria empresa, que supõe-se fidedignos. A \nmetodologia de cálculo também foi a mesma utilizada pelo contribuinte em meses subsequentes.  \nNão existe questão teórica, relativa a rendimentos de reservas técnicas/ativos \ngarantidores ou variações cambiais ativas pendente de alguma definição ou informação. \nAssim, não é necessária qualquer diligência ou perícia para o deslinde do \njulgamento. \nE) Incidência de juros sobre a multa de ofício \nPor fim, a recorrente questiona a incidência de juros sobre a multa de ofício:  \n151. Por fim, caso venha a ser mantida qualquer parcela dos lançamentos – o que \nse admite apenas para fins de argumentação, o Recorrente requer que seja \nreconhecida a impossibilidade de exigência de juros de mora sobre a multa de \nofício lançada, em razão do disposto no artigo 161, do Código Tributário Nacional, \nFl. 1127\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 35 \nconforme já decidido pela 1ª Turma da Câmara Superior de Recursos Fiscais, no \njulgamento do recurso especial interposto nos autos do processo administrativo \nnº 10680.002472/2007-23, realizado na sessão do dia 09.11.2010. \nNão assiste razão à recorrente. \nSobre a incidência dos juros de mora sobre a multa de ofício, numa análise \nsistemática do Código Tributário Nacional, percebe-se que os juros incidem sobre o crédito não \nintegralmente pago no vencimento, sendo devidos tanto com relação ao tributo como com \nrelação à multa, já que o crédito tributário engloba ambos. Vejamos. \nArt. 161. O crédito não integralmente pago no vencimento é acrescido de juros de \nmora, seja qual for o motivo determinante da falta, sem prejuízo da imposição das \npenalidades cabíveis e da aplicação de quaisquer medidas de garantia previstas \nnesta Lei ou em lei tributária. \n§ 1º Se a lei não dispuser de modo diverso, os juros de mora são calculados à taxa \nde um por cento ao mês. \nO art. 113, § 1º do CTN preceitua que a obrigação principal tem por objeto o \npagamento do tributo ou penalidade pecuniária, donde se observa que o critério utilizado pelo \nCódigo Tributário Nacional para distinguir obrigação acessória de obrigação principal é o conteúdo \npecuniário. A obrigação acessória consiste em um fazer ou não fazer, enquanto que a obrigação \nprincipal implica em obrigação de dar dinheiro. \nNeste passo, a multa tem natureza de obrigação principal, visto que incontestável o \nseu conteúdo pecuniário. O conceito de crédito tributário está esculpido no art. 139 do CTN, nos \nseguintes termos: o crédito tributário decorre da obrigação principal e tem a mesma natureza \ndesta. \nDesta forma, por ser a multa, obrigação principal, conclui-se que crédito tributário \nengloba o tributo e a multa. Logo, tanto sobre o tributo (principal) quanto sobre a multa deve \nincidir juros, como determina o art. 161 do Código Tributário Nacional. \nO CARF já expressou esse entendimento em inúmeros acórdãos e a Súmula CARF nº \n108 disciplinou definitivamente o assunto: \nSúmula CARF nº 108  \nIncidem juros moratórios, calculados à taxa referencial do Sistema Especial de \nLiquidação e Custódia - SELIC, sobre o valor correspondente à multa de ofício. \n(Vinculante, conforme Portaria ME nº 129, de 01/04/2019, DOU de 02/04/2019). \nAcórdãos Precedentes: \nCSRF/04-00.651, de 18/09/2007; 103-22.290, de 23/02/2006; 103-23.290, de \n05/12/2007; 105-15.211, de 07/07/2005; 106-16.949, de 25/06/2008; 303-\n35.361, de 21/05/2018; 1401-00.323, de 01/09/2010; 9101-00.539, de \n11/03/2010; 9101-01.191, de 17/10/2011; 9202-01.806, de 24/10/2011; 9202-\n01.991, de 16/02/2012; 1402-002.816, de 24/01/2018; 2202-003.644, de \nFl. 1128\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 36 \n09/02/2017; 2301-005.109, de 09/08/2017; 3302-001.840, de 23/08/2012; 3401-\n004.403, de 28/02/2018; 3402-004.899, de 01/02/2018; 9101-001.350, de \n15/05/2012; 9101-001.474, de 14/08/2012; 9101-001.863, de 30/01/2014; 9101-\n002.209, de 03/02/2016; 9101-003.009, de 08/08/2017; 9101-003.053, de \n10/08/2017; 9101-003.137 de 04/10/2017; 9101-003.199 de 07/11/2017; 9101-\n003.371, de 19/01/2018; 9101-003.374, de 19/01/2018; 9101-003.376, de \n05/02/2018; 9202-003.150, de 27/03/2014; 9202-004.250, de 23/06/2016; 9202-\n004.345, de 24/08/2016; 9202-005.470, de 24/05/2017; 9202-005.577, de \n28/06/2017; 9202-006.473, de 30/01/2018; 9303-002.400, de 15/08/2013; 9303-\n003.385, de 25/01/2016; 9303-005.293, de 22/06/2017; 9303-005.435, de \n25/07/2017; 9303-005.436, de 25/07/2017; 9303-005.843, de 17/10/2017. \nAssim, os juros sobre a multa de ofício devem ser mantidos. \nConclusão  \nPor todo o exposto, voto por conhecer do recurso voluntário, negando-lhe \nprovimento. \nAssinado Digitalmente \nFábio Kirzner Ejchel \n \n \n \n \nDECLARAÇÃO DE VOTO \nConselheira Sabrina Coutinho Barbosa  \nMinha manifestação no presente voto decorre da alteração do meu posicionamento \nsobre a matéria. Até o Acórdão nº 3102-003.462, adotei o entendimento de que as receitas \nprovenientes de ativos garantidores e de reservas técnicas, ainda que decorrentes de imposição \nlegal, não se enquadravam no conceito de receita operacional para fins de incidência da \nContribuição para o PIS/Pasep e a Cofins. \nOcorre que, durante os debates e as sustentações orais das partes, reavaliei a \nquestão, especificamente no que se refere às resseguradoras, e passei a compreender que a \nimposição legal de manutenção desses ativos acaba por caracterizá-los como inerentes à atividade \ntípica da entidade. Por essa razão, entendo que as receitas deles decorrentes integram a base de \ncálculo das contribuições devidas, como será esclarecido. \nÉ fato incontroverso que a constituição de reservas técnicas e de ativos \ngarantidores decorre de imposição legal. O ponto da discussão consiste em saber se esses ativos \nsão inerentes à atividade da resseguradora, de modo que as receitas deles provenientes recebam \nFl. 1129\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 37 \no tratamento próprio para fins das contribuições ao PIS e à Cofins, em especial as receitas \nfinanceiras. \nA LC nº 126/2007 regulamenta as atividades de resseguro, retrocessão, cosseguro e \nseguros contratados no exterior e estabelece que tais atividades devem atender às exigências nela \nprevistas, incluindo, como critério para a cessão de riscos: \nArt. 9º A transferência de risco somente será realizada em operações: \nI - de resseguro com resseguradores locais, admitidos ou eventuais; e \nII - de retrocessão com resseguradores locais, admitidos ou eventuais, ou \nsociedades seguradoras locais. \nQuanto às operações, dispõe o art. 12: \nArt. 12. O órgão regulador de seguros estabelecerá as diretrizes para as operações \nde resseguro, de retrocessão e de corretagem de resseguro e para a atuação dos \nescritórios de representação dos resseguradores admitidos, observadas as \ndisposições desta Lei Complementar. \nParágrafo único. O órgão regulador de seguros poderá estabelecer: \nI - cláusulas obrigatórias de instrumentos contratuais relativos às operações de \nresseguro e retrocessão; \nII - prazos para formalização contratual; \nIII - restrições quanto à realização de determinadas operações de cessão de risco; \nIV - requisitos para limites, acompanhamento e monitoramento de operações \nintragrupo; e \nV - requisitos adicionais aos mencionados nos incisos I a IV deste parágrafo. \nAinda, tem-se o art. 14 que dispõe: \nArt. 14. Os resseguradores e os seus retrocessionários não responderão \ndiretamente perante o segurado, participante, beneficiário ou assistido pelo \nmontante assumido em resseguro e em retrocessão, ficando as cedentes que \nemitiram o contrato integralmente responsáveis por indenizá-los. \nParágrafo único. Na hipótese de insolvência, decretação de liquidação ou falência \nda cedente, é permitido o pagamento direto ao segurado, participante, \nbeneficiário ou assistido da parcela de indenização ou benefício correspondente \nao resseguro, desde que o pagamento da respectiva parcela não tenha sido \nrealizado ao segurado pela cedente nem pelo ressegurador à cedente, quando: \nI - o contrato de resseguro for considerado facultativo, na forma definida pelo \nórgão regulador de seguros; \nII - nos demais casos, houver cláusula contratual de pagamento direto. \nFl. 1130\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 38 \nVerifica-se, da leitura dos dispositivos acima, que a resseguradora não responde \nperante o segurado, sendo responsável pela indenização a seguradora que emitiu a apólice. Tanto \né assim que o art. 84 do Decreto-Lei nº 73/1966, com redação dada pela LC nº 126/2007, \nestabelece que, no caso de liquidação da seguradora, os segurados têm prioridade no \nrecebimento das indenizações, ficando a seguradora cedente em segundo plano e, somente após, \nos resseguradores, caso ainda remanesçam valores para pagamento. \nIsso significa que a receita financeira é claramente inerente à atividade da \nresseguradora, que está obrigada a constituir reservas técnicas, as quais representam atividade-\nmeio destinada à geração de recursos garantidores das indenizações, bem como à manutenção da \ncapacidade econômica para suportar futuros sinistros, nos termos das Resoluções CMN nº \n3.308/2005 e nº 4.444/2015. \nAssim, se, para o exercício da atividade de resseguro, o Banco Central do Brasil \nexige a aplicação dos recursos das reservas, das provisões e dos fundos das sociedades \nseguradoras, as receitas daí provenientes possuem natureza de receita operacional, por estarem \nintrinsecamente vinculadas à atividade principal da empresa (resseguradora). Isso porque a \nreceita financeira sobre esses ativos não decorre de mera gestão de excedentes de caixa, como \nocorre com empresas que realizam aplicações financeiras sem qualquer relação com sua atividade \noperacional. \nConcordo, portanto, com o i. Relator no sentido de que, in casu, as contribuições ao \nPIS e à Cofins devem incidir sobre as receitas financeiras inerentes às atividades de resseguro e \nretrocessão, por constituírem resultado da própria atividade empresarial. \nNo caso dos autos, a empresa é resseguradora, atuando em operações de resseguro \ne retrocessão, e, em razão da atividade desenvolvida, a legislação e a regulamentação da SUSEP \nimpõem a constituição de provisões técnicas e a manutenção de ativos garantidores em montante \nsuficiente para assegurar a solvência da entidade e o cumprimento de suas obrigações perante o \nmercado. \nO ponto central é que a aplicação desses recursos, além de constituir exigência \nnormativa indissociável do próprio exercício da atividade de resseguro e retrocessão, faz parte da \ndinâmica operacional da atividade. Por essa razão, as receitas financeiras dela decorrentes não \npossuem natureza eventual ou atípica, pois, sem a constituição das provisões e a correspondente \naplicação dos ativos garantidores, a resseguradora sequer poderia exercer regularmente suas \natividades. É o que se depreende da referida norma do CMN (Resolução nº 3.308): \nArt. 1º Os recursos das reservas, das provisões e dos fundos das sociedades \nseguradoras, das sociedades de capitalização e das entidades abertas de \nprevidência complementar, constituídos de acordo com os critérios fixados pelo \nConselho Nacional de Seguros Privados (CNSP), devem ser aplicados conforme as \ndiretrizes deste regulamento, observadas as condições de segurança, \nrentabilidade, solvência e liquidez. \nFl. 1131\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 39 \nNão se trata, portanto, de contribuinte que exerça atividade financeira ou de \ninvestimento de forma autônoma, mas de pessoa jurídica cuja atuação está integralmente voltada \nà assunção e à gestão dos riscos transferidos pelas seguradoras, sob pena de liquidação. \nNesse contexto, a constituição de provisões técnicas e a manutenção de ativos \ngarantidores representam imposições legais indissociáveis do próprio exercício da atividade de \nresseguro. Por essa razão, as receitas financeiras decorrentes da aplicação desses ativos \napresentam características que evidenciam sua natureza operacional: \n(i) decorrem de obrigação legal;  \n(ii) não constituem receita financeira autônoma ou atípica;  \n(iii) não possuem caráter eventual, mas representam resultado normal e esperado \nda atividade; e  \n(iv) são indissociáveis do exercício da atividade de resseguro. \nEssa conclusão é corroborada pela Lei Complementar nº 213/2025, que, ao \ndisciplinar a responsabilidade dos administradores das entidades, inclusive das resseguradoras, \ntrata a constituição das provisões e reservas obrigatórias como dever inerente ao exercício da \natividade, cuja inobservância caracteriza infração. Confira-se: \nArt. 109. Os diretores, administradores, gerentes e fiscais de sociedades \nseguradoras, sociedades cooperativas de seguros, resseguradoras, sociedades de \ncapitalização, entidades abertas de previdência complementar, administradoras \nde operações de proteção patrimonial mutualista e as associações contratantes \ndas administradoras responderão solidariamente com essas entidades pelos \nprejuízos causados a terceiros, inclusive aos seus acionistas, em consequência do \ndescumprimento de leis, normas e instruções aplicáveis aos respectivos mercados \ne, em especial, pela falta de constituição de provisões e reservas obrigatórias. \nVerifica-se, portanto, que a própria legislação considera a constituição das \nprovisões técnicas e das reservas obrigatórias elemento essencial ao exercício da atividade de \nresseguro. Sendo obrigatória a manutenção dos ativos garantidores e indissociável da exploração \ndessa atividade, a remuneração deles decorrente não pode ser qualificada como receita financeira \nestranha ou meramente acessória. Ao contrário, à luz do inciso IV do art. 12 do Decreto-Lei nº \n1.598/1977, com redação dada pela Lei nº 12.973/2014, tais receitas decorrem diretamente da \nexploração da atividade regulada de resseguro e, por isso, integram a receita da atividade da \nRecorrente compondo a base de cálculo das contribuições ao PIS e a Cofins. \nÉ o meu voto. \n \nAssinado Digitalmente \nSabrina Coutinho Barbosa \nFl. 1132\nDF  CARF  MF\nOriginal\n\nDOCUMENTO VALIDADO \nACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n PROCESSO  16327.721182/2019-21 \n 40 \n \nFl. 1133\nDF  CARF  MF\nOriginal",
+    "n_chars": 95225,
+    "marca": null,
+    "fonte": "blob"
+   }
+  ]
+ },
+ "indice_navegavel": [
+  {
+   "doc_id": "carf:raw/carf/ano=2026/mes=10/dia=10/cnpj=33376989/16327721182201921/anexos/Decisao_16327721182201921_3102-004203.PDF",
+   "nome": "Decisao_16327721182201921_3102-004203.PDF",
+   "tipo": "decisao",
+   "paginas": null,
+   "ancora": null,
+   "gcs_path": "raw/carf/ano=2026/mes=10/dia=10/cnpj=33376989/16327721182201921/anexos/Decisao_16327721182201921_3102-004203.PDF",
+   "processo_numero": "16327721182201921",
+   "data": null,
+   "movimento_ref": null,
+   "grau": "sem_ancora",
+   "fls": null,
+   "documento_indexado": null,
+   "processo": "16327721182201921",
+   "n_chars": null,
+   "marca": null
+  }
+ ]
+}

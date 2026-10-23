@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
 
@@ -497,15 +498,25 @@ def test_6d_meio_v5_e_rejeitado():
 # ── (7) schemas fechados ───────────────────────────────────────────────────
 
 
-@pytest.mark.parametrize(("modelo", "dados"), [
-    (Nucleo, {**_nucleo(), "extra": 1}),
-    (Nucleo, {"acordaos": [{"doc_id": "a", "texto": "t", "relator": "x"}]}),
-    (ItemIndice, {"doc_id": "a", "gcs_path": "gs://x"}),
-    (TrilhaItem, {"slot": "merito.p1", "doc_id": "a", "trecho_apoio": "t", "nota": "x"}),
-], ids=["nucleo", "acordao", "indice", "trilha"])
-def test_7_schemas_rejeitam_chave_extra(modelo, dados):
+def test_7_trilha_rejeita_chave_extra():
     with pytest.raises(ValidationError):
-        modelo.model_validate(dados)
+        TrilhaItem.model_validate(
+            {"slot": "merito.p1", "doc_id": "a", "trecho_apoio": "t", "nota": "x"})
+
+
+# 23/10/2026: o núcleo e o item do índice são dado do shared. Chave desconhecida
+# dentro deles vira log, não 422 (defeito do 422 da rodada IRB 1481420).
+@pytest.mark.parametrize(("modelo", "dados"), [
+    (Nucleo, {**_nucleo(), "chave_nova": 1}),
+    (Nucleo, {"acordaos": [{"doc_id": "a", "texto": "t", "relator": "x"}]}),
+    (ItemIndice, {"doc_id": "a", "chave_nova": "x"}),
+], ids=["nucleo", "acordao", "indice"])
+def test_7_nucleo_e_indice_ignoram_chave_desconhecida_com_log(modelo, dados, caplog):
+    with caplog.at_level("WARNING"):
+        m = modelo.model_validate(dados)
+    assert "FICHA_NUCLEO_CHAVE_IGNORADA" in caplog.text
+    assert "chave_nova" not in m.model_dump() and "relator" not in json.dumps(
+        m.model_dump(mode="json"))
 
 
 def test_7b_trecho_apoio_acima_de_200_e_rejeitado():
@@ -529,3 +540,71 @@ def test_8_o_v5_usa_o_papel_ficha_redacao(monkeypatch):
     assert v5_mod.DEFAULT_MODEL == model_for("ficha_redacao")
     assert {c["model"] for c in prov.chamadas} == {model_for("ficha_redacao")}
     assert r.model == model_for("ficha_redacao")
+
+
+# ── (8) contrato com o shared 1.826 (23/10/2026) ────────────────────────────
+#
+# A forma real que o shared manda (`v2.montar_nucleo` + `v2.indice_navegavel`),
+# gravada na rodada IRB 1481420. O redator v5 respondeu 422 a ela.
+
+_FIXTURE = Path(__file__).parent / "fixtures" / "nucleo_shared_1826.json"
+
+
+def _shared_1826() -> dict:
+    return json.loads(_FIXTURE.read_text(encoding="utf-8"))
+
+
+def test_8_contrato_nucleo_do_shared_1826_valida_sem_erro(caplog):
+    real = _shared_1826()
+    with caplog.at_level("WARNING"):
+        req = FichaWriteFieldsRequest(**_body(nucleo=real["nucleo"],
+                                              indice_navegavel=real["indice_navegavel"]))
+    assert "FICHA_NUCLEO_CHAVE_IGNORADA" not in caplog.text  # nenhuma chave perdida
+    n = req.nucleo
+    assert req.modo_v5
+    assert n.cdas.divida_ativa["data"] == "22/10/2026"
+    assert n.cdas.valor_cdas == 0.0 and n.cdas.inscricoes_membros == []
+    assert n.metadados["conexo_id"] == 1481420
+    assert n.qualificacao["modo"] == "capa" and n.premissas_v3
+    [doc] = n.documentos()
+    assert doc.papel == "decisao_pa" and doc.n_chars == len(doc.texto) == 95225
+    [it] = req.indice_navegavel
+    assert it.processo == "16327721182201921" and it.grau == "sem_ancora"
+
+
+def test_8b_rota_aceita_a_forma_do_shared(monkeypatch):
+    """A rota não dá 422. O LLM é dublê: o teste é só do contrato."""
+    real = _shared_1826()
+    prov = _Prov([_FIM], [_emissao(trilha=[])])
+    monkeypatch.setattr(v5_mod, "create_provider", lambda *_a, **_k: prov)
+    app = FastAPI()
+    app.include_router(router)
+    resp = TestClient(app).post("/ficha/write-fields", json=_body(
+        nucleo=real["nucleo"], indice_navegavel=real["indice_navegavel"]))
+    assert resp.status_code == 200, resp.text[:500]
+
+
+def test_8c_qualificacao_aceita_os_2_nomes():
+    a = Nucleo.model_validate({"qualificacao": {"modo": "capa"}})
+    b = Nucleo.model_validate({"qualificacao_s2c": {"modo": "capa"}})
+    assert a.qualificacao == b.qualificacao == {"modo": "capa"}
+
+
+def test_8d_o_prompt_leva_cdas_e_metadados_legiveis():
+    real = _shared_1826()
+    nucleo = Nucleo.model_validate(real["nucleo"])
+    out = ferr_mod.nucleo_legivel(nucleo)
+    assert out["cdas"][0].startswith("Dívida ativa (esqueleto): tem: False")
+    assert "data: 22/10/2026" in out["cdas"][0]
+    assert "Valor das CDAs (R$): 0.0" in out["cdas"]
+    assert "Dívida ativa verificada em: sem data" in out["cdas"]
+    assert "conexo.razao_social: IRB-BRASIL RESSEGUROS S.A." in out["metadados"]
+    assert "membros[0].item_type: processo_carf" in out["metadados"]
+    assert not any(linha.startswith("premissas_v3") for linha in out["metadados"])
+    assert out["documentos"][0]["texto"] == nucleo.documentos()[0].texto
+    assert out["qualificacao"]["modo"] == "capa"
+
+
+def test_8e_cdas_em_lista_continua_valendo():
+    n = Nucleo.model_validate({"cdas": [{"numero": "8061900012345", "valor": 10.0}]})
+    assert ferr_mod.cdas_legiveis(n.cdas) == ["CDA 1: numero: 8061900012345; valor: 10.0"]
