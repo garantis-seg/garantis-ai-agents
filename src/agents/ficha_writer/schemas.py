@@ -409,6 +409,27 @@ class ErroDeCampo(BaseModel):
     valor_anterior: Any = None
 
 
+class RodadaDetalhe(BaseModel):
+    """Uma rodada da fase B do v5 (24/10/2026).
+
+    O `S4.json` só trazia o nº de rodadas e os erros da última. Um fato sem fonte que
+    uma rodada corrigiu não deixava rastro. O debugger visual lê esta lista.
+    """
+
+    rodada: int
+    #: Os erros da rodada. A rodada aprovada tem `erros=[]`.
+    erros: list[ErroDeCampo] = Field(default_factory=list)
+    #: Os slots que o prompt da rodada pediu.
+    slots_pedidos: list[str] = Field(default_factory=list)
+    #: Os slots pedidos que a saída do LLM trouxe em `campos`.
+    slots_devolvidos: list[str] = Field(default_factory=list)
+    #: Os documentos que o código abriu na rodada para conferir uma trilha. A fase B
+    #: não tem ferramenta do LLM. As chamadas da fase A ficam no topo da resposta.
+    chamadas_ferramenta: int = 0
+    #: Os avisos novos do código na rodada (ex.: `trecho_aproximado`).
+    avisos: list[str] = Field(default_factory=list)
+
+
 class FichaWriteFieldsResponse(BaseModel):
     """Response do POST /ficha/write-fields.
 
@@ -443,3 +464,9 @@ class FichaWriteFieldsResponse(BaseModel):
     #: v5: chamadas de ferramenta da fase A e o estado do budget.
     chamadas_ferramenta: int = 0
     budget_esgotado: bool = False
+    #: v5 (24/10/2026): uma entrada por rodada da fase B, inclusive a aprovada.
+    rodadas_detalhe: list[RodadaDetalhe] = Field(default_factory=list)
+    #: O redator que respondeu: "ficha_writer_v5" ou "ficha_writer_v4". O v3 omite.
+    versao: Optional[str] = None
+    #: O modo do request: "v5" ou "v4". O v3 omite (24/10/2026).
+    modo: Optional[str] = None

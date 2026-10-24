@@ -1113,3 +1113,45 @@ def test_11f_esgotamento_vale_com_a_etapa_concluida_ou_com_a_decisao():
     assert FontesDeFato.montar(
         textos_docs=["A sentença transitou em julgado."]).esgotamento_sem_fonte(
         "Houve trânsito.") == []
+
+
+# ── (12) o histórico de erros por rodada e a versão (24/10/2026) ───────────
+# O `S4.json` só trazia o nº de rodadas e os erros da última. Um fato sem fonte que
+# uma rodada corrigiu não deixava rastro. O debugger visual lê `rodadas_detalhe`.
+
+
+def test_12a_rodadas_detalhe_guarda_os_erros_de_cada_rodada(monkeypatch):
+    sem_trilha = _emissao(trilha=[_trilha_ok()[1]])
+    so_merito = {"merito.p1": _CAMPOS["merito.p1"]}
+    sem_json = "isto não é JSON"
+    ok = _emissao(campos=so_merito, trilha=[_trilha_ok()[0]], alertas=[])
+    prov = _Prov(_leituras(), [sem_trilha, sem_json, ok])
+    r = _rodar(prov, monkeypatch)
+    assert r.success, r.erros
+    assert r.rodadas == 3
+    assert r.versao == "ficha_writer_v5" and r.modo == "v5"
+    d = r.rodadas_detalhe
+    assert [x.rodada for x in d] == [1, 2, 3]
+    # Rodada 1: o mérito reprovou por falta de trilha. O bullet passou.
+    assert [e.campo for e in d[0].erros] == ["merito.p1"]
+    assert "slot sem trilha_leitura" in d[0].erros[0].erro
+    assert d[0].erros[0].valor_anterior == _CAMPOS["merito.p1"]
+    assert set(d[0].slots_pedidos) == {"merito.p1", "bullets[0]"}
+    assert set(d[0].slots_devolvidos) == {"merito.p1", "bullets[0]"}
+    # Rodada 2: a saída não é JSON. O retry pediu só o mérito.
+    assert [e.campo for e in d[1].erros] == ["_saida"]
+    assert "parse do JSON" in d[1].erros[0].erro
+    assert d[1].slots_pedidos == ["merito.p1"] and d[1].slots_devolvidos == []
+    # Rodada 3: aprovada, com `erros=[]`.
+    assert d[2].erros == [] and d[2].slots_devolvidos == ["merito.p1"]
+    dump = r.model_dump()
+    assert dump["rodadas_detalhe"][0]["erros"][0]["campo"] == "merito.p1"
+
+
+def test_12b_o_v4_aceita_a_resposta_sem_versao_e_sem_modo():
+    from src.agents.ficha_writer.schemas import FichaWriteFieldsResponse
+
+    r = FichaWriteFieldsResponse(success=True)
+    assert r.versao is None and r.modo is None and r.rodadas_detalhe == []
+    r4 = FichaWriteFieldsResponse(success=True, versao="ficha_writer_v4", modo="v4")
+    assert r4.versao == "ficha_writer_v4" and r4.modo == "v4"
