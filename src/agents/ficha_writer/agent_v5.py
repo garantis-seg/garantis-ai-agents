@@ -86,6 +86,7 @@ from .schemas import (
     MAX_TRECHO_APOIO,
     FichaWriteFieldsResponse,
     Nucleo,
+    RodadaDetalhe,
     TrilhaItem,
 )
 from .validacao import (
@@ -122,6 +123,10 @@ AVISO_VERIFICADO = "verificado_pelo_codigo"
 
 #: O aviso de um trecho que casou por prefixo ou por similaridade (23/10/2026).
 AVISO_APROXIMADO = "trecho_aproximado"
+
+#: A versão e o modo na resposta (24/10/2026). O shared (#751) lê os 2 campos.
+VERSAO = "ficha_writer_v5"
+MODO = "v5"
 
 _AQUI = Path(__file__).resolve().parent
 
@@ -295,6 +300,7 @@ async def write_v5(
     if err is not None:
         return FichaWriteFieldsResponse(
             success=False, model=model, error=err, prompt_version=pv, tipo_livro=chave,
+            versao=VERSAO, modo=MODO,
         )
     slots, nao_aplicaveis = resolver_slots(request, campos_alvo)
     motivos = motivos_nao_aplicaveis(chave, nao_aplicaveis)
@@ -306,7 +312,7 @@ async def write_v5(
     base = {
         "prompt_version": pv, "tipo_livro": chave,
         "campos_nao_aplicaveis": nao_aplicaveis, "motivos_nao_aplicaveis": motivos,
-        "avisos": avisos_req,
+        "avisos": avisos_req, "versao": VERSAO, "modo": MODO,
     }
 
     if not slots and not request.alertas:
@@ -353,6 +359,8 @@ async def write_v5(
     erros: list[ErroDeCampo] = []
     used_model = model
     rodada = 0
+    # Uma entrada por rodada, inclusive a aprovada (24/10/2026).
+    detalhe: list[RodadaDetalhe] = []
 
     for rodada in range(1, MAX_RODADAS + 1):
         prompt = build_prompt_escrita(
@@ -369,6 +377,9 @@ async def write_v5(
         used_model = resp.model or used_model
         cost_total += custo_da_resposta(resp)
         raw = resp.text or ""
+        pedidos = [s.nome for s in pendentes_slots]
+        abertos_antes = len(autos.abertos_pelo_codigo)
+        n_avisos_antes = len(avisos_codigo)
         try:
             parsed = parse_llm_json(raw)
         except (ValueError, Exception) as e:  # noqa: BLE001
@@ -376,7 +387,11 @@ async def write_v5(
                            rodada, e, raw[:200])
             erros = [ErroDeCampo(campo=CAMPO_SAIDA, erro=f"parse do JSON do LLM falhou: {e}")]
             erros_retry = erros
+            detalhe.append(RodadaDetalhe(rodada=rodada, erros=erros, slots_pedidos=pedidos))
             continue
+        campos_llm = parsed.get("campos") if isinstance(parsed, dict) else None
+        devolvidos = ([n for n in pedidos if n in campos_llm]
+                      if isinstance(campos_llm, dict) else [])
 
         ok, erros_campos = validar_campos(parsed, pendentes_slots, citaveis,
                                           origem_valor=origem, sem_corretor=sem_corretor)
@@ -412,6 +427,11 @@ async def write_v5(
         aprovados.update(ok)
         respondidos.update({a.codigo: a for a in ok_alertas})
         erros = erros_campos + erros_alertas
+        detalhe.append(RodadaDetalhe(
+            rodada=rodada, erros=erros, slots_pedidos=pedidos, slots_devolvidos=devolvidos,
+            chamadas_ferramenta=len(autos.abertos_pelo_codigo) - abertos_antes,
+            avisos=avisos_codigo[n_avisos_antes:],
+        ))
         if not erros:
             break
         logger.info("FICHA_WRITER_V5 rodada=%s erros=%s", rodada, [e.campo for e in erros])
@@ -433,13 +453,13 @@ async def write_v5(
             success=False, campos=aprovados, model=used_model, cost_usd=round(cost_total, 6),
             error=f"validação falhou após {rodada} rodada(s): {resumo}",
             alertas_respondidos=alertas_ordenados, erros=erros, rodadas=rodada,
-            trilha_leitura=trilha_ordenada, **base, **nav_info,
+            trilha_leitura=trilha_ordenada, rodadas_detalhe=detalhe, **base, **nav_info,
         )
     campos = {s.nome: aprovados[s.nome] for s in slots if s.nome in aprovados}
     return FichaWriteFieldsResponse(
         success=True, campos=campos, model=used_model, cost_usd=round(cost_total, 6),
         alertas_respondidos=alertas_ordenados, rodadas=rodada,
-        trilha_leitura=trilha_ordenada, **base, **nav_info,
+        trilha_leitura=trilha_ordenada, rodadas_detalhe=detalhe, **base, **nav_info,
     )
 
 
@@ -451,6 +471,8 @@ __all__ = [
     "CAMPO_TRILHA",
     "DEFAULT_MODEL",
     "MAX_RODADAS",
+    "MODO",
+    "VERSAO",
     "prompt_version",
     "write_v5",
 ]
