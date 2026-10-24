@@ -175,7 +175,8 @@ def validar_saida_v3(
             "valor_anterior": len(saida.divergencias_gabarito),
         })
 
-    # Regra 2: a prova cita documento existente, lido, com o trecho literal.
+    # Regra 2: a prova cita documento existente, lido, com o trecho no texto
+    # (`trecho_confere`: literal, prefixo ou similar; 23/10/2026).
     for balde, itens in (("balde1", saida.balde1), ("balde2", saida.balde2)):
         for i, it in enumerate(itens):
             if it.prova is None:
@@ -192,6 +193,10 @@ def validar_saida_v3(
             if conf.verificado_pelo_codigo:
                 logger.info("AUDITOR_FICHA_V3_VERIFICADO_PELO_CODIGO %s[%d] doc=%s",
                             balde, i, it.prova.doc_id)
+            if conf.metodo and conf.metodo != "literal":
+                # 23/10/2026: o trecho casou por prefixo ou similar (`trecho_confere`).
+                logger.info("AUDITOR_FICHA_V3_TRECHO_APROXIMADO %s[%d] doc=%s metodo=%s",
+                            balde, i, it.prova.doc_id, conf.metodo)
 
     # Regra 4: todo slot da trilha conferido; todo `confere=false` acusado.
     for i, f in enumerate(saida.fatos_conferidos):
