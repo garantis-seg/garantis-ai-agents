@@ -329,11 +329,11 @@ def test_2c_bullet_opcional_vazio_nao_exige_trilha(monkeypatch):
     ({"doc_id": "carf:anexo.pdf", "paginas": [1], "trecho_apoio": "Anexo."},
      "não foi lido na fase A, e o código não consegue abrir"),
     ({"doc_id": "carf:recurso.pdf", "paginas": [2],
-      "trecho_apoio": "O recurso especial foi admitido."}, "não está, literal"),
+      "trecho_apoio": "O recurso especial foi admitido."}, "não está no documento citado"),
     ({"doc_id": "carf:recurso.pdf", "paginas": [9], "trecho_apoio": "Trecho inventado."},
      "página que não existe"),
     ({"doc_id": "carf:acordao.pdf", "paginas": [],
-      "trecho_apoio": "O CARF cancelou a exigência."}, "não está, literal"),
+      "trecho_apoio": "O CARF cancelou a exigência."}, "não está no documento citado"),
 ], ids=["fora_do_indice", "nao_lido_ilegivel", "trecho_inventado", "pagina_inexistente",
         "trecho_fora_do_nucleo"])
 def test_3_trilha_invalida_e_erro_do_slot(monkeypatch, item, trecho_do_erro):
@@ -657,17 +657,17 @@ def test_9b_trecho_acima_de_200_e_cortado_e_aceito(monkeypatch):
     assert _LONGO_NUCLEO[len(trecho)] == " "                  # fim de palavra
 
 
-def test_9c_prefixo_de_120_caracteres_basta(monkeypatch):
-    trecho = _ACORDAO[:130] + " e o resto foi parafraseado"
+def test_9c_prefixo_de_80_caracteres_basta(monkeypatch):
+    trecho = _ACORDAO[:90] + " e o resto foi parafraseado"
     t = [{"slot": "merito.p1", "doc_id": "carf:acordao.pdf", "paginas": [],
           "trecho_apoio": trecho}, _trilha_ok()[1]]
     prov = _Prov(_leituras(), [_emissao(trilha=t)])
     assert _rodar(prov, monkeypatch).success
-    # Abaixo de 120 caracteres certos, o prefixo não casa.
+    # Abaixo de 80 caracteres certos, o prefixo não casa (23/10/2026).
     ruim = [{**t[0], "trecho_apoio": _ACORDAO[:60] + " e o resto foi parafraseado"}, t[1]]
     prov = _Prov(_leituras(), [_emissao(trilha=ruim)])
     r = _rodar(prov, monkeypatch)
-    assert r.success is False and "não está, literal" in r.erros[0].erro
+    assert r.success is False and "não está no documento citado" in r.erros[0].erro
 
 
 @pytest.mark.parametrize(("paginas", "esperado"), [
@@ -765,3 +765,197 @@ def test_9j_slot_vazio_usa_o_motivo_que_veio_do_shared(monkeypatch):
     r = _rodar(prov, monkeypatch, body=body)
     erro = {e.campo: e.erro for e in r.erros}["merito.p1"]
     assert "Motivo da rodada anterior: S5: tese sem documento" in erro
+
+
+# ── (10) a conferência do trecho normaliza o texto de PDF (23/10/2026) ─────────
+#
+# Rodada real IRB 1481420 (ai-agents rev 00412): o redator reprovou `bullets[2]` 3
+# vezes com "o trecho não está, literal, no documento citado". O trecho estava no
+# acórdão (`Decisao_16327721182201921_3102-004203.PDF`, núcleo de 95.225
+# caracteres). O cabeçalho da página seguinte cortava a frase no meio. O recorte
+# abaixo é o texto real do núcleo: a passagem do voto de qualidade e mais 5
+# cabeçalhos de página, com o corpo encurtado.
+
+_IRB_NUCLEO = (
+    'de votos, em conhecer do recurso voluntário e negar-lhe provimento quanto à exclusão da \n'
+    'incidência das contribuições referentes às receitas de variações cambiais decorrentes de prêmios \n'
+    'de seguros; ii) por voto de qualidade, para: a) negar-lhe provimento quanto à exclusão da \n'
+    'Fl. 1094\n'
+    'DF  CARF  MF\n'
+    'Original\n'
+    '\n'
+    'DOCUMENTO VALIDADO \n'
+    'ACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n'
+    ' PROCESSO  16327.721182/2019-21 \n'
+    ' 2 \n'
+    'incidência das contribuições referentes às receitas financeiras dos ativos garantidores. Vencidos os \n'
+    'conselheiros Jorge Luís Cabral, Wilson Antônio de Souza Corrêa e Joana Maria de Oliveira \n'
+    'Guimarães; e b) recusar a proposta de diligência feita pela conselheira Joana Maria de Oliveira \n'
+    'Guimarães. Vencidos os conselheiros Joana Maria de Oliveira Guimarães, Sabrina Coutinho \n'
+    '(...)\n'
+    'segurança, rentabilidade e solvência. E são justamente os rendimentos financeiros \n'
+    'Fl. 1095\n'
+    'DF  CARF  MF\n'
+    'Original\n'
+    '\n'
+    'DOCUMENTO VALIDADO \n'
+    'ACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n'
+    ' PROCESSO  16327.721182/2019-21 \n'
+    ' 3 \n'
+    'das reservas técnicas que dão ensejo às receitas financeiras auferidas pelas \n'
+    'entidades seguradoras e de previdência complementar aberta. \n'
+    '(...)\n'
+    'cálculo. O valor a ser tributado é representado pela receita operacional total, \n'
+    'Fl. 1096\n'
+    'DF  CARF  MF\n'
+    'Original\n'
+    '\n'
+    'DOCUMENTO VALIDADO \n'
+    'ACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n'
+    ' PROCESSO  16327.721182/2019-21 \n'
+    ' 4 \n'
+    'incluindo as receitas financeiras auferidas nos investimentos compulsórios (Anexo \n'
+    'I para o ano-calendário de 2015 e Anexo III para o ano-calendário de 2016) e as \n'
+    '(...)\n'
+    'correspondentes provas documentais, não é hábil a alterar o lançamento nem a \n'
+    'justificar pedido de diligência ou perícia. \n'
+    'Fl. 1097\n'
+    'DF  CARF  MF\n'
+    'Original\n'
+    '\n'
+    'DOCUMENTO VALIDADO \n'
+    'ACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n'
+    ' PROCESSO  16327.721182/2019-21 \n'
+    ' 5 \n'
+    'ASSUNTO: CONTRIBUIÇÃO PARA O FINANCIAMENTO DA SEGURIDADE SOCIAL - \n'
+    'COFINS  \n'
+    'Período de apuração: 01/01/2015 a 31/12/2016  \n'
+    '(...)\n'
+    'pessoa jurídica, obtidas a partir de investimentos necessários para o exercício da \n'
+    'Fl. 1098\n'
+    'DF  CARF  MF\n'
+    'Original\n'
+    '\n'
+    'DOCUMENTO VALIDADO \n'
+    'ACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n'
+    ' PROCESSO  16327.721182/2019-21 \n'
+    ' 6 \n'
+    'atividade fim, integram o seu faturamento e, portanto, compõem a base de \n'
+    'cálculo, não se justificando sua exclusão. \n'
+    '(...)\n'
+    'O Recurso Voluntário é tempestivo e atende os demais requisitos de \n'
+    'admissibilidade, devendo, então, ser conhecido. \n'
+    'Fl. 1099\n'
+    'DF  CARF  MF\n'
+    'Original\n'
+    '\n'
+    'DOCUMENTO VALIDADO \n'
+    'ACÓRDÃO  3102-004.203 – 3ª SEÇÃO/1ª CÂMARA/2ª TURMA ORDINÁRIA \n'
+    ' PROCESSO  16327.721182/2019-21 \n'
+    ' 7 \n'
+    'Conforme relatado, trata-se de autos de infração de PIS e Cofins relativos aos anos \n'
+    'de 2015 e 2016 lavrados porque a fiscalização entendeu que a empresa deixou de incluir na base \n'
+    '(...)\n'
+)
+
+_TRECHO_IRB = (
+    "ii) por voto de qualidade, para: a) negar-lhe provimento quanto à exclusão da "
+    "incidência das contribuições referentes às receitas financeiras dos ativos "
+    "garantidores."
+)
+
+
+def _nucleo_irb() -> dict:
+    n = _nucleo()
+    n["acordaos"] = [{"processo": "16327.721182/2019-21", "doc_id": "carf:acordao.pdf",
+                      "texto": _IRB_NUCLEO}]
+    n["ultima_decisao"] = {"doc_id": "carf:acordao.pdf", "texto": _IRB_NUCLEO}
+    return n
+
+
+def test_10a_trecho_real_do_irb_casa_apesar_do_cabecalho_de_pagina():
+    from src.agents.ficha_writer.ferramentas import normalizar, trecho_confere
+
+    assert normalizar(_TRECHO_IRB) not in normalizar(_IRB_NUCLEO)   # o defeito de antes
+    casou = trecho_confere(_TRECHO_IRB, _IRB_NUCLEO)
+    assert casou and casou.metodo == "literal"
+
+
+@pytest.mark.parametrize("trecho", [
+    # Inventado: as palavras são do documento, a frase não é.
+    "por voto de qualidade, negar provimento ao recurso de ofício da Fazenda Nacional "
+    "quanto à multa isolada aplicada sobre as estimativas mensais.",
+    # A decisão invertida: "dar" no lugar de "negar".
+    _TRECHO_IRB.replace("negar-lhe", "dar-lhe"),
+    # A negação a mais.
+    _TRECHO_IRB.replace("a) negar-lhe provimento", "a) não negar-lhe provimento"),
+], ids=["inventado", "dar_por_negar", "negacao_a_mais"])
+def test_10b_trecho_que_nao_esta_no_documento_reprova(trecho):
+    from src.agents.ficha_writer.ferramentas import trecho_confere
+
+    casou = trecho_confere(trecho, _IRB_NUCLEO)
+    assert not casou and casou.metodo is None
+
+
+def test_10c_hifenizacao_quebras_aspas_e_acentos_sinteticos():
+    from src.agents.ficha_writer.ferramentas import trecho_confere
+
+    pdf = ("O  colegiado  decidiu  que  as  contribui-\nções  incidem  sobre  o  “resultado\n"
+           "econômico-\nfinanceiro”  da  segura-\n  dora — conforme  o  Acórdão  3401-\n004.511..")
+    trecho = ('O colegiado decidiu que as contribuicoes incidem sobre o "resultado '
+              'economico-financeiro" da seguradora - conforme o acordao 3401-004.511.')
+    casou = trecho_confere(trecho, pdf)
+    assert casou and casou.metodo == "literal"
+    # Um número diferente nunca casa (o trecho tem menos de 80 caracteres).
+    curto = "da seguradora - conforme o acordao 3401-004.511"
+    assert trecho_confere(curto, pdf).metodo == "literal"
+    assert not trecho_confere(curto.replace("004.511", "004.512"), pdf)
+
+
+def test_10d_prefixo_e_similar_dao_o_metodo():
+    from src.agents.ficha_writer.ferramentas import trecho_confere
+
+    texto = ("A turma manteve a exigência de PIS e COFINS sobre as receitas financeiras das "
+             "reservas técnicas da seguradora, por voto de qualidade, na sessão de junho.")
+    prefixo = trecho_confere(texto[:85] + " e o resto o modelo escreveu de cabeça.", texto)
+    assert prefixo and prefixo.metodo == "prefixo"
+    typo = trecho_confere("A turma mantteve a exigencia de PIS e COFINS sobre as receitas "
+                          "financeiras", texto)
+    assert typo and typo.metodo == "similar" and typo.similaridade >= 0.90
+    # Um número diferente nunca casa, nem com a grafia quase igual.
+    processo = ("O processo 16327.721182/2019-21 trata da exigência de PIS e COFINS sobre "
+                "as receitas financeiras.")
+    assert trecho_confere(processo.replace("financeiras", "financeiraz"), processo)
+    assert not trecho_confere(processo.replace("721182", "721183"), processo)
+    # Curto demais para a similaridade: só o literal vale.
+    assert not trecho_confere("A turma mantteve", texto)
+
+
+def test_10e_v5_aceita_o_trecho_real_na_primeira_rodada(monkeypatch):
+    t = [{"slot": "merito.p1", "doc_id": "carf:acordao.pdf", "paginas": [],
+          "trecho_apoio": _TRECHO_IRB}, _trilha_ok()[1]]
+    prov = _Prov(_leituras(), [_emissao(trilha=t)])
+    r = _rodar(prov, monkeypatch, body=_body(nucleo=_nucleo_irb()))
+    assert r.success, r.erros
+    assert r.rodadas == 1
+    assert not any(a.startswith("trecho_aproximado") for a in r.avisos)
+
+
+def test_10f_v5_avisa_quando_o_trecho_casa_por_similaridade(monkeypatch):
+    trecho = _TRECHO_IRB.replace("provimento", "provimentto")
+    t = [{"slot": "merito.p1", "doc_id": "carf:acordao.pdf", "paginas": [],
+          "trecho_apoio": trecho}, _trilha_ok()[1]]
+    prov = _Prov(_leituras(), [_emissao(trilha=t)])
+    r = _rodar(prov, monkeypatch, body=_body(nucleo=_nucleo_irb()))
+    assert r.success and r.rodadas == 1, r.erros
+    assert ("trecho_aproximado: merito.p1: o trecho casou por similar no documento "
+            "carf:acordao.pdf") in r.avisos
+
+
+def test_10g_v5_reprova_o_trecho_inventado_no_nucleo_real(monkeypatch):
+    t = [{"slot": "merito.p1", "doc_id": "carf:acordao.pdf", "paginas": [],
+          "trecho_apoio": _TRECHO_IRB.replace("negar-lhe", "dar-lhe")}, _trilha_ok()[1]]
+    prov = _Prov(_leituras(), [_emissao(trilha=t)] * 3)
+    r = _rodar(prov, monkeypatch, body=_body(nucleo=_nucleo_irb()))
+    assert r.success is False
+    assert "o trecho não está no documento citado" in r.erros[0].erro

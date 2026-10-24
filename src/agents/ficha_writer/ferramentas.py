@@ -22,15 +22,17 @@ Quem confere a trilha e a prova é o CÓDIGO (`Autos.conferir_citacao`):
 2. Um documento do índice foi lido de fato na fase A. Um documento do núcleo
    conta como lido: ele está inteiro no prompt.
 3. Com o texto disponível, o trecho está no documento (nas páginas citadas, se
-   há páginas). A comparação ignora acento, caixa e espaço repetido.
+   há páginas). A função dona é `trecho_confere` (23/10/2026). Ela normaliza os
+   2 lados (acento, caixa, aspas, travessão, hífen de fim de linha, quebra,
+   espaço, pontuação dupla) e tira o cabeçalho de página. Depois ela tenta 3
+   métodos: `literal`, `prefixo` (80 caracteres) e `similar` (difflib por token,
+   no mínimo 0,90). Só reprova quando os 3 falham.
 
 Determinismo máximo (plano 1.2, rodada real de 23/10/2026): o que o código
 consegue consertar ou verificar, ele conserta ou verifica. Só reprova o que não
 consegue (`Autos.verificar`):
 
-- Trecho longo: o código corta o trecho no fim de palavra (`cortar_trecho`). O
-  trecho casa se ele inteiro, ou os primeiros 120 caracteres normalizados, estão
-  no documento.
+- Trecho longo: o código corta o trecho no fim de palavra (`cortar_trecho`).
 - Documento do núcleo: `paginas` é opcional. O código confere o texto inteiro.
 - Documento do índice com página errada ou sem página: o código acha a página.
 - Documento do índice que a fase A não leu: o código abre o documento (até 5
@@ -39,10 +41,13 @@ consegue (`Autos.verificar`):
 """
 from __future__ import annotations
 
+import difflib
+import functools
 import json
 import logging
 import re
 import unicodedata
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Awaitable, Callable, Optional
 
@@ -60,9 +65,6 @@ _MAX_TRECHOS_POR_LEITURA = 8
 
 #: Caracteres de uma página crua devolvida ao agente.
 _MAX_CHARS_PAGINA = 6000
-
-#: Prefixo normalizado do trecho que basta para a citação casar (23/10/2026).
-PREFIXO_TRECHO = 120
 
 #: Documentos não lidos na fase A que o código abre para conferir uma citação,
 #: por ficha (23/10/2026). Budget separado do budget da fase A.
@@ -94,14 +96,6 @@ class BudgetNavegacao:
 # ── Os autos: núcleo + índice ───────────────────────────────────────────────
 
 
-def normalizar(texto: str) -> str:
-    """Sem acento, sem caixa e sem espaço repetido."""
-    sem_acento = "".join(
-        c for c in unicodedata.normalize("NFKD", texto or "") if not unicodedata.combining(c)
-    )
-    return re.sub(r"\s+", " ", sem_acento.casefold()).strip()
-
-
 def cortar_trecho(texto: Any, limite: int) -> Any:
     """Corta o trecho em `limite` caracteres, no fim de palavra (23/10/2026).
 
@@ -122,15 +116,223 @@ def cortar_trecho(texto: Any, limite: int) -> Any:
     return corte.rstrip(" \t\n.…") or t[:limite]
 
 
-def trecho_casa(trecho: str, base_normalizada: str) -> bool:
-    """O trecho está no texto: todos os pedaços entre "...", ou o prefixo de 120."""
-    pedacos = [p for p in re.split(r"\.\.\.|…", trecho or "") if p.strip()]
-    if not pedacos:
+# ── A conferência do trecho (23/10/2026) ────────────────────────────────────
+#
+# Rodada real IRB 1481420 (rev 00412): o redator reprovou `bullets[2]` 3 vezes.
+# O trecho estava no acórdão, mas o cabeçalho da página seguinte ("Fl. 1094 / DF
+# CARF MF / ...") cortava a frase no meio. O texto de PDF também traz hífen de fim
+# de linha, espaço repetido e aspas e travessões de outro tipo. A função dona é
+# `trecho_confere`. O v5 e o v3 usam só ela, pela `Autos.verificar`.
+
+#: Prefixo normalizado do trecho que basta para a citação casar (23/10/2026).
+PREFIXO_TRECHO = 80
+
+#: Similaridade mínima (difflib, por token) entre o trecho e a janela do texto.
+LIMIAR_SIMILAR = 0.90
+
+#: Tokens mínimos do trecho para o método `similar`. Abaixo disso, o acaso casa.
+MIN_TOKENS_SIMILAR = 8
+
+#: Tokens raros do trecho que ancoram a busca da janela, e ocorrências por token.
+_ANCORAS = 3
+_MAX_OCORRENCIAS = 20
+
+#: Palavras de negação. No método `similar`, uma negação a mais ou a menos reprova.
+_NEGACOES = frozenset({"nao", "nem", "nunca", "jamais", "sem"})
+
+#: Tokens de folga em cada borda da janela na conferência de grafia.
+_FOLGA = 3
+
+_ASPAS = str.maketrans({c: '"' for c in "\u201c\u201d\u201e\u201f\u00ab\u00bb\u2033"
+                        "\u2018\u2019\u201a\u201b\u2032\u00b4`'"})
+_TRACOS = str.maketrans({c: "-" for c in "\u2010\u2011\u2012\u2013\u2014\u2015\u2212"})
+
+
+def _sem_hifen_de_quebra(texto: str) -> str:
+    """Junta a palavra que o PDF partiu no fim da linha ("contribui-\\nções")."""
+    texto = texto.replace("\u00ad", "")
+    # Entre letras, o hífen de quebra sai. Entre dígitos ("3401-\n004"), ele fica.
+    texto = re.sub(r"(\d)[-\u2010\u2011][ \t]*\r?\n\s*(?=\d)", r"\1-", texto)
+    return re.sub(r"([^\W\d_])[-\u2010\u2011][ \t]*\r?\n\s*(?=[^\W\d_])", r"\1", texto)
+
+
+def _normalizar(texto: str) -> str:
+    """O texto na forma de comparar (23/10/2026).
+
+    Sem acento, sem caixa, aspas e travessões unificados, hífen de fim de linha
+    removido com a quebra, hífen entre letras removido ("negar-lhe" = "negarlhe"),
+    toda sequência de espaço e quebra vira 1 espaço, sem espaço antes da pontuação e
+    sem pontuação dupla.
+    """
+    t = _sem_hifen_de_quebra(texto or "")
+    t = "".join(c for c in unicodedata.normalize("NFKD", t) if not unicodedata.combining(c))
+    t = t.casefold().translate(_ASPAS).translate(_TRACOS)
+    t = re.sub(r"(?<=[^\W\d_])-(?=[^\W\d_])", "", t)
+    t = re.sub(r"\s+", " ", t)
+    t = re.sub(r" (?=[.,;:!?)\]])", "", t)
+    t = re.sub(r"(?<=[(\[]) ", "", t)
+    t = re.sub(r"([.,;:!?\"-])\1+", r"\1", t)
+    return t.strip()
+
+
+@functools.lru_cache(maxsize=256)
+def normalizar(texto: str) -> str:
+    """`_normalizar` com cache: o mesmo documento é conferido várias vezes por ficha."""
+    return _normalizar(texto)
+
+
+def _chave_de_linha(linha: str) -> str:
+    return re.sub(r"\d+", "#", _normalizar(linha))
+
+
+@functools.lru_cache(maxsize=64)
+def _sem_cabecalho(texto: str) -> str:
+    """O texto sem as linhas de cabeçalho e de rodapé de página.
+
+    Uma linha é cabeçalho quando a forma dela (com os dígitos mascarados) se repete
+    pelo menos 5 vezes e pelo menos metade das vezes da linha que mais se repete.
+    Sem linha assim, o texto volta igual.
+    """
+    linhas = (texto or "").split("\n")
+    contagem = Counter(k for k in map(_chave_de_linha, linhas) if k)
+    if not contagem:
+        return texto
+    piso = max(5, contagem.most_common(1)[0][1] // 2)
+    repetidas = {k for k, n in contagem.items() if n >= piso}
+    if not repetidas:
+        return texto
+    return "\n".join(ln for ln in linhas if _chave_de_linha(ln) not in repetidas)
+
+
+def _tokens(normalizado: str) -> list[str]:
+    return re.findall(r"\w+", normalizado)
+
+
+@dataclass(frozen=True)
+class Casamento:
+    """O resultado de `trecho_confere`. Vale como bool.
+
+    `metodo`: `literal` (o trecho inteiro, ou cada pedaço entre "...", está no
+    texto), `prefixo` (os primeiros 80 caracteres estão no texto) ou `similar`
+    (similaridade por token de pelo menos 0,90 com uma janela do texto). None
+    quando os 3 falham.
+    """
+
+    ok: bool
+    metodo: Optional[str] = None
+    similaridade: Optional[float] = None
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+
+def _literal(trecho: str, base: str) -> bool:
+    pedacos = [normalizar(p) for p in re.split(r"\.\.\.|…", trecho or "")]
+    pedacos = [p for p in pedacos if p.strip(" .")]
+    return bool(pedacos) and all(p in base for p in pedacos)
+
+
+def _prefixo(trecho_n: str, base: str) -> bool:
+    if len(trecho_n) <= PREFIXO_TRECHO:
         return False
-    if all(normalizar(p) in base_normalizada for p in pedacos):
-        return True
-    prefixo = normalizar(trecho)[:PREFIXO_TRECHO].strip()
-    return bool(prefixo) and prefixo in base_normalizada
+    corte = trecho_n[:PREFIXO_TRECHO].strip()
+    return bool(corte) and corte in base
+
+
+def _so_diferenca_de_grafia(alvo: list[str], janela: list[str]) -> bool:
+    """As diferenças entre o trecho e a janela são só de grafia (OCR, plural, typo).
+
+    Uma palavra trocada ("dar" por "negar") muda o sentido. Uma palavra a mais ou a
+    menos só passa se ela é curta (até 3 letras, como "a" ou "de") e não é negação.
+    A `janela` tem folga nas bordas: o texto a mais no início e no fim não conta.
+    """
+    ops = difflib.SequenceMatcher(None, alvo, janela, autojunk=False).get_opcodes()
+    for k, (op, i1, i2, j1, j2) in enumerate(ops):
+        if op == "equal" or (op == "insert" and k in (0, len(ops) - 1)):
+            continue
+        a, b = alvo[i1:i2], janela[j1:j2]
+        if op == "replace":
+            if difflib.SequenceMatcher(None, " ".join(a), " ".join(b)).ratio() < 0.8:
+                return False
+            continue
+        if any(len(t) > 3 or t in _NEGACOES for t in a + b):
+            return False
+    return True
+
+
+def _similar(trecho_n: str, base: str) -> float:
+    """A melhor similaridade entre o trecho e uma janela do texto do mesmo tamanho.
+
+    A busca anda 1 token por vez na vizinhança dos tokens raros do trecho. A janela
+    só conta se tem todos os números do trecho ("721182" nunca casa com "721183") e
+    se o resto da diferença é só de grafia (`_so_diferenca_de_grafia`): "foi
+    admitido" nunca casa com "não foi admitido", e "dar provimento" nunca casa com
+    "negar provimento".
+    """
+    alvo = _tokens(trecho_n)
+    n = len(alvo)
+    if n < MIN_TOKENS_SIMILAR:
+        return 0.0
+    texto = _tokens(base)
+    if len(texto) < n:
+        return 0.0
+    freq = Counter(texto)
+    raros = sorted({t for t in alvo if len(t) >= 4 and t in freq}, key=lambda t: (freq[t], t))
+    numeros = {t for t in alvo if any(c.isdigit() for c in t)}
+    posicoes = {}
+    for i, t in enumerate(texto):
+        if t in raros[:_ANCORAS]:
+            posicoes.setdefault(t, []).append(i)
+    inicios: set[int] = set()
+    for t in raros[:_ANCORAS]:
+        for p in posicoes.get(t, [])[:_MAX_OCORRENCIAS]:
+            inicios.update(range(max(0, p - n + 1), min(p, len(texto) - n) + 1))
+    sm = difflib.SequenceMatcher(None, autojunk=False)
+    sm.set_seq2(alvo)
+    melhor = 0.0
+    for i in sorted(inicios):
+        janela = texto[i:i + n]
+        sm.set_seq1(janela)
+        if sm.real_quick_ratio() < LIMIAR_SIMILAR or sm.quick_ratio() < LIMIAR_SIMILAR:
+            continue
+        r = sm.ratio()
+        if r <= melhor:
+            continue
+        if not numeros <= set(janela):
+            continue
+        if not _so_diferenca_de_grafia(alvo, texto[max(0, i - _FOLGA):i + n + _FOLGA]):
+            continue
+        melhor = r
+    return melhor
+
+
+def trecho_confere(trecho: str, texto: str) -> Casamento:
+    """O trecho citado está no texto do documento? (23/10/2026)
+
+    Normaliza os dois lados (`normalizar`) e tenta, em ordem: `literal`,
+    `prefixo` e `similar`. Tenta também o texto sem cabeçalho de página
+    (`_sem_cabecalho`). Erro só quando os 3 métodos falham.
+    """
+    if not (trecho or "").strip() or not (texto or "").strip():
+        return Casamento(False)
+    trecho_n = normalizar(trecho)
+    bases = [normalizar(texto)]
+    limpo = _sem_cabecalho(texto)
+    if limpo != texto:
+        bases.append(normalizar(limpo))
+    for metodo, teste in (("literal", lambda b: _literal(trecho, b)),
+                          ("prefixo", lambda b: _prefixo(trecho_n, b))):
+        if any(teste(b) for b in bases):
+            return Casamento(True, metodo)
+    melhor = max(_similar(trecho_n, b) for b in bases)
+    if melhor >= LIMIAR_SIMILAR:
+        return Casamento(True, "similar", round(melhor, 3))
+    return Casamento(False, similaridade=round(melhor, 3) if melhor else None)
+
+
+#: O erro quando os 3 métodos de `trecho_confere` falham.
+_ERRO_SEM_TRECHO = ("o trecho não está no documento citado (o código comparou o texto "
+                    "normalizado, o prefixo de 80 caracteres e a similaridade)")
 
 
 @dataclass
@@ -146,6 +348,8 @@ class Conferencia:
     paginas: list[int] = field(default_factory=list)
     verificado_pelo_codigo: bool = False
     paginas_corrigidas: bool = False
+    #: Como o trecho casou (`trecho_confere`): literal, prefixo ou similar.
+    metodo: Optional[str] = None
 
 
 def _texto_da_pagina(doc: Any, pagina: int) -> str:
@@ -328,7 +532,7 @@ class Autos:
     def _localizar(self, doc: Any, trecho: str) -> list[int]:
         """As páginas do documento em que o trecho está. Vazia: não achou."""
         return [p for p in sorted(set(doc.paginas()))
-                if trecho_casa(trecho, normalizar(_texto_da_pagina(doc, p)))]
+                if trecho_confere(trecho, _texto_da_pagina(doc, p))]
 
     def _abrir_para_verificar(self, doc_id: str) -> Optional[str]:
         """Abre um documento do índice que a fase A não leu. Devolve o erro, ou None."""
@@ -366,25 +570,33 @@ class Autos:
         texto_nucleo = self.textos_nucleo.get(doc_id, "")
         doc = self.legiveis.get(doc_id)
         if texto_nucleo.strip() or doc is None:
-            if trecho_casa(trecho, normalizar(texto_nucleo)):
-                return Conferencia(paginas=paginas)
-            return Conferencia(erro="o trecho não está, literal, no documento citado")
+            casou = trecho_confere(trecho, texto_nucleo)
+            if casou:
+                return Conferencia(paginas=paginas, metodo=casou.metodo)
+            return Conferencia(erro=_ERRO_SEM_TRECHO)
 
         # Documento do índice: as páginas citadas e, se não casar, o código acha a página.
         existentes = set(doc.paginas())
         citadas = [p for p in paginas if p in existentes]
-        if citadas and len(citadas) == len(paginas) and trecho_casa(
-                trecho, normalizar(" ".join(_texto_da_pagina(doc, p) for p in citadas))):
-            conf = Conferencia(paginas=citadas)
+        casou = (trecho_confere(trecho, "\n".join(_texto_da_pagina(doc, p) for p in citadas))
+                 if citadas and len(citadas) == len(paginas) else Casamento(False))
+        if casou:
+            conf = Conferencia(paginas=citadas, metodo=casou.metodo)
         else:
             achadas = self._localizar(doc, trecho)
-            todas = " ".join(_texto_da_pagina(doc, p) for p in sorted(existentes))
-            if not achadas and trecho_casa(trecho, normalizar(todas)):
-                # O trecho cruza a quebra de página.
-                achadas = citadas or sorted(existentes)
+            metodo = "literal"
+            if achadas:
+                metodo = trecho_confere(
+                    trecho, "\n".join(_texto_da_pagina(doc, p) for p in achadas)).metodo
+            else:
+                todas = "\n".join(_texto_da_pagina(doc, p) for p in sorted(existentes))
+                casou = trecho_confere(trecho, todas)
+                if casou:
+                    # O trecho cruza a quebra de página.
+                    achadas, metodo = citadas or sorted(existentes), casou.metodo
             if not achadas:
                 motivo = ("o código abriu o documento, e o trecho não está nele"
-                          if pelo_codigo else "o trecho não está, literal, no documento citado")
+                          if pelo_codigo else _ERRO_SEM_TRECHO)
                 if paginas:
                     motivo += f" (páginas citadas {paginas}"
                     fora = [p for p in paginas if p not in existentes]
@@ -392,7 +604,8 @@ class Autos:
                                if fora else ")")
                 return Conferencia(erro=(self._erro_com_lista(motivo) if pelo_codigo
                                          else motivo))
-            conf = Conferencia(paginas=achadas, paginas_corrigidas=achadas != paginas)
+            conf = Conferencia(paginas=achadas, paginas_corrigidas=achadas != paginas,
+                               metodo=metodo)
             if conf.paginas_corrigidas:
                 logger.info("FICHA_AUTOS_PAGINA_CORRIGIDA doc=%s de=%s para=%s",
                             doc_id, paginas, achadas)
@@ -619,8 +832,10 @@ __all__ = [
     "FERRAMENTAS",
     "MAX_FALHAS_DE_PROTOCOLO",
     "MAX_VERIFICACOES",
+    "LIMIAR_SIMILAR",
     "PREFIXO_TRECHO",
     "Autos",
+    "Casamento",
     "BudgetNavegacao",
     "CircuitBreaker",
     "Conferencia",
@@ -631,5 +846,5 @@ __all__ = [
     "normalizar",
     "perguntar_via_doc_reader",
     "resumir_via_doc_reader",
-    "trecho_casa",
+    "trecho_confere",
 ]

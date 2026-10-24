@@ -23,8 +23,11 @@ Regras duras (no código, não no prompt):
    texto têm trilha. Sem trilha, o slot reprova com erro estruturado para o retry.
 3. O `doc_id` da trilha existe no núcleo ou no índice. Um documento do índice foi
    lido de fato na fase A.
-4. Com o texto disponível, o `trecho_apoio` está no documento (literal, sem
-   acento, sem caixa e sem espaço repetido).
+4. Com o texto disponível, o `trecho_apoio` está no documento. Quem decide é
+   `ferramentas.trecho_confere` (23/10/2026): literal, prefixo de 80 caracteres ou
+   similar (no mínimo 0,90), depois de normalizar hífen de fim de linha, quebra,
+   acento, aspas e cabeçalho de página. Fora do literal, o aviso
+   `trecho_aproximado` registra o método.
 
 Determinismo máximo (plano 1.2, rodada real de 23/10/2026). O código conserta ou
 verifica antes de reprovar:
@@ -101,6 +104,9 @@ _ERROS_DE_SLOT_VAZIO = ("slot obrigatório vazio", "slot ausente na resposta")
 
 #: O aviso de um documento que o código abriu e conferiu (23/10/2026).
 AVISO_VERIFICADO = "verificado_pelo_codigo"
+
+#: O aviso de um trecho que casou por prefixo ou por similaridade (23/10/2026).
+AVISO_APROXIMADO = "trecho_aproximado"
 
 _AQUI = Path(__file__).resolve().parent
 
@@ -197,6 +203,10 @@ def _erros_da_trilha(
             avisos_slot.append(
                 f"{AVISO_VERIFICADO}: {slot}: a fase A não leu o documento {t.doc_id}. "
                 "O código abriu o documento e achou o trecho")
+        if conf.metodo and conf.metodo != "literal":
+            avisos_slot.append(
+                f"{AVISO_APROXIMADO}: {slot}: o trecho casou por {conf.metodo} no "
+                f"documento {t.doc_id}")
     return erros, reparados, avisos_slot
 
 
@@ -377,6 +387,7 @@ async def write_v5(
 
 
 __all__ = [
+    "AVISO_APROXIMADO",
     "AVISO_VERIFICADO",
     "BUDGET_POR_DOC",
     "BUDGET_POR_FICHA",

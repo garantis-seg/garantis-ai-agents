@@ -204,7 +204,7 @@ def test_2b_balde_2_alta_com_prova_retem(monkeypatch):
     ({"doc_id": "carf:anexo.pdf", "pagina": 1, "trecho": "Anexo."},
      "não foi lido na fase A, e o código não consegue abrir"),
     ({"doc_id": "carf:recurso.pdf", "pagina": 2, "trecho": "O REsp foi provido."},
-     "não está, literal"),
+     "não está no documento citado"),
     ({"doc_id": "carf:impugnacao.pdf", "pagina": 1, "trecho": "O REsp foi provido."},
      "o código abriu o documento, e o trecho não está nele"),
 ], ids=["fora", "nao_lido_ilegivel", "inventado", "nao_lido_sem_trecho"])
@@ -457,3 +457,38 @@ def test_9e_prova_nao_verificavel_da_a_lista_de_citaveis(monkeypatch):
     assert ('Cite só documentos desta lista: ["carf:acordao.pdf", "carf:recurso.pdf"]'
             in r.erros_validacao[0]["erro"])
     assert "carf:recurso.pdf" in prov.prompts("B")[1]
+
+
+# ── (10) a conferência do trecho normaliza o texto de PDF (23/10/2026) ─────────
+#
+# A mesma função dona do redator v5 (`ferramentas.trecho_confere`). O caso real é o
+# do IRB 1481420: o cabeçalho de página corta a frase do voto de qualidade.
+
+
+def _b1_irb(trecho: str) -> dict:
+    return _b1(campo="merito.p1", prova={"doc_id": "carf:acordao.pdf", "trecho": trecho})
+
+
+def _fatos_irb() -> list[dict]:
+    return [{**_fatos()[0], "confere": False}, {**_fatos()[1], "confere": True}]
+
+
+def test_10a_prova_com_o_trecho_real_do_irb_e_aceita(monkeypatch):
+    from tests.test_ficha_writer_v5 import _TRECHO_IRB, _nucleo_irb
+
+    prov = _Prov(_ler_recurso(), [_saida(balde1=[_b1_irb(_TRECHO_IRB)],
+                                         fatos_conferidos=_fatos_irb())])
+    r = _rodar(prov, monkeypatch, body=_body(nucleo=_nucleo_irb()))
+    assert r.success, r.erros_validacao
+    assert r.balde1[0].prova.trecho == _TRECHO_IRB
+
+
+def test_10b_prova_com_a_decisao_invertida_reprova(monkeypatch):
+    from tests.test_ficha_writer_v5 import _TRECHO_IRB, _nucleo_irb
+
+    ruim = _saida(balde1=[_b1_irb(_TRECHO_IRB.replace("negar-lhe", "dar-lhe"))],
+                  fatos_conferidos=_fatos_irb())
+    prov = _Prov(_ler_recurso(), [ruim] * 3)
+    r = _rodar(prov, monkeypatch, body=_body(nucleo=_nucleo_irb()))
+    assert r.success is False
+    assert "o trecho não está no documento citado" in r.erros_validacao[0]["erro"]
