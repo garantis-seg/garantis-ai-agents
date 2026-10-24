@@ -525,6 +525,28 @@ class Autos:
         out += sorted((self.lidos | self.verificados) - set(out))
         return out
 
+    def texto_do_documento(self, doc_id: str) -> str:
+        """O texto de um documento: o do núcleo ou o do índice legível (todas as páginas)."""
+        texto = self.textos_nucleo.get(doc_id, "")
+        if texto.strip():
+            return texto
+        doc = self.legiveis.get(doc_id)
+        if doc is None:
+            return ""
+        return "\n".join(_texto_da_pagina(doc, p) for p in sorted(set(doc.paginas())))
+
+    def textos_de_fonte(self, todos_os_legiveis: bool = False) -> list[str]:
+        """Os textos que valem como fonte de um fato (regra 11, 23/10/2026).
+
+        O redator: o núcleo, os documentos lidos na fase A e os que o código conferiu.
+        O auditor (`todos_os_legiveis=True`): o núcleo e todo documento legível do
+        índice, porque o auditor não sabe o que o redator leu fora da trilha.
+        """
+        ids = list(self.textos_nucleo)
+        extra = set(self.legiveis) if todos_os_legiveis else (self.lidos | self.verificados)
+        ids += sorted(extra - set(ids))
+        return [t for t in (self.texto_do_documento(i) for i in ids) if t]
+
     def _erro_com_lista(self, motivo: str) -> str:
         return (f"{motivo}. Cite só documentos desta lista: "
                 f"{json.dumps(self.citaveis(), ensure_ascii=False)}")
