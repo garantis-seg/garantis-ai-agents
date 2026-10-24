@@ -41,6 +41,19 @@ verifica antes de reprovar:
   `verificado_pelo_codigo` registra o caso. Sem sucesso, o erro dá a lista dos
   documentos citáveis, e o prompt do retry repete a lista.
 - Slot obrigatório vazio ou ausente: o erro diz o motivo da rodada anterior.
+
+Fato sem fonte (regras 11 e 12 de `validacao.py`, 23/10/2026). Rodada real do IRB
+1481420 (rev 00413): o modelo escreveu "não foi admitido em 01/09/2026, encerrando a
+via administrativa" em 4 slots, e a data não existe em fonte nenhuma. Agora:
+
+- Toda data (DD/MM/AAAA, "DD de mês de AAAA", MM/AAAA) e todo número de acórdão,
+  processo, CDA e valor em R$ de um slot existe, normalizado, numa fonte: o texto do
+  núcleo, os documentos lidos na fase A (e os conferidos pelo código), o esqueleto, o
+  índice, os alertas, as `premissas_v3` e os `metadados` do núcleo.
+- Termo de esgotamento ("esgotad", "não foi admitido", "trânsito", ...) só com a etapa
+  concluída no esqueleto ou com a decisão literal nos documentos.
+- Falhou: erro estruturado para o retry, com a lista das datas e dos números
+  permitidos. Na última rodada, `success=false`.
 """
 
 from __future__ import annotations
@@ -59,6 +72,7 @@ from .._utils.prompt_identity import versao_com_identidade
 from .agent import _resolve_campos_alvo
 from .ferramentas import Autos, BudgetNavegacao, cortar_trecho, custo_da_resposta, navegar
 from .livro import SlotResolvido, chave_livro, motivos_nao_aplicaveis, resolver_slots
+from .prompts_v4 import _fatos_fixos
 from .prompts_v5 import (
     PROMPT_VERSION,
     build_prompt_escrita,
@@ -76,6 +90,7 @@ from .schemas import (
 )
 from .validacao import (
     CAMPO_SAIDA,
+    FontesDeFato,
     avisos,
     origem_valor,
     processos_citaveis,
@@ -223,6 +238,42 @@ def _com_motivo_anterior(e: ErroDeCampo, rodada: int, motivos: dict[str, str]) -
     return e.model_copy(update={"erro": f"{e.erro} na rodada {rodada}.{detalhe}"})
 
 
+def fontes_do_redator(request: FichaWriteFieldsRequest, autos: Autos) -> FontesDeFato:
+    """As fontes da regra 11 para o redator (23/10/2026). Ver o docstring do módulo.
+
+    O texto dos documentos entra uma vez (`textos_de_fonte`). Do núcleo estruturado
+    sai o texto dos documentos, e ficam os metadados, as CDAs, as premissas e a S2c.
+    """
+    nucleo = request.nucleo or Nucleo()
+    sem_texto = {"__all__": {"texto"}}
+    nucleo_dados = nucleo.model_dump(mode="json", exclude={
+        "docs": sem_texto, "acordaos": sem_texto,
+        "peticao_inicial": {"texto"}, "ultima_decisao": {"texto"},
+    })
+    indice = [d.model_dump(mode="json", exclude={"documento_indexado"})
+              for d in (request.indice_navegavel or [])]
+    return FontesDeFato.montar(
+        textos_docs=autos.textos_de_fonte(),
+        estruturados=[
+            _fatos_fixos(request), [a.model_dump() for a in request.alertas],
+            nucleo_dados, indice, list(request.processos_citaveis or []),
+        ],
+        pipeline=request.esqueleto.pipeline if request.esqueleto else [],
+    )
+
+
+def erros_de_fonte(
+    ok: dict[str, str], fontes: FontesDeFato, citaveis: Optional[set[str]] = None,
+) -> dict[str, list[ErroDeCampo]]:
+    """As regras 11 e 12 sobre os slots aprovados. `{slot: erros}` só com quem falhou."""
+    out: dict[str, list[ErroDeCampo]] = {}
+    for slot, texto in ok.items():
+        erros = fontes.erros_do_slot(slot, texto, citaveis)
+        if erros:
+            out[slot] = erros
+    return out
+
+
 # ── Ponto de entrada ────────────────────────────────────────────────────────
 
 
@@ -344,6 +395,12 @@ async def write_v5(
             else:
                 trilha[slot] = reparados
                 avisos_codigo += [a for a in av if a not in avisos_codigo]
+        # Regras 11 e 12 (23/10/2026): data, número ou esgotamento sem fonte reprova.
+        fontes = fontes_do_redator(request, autos)
+        for slot, e_slot in erros_de_fonte(ok, fontes, citaveis).items():
+            del ok[slot]
+            trilha.pop(slot, None)
+            erros_campos += e_slot
         # Erro de trilha de slot que já reprovou no texto: o erro do texto basta.
         # Erro de trilha sem slot: vai ao LLM como erro da saída.
         erros_campos += erros_trilha.pop(CAMPO_TRILHA, [])

@@ -959,3 +959,157 @@ def test_10g_v5_reprova_o_trecho_inventado_no_nucleo_real(monkeypatch):
     r = _rodar(prov, monkeypatch, body=_body(nucleo=_nucleo_irb()))
     assert r.success is False
     assert "o trecho não está no documento citado" in r.erros[0].erro
+
+
+# ── (11) fato sem fonte: data, número e esgotamento (23/10/2026) ──────────────
+#
+# Rodada real do IRB 1481420 (rev 00413): o redator v5 escreveu "não foi admitido em
+# 01/09/2026, encerrando a via administrativa" em 4 slots. A data não existe em fonte
+# nenhuma, e o esqueleto marca a CSRF `em_andamento`. A fixture traz o núcleo real e a
+# saída real do redator.
+
+_FIXTURE_IRB = Path(__file__).parent / "fixtures" / "irb_1481420_rev00413.json"
+
+#: Os 4 slots com a data inventada ou o esgotamento, reescritos sem o fato sem fonte.
+_SLOTS_LIMPOS = {
+    "processo_administrativo.resumo": (
+        "Autos de infração exigindo PIS e COFINS no regime cumulativo sobre receitas "
+        "financeiras dos ativos garantidores das reservas técnicas e sobre variações "
+        "cambiais dos anos de 2015 e 2016. A DRJ manteve a exigência e o CARF negou "
+        "provimento integral ao recurso voluntário. O recurso especial está em julgamento "
+        "na Câmara Superior."),
+    "ultima_ocorrencia.texto": "Recurso especial em julgamento na Câmara Superior desde "
+                               "11/10/2026.",
+    "bullets[0]": "Recurso especial em julgamento na CSRF desde 11/10/2026: a via "
+                  "administrativa continua aberta.",
+    "merito.p2": (
+        "A DRJ julgou a impugnação improcedente. Em 17/06/2026, o CARF negou provimento "
+        "integral ao recurso voluntário (acórdão 3102-004.203): unânime quanto às "
+        "variações cambiais de prêmios e por voto de qualidade quanto às receitas "
+        "financeiras dos ativos garantidores."),
+}
+
+
+def _irb() -> dict:
+    return json.loads(_FIXTURE_IRB.read_text(encoding="utf-8"))
+
+
+def _campos_irb(fx: dict) -> dict[str, str]:
+    from src.agents.ficha_writer.validacao import slots_de_texto
+
+    nomes = {s["nome"] for s in fx["slots"]}
+    return {k: v for k, v in slots_de_texto(fx["ficha"]).items() if k in nomes}
+
+
+def _body_irb(fx: dict) -> dict:
+    campos = _campos_irb(fx)
+    return {
+        "dossie": "", "tipo_ficha": fx["tipo_ficha"], "trilho": fx["trilho"],
+        "esqueleto": fx["ficha"],
+        "campos": [{"nome": s["nome"], "path": s["nome"], "max": 2000,
+                    "obrigatorio": s["obrigatorio"]}
+                   for s in fx["slots"] if s["nome"] in campos],
+        "alertas": fx["alertas"], "processos_citaveis": fx["processos_citaveis"],
+        "nucleo": fx["nucleo"], "indice_navegavel": fx["indice_navegavel"],
+    }
+
+
+def _emissao_irb(fx: dict, campos: dict[str, str]) -> dict:
+    alertas = [{"codigo": a["codigo"], "resposta": "acatado", "motivo": "conferido"}
+               for a in fx["alertas"]]
+    return {"campos": campos, "alertas_respondidos": alertas,
+            "trilha_leitura": fx["trilha_leitura"]}
+
+
+def test_11a_a_saida_real_do_irb_reprova_a_data_inventada_e_o_esgotamento(monkeypatch):
+    fx = _irb()
+    real = _emissao_irb(fx, _campos_irb(fx))
+    prov = _Prov([_FIM], [real] * 3)
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+
+    assert r.success is False and r.rodadas == 3
+    sem_data = {e.campo for e in r.erros if e.erro.startswith("fato sem fonte: 01/09/2026")}
+    assert sem_data == {"ultima_ocorrencia.texto", "bullets[0]", "merito.p2"}
+    esgot = {e.campo for e in r.erros
+             if e.erro.startswith("afirmação de esgotamento sem fonte")}
+    assert esgot == {"processo_administrativo.resumo", "ultima_ocorrencia.texto",
+                     "bullets[0]", "merito.p2"}
+    # O erro é estruturado: o texto que reprovou vai em valor_anterior.
+    e = next(e for e in r.erros if e.campo == "bullets[0]")
+    assert e.valor_anterior == real["campos"]["bullets[0]"]
+    # Os slots sem fato sem fonte passam.
+    assert r.campos["merito.p1"] == real["campos"]["merito.p1"]
+    assert "bullets[0]" not in r.campos
+    # O retry diz ao modelo as datas e os números permitidos.
+    retry = prov.prompts("B")[1]
+    assert "datas permitidas:" in retry and "17/06/2026" in retry and "11/10/2026" in retry
+    permitidas = retry.split("datas permitidas:")[1].split(";")[0]
+    assert "17/06/2026" in permitidas and "01/09/2026" not in permitidas
+    assert "3102-004.203" in retry.split("números permitidos:")[1]
+
+
+def test_11b_a_saida_limpa_do_irb_passa_na_primeira_rodada(monkeypatch):
+    fx = _irb()
+    prov = _Prov([_FIM], [_emissao_irb(fx, {**_campos_irb(fx), **_SLOTS_LIMPOS})])
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+    assert r.success, r.erros
+    assert r.rodadas == 1 and r.campos["bullets[0]"] == _SLOTS_LIMPOS["bullets[0]"]
+
+
+def test_11c_o_retry_conserta_a_data_inventada(monkeypatch):
+    fx = _irb()
+    real = _emissao_irb(fx, _campos_irb(fx))
+    limpa = _emissao_irb(fx, {**_campos_irb(fx), **_SLOTS_LIMPOS})
+    prov = _Prov([_FIM], [real, limpa])
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+    assert r.success and r.rodadas == 2, r.erros
+    assert r.campos["ultima_ocorrencia.texto"] == _SLOTS_LIMPOS["ultima_ocorrencia.texto"]
+
+
+def test_11d_datas_em_formatos_diferentes_casam():
+    from src.agents.ficha_writer.validacao import FontesDeFato
+
+    for fonte in ("Sessão de 01/09/2026.", "data: 2026-09-01T10:00:00Z",
+                  "Sessão de 1º de setembro de 2026.", "Sessão de 01.09.2026."):
+        f = FontesDeFato.montar(textos_docs=[fonte])
+        for texto in ("em 01/09/2026", "em 1º de setembro de 2026", "em 1/9/2026",
+                      "em 2026-09-01", "em 09/2026"):
+            assert f.sem_fonte(texto) == [], (fonte, texto)
+    f = FontesDeFato.montar(textos_docs=["Sessão de 17/06/2026."])
+    assert f.sem_fonte("em 01/09/2026 e 17/06/2026") == ["01/09/2026"]
+    assert f.sem_fonte("de 01/2015 a 06/2026") == ["01/2015"]
+
+
+def test_11e_numeros_e_valores_casam_normalizados():
+    from src.agents.ficha_writer.validacao import FontesDeFato
+
+    f = FontesDeFato.montar(
+        textos_docs=["Decisao_16327721182201921_3102-004203.PDF",
+                     "CDA 80 6 10 010169-09, exigência de R$ 35.773.520,56"],
+        estruturados=[{"valor_garantia": 182787942.5}],
+    )
+    ok = ("acórdão 3102-004.203, CDA 80610010169-09, PA 16327.721182/2019-21, "
+          "R$ 35.773.520,56, R$ 182,8 milhões e R$ 183 milhões")
+    assert f.sem_fonte(ok) == []
+    ruim = "acórdão 3102-004.204, CDA 80 6 10 010169-08, R$ 190 milhões"
+    assert f.sem_fonte(ruim) == ["3102-004.204", "80 6 10 010169-08", "R$ 190 milhões"]
+
+
+def test_11f_esgotamento_vale_com_a_etapa_concluida_ou_com_a_decisao():
+    from src.agents.ficha_writer.validacao import FontesDeFato
+
+    texto = "A via administrativa está esgotada e o REsp não foi admitido."
+    aberto = [{"etapa": "CARF", "status": "concluido_desfavoravel"},
+              {"etapa": "CSRF", "status": "em_andamento"}]
+    fechado = [{"etapa": "CARF", "status": "concluido_desfavoravel"},
+               {"etapa": "Cobrança", "status": "em_andamento"}]
+    assert FontesDeFato.montar(pipeline=aberto).esgotamento_sem_fonte(texto)
+    assert FontesDeFato.montar(pipeline=fechado).esgotamento_sem_fonte(texto) == []
+    decisao = FontesDeFato.montar(pipeline=aberto,
+                                  textos_docs=["Nego seguimento ao recurso especial."])
+    assert decisao.esgotamento_sem_fonte(texto) == []
+    # Trânsito: só com a etapa judicial concluída ou com "transitado em julgado".
+    assert FontesDeFato.montar(pipeline=fechado).esgotamento_sem_fonte("Houve trânsito.")
+    assert FontesDeFato.montar(
+        textos_docs=["A sentença transitou em julgado."]).esgotamento_sem_fonte(
+        "Houve trânsito.") == []

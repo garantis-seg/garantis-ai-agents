@@ -311,12 +311,20 @@ class ProvaDoc(BaseModel):
 
 
 class _ComProva(BaseModel):
-    """Cada item do v3 traz `prova` OU `sem_prova_no_doc=true`. Nunca os dois."""
+    """Cada item do v3 traz `prova` OU `sem_prova_no_doc=true`. Nunca os dois.
+
+    `contradiz_esqueleto` (23/10/2026): o auditor marca `true` quando o TEXTO de um
+    slot contradiz um fato do esqueleto (etapa, status, data). O esqueleto é a prova:
+    o código põe o item no balde 1, mesmo sem trecho de documento
+    (`agent_v3.normalizar_baldes_v3`). Rodada real do IRB 1481420: 4 contradições
+    com o esqueleto foram ao balde 2, e a ficha saiu aprovada.
+    """
 
     model_config = _FECHADO
 
     prova: Optional[ProvaDoc] = None
     sem_prova_no_doc: bool = False
+    contradiz_esqueleto: bool = False
 
     @model_validator(mode="after")
     def _prova_ou_sem_prova(self):
@@ -365,11 +373,15 @@ class SaidaAuditor(BaseModel):
 
 
 class SaidaAuditorV3(SaidaAuditor):
-    """O JSON do modelo no v3: o do v2, com prova nos baldes e `fatos_conferidos`."""
+    """O JSON do modelo no v3: o do v2, com prova nos baldes e `fatos_conferidos`.
+
+    `fatos_conferidos` é obrigatório (23/10/2026). Antes, o default `[]` deixava o
+    modelo omitir a chave, e a resposta real do IRB 1481420 saiu sem fato conferido.
+    """
 
     balde1: list[ItemBalde1V3] = Field(default_factory=list)
     balde2: list[ItemBalde2V3] = Field(default_factory=list)
-    fatos_conferidos: list[FatoConferido] = Field(default_factory=list)
+    fatos_conferidos: list[FatoConferido]
 
 
 class Reprovacao(BaseModel):

@@ -492,3 +492,138 @@ def test_10b_prova_com_a_decisao_invertida_reprova(monkeypatch):
     r = _rodar(prov, monkeypatch, body=_body(nucleo=_nucleo_irb()))
     assert r.success is False
     assert "o trecho não está no documento citado" in r.erros_validacao[0]["erro"]
+
+
+# ── (11) contradição com o esqueleto é balde 1, e D-FONTE (23/10/2026) ───────
+#
+# Rodada real do IRB 1481420 (rev 00413): o auditor v3 viu que 4 slots contradiziam
+# o esqueleto (CSRF `em_andamento`) e pôs os 4 no balde 2, sem prova de documento. A
+# ficha saiu aprovada com a data inventada 01/09/2026. A fixture traz a ficha real e
+# os 4 itens reais do balde 2. O shared real não mandou a trilha do redator.
+
+
+def _body_irb(fx: dict, **over: Any) -> dict:
+    body = {
+        "ficha": fx["ficha"], "esqueleto": fx["ficha"], "dossie": "",
+        "tipo_ficha": fx["tipo_ficha"], "trilho": fx["trilho"],
+        "alertas": [{"codigo": a["codigo"], "texto": a["texto"]} for a in fx["alertas"]],
+        "nucleo": fx["nucleo"], "indice_navegavel": fx["indice_navegavel"],
+    }
+    body.update(over)
+    return body
+
+
+def _fatos_da_ficha_irb(fx: dict) -> list[dict]:
+    from src.agents.ficha_writer.prompts_v5 import exige_trilha
+    from src.agents.ficha_writer.validacao import slots_de_texto
+
+    doc = fx["nucleo"]["documentos"][0]["doc_id"]
+    return [{"slot": s, "doc_id": doc, "confere": True, "motivo": "o acórdão sustenta"}
+            for s, t in slots_de_texto(fx["ficha"]).items() if exige_trilha(s) and t]
+
+
+def _saida_irb(fx: dict, **over: Any) -> dict:
+    s = {"balde1": [], "balde2": fx["auditoria_s6"]["balde2"], "nao_confirmado": [],
+         "alertas_respondidos": [{"codigo": a["codigo"], "resposta": "confirmado",
+                                  "motivo": "ok"} for a in fx["alertas"]],
+         "divergencias_gabarito": [], "fatos_conferidos": _fatos_da_ficha_irb(fx)}
+    s.update(over)
+    return s
+
+
+def _irb() -> dict:
+    from tests.test_ficha_writer_v5 import _irb as carregar
+
+    return carregar()
+
+
+def test_11a_contradicao_com_o_esqueleto_vai_ao_balde_1_e_retem_a_aprovacao(monkeypatch):
+    fx = _irb()
+    assert fx["auditoria_s6"]["veredito"] == "aprovada"     # o defeito real
+    prov = _Prov([_FIM], [_saida_irb(fx)])
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+
+    assert r.success, r.erros_validacao
+    assert r.balde2 == []
+    esq = [i for i in r.balde1 if i.regra == "T-01"]
+    assert {i.campo for i in esq} == {"processo_administrativo.resumo",
+                                      "ultima_ocorrencia.texto", "bullets[0]", "merito.p2"}
+    assert all(i.model_dump()["contradiz_esqueleto"] is True for i in esq)
+    assert r.veredito == "aprovada_com_correcoes"
+    assert {x["campo"] for x in r.reprovacoes} >= {i.campo for i in esq}
+
+
+def test_11b_o_codigo_emite_d_fonte_antes_do_llm(monkeypatch):
+    fx = _irb()
+    prov = _Prov([_FIM], [_saida_irb(fx, balde2=[])])
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+
+    assert r.success, r.erros_validacao
+    d = [i for i in r.balde1 if i.regra == "D-FONTE"]
+    data = {i.campo for i in d if i.motivo.startswith("fato sem fonte: 01/09/2026")}
+    assert data == {"ultima_ocorrencia.texto", "bullets[0]", "merito.p2"}
+    esgot = {i.campo for i in d if i.motivo.startswith("afirmação de esgotamento sem fonte")}
+    assert esgot == {"processo_administrativo.resumo", "ultima_ocorrencia.texto",
+                     "bullets[0]", "merito.p2"}
+    assert r.veredito == "aprovada_com_correcoes"
+    # O LLM recebe os achados do código no prompt do veredito.
+    b = prov.prompts("B")[0]
+    assert "ACHADOS DO CODIGO" in b and "01/09/2026" in b
+    assert b.rstrip().endswith("</regra_de_decisao>")
+
+
+def test_11c_ficha_limpa_nao_tem_d_fonte(monkeypatch):
+    from tests.test_ficha_writer_v5 import _SLOTS_LIMPOS
+
+    fx = _irb()
+    ficha = json.loads(json.dumps(fx["ficha"]))
+    ficha["processo_administrativo"]["resumo"] = _SLOTS_LIMPOS["processo_administrativo.resumo"]
+    ficha["ultima_ocorrencia"]["texto"] = _SLOTS_LIMPOS["ultima_ocorrencia.texto"]
+    ficha["bullets"][0] = _SLOTS_LIMPOS["bullets[0]"]
+    ficha["merito"]["p2"] = _SLOTS_LIMPOS["merito.p2"]
+    fx["ficha"] = ficha
+    prov = _Prov([_FIM], [_saida_irb(fx, balde2=[])])
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+    assert r.success, r.erros_validacao
+    assert r.balde1 == [] and r.veredito == "aprovada"
+
+
+def test_11d_fatos_conferidos_sai_sempre(monkeypatch):
+    fx = _irb()
+    # Sem a chave: o schema recusa, e o retry não conserta -> "não auditada".
+    sem = _saida_irb(fx)
+    sem.pop("fatos_conferidos")
+    prov = _Prov([_FIM], [sem] * 3)
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+    assert r.success is False
+    assert any(e["campo"] == "fatos_conferidos" for e in r.erros_validacao)
+    # Sem trilha do redator, cada slot de mérito, decisão, infração e bullet é conferido.
+    prov = _Prov([_FIM], [_saida_irb(fx, fatos_conferidos=_fatos_da_ficha_irb(fx)[:1])] * 3)
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+    assert r.success is False
+    assert any("merito.p2 da ficha (sem trilha do redator) nao foi conferido" in e["erro"]
+               for e in r.erros_validacao)
+    # Com todos os slots: sai na resposta e na rota.
+    prov = _Prov([_FIM], [_saida_irb(fx)])
+    r = _rodar(prov, monkeypatch, body=_body_irb(fx))
+    assert r.success and len(r.fatos_conferidos) == len(_fatos_da_ficha_irb(fx))
+    assert "fatos_conferidos" in r.model_dump()
+
+
+def test_11e_a_marca_contradiz_esqueleto_manda_ao_balde_1_so_em_slot_de_texto(monkeypatch):
+    marcado = {"campo": "bullets[0]", "pendencia": "a data diverge", "grau": "media",
+               "evidencia": "-", "recomendacao": "conferir", "prova": None,
+               "sem_prova_no_doc": True, "contradiz_esqueleto": True}
+    no_pipeline = {**marcado, "campo": "pipeline", "pendencia": "o CSRF parece encerrado"}
+    prov = _Prov(_ler_recurso(), [_saida(balde1=[], balde2=[marcado, no_pipeline],
+                                         fatos_conferidos=_fatos(confere_bullet=True))])
+    r = _rodar(prov, monkeypatch)
+    assert r.success, r.erros_validacao
+    assert [(i.campo, i.regra) for i in r.balde1] == [("bullets[0]", "T-01")]
+    assert [i.campo for i in r.balde2] == ["pipeline"]
+    # Item do balde 1 sem prova, mas que contradiz o esqueleto: fica no balde 1.
+    b1 = _b1(prova=None, sem_prova_no_doc=True,
+             motivo="o texto contradiz o esqueleto: a etapa CSRF está em andamento")
+    prov = _Prov(_ler_recurso(), [_saida(balde1=[b1])])
+    r = _rodar(prov, monkeypatch)
+    assert r.success and [i.campo for i in r.balde1] == ["bullets[0]"] and r.balde2 == []

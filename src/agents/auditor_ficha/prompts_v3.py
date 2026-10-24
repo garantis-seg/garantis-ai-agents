@@ -120,11 +120,30 @@ def _build_regras_de_prova() -> str:
    A `pagina` e a pagina do trecho. Para documento do nucleo, use 1.
 3. Um fato que voce acha CONTRADITO, mas sem trecho de documento que o contradiga, NAO
    e balde 1. Marque `sem_prova_no_doc: true`. O codigo move o item ao balde 2.
-4. `fatos_conferidos`: um item para CADA slot da trilha do redator, com o doc_id que
-   voce conferiu. `confere=false` quando o documento nao sustenta o slot. Todo
-   `confere=false` tem um item no balde 1 ou no balde 2 no MESMO campo.
-5. Nao ha gabarito nesta auditoria: `divergencias_gabarito` fica vazio.
+   EXCECAO: o texto de um slot que contradiz o ESQUELETO (etapa, status, data).
+4. `contradiz_esqueleto: true` quando o TEXTO de um slot contradiz um fato do esqueleto:
+   uma etapa em andamento descrita como encerrada, um status diferente, uma data que o
+   esqueleto nao tem. O esqueleto e a prova: o item fica no balde 1, mesmo com
+   `sem_prova_no_doc: true`. Discordar do PROPRIO esqueleto (campo `pipeline`, `valor`)
+   continua balde 2, com `contradiz_esqueleto: false`.
+5. `fatos_conferidos` e OBRIGATORIO: um item para CADA slot da trilha do redator, com o
+   doc_id que voce conferiu. Sem trilha, um item para cada slot de merito, de decisao,
+   de infracao e de bullet da ficha. `confere=false` quando o documento nao sustenta o
+   slot. Todo `confere=false` tem um item no balde 1 ou no balde 2 no MESMO campo.
+6. Nao ha gabarito nesta auditoria: `divergencias_gabarito` fica vazio.
+7. Os ACHADOS DO CODIGO (regra D-FONTE) ja estao no balde 1. Nao repita esses itens.
 </regras_de_prova>"""
+
+
+def _build_achados_codigo_block(achados: list[dict[str, Any]], token: str) -> str:
+    return _fence(
+        "achados_codigo",
+        "ACHADOS DO CODIGO (D-FONTE: data, numero ou esgotamento sem fonte)",
+        "O codigo conferiu cada data e cada numero da ficha contra o nucleo, os documentos, "
+        "o esqueleto e os alertas. Estes itens ja estao no balde 1. " + _AVISO_DADO,
+        _json_sanitizado(achados),
+        token,
+    )
 
 
 def _build_output_shape_v3() -> str:
@@ -140,13 +159,13 @@ Responda ESTRITAMENTE com UM objeto JSON com estas chaves e nenhuma outra:
      "correcao_sugerida": "<o fato certo, curto, ate %d caracteres>",
      "prova": {"doc_id": "<do nucleo ou do indice lido>", "pagina": 3,
                "trecho": "<copia literal>"},
-     "sem_prova_no_doc": false}
+     "sem_prova_no_doc": false, "contradiz_esqueleto": false}
   ],
   "balde2": [
     {"campo": "<slot>", "pendencia": "<afirmacao em disputa>",
      "grau": "alta | media | baixa", "evidencia": "<citacao + fonte>",
      "recomendacao": "<acao acionavel>",
-     "prova": null, "sem_prova_no_doc": true}
+     "prova": null, "sem_prova_no_doc": true, "contradiz_esqueleto": false}
   ],
   "nao_confirmado": ["<o que nao deu para conferir e por que>"],
   "alertas_respondidos": [
@@ -219,8 +238,12 @@ def build_prompt_v3(
     indice: list[dict[str, Any]],
     achados: list[dict[str, Any]],
     fence_token: Optional[str] = None,
+    achados_codigo: Optional[list[dict[str, Any]]] = None,
 ) -> str:
-    """O turno do veredito. A regra de decisao fica por ULTIMO (recency anchor)."""
+    """O turno do veredito. A regra de decisao fica por ULTIMO (recency anchor).
+
+    `achados_codigo` (23/10/2026): os itens D-FONTE que o codigo achou antes do LLM.
+    """
     token = fence_token or gerar_fence_token()
     parts = [
         _build_persona_v3(),
@@ -239,6 +262,8 @@ def build_prompt_v3(
         parts.append(_build_alertas(req, token))
     if req.licoes:
         parts.append(_build_licoes(req, token))
+    if achados_codigo:
+        parts.append(_build_achados_codigo_block(achados_codigo, token))
     parts += [
         _build_output_shape_v3(),
         _build_checklist(),

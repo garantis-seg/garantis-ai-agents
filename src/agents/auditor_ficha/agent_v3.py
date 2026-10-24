@@ -25,6 +25,23 @@ Regras duras (no codigo):
 4. Todo slot da trilha do redator tem um item em `fatos_conferidos`. Silencio
    nao aprova. Todo `confere=false` tem item no balde 1 ou 2 do mesmo campo.
 5. O v3 nunca recebe gabarito (Livro §10.2): o schema recusa o request.
+6. (23/10/2026) Contradicao com o esqueleto e balde 1, nunca balde 2. O item com
+   `contradiz_esqueleto=true`, ou cujo motivo cita um fato do esqueleto (a palavra
+   "esqueleto", uma etapa com o status, uma data do esqueleto), fica no balde 1 ou
+   vai ao balde 1. O esqueleto e a prova. Vale so para slot de texto: discordar
+   do proprio esqueleto (campo `pipeline`, `valor`) continua balde 2 (T-01).
+7. (23/10/2026) D-FONTE: antes do LLM, o codigo aplica as regras 11 e 12 do
+   redator (`ficha_writer.validacao.FontesDeFato`) a cada slot de texto da ficha.
+   Data, numero ou esgotamento sem fonte vira item do balde 1 com
+   `regra="D-FONTE"`. As fontes: o nucleo, todo documento legivel do indice, o
+   esqueleto, os fatos do codigo na ficha, o indice e os alertas.
+8. (23/10/2026) `fatos_conferidos` sai sempre. Sem trilha do redator, o auditor
+   confere cada slot de merito, de decisao, de infracao e de bullet da ficha.
+
+Rodada real de 23/10/2026 (IRB 1481420, rev 00413): o redator inventou a data
+01/09/2026 e o esgotamento. O auditor viu a contradicao com o esqueleto, pos o
+item no balde 2 (sem prova de documento), e a ficha saiu aprovada. As regras 6 e
+7 fecham esse caminho.
 
 Determinismo maximo (plano 1.2, 23/10/2026), o mesmo do redator v5: antes de
 reprovar uma prova, o codigo conserta ou verifica (`_reparar_provas` e
@@ -42,6 +59,7 @@ FAIL-SAFE, como no v2: falha vira `success=false`, `aprovado=false` e
 """
 
 import logging
+import re
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -59,7 +77,15 @@ from ..ficha_writer.ferramentas import (
     custo_da_resposta,
     navegar,
 )
+from ..ficha_writer.prompts_v5 import exige_trilha
 from ..ficha_writer.schemas import Nucleo
+from ..ficha_writer.validacao import (
+    FontesDeFato,
+    datas_no_texto,
+    sem_acento,
+    sem_slots_de_texto,
+    slots_de_texto,
+)
 from .agent import (
     MAX_RODADAS,
     _ancorar,
@@ -72,6 +98,7 @@ from .checklist import SO_BALDE_2
 from .prompts import build_prompt_de_correcao
 from .prompts_v3 import PROMPT_VERSION, build_prompt_navegacao_v3, build_prompt_v3
 from .schemas import (
+    MAX_CORRECAO_SUGERIDA,
     MAX_TRECHO_PROVA,
     AuditarFichaRequest,
     AuditarFichaResponse,
@@ -91,6 +118,22 @@ BUDGET_POR_DOC = 5
 #: Texto do balde 2 quando o codigo move um item sem prova (regra 3).
 EVIDENCIA_SEM_PROVA = "(o auditor nao achou trecho de documento que contradiga o texto)"
 
+#: A regra do item que o proprio codigo acha (regra 7, 23/10/2026).
+REGRA_D_FONTE = "D-FONTE"
+#: A regra do item do balde 2 que o codigo move ao balde 1 (regra 6): T-01 diz "a
+#: prosa segue o esqueleto (balde 1)".
+REGRA_ESQUELETO = "T-01"
+_CORRECAO_D_FONTE = ("Tire o fato sem fonte ou troque o fato por um que esta nas fontes "
+                     "(nucleo, documentos, esqueleto). Siga o pipeline do esqueleto.")
+
+#: Slot de texto da ficha (o campo do item). Regra 6.
+_RE_SLOT_TEXTO = re.compile(
+    r"^(?:descricao_infracao|valor\.descricao|processo_administrativo\.resumo|"
+    r"ultima_decisao\.texto|ultima_ocorrencia\.texto|bullets\[\d+\]|merito\.\w+|"
+    r"observacao|divida_ativa\.detalhe)$")
+#: Palavra de status no motivo: com o nome de uma etapa, o motivo cita o esqueleto.
+_RE_STATUS = re.compile(r"em[ _]andamento|concluid|futur|pendente|\bstatus\b|etapa[ _]atual")
+
 _AQUI = Path(__file__).resolve().parent
 
 
@@ -100,6 +143,84 @@ def prompt_version() -> str:
         PROMPT_VERSION, str(_AQUI / "prompts_v3.py"), str(_AQUI / "prompts.py"),
         str(_AQUI / "schemas.py"),
     )
+
+
+# ── Fontes e esqueleto (regras 6, 7 e 8, 23/10/2026) ──────────────────────
+
+
+def _pipeline(request: AuditarFichaRequest) -> list[Any]:
+    return list((request.esqueleto or {}).get("pipeline")
+                or (request.ficha or {}).get("pipeline") or [])
+
+
+def fontes_do_auditor(request: AuditarFichaRequest, autos: Autos) -> FontesDeFato:
+    """As fontes da regra 7: as mesmas do redator, com todo documento legivel."""
+    nucleo = request.nucleo or Nucleo()
+    sem_texto = {"__all__": {"texto"}}
+    nucleo_dados = nucleo.model_dump(mode="json", exclude={
+        "docs": sem_texto, "acordaos": sem_texto,
+        "peticao_inicial": {"texto"}, "ultima_decisao": {"texto"},
+    })
+    indice = [d.model_dump(mode="json", exclude={"documento_indexado"})
+              for d in (request.indice_navegavel or [])]
+    return FontesDeFato.montar(
+        textos_docs=autos.textos_de_fonte(todos_os_legiveis=True),
+        estruturados=[
+            sem_slots_de_texto(request.esqueleto or {}),
+            sem_slots_de_texto(request.ficha or {}),
+            [a.model_dump() for a in request.alertas], nucleo_dados, indice,
+        ],
+        pipeline=_pipeline(request),
+    )
+
+
+def achados_d_fonte(request: AuditarFichaRequest, fontes: FontesDeFato) -> list[ItemBalde1V3]:
+    """Regra 7: cada slot de texto com data, numero ou esgotamento sem fonte."""
+    itens: list[ItemBalde1V3] = []
+    for slot, texto in slots_de_texto(request.ficha or {}).items():
+        for e in fontes.erros_do_slot(slot, texto):
+            itens.append(ItemBalde1V3(
+                campo=slot, motivo=e.erro, regra=REGRA_D_FONTE,
+                correcao_sugerida=_CORRECAO_D_FONTE, prova=None, sem_prova_no_doc=True,
+            ))
+    if itens:
+        logger.info("AUDITOR_FICHA_V3_D_FONTE %s", [i.campo for i in itens])
+    return itens
+
+
+def contradiz_esqueleto(campo: str, texto: str, marcado: bool,
+                        esqueleto: dict[str, Any], pipeline: list[Any]) -> bool:
+    """Regra 6: o item acusa um slot de texto que contradiz o esqueleto?
+
+    Sim quando o campo e um slot de texto e: o auditor marcou `contradiz_esqueleto`,
+    ou o texto do item diz "esqueleto", ou cita uma etapa do pipeline com um status,
+    ou cita uma data do esqueleto.
+    """
+    if not _RE_SLOT_TEXTO.match(campo.strip()):
+        if marcado:
+            logger.info("AUDITOR_FICHA_V3_ESQUELETO_FORA_DE_SLOT campo=%s", campo)
+        return False
+    if marcado:
+        return True
+    t = sem_acento(texto)
+    if "esqueleto" in t:
+        return True
+    etapas = {sem_acento(e.get("etapa") if isinstance(e, dict) else "") for e in pipeline}
+    if any(len(e) >= 3 and e in t for e in etapas) and _RE_STATUS.search(t):
+        return True
+    datas_esq = {k for _t, k in datas_no_texto(str(sem_slots_de_texto(esqueleto or {})))}
+    return any(k in datas_esq for _t, k in datas_no_texto(texto))
+
+
+def slots_a_conferir(request: AuditarFichaRequest, autos: Autos) -> list[str]:
+    """Regra 8: os slots que `fatos_conferidos` cobre. Sem trilha, os da ficha."""
+    trilha = list(dict.fromkeys(t.slot for t in request.trilha_leitura or []))
+    if trilha:
+        return trilha
+    if not (autos.textos_nucleo or autos.legiveis):
+        return []
+    return [s for s, t in slots_de_texto(request.ficha or {}).items()
+            if exige_trilha(s) and t.strip()]
 
 
 # ── Validacao ──────────────────────────────────────────────────────────────
@@ -205,10 +326,12 @@ def validar_saida_v3(
                           "erro": "doc_id fora do nucleo e do indice",
                           "valor_anterior": f.doc_id})
     conferidos = {f.slot.strip() for f in saida.fatos_conferidos}
-    for slot in dict.fromkeys(t.slot for t in request.trilha_leitura or []):
+    sem_trilha = not request.trilha_leitura
+    for slot in slots_a_conferir(request, autos):
         if slot not in conferidos:
+            origem = "da ficha (sem trilha do redator)" if sem_trilha else "da trilha"
             erros.append({"campo": "fatos_conferidos",
-                          "erro": f"o slot {slot} da trilha nao foi conferido",
+                          "erro": f"o slot {slot} {origem} nao foi conferido",
                           "valor_anterior": None})
     acusados = {i.campo.strip() for i in saida.balde1} | {i.campo.strip() for i in saida.balde2}
     for f in saida.fatos_conferidos:
@@ -224,15 +347,47 @@ def validar_saida_v3(
 
 def normalizar_baldes_v3(
     saida: SaidaAuditorV3,
+    esqueleto: Optional[dict[str, Any]] = None,
+    pipeline: Optional[list[Any]] = None,
 ) -> tuple[list[ItemBalde1V3], list[ItemBalde2V3]]:
-    """As regras do v2 (item vazio sai, ancora, "SO balde 2") mais a regra 3."""
+    """As regras do v2 (item vazio sai, ancora, "SO balde 2") mais as regras 3 e 6.
+
+    A regra 6 vem antes da 3: a contradicao com o esqueleto fica no balde 1 mesmo
+    sem prova de documento, e um item do balde 2 que contradiz o esqueleto vai ao
+    balde 1.
+    """
+    esqueleto, pipeline = esqueleto or {}, list(pipeline or [])
     b1: list[ItemBalde1V3] = []
-    b2: list[ItemBalde2V3] = list(saida.balde2)
+    b2: list[ItemBalde2V3] = []
+    for it in saida.balde2:
+        campo = it.campo.strip()
+        texto = " ".join((it.pendencia, it.evidencia, it.recomendacao))
+        if campo and it.pendencia.strip() and contradiz_esqueleto(
+                campo, texto, it.contradiz_esqueleto, esqueleto, pipeline):
+            logger.info("AUDITOR_FICHA_V3_ESQUELETO_BALDE1 campo=%s (veio do balde 2)", campo)
+            b1.append(ItemBalde1V3(
+                campo=campo, motivo=it.pendencia.strip(), regra=REGRA_ESQUELETO,
+                correcao_sugerida=("Siga o esqueleto. " + it.recomendacao.strip())[
+                    :MAX_CORRECAO_SUGERIDA],
+                prova=it.prova, sem_prova_no_doc=it.sem_prova_no_doc,
+                contradiz_esqueleto=True,
+            ))
+            continue
+        b2.append(it)
     for it in saida.balde1:
         campo, motivo = it.campo.strip(), it.motivo.strip()
         if not campo or not motivo:
             continue
         regra = it.regra.strip()
+        if contradiz_esqueleto(campo, f"{motivo} {it.correcao_sugerida}",
+                               it.contradiz_esqueleto, esqueleto, pipeline):
+            # Regra 6 (23/10/2026): o esqueleto e a prova. Fica no balde 1.
+            b1.append(it.model_copy(update={
+                "campo": campo, "motivo": motivo, "regra": _ancorar(regra),
+                "correcao_sugerida": it.correcao_sugerida.strip(),
+                "contradiz_esqueleto": True,
+            }))
+            continue
         if it.sem_prova_no_doc:
             # Regra 3 (23/10/2026): contradito sem prova de documento -> balde 2, media.
             b2.append(ItemBalde2V3(
@@ -285,6 +440,8 @@ async def auditar_ficha_v3(
         return falha("dossie vazio e nucleo sem documento: nao ha contra o que conferir")
 
     autos = Autos(nucleo, request.indice_navegavel or [])
+    # Regra 7 (23/10/2026): o codigo confere datas e numeros ANTES do LLM.
+    d_fonte = achados_d_fonte(request, fontes_do_auditor(request, autos))
     nucleo_llm = autos.nucleo_para_llm()
     indice_llm = autos.indice_para_llm()
     chave_seed = str((request.esqueleto or {}).get("processo_id")
@@ -311,7 +468,8 @@ async def auditar_ficha_v3(
 
     # ── Fase B — veredito ──────────────────────────────────────────────────
     prompt_base = build_prompt_v3(request, nucleo=nucleo_llm, indice=indice_llm,
-                                  achados=nav.achados)
+                                  achados=nav.achados,
+                                  achados_codigo=[i.model_dump() for i in d_fonte])
     prompt = prompt_base
     used_model = model
     erros: list[dict[str, Any]] = []
@@ -343,7 +501,9 @@ async def auditar_ficha_v3(
                   erros_validacao=erros)
         return r.model_copy(update=nav_info)
 
-    balde1, balde2 = normalizar_baldes_v3(saida)
+    balde1, balde2 = normalizar_baldes_v3(saida, request.esqueleto, _pipeline(request))
+    ja = {(i.campo, i.regra) for i in balde1}
+    balde1 += [i for i in d_fonte if (i.campo, i.regra) not in ja]
     veredito = calcular_veredito(balde1, balde2)
     if saida.veredito and saida.veredito != veredito:
         logger.info("AUDITOR_FICHA_V3_VEREDITO_DIVERGENTE modelo=%s codigo=%s",
@@ -377,6 +537,11 @@ __all__ = [
     "BUDGET_POR_DOC",
     "BUDGET_POR_FICHA",
     "DEFAULT_MODEL",
+    "REGRA_D_FONTE",
+    "REGRA_ESQUELETO",
+    "achados_d_fonte",
+    "contradiz_esqueleto",
+    "fontes_do_auditor",
     "auditar_ficha_v3",
     "normalizar_baldes_v3",
     "prompt_version",
