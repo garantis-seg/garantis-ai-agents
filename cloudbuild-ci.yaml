@@ -1,0 +1,24 @@
+# Cloud Build CI de PR do garantis-ai-agents (trigger `ci-garantis-ai-agents`, pull_request ->
+# master). So o aviso de comentario datado: o gate de teste do repo roda fail-closed no deploy
+# (`cloudbuild-deploy.yaml`), e o PR nao o repete.
+
+steps:
+  # Escreve no PR as linhas novas de comentario e docstring com data, card ou numero de PR. O
+  # modulo e o dono do regex DATADO moram no garantis-shared (garantis_shared/aviso_datado.py). O
+  # wheel vem do Artifact Registry na versao mais nova, sem dependencias: e um aviso, nao a suite,
+  # entao nao segue o pin do requirements. Nunca reprova o build: o modulo sai com 0, e o `|| echo`
+  # cobre a falha antes dele. Sem `timeout` de step, porque estourar um reprova o build.
+  - id: aviso-datado
+    name: python:3.11-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install -q keyrings.google-artifactregistry-auth \
+          && pip install -q --no-deps --index-url https://southamerica-east1-python.pkg.dev/neqsti/python-packages/simple/ garantis-shared \
+          && python -m garantis_shared.aviso_datado --repo garantis-seg/garantis-ai-agents --pr "$_PR_NUMBER" \
+          || echo "AVISO_DATADO_FAIL: o step caiu antes do aviso, e o build segue"
+
+# SA customizada exige logging explicito (igual ao cloudbuild-deploy.yaml).
+options:
+  logging: CLOUD_LOGGING_ONLY
