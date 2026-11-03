@@ -1284,3 +1284,30 @@ def test_14c_o_prompt_mostra_os_andamentos_como_documento_e_nao_nos_metadados():
     assert not any(linha.startswith("andamentos_pa") for linha in out["metadados"])
     assert "conexo_id: 1481420" in out["metadados"]
 
+
+def test_14d_o_documento_de_andamentos_nao_e_fonte_da_regra_12():
+    """Lente do #291: "Resultado: NÃO ADMITIDO" de embargos, num andamento, não libera a
+    palavra de esgotamento com a CSRF em andamento. O documento é citável, não é fonte."""
+    from src.agents.ficha_writer.schemas import Nucleo
+    from src.agents.ficha_writer.validacao import FontesDeFato
+
+    n = Nucleo.model_validate({**_nucleo(), "metadados": _ANDAMENTOS_META})
+    autos = ferr_mod.Autos(n, [])
+    assert not any("INCLUSÃO DE RECURSO" in t for t in autos.textos_de_fonte())
+    assert not any("INCLUSÃO DE RECURSO" in t for t in autos.textos_de_fonte(True))
+    aberto = [{"etapa": "CARF", "status": "concluido_desfavoravel"},
+              {"etapa": "CSRF", "status": "em_andamento"}]
+    fontes = FontesDeFato.montar(pipeline=aberto, textos_docs=autos.textos_de_fonte())
+    assert fontes.esgotamento_sem_fonte(
+        "O recurso não foi admitido e a via administrativa está esgotada.")
+
+
+def test_14e_casos_de_borda_do_documento_de_andamentos():
+    docs = ferr_mod.andamentos_como_documento({"andamentos_pa": {"numero": None, "itens": [
+        {"data": "28/09/2026", "descricao": "DESPACHO:"},
+        {"data": None, "descricao": "  SORTEIO  "},
+        {"data": "2026-01-01", "descricao": ""},
+        "lixo"]}})
+    assert list(docs) == ["andamentos:pa"]
+    assert docs["andamentos:pa"].split("\n") == ["28/09/2026: DESPACHO:", "SORTEIO"]
+

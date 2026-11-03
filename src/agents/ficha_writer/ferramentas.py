@@ -449,8 +449,8 @@ def andamentos_como_documento(metadados: Any) -> dict[str, str]:
     Rodada 8 do IRB 1481420 (03/11/2026): o modelo citou um andamento ("INCLUSÃO DE
     RECURSO ... 28/09/2026") com o doc_id do acórdão, porque a trilha só aceita doc_id e
     os andamentos não tinham um. O trecho não estava no acórdão: 9 rodadas perdidas.
-    Agora a cronologia oficial é um documento do núcleo: entra nos citáveis, no texto de
-    fonte (regra 11) e na conferência do trecho. Uma linha por andamento, na ordem do
+    Agora a cronologia oficial é um documento do núcleo: entra nos citáveis e na
+    conferência do trecho. Ele NÃO entra em `textos_de_fonte` (ver lá). Uma linha por andamento, na ordem do
     shared: `DD/MM/AAAA: <descrição numa linha> (<órgão>)`. Vazio quando não há itens.
     """
     pa = (metadados or {}).get("andamentos_pa") if isinstance(metadados, dict) else None
@@ -465,7 +465,8 @@ def andamentos_como_documento(metadados: Any) -> dict[str, str]:
     for i in itens:
         desc = " ".join(str(i["descricao"]).split())
         orgao = f" ({' '.join(str(i['orgao']).split())})" if i.get("orgao") else ""
-        linhas.append(f"{_ddmmaaaa(i.get('data'))}: {desc}{orgao}".strip(": "))
+        data = _ddmmaaaa(i.get("data"))
+        linhas.append((f"{data}: " if data else "") + desc + orgao)
     return {f"{PREFIXO_ANDAMENTOS}{numero}": "\n".join(linhas)}
 
 
@@ -585,7 +586,11 @@ class Autos:
         O auditor (`todos_os_legiveis=True`): o núcleo e todo documento legível do
         índice, porque o auditor não sabe o que o redator leu fora da trilha.
         """
-        ids = list(self.textos_nucleo)
+        # O documento `andamentos:<n>` fica FORA (lente do #291, 03/11/2026): as datas e
+        # os números dos andamentos já são fonte pelos `metadados` (regra 11), e o texto de
+        # um andamento ("Resultado: NÃO ADMITIDO" de embargos) liberaria a palavra de
+        # esgotamento da regra 12 com a CSRF em andamento. Ele segue citável e conferível.
+        ids = [i for i in self.textos_nucleo if not i.startswith(PREFIXO_ANDAMENTOS)]
         extra = set(self.legiveis) if todos_os_legiveis else (self.lidos | self.verificados)
         ids += sorted(extra - set(ids))
         return [t for t in (self.texto_do_documento(i) for i in ids) if t]
