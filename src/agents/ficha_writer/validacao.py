@@ -6,7 +6,11 @@ agente sabe conferir com o que recebeu:
 
 1. Só os slots pedidos. Chave a mais é descartada e logada. Chave que falta reprova.
 2. Cada valor é string.
-3. `max` de cada slot. Antes de 22/10/2026 só o caller conferia.
+3. `max` de cada slot. Antes de 22/10/2026 só o caller conferia. O erro dá um alvo
+   numérico abaixo do limite (`ALVO_ABAIXO_DO_MAX`) e quantos caracteres cortar: na
+   rodada 6 do IRB 1481420 (03/11/2026), o modelo devolveu 9 vezes o mesmo texto de 253
+   caracteres para um `max` de 250, porque "corte" sem número não muda a resposta.
+   Antes de contar, o código compacta espaços repetidos (sem perda de fato).
 4. Slot obrigatório não fica vazio.
 5. Zero cifra `R$` em `valor.descricao` (regra de 09/10/2026, A56 da S5).
 6. Nenhum número de processo fora dos citáveis (regra de 28/09/2026: processo de outra
@@ -145,6 +149,35 @@ def processos_no_texto(texto: str) -> list[str]:
     return [m.group(0) for m in RE_PROCESSO.finditer(texto or "")]
 
 
+#: Fração do `max` que o retry pede a menos. O modelo conta mal: com o alvo no
+#: próprio limite, ele devolve o mesmo texto (rodada 6 do IRB, 03/11/2026).
+ALVO_ABAIXO_DO_MAX = 0.10
+_RE_ESPACOS = re.compile(r"[ \t]+")
+
+
+def compactar_espacos(v: str) -> str:
+    """Toda sequência de espaços e tabulações vira 1 espaço. Quebra de linha fica.
+
+    Conserto determinístico antes de contar: não tira palavra nem pontuação.
+    """
+    return _RE_ESPACOS.sub(" ", v)
+
+
+def alvo_de_tamanho(maximo: int) -> int:
+    """O tamanho que o retry pede: `max` menos 10%, e pelo menos 10 a menos."""
+    return maximo - max(10, int(maximo * ALVO_ABAIXO_DO_MAX))
+
+
+def erro_de_tamanho(nome: str, maximo: int, tem: int) -> str:
+    """A mensagem de estouro. O prefixo `"<slot> > <max> chars"` é contrato com o
+    `_ERRO_PARA_CAMPO` do shared: não mude.
+    """
+    alvo = alvo_de_tamanho(maximo)
+    return (f"{nome} > {maximo} chars (tem {tem}). Reescreva com no máximo {alvo} caracteres, "
+            f"contando espaços e pontuação: remova pelo menos {tem - alvo} caracteres "
+            "(um aposto, um parêntese ou uma qualificação). Mantenha o fato principal")
+
+
 def validar_campos(
     parsed: Any, slots: Iterable[SlotResolvido], citaveis: Optional[set[str]],
     *, origem_valor: Optional[str] = None, sem_corretor: bool = False,
@@ -177,7 +210,7 @@ def validar_campos(
             erros.append(ErroDeCampo(campo=s.nome, erro=(
                 f"{s.nome}: deveria ser string, veio {type(v).__name__}"), valor_anterior=v))
             continue
-        v = v.strip()
+        v = compactar_espacos(v.strip())
         erro = _erro_do_texto(s, v, citaveis, origem_valor, sem_corretor)
         if erro:
             erros.append(ErroDeCampo(campo=s.nome, erro=erro, valor_anterior=v))
@@ -192,7 +225,7 @@ def _erro_do_texto(s: SlotResolvido, v: str, citaveis: Optional[set[str]],
     if not v:
         return f"{s.nome}: slot obrigatório vazio" if s.obrigatorio else None
     if len(v) > s.max:
-        return f"{s.nome} > {s.max} chars (tem {len(v)}). Corte sem perder o fato principal"
+        return erro_de_tamanho(s.nome, s.max, len(v))
     if s.nome == "valor.descricao":
         m = RE_CIFRA.search(v)
         if m:

@@ -41,6 +41,9 @@ verifica antes de reprovar:
   `verificado_pelo_codigo` registra o caso. Sem sucesso, o erro dá a lista dos
   documentos citáveis, e o prompt do retry repete a lista.
 - Slot obrigatório vazio ou ausente: o erro diz o motivo da rodada anterior.
+- O mesmo erro no mesmo slot em 2 rodadas seguidas: o retry diz que a resposta se
+  repetiu e pede uma versão diferente (rodada 6 do IRB, 03/11/2026: 9 rodadas com o
+  mesmo texto de 253 caracteres).
 
 Fato sem fonte (regras 11 e 12 de `validacao.py`, 23/10/2026). Rodada real do IRB
 1481420 (rev 00413): o modelo escreveu "não foi admitido em 01/09/2026, encerrando a
@@ -230,6 +233,22 @@ def _erros_da_trilha(
     return erros, reparados, avisos_slot
 
 
+REPETIU = (" A rodada anterior devolveu a mesma resposta e o mesmo erro. Escreva uma versão "
+           "diferente: outra ordem, outras palavras, mais curta.")
+
+
+def _com_repeticao(e: ErroDeCampo, brutos: dict[str, str]) -> ErroDeCampo:
+    """O mesmo erro, no mesmo slot, que na rodada anterior: o retry diz isso.
+
+    `brutos` guarda o erro da rodada anterior antes de qualquer acréscimo. Rodada 6 do
+    IRB 1481420 (03/11/2026): o modelo repetiu o texto de 253 caracteres 9 vezes.
+    """
+    # Slot vazio tem tratamento próprio (`_com_motivo_anterior`).
+    if brutos.get(e.campo) != e.erro or any(g in e.erro for g in _ERROS_DE_SLOT_VAZIO):
+        return e
+    return e.model_copy(update={"erro": f"{e.erro}.{REPETIU}"})
+
+
 def _com_motivo_anterior(e: ErroDeCampo, rodada: int, motivos: dict[str, str]) -> ErroDeCampo:
     """Slot obrigatório vazio ou ausente: o erro diz o motivo da rodada anterior.
 
@@ -352,6 +371,8 @@ async def write_v5(
     pendentes_alertas = list(request.alertas)
     # slot -> o último motivo de reprovação que não é "vazio" (23/10/2026).
     motivos: dict[str, str] = {e.campo: e.erro for e in erros_retry}
+    # slot -> o erro bruto da rodada anterior, para detectar repetição (03/11/2026).
+    brutos: dict[str, str] = {}
     avisos_codigo: list[str] = []
     aprovados: dict[str, str] = {}
     trilha: dict[str, list[TrilhaItem]] = {}
@@ -419,6 +440,9 @@ async def write_v5(
         # Erro de trilha de slot que já reprovou no texto: o erro do texto basta.
         # Erro de trilha sem slot: vai ao LLM como erro da saída.
         erros_campos += erros_trilha.pop(CAMPO_TRILHA, [])
+        brutos_da_rodada = {e.campo: e.erro for e in erros_campos}
+        erros_campos = [_com_repeticao(e, brutos) for e in erros_campos]
+        brutos = brutos_da_rodada
         erros_campos = [_com_motivo_anterior(e, rodada, motivos) for e in erros_campos]
         for e in erros_campos:
             if not any(g in e.erro for g in _ERROS_DE_SLOT_VAZIO):
