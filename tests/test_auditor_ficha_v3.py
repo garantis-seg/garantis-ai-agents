@@ -627,3 +627,21 @@ def test_11e_a_marca_contradiz_esqueleto_manda_ao_balde_1_so_em_slot_de_texto(mo
     prov = _Prov(_ler_recurso(), [_saida(balde1=[b1])])
     r = _rodar(prov, monkeypatch)
     assert r.success and [i.campo for i in r.balde1] == ["bullets[0]"] and r.balde2 == []
+
+
+def test_3d_prova_no_documento_de_andamentos_vale_sem_ferramenta(monkeypatch):
+    """#291 (03/11/2026): o auditor vê a cronologia oficial `andamentos:<n>` como documento
+    do núcleo. A prova com esse doc_id confere no texto do andamento, sem ferramenta."""
+    from tests.test_ficha_writer_v5 import _ANDAMENTOS_META
+
+    body = _body(nucleo={**_nucleo(), "metadados": _ANDAMENTOS_META})
+    b1 = _b1(campo="merito.p1", prova={"doc_id": "andamentos:16327721182201921", "pagina": 1,
+                                         "trecho": "RECURSO ESPECIAL DO CONTRIBUINTE Data de "
+                                                   "Entrada: 28/09/2026"})
+    fatos = [{**_fatos()[0], "confere": False}, {**_fatos()[1], "confere": True}]
+    prov = _Prov([_FIM], [_saida(balde1=[b1], fatos_conferidos=fatos)])
+    r = _rodar(prov, monkeypatch, body=body)
+    assert r.success, r.erros_validacao
+    assert r.chamadas_ferramenta == 0
+    assert r.balde1 and r.balde1[0].prova.doc_id == "andamentos:16327721182201921"
+
