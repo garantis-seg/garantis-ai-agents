@@ -67,3 +67,24 @@ if __name__ == "__main__":  # smoke sem pytest
     test_texto_de_peca_real_decide_sozinho_e_nao_baixa_pdf()
     test_vazio_e_garbage_continuam_indo_pro_pdf()
     print("ok")
+
+
+def test_pagina_de_glifo_cru_vai_ao_ocr_mesmo_com_area_de_texto():
+    """03/11/2026 (Alfredo): a camada de texto de glifo cru tem área, passa pelo Sinal 1
+    e o indexado virava lixo. Agora a página vai ao OCR, com o motivo `glifo_cru`, pela
+    mesma regra do shared que o leitor de apólices usa (#672)."""
+    from garantis_shared.texto_util import glifo_cru
+
+    from src.agents.doc_indexer.gate import MOTIVO_GLIFO_CRU, paginas_inalcancaveis
+
+    lixo = "\x01\x02\x03\x04\x05\x06\x07\x08\x0b\x0c\x0e\x0f" * 60
+    assert glifo_cru(lixo)
+    bom = "Vistos. A impugnação foi julgada improcedente pela DRJ. " * 10
+
+    class _Doc(list):
+        pass
+
+    doc = _Doc([object(), object()])  # 2 páginas; o Sinal 1 nunca é chamado para a 1ª
+    fora = paginas_inalcancaveis(doc, {1: lixo, 2: bom})
+    assert fora == {1: MOTIVO_GLIFO_CRU}
+

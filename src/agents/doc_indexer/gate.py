@@ -42,6 +42,8 @@ from __future__ import annotations
 import logging
 from typing import Any, Optional
 
+from garantis_shared.texto_util import glifo_cru
+
 from .._utils.ocr_gate import _pagina_motivo, texto_decide_sozinho
 
 logger = logging.getLogger(__name__)
@@ -61,6 +63,11 @@ __all__ = [
 MOTIVO_VAZIA = "vazia"
 MOTIVO_IMAGEM = "imagem"
 MOTIVO_VETOR = "vetor"
+#: Camada de texto que existe e não é texto: índices de glifo. Só o OCR lê. A regra
+#: mora em `garantis_shared.texto_util.glifo_cru`, a mesma que o leitor de apólices
+#: usa desde o shared#672 (14/10/2026). Entrou aqui em 03/11/2026 (Alfredo): o erro
+#: era mandar DE MENOS ao OCR, nunca de mais.
+MOTIVO_GLIFO_CRU = "glifo_cru"
 
 
 def paginas_inalcancaveis(
@@ -94,6 +101,12 @@ def paginas_inalcancaveis(
     fora: dict[int, str] = {}
     for i, page in enumerate(doc, start=1):
         texto = textos.get(i, "")
+        # Pergunta 0 — a camada de texto é glifo cru? Então ela mente: tem área de
+        # texto, passa pelo Sinal 1, e o indexado vira lixo de glifos. Só o OCR lê.
+        # Mesma regra do leitor de apólices (shared#672). Vem antes de tudo.
+        if glifo_cru(texto):
+            fora[i] = MOTIVO_GLIFO_CRU
+            continue
         # Pergunta 1 — o texto desta folha se sustenta? Sai cedo no caso comum
         # (documento born-digital), sem pagar o Sinal 1 (`_pagina_motivo`).
         if texto_decide_sozinho(texto):
