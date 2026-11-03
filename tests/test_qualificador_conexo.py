@@ -629,7 +629,9 @@ def _prova(pagina: int, trecho: str) -> dict:
 
 def _estado_irb(**over: Any) -> dict:
     e = {
-        "origem": {"tipo": "auto_de_infracao", "data": "2019-05-10"},
+        # Regra 13 (03/11/2026): a origem tem prova com expressão do dicionário.
+        "origem": {"tipo": "auto_de_infracao", "data": "2019-05-10",
+                   "prova": _prova(1, _TRECHO_DRJ)},
         "decisoes": [
             {"etapa": "DRJ", "resultado": "desfavoravel", "data": "2020-08-18",
              "acordao": "06-071.234", "prova": _prova(1, _TRECHO_DRJ)},
@@ -986,3 +988,117 @@ def test_10t_processo_sem_documento_proprio_gera_alerta_de_processo(monkeypatch)
     assert pa.fonte == "capa" and pa.estado_processual.confianca == "baixa"
     assert [a.model_dump() for a in r.alertas_gerados] == [
         {"codigo": "estado_processual_sem_documentos", "escopo": "processo", "alvo": _PA}]
+
+
+# ── (11) origem com dicionário fechado (regra 13, 03/11/2026) ───────────────
+#
+# Motivo: no IRB 1481420 (03/11/2026), a mesma entrada deu `auto_de_infracao`
+# numa rodada e null na outra. O código agora exige um trecho literal com uma
+# expressão do dicionário fechado daquele tipo.
+
+_CAMPO_ORIGEM = "processos[0].estado_processual.origem"
+
+
+def _estado_com_origem(origem: dict) -> dict:
+    return _estado_irb(origem=origem)
+
+
+def test_11a_origem_com_trecho_do_dicionario_passa(monkeypatch):
+    prov = _ProvAuditorSustenta(_leituras_carf(), [_emissao_carf()])
+    r = _rodar(prov, monkeypatch, req=_request_carf())
+    assert r.rodadas_de_correcao == 0
+    origem = r.processos[0].estado_processual.origem
+    assert origem.tipo == "auto_de_infracao" and origem.prova.trecho == _TRECHO_DRJ
+    dump = r.model_dump()["processos"][0]["estado_processual"]["origem"]
+    assert set(dump) == {"tipo", "data", "prova"}
+
+
+def test_11b_trecho_de_outro_tipo_volta_ao_llm(monkeypatch):
+    errada = _estado_com_origem({"tipo": "despacho_decisorio", "data": "2019-05-10",
+                                 "prova": _prova(1, _TRECHO_DRJ)})
+    prov = _ProvAuditorSustenta(_leituras_carf(), [_emissao_carf(errada), _emissao_carf()])
+    r = _rodar(prov, monkeypatch, req=_request_carf())
+    assert r.rodadas_de_correcao == 1
+    assert r.processos[0].estado_processual.origem.tipo == "auto_de_infracao"
+    segunda = prov.prompts("B")[1]
+    assert f'"campo": "{_CAMPO_ORIGEM}.prova.trecho"' in segunda
+    assert "o trecho mostra auto_de_infracao e não decide despacho_decisorio" in segunda
+    assert "manifestação de inconformidade" in segunda     # nomeia as aceitas
+
+
+def test_11c_tipo_sem_prova_volta_ao_llm(monkeypatch):
+    sem_prova = _estado_com_origem({"tipo": "auto_de_infracao", "data": "2019-05-10"})
+    prov = _ProvAuditorSustenta(_leituras_carf(), [_emissao_carf(sem_prova), _emissao_carf()])
+    r = _rodar(prov, monkeypatch, req=_request_carf())
+    assert r.rodadas_de_correcao == 1
+    segunda = prov.prompts("B")[1]
+    assert f'"campo": "{_CAMPO_ORIGEM}.prova"' in segunda
+    assert "origem.tipo=auto_de_infracao exige prova" in segunda
+
+
+def test_11d_trecho_sem_expressao_do_dicionario_e_erro(monkeypatch):
+    sem_expr = _estado_com_origem({"tipo": "auto_de_infracao", "data": "2019-05-10",
+                                   "prova": _prova(2, _TRECHO_RV)})
+    prov = _ProvAuditorSustenta(_leituras_carf(), [_emissao_carf(sem_expr), _emissao_carf()])
+    r = _rodar(prov, monkeypatch, req=_request_carf())
+    assert r.rodadas_de_correcao == 1
+    assert "o trecho não tem expressão do dicionário" in prov.prompts("B")[1]
+
+
+def test_11e_origem_null_sem_trecho_passa(monkeypatch):
+    nula = _estado_com_origem({"tipo": None, "data": None})
+    prov = _ProvAuditorSustenta(_leituras_carf(), [_emissao_carf(nula)])
+    r = _rodar(prov, monkeypatch, req=_request_carf())
+    assert r.rodadas_de_correcao == 0
+    origem = r.processos[0].estado_processual.origem
+    assert origem.tipo is None and origem.prova is None
+
+
+def test_11f_rodadas_esgotadas_anulam_so_a_origem(monkeypatch):
+    # O LLM insiste num trecho que não prova o tipo. Depois das 2 correções, o
+    # código põe origem.tipo=null e mantém o resto. Não há 422.
+    errada = _estado_com_origem({"tipo": "aiim", "data": "2019-05-10",
+                                 "prova": _prova(1, _TRECHO_DRJ)})
+    prov = _ProvAuditorSustenta(_leituras_carf(), [_emissao_carf(errada)])
+    r = _rodar(prov, monkeypatch, req=_request_carf())
+    assert prov.n["B"] == 3 and r.rodadas_de_correcao == 2
+    ep = r.processos[0].estado_processual
+    assert ep.origem.tipo is None and ep.origem.prova is None
+    assert ep.origem.data == "2019-05-10"
+    assert [d.etapa for d in ep.decisoes] == ["DRJ", "CARF"]   # o resto fica
+
+
+def test_11g_trecho_fora_da_pagina_tambem_anula_depois_das_rodadas(monkeypatch):
+    # O trecho tem a expressão, mas não está na página citada (regra 5).
+    inventado = _estado_com_origem({"tipo": "auto_de_infracao", "data": "2019-05-10",
+                                    "prova": _prova(1, "Lavrado o auto de infração.")})
+    prov = _ProvAuditorSustenta(_leituras_carf(), [_emissao_carf(inventado)])
+    r = _rodar(prov, monkeypatch, req=_request_carf())
+    assert r.rodadas_de_correcao == 2
+    assert r.processos[0].estado_processual.origem.tipo is None
+    assert "o trecho não está, literal, na página citada" in prov.prompts("B")[1]
+
+
+def test_11h_erro_da_origem_com_outro_erro_continua_422(monkeypatch):
+    estado = _estado_com_origem({"tipo": "auto_de_infracao", "data": "2019-05-10"})
+    estado["decisoes"][0]["prova"] = None
+    prov = _Prov(_leituras_carf(), [_emissao_carf(estado)])
+    with pytest.raises(QualificacaoInvalidaError) as exc:
+        _rodar(prov, monkeypatch, req=_request_carf())
+    campos = {x.campo for x in exc.value.body.erros}
+    assert f"{_CAMPO_ORIGEM}.prova" in campos
+    assert "processos[0].estado_processual.decisoes[0].prova" in campos
+
+
+def test_11i_modo_capa_guarda_o_tipo_sem_prova(monkeypatch):
+    # Modo capa (sem documento): a regra 13 não vale. O código guarda o tipo
+    # que o LLM leu na capa, sem prova e sem data.
+    e = _emissao_carf(alertas_respondidos=[
+        {"codigo": "aggregate_diz_CSRF", "alvo": _PA, "resposta": "confirmado",
+         "prova": None, "motivo": "Sem documento."}])
+    e["processos"][0]["estado_processual"]["origem"] = {"tipo": "aiim", "data": None}
+    prov = _Prov([], [e])
+    r = _rodar(prov, monkeypatch, req=_request_carf(documentos_indexados=[]))
+    assert r.modo == "capa" and r.rodadas_de_correcao == 0
+    origem = r.processos[0].estado_processual.origem
+    assert origem.tipo == "aiim" and origem.prova is None and origem.data is None

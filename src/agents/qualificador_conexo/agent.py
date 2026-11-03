@@ -36,17 +36,21 @@ Regras duras da pergunta 3, estado processual (23/10/2026, S2c v2):
 11. Alerta `aggregate_diz_<etapa>` exige prova na resposta (confirmado ou
     refutado) quando o processo alvo tem documento legível.
 12. Os doc_id de `estado_processual.documentos_lidos` foram lidos na fase A.
+13. `origem.tipo` não nulo exige `origem.prova`. O trecho tem de provar AQUELE
+    tipo pelo dicionário fechado (`dicionario_origem.tipo_do_trecho`). Depois
+    das rodadas de correção, um erro que é só da origem não vira 422: o código
+    anula `origem.tipo` (ver `_anular_origens_rejeitadas`).
 
-Exceção das regras 1, 2, 4, 6, 7 e 11 (modo capa): o item não tem documento
+Exceção das regras 1, 2, 4, 6, 7, 11 e 13 (modo capa): o item não tem documento
 para citar. Ver `_Contexto.processo_tem_documentos`.
 
 `sem_evidencia` não exige `prova`: a falta de prova é o próprio estado.
 """
 from __future__ import annotations
 
+import copy
 import logging
 import re
-import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -58,6 +62,8 @@ from ...utils.llm_json import parse_llm_json
 from .._utils.llm_seed import seed_for
 from .._utils.prompt_identity import versao_com_identidade
 from . import auditor as auditor_mod
+from . import dicionario_origem
+from .dicionario_origem import normalizar as _normalizar
 from .ferramentas import BudgetConexo, CircuitBreaker, menu, parse_chamada
 from .prompts import (
     PROMPT_VERSION,
@@ -223,6 +229,7 @@ async def qualificar_conexo(
     # ── Fase B — emissão com validação ──────────────────────────────────────
     erros: list[dict[str, Any]] = []
     qualificacao: Optional[QualificacaoLLM] = None
+    parsed: Any = None
     rodadas = 0
     for rodada in range(RODADAS_DE_CORRECAO + 1):
         rodadas = rodada
@@ -243,12 +250,22 @@ async def qualificar_conexo(
             parsed = parse_llm_json(resp.text or "")
         except Exception as e:  # noqa: BLE001 — JSON ilegível é erro de campo
             erros = [_erro("$", f"JSON ilegível: {e}", (resp.text or "")[:200])]
+            parsed = None
             continue
         qualificacao, erros = validar_qualificacao(parsed, ctx)
         if not erros:
             break
         logger.info("QUALIFICADOR_EMISSAO_REJEITADA conexo=%s rodada=%d erros=%d",
                     request.conexo_id, rodada, len(erros))
+
+    # Regra 13 esgotada: a origem sai null, e o resto da resposta fica.
+    anulado = _anular_origens_rejeitadas(parsed, erros) if erros else None
+    if anulado is not None:
+        q_anulada, erros_anulada = validar_qualificacao(anulado, ctx)
+        if not erros_anulada:
+            logger.warning("QUALIFICADOR_ORIGEM_ANULADA conexo=%s campos=%s",
+                           request.conexo_id, [e["campo"] for e in erros])
+            qualificacao, erros = q_anulada, []
 
     if erros or qualificacao is None:
         raise QualificacaoInvalidaError(QualificacaoInvalidaBody(
@@ -481,13 +498,6 @@ def _erro(campo: str, erro: str, valor: Any = None) -> dict[str, Any]:
     return {"campo": campo, "erro": erro, "valor_anterior": valor}
 
 
-def _normalizar(texto: str) -> str:
-    sem_acento = "".join(
-        c for c in unicodedata.normalize("NFKD", texto) if not unicodedata.combining(c)
-    )
-    return re.sub(r"\s+", " ", sem_acento.casefold()).strip()
-
-
 def _validar_prova(prova: Any, campo: str, ctx: _Contexto) -> list[dict[str, Any]]:
     if prova is None:
         return []
@@ -515,8 +525,10 @@ def _validar_prova(prova: Any, campo: str, ctx: _Contexto) -> list[dict[str, Any
 def _validar_estado(
     ep: EstadoProcessual, campo: str, ctx: _Contexto,
 ) -> list[dict[str, Any]]:
-    """Regras 7, 9, 10 e 12 da pergunta 3. A regra 8 (data ISO) é do schema."""
+    """Regras 7, 9, 10, 12 e 13 da pergunta 3. A regra 8 (data ISO) é do schema."""
     erros: list[dict[str, Any]] = []
+    if not ctx.modo_capa:
+        erros += _validar_origem(ep, f"{campo}.origem", ctx)
     for j, d in enumerate(ep.decisoes):
         c = f"{campo}.decisoes[{j}].prova"
         if d.prova is None:
@@ -561,6 +573,81 @@ def _validar_estado(
         erros.append(_erro(f"{campo}.documentos_lidos",
                            "documento que a fase A não leu", nao_lidos))
     return erros
+
+
+def _validar_origem(
+    ep: EstadoProcessual, campo: str, ctx: _Contexto,
+) -> list[dict[str, Any]]:
+    """Regra 13: `origem.tipo` só com um trecho literal que prova o tipo.
+
+    Decisão do Alfredo, 03/11/2026: o Gemini lê a origem, mas o código exige
+    uma expressão do dicionário fechado (`dicionario_origem`) no trecho. Sem
+    isso, a mesma entrada pode dar 2 respostas diferentes. A expressão tem de
+    ser do MESMO tipo. Um trecho com os 2 grupos federais só vale quando a
+    defesa de 1ª instância desempata.
+    """
+    orig = ep.origem
+    erros: list[dict[str, Any]] = []
+    if orig.prova is not None:
+        erros += _validar_prova(orig.prova, f"{campo}.prova", ctx)
+    if orig.tipo is None:
+        return erros
+    aceitas = dicionario_origem.lista_de_expressoes(orig.tipo)
+    if orig.prova is None:
+        erros.append(_erro(
+            f"{campo}.prova",
+            f"origem.tipo={orig.tipo} exige prova. O trecho literal tem de ter uma destas"
+            f" expressões: {aceitas}. Sem trecho assim, use origem.tipo=null.",
+            None,
+        ))
+        return erros
+    provado = dicionario_origem.tipo_do_trecho(orig.prova.trecho)
+    if provado != orig.tipo:
+        achadas = dicionario_origem.tipos_no_trecho(orig.prova.trecho)
+        if achadas:
+            motivo = (f"o trecho mostra {', '.join(sorted(achadas))} e não decide"
+                      f" {orig.tipo}")
+        else:
+            motivo = "o trecho não tem expressão do dicionário"
+        erros.append(_erro(
+            f"{campo}.prova.trecho",
+            f"{motivo}. Para origem.tipo={orig.tipo}, o trecho literal tem de ter uma"
+            f" destas expressões: {aceitas}. Sem trecho assim, use origem.tipo=null.",
+            orig.prova.trecho,
+        ))
+    return erros
+
+
+#: O campo de um erro da regra 13 (a origem de um processo).
+_CAMPO_DA_ORIGEM = re.compile(r"^processos\[(\d+)\]\.estado_processual\.origem(\.|$)")
+
+
+def _anular_origens_rejeitadas(
+    parsed: Any, erros: list[dict[str, Any]],
+) -> Optional[Any]:
+    """Depois da última rodada: anula a origem rejeitada, se só ela falhou.
+
+    Decisão do Alfredo, 03/11/2026: na dúvida, `origem.tipo` fica null. O
+    código nunca chuta o tipo. Por isso, um erro que é SÓ da origem não derruba
+    o conexo inteiro num 422. O código põe `tipo` e `prova` em null e mantém o
+    resto. Com outro erro junto, a função devolve None, e o 422 continua.
+    """
+    if not erros or not isinstance(parsed, dict):
+        return None
+    indices = set()
+    for e in erros:
+        m = _CAMPO_DA_ORIGEM.match(str(e.get("campo") or ""))
+        if m is None:
+            return None
+        indices.add(int(m.group(1)))
+    novo = copy.deepcopy(parsed)
+    processos = novo.get("processos")
+    for i in indices:
+        ep = processos[i].get("estado_processual") if isinstance(processos, list) else None
+        if not isinstance(ep, dict) or not isinstance(ep.get("origem"), dict):
+            return None
+        ep["origem"] = {**ep["origem"], "tipo": None, "prova": None}
+    return novo
 
 
 def _estado_da_capa(bruto: Any) -> dict[str, Any]:

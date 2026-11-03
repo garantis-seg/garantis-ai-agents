@@ -185,7 +185,8 @@ Cada processo leva `estado_processual`. Todo modelo usa `extra="forbid"`.
 
 ```json
 "estado_processual": {
-  "origem": {"tipo": "auto_de_infracao|despacho_decisorio|aiim|null", "data": "2019-05-10|null"},
+  "origem": {"tipo": "auto_de_infracao|despacho_decisorio|aiim|null", "data": "2019-05-10|null",
+             "prova": {"doc_id": "carf:acordaos.pdf", "pagina": 1, "trecho": "...a impugnação."} | null},
   "decisoes": [
     {"etapa": "DRJ|CARF|CSRF|DTJ|camara_julgadora|camara_superior|1a_instancia|2a_instancia|STJ|STF",
      "resultado": "favoravel|desfavoravel|parcial",
@@ -255,6 +256,29 @@ O código valida em `agent._validar_estado` e em `agent.validar_qualificacao`.
 6. A fase A leu cada doc_id de `documentos_lidos`.
 7. Alerta `aggregate_diz_<etapa>` exige `prova` nas 2 respostas (confirmado ou
    refutado), quando o processo alvo tem documento legível.
+8. `origem.tipo` não nulo exige `origem.prova`. O trecho tem de provar AQUELE tipo pelo
+   dicionário fechado (ver "Origem: dicionário fechado"). Esta regra não vale no modo capa.
+
+### Origem: dicionário fechado
+
+Decisão do Alfredo, 03/11/2026: "Precisa ser o gemini; mas ele tem que ter um guidance.
+e dicionario fechado." Motivo: no IRB 1481420, a mesma entrada deu `auto_de_infracao`
+numa rodada e `null` na outra.
+
+- O dono do dicionário é `dicionario_origem.EXPRESSOES_ORIGEM`. O prompt
+  (`<guia_origem>`) e a regra dura leem a constante. Uma expressão nova entra só por PR.
+- A comparação não liga para caixa, acento nem espaço repetido. A expressão casa como
+  palavra inteira.
+- A expressão mais longa vence: "auto de infração e imposição de multa" conta só para
+  `aiim`.
+- Empate: o trecho tem os 2 grupos federais. A defesa de 1ª instância decide:
+  "impugnação" ⇒ `auto_de_infracao`, "manifestação de inconformidade" ⇒
+  `despacho_decisorio`. Sem a defesa, ou com as 2, o trecho não prova tipo nenhum.
+- `aiim` com uma expressão federal no mesmo trecho: o trecho não prova tipo nenhum.
+- O erro volta ao LLM com as expressões aceitas. Depois das 2 rodadas de correção, um
+  erro que é SÓ da origem não vira 422. O código põe `origem.tipo` e `origem.prova` em
+  `null`, mantém `origem.data` e o resto, e grava o log `QUALIFICADOR_ORIGEM_ANULADA`.
+  Com outro erro junto, o 422 continua.
 
 ### Alertas da entrada que o LLM responde
 
