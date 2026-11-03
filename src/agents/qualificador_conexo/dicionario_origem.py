@@ -47,13 +47,16 @@ EXPRESSOES_ORIGEM: dict[str, tuple[str, ...]] = {
 }
 
 #: A defesa de 1ª instância de cada trilho federal. Ela desempata quando o
-#: trecho tem expressões dos 2 grupos federais.
+#: trecho tem expressões dos 2 grupos federais. Uma palavra de defesa é FRACA:
+#: ela nunca briga com `aiim`. Por quê: o texto do TIT-SP também pode chamar a
+#: defesa contra o AIIM de "impugnação".
 DEFESA_DE_1A_INSTANCIA: dict[str, str] = {
     "auto_de_infracao": "impugnação",
     "despacho_decisorio": "manifestação de inconformidade",
 }
 
 _FEDERAIS = frozenset(DEFESA_DE_1A_INSTANCIA)
+_DEFESAS = frozenset(DEFESA_DE_1A_INSTANCIA.values())
 
 
 def normalizar(texto: str) -> str:
@@ -103,11 +106,18 @@ def tipo_do_trecho(trecho: str) -> Optional[str]:
     - Os 2 grupos federais: a defesa de 1ª instância decide. Com "impugnação"
       e sem "manifestação de inconformidade", o tipo é `auto_de_infracao`. No
       caso inverso, o tipo é `despacho_decisorio`. Nos outros casos, None.
-    - `aiim` com um grupo federal: None. O trecho não decide entre os trilhos.
+    - `aiim` com palavras de defesa e sem expressão federal FORTE: `aiim`. A
+      expressão forte é a federal que não é palavra de defesa (por exemplo,
+      "despacho decisório" ou "auto de infração" fora da forma longa do AIIM).
+    - `aiim` com uma expressão federal forte: None. O trecho não decide.
     - Nenhuma expressão: None.
     """
     achadas = expressoes_no_trecho(trecho)
     tipos = set(achadas)
+    if "aiim" in tipos:
+        fortes = {t for t, exps in achadas.items()
+                  if any(e not in _DEFESAS for e in exps)}
+        return "aiim" if fortes == {"aiim"} else None
     if len(tipos) == 1:
         return next(iter(tipos))
     if tipos != _FEDERAIS:

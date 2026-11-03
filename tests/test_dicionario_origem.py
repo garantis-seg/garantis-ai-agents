@@ -56,6 +56,23 @@ def test_aiim_com_expressao_federal_fica_null():
     assert d.tipo_do_trecho(trecho) is None
 
 
+def test_aiim_com_palavra_de_defesa_prova_aiim():
+    # A defesa é palavra fraca: ela não briga com aiim (TIT-SP).
+    assert d.tipo_do_trecho("AIIM nº 4.123.456 ... a impugnação apresentada") == "aiim"
+    assert d.tipo_do_trecho(
+        "Auto de Infração e Imposição de Multa. Manifestação de inconformidade.") == "aiim"
+
+
+@pytest.mark.parametrize("trecho", [
+    "AIIM ... despacho decisório",
+    "AIIM nº 1 e o auto de infração federal, com impugnação",
+    "AIIM e lançamento de ofício",
+    "AIIM e PER/DCOMP",
+])
+def test_aiim_com_expressao_federal_forte_nao_prova_nada(trecho):
+    assert d.tipo_do_trecho(trecho) is None
+
+
 def test_empate_federal_a_impugnacao_decide_auto():
     trecho = ("Multa isolada sobre declaração de compensação. "
               "A contribuinte apresentou impugnação.")

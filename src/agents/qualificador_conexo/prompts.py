@@ -160,6 +160,8 @@ Empate: os documentos mostram expressões dos 2 grupos federais. Então a defesa
 instância decide: "{defesa["auto_de_infracao"]}" ⇒ auto_de_infracao,
 "{defesa["despacho_decisorio"]}" ⇒ despacho_decisorio. Sem a defesa, origem.tipo = null.
 A expressão mais longa vence: "{aiim_longa}" conta só para aiim.
+Com uma expressão de aiim, a palavra de defesa não conta como federal. Uma expressão federal
+de outro tipo no mesmo trecho deixa origem.tipo = null.
 Sem uma expressão do dicionário num trecho literal, origem.tipo = null.
 </guia_origem>"""
 

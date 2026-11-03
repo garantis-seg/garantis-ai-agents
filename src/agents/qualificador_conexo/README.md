@@ -274,7 +274,10 @@ numa rodada e `null` na outra.
 - Empate: o trecho tem os 2 grupos federais. A defesa de 1ª instância decide:
   "impugnação" ⇒ `auto_de_infracao`, "manifestação de inconformidade" ⇒
   `despacho_decisorio`. Sem a defesa, ou com as 2, o trecho não prova tipo nenhum.
-- `aiim` com uma expressão federal no mesmo trecho: o trecho não prova tipo nenhum.
+- "impugnação" e "manifestação de inconformidade" são palavras de DEFESA. Elas só
+  desempatam os 2 grupos federais e nunca brigam com `aiim`. `aiim` com palavras de
+  defesa prova `aiim`. `aiim` com uma expressão federal forte (por exemplo, "despacho
+  decisório" ou "auto de infração" fora da forma longa) não prova tipo nenhum.
 - O erro volta ao LLM com as expressões aceitas. Depois das 2 rodadas de correção, um
   erro que é SÓ da origem não vira 422. O código põe `origem.tipo` e `origem.prova` em
   `null`, mantém `origem.data` e o resto, e grava o log `QUALIFICADOR_ORIGEM_ANULADA`.
