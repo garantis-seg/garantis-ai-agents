@@ -97,7 +97,10 @@ async def _chamar(llm_provider, prompt: str, model: str) -> LLMResponse:
     return await llm_provider.agenerate(
         prompt=prompt,
         model=model,
-        temperature=0.0,
+        # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+        # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+        # faz o provider omitir temperature, top_p, top_k e seed.
+        temperature=None,
         response_mime_type="application/json",  # JSON mode SEM schema estático (slots dinâmicos)
         thinking_budget=0,
         max_tokens=8192,

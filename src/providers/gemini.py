@@ -306,7 +306,7 @@ class GeminiProvider(BaseLLMProvider):
     def _build_config_params(
         self,
         *,
-        temperature: float,
+        temperature: Optional[float],
         max_tokens: int,
         response_schema: Optional[Type],
         model: str,
@@ -315,7 +315,8 @@ class GeminiProvider(BaseLLMProvider):
         """Build kwargs p/ GenerateContentConfig — centralizado p/ generate/agenerate.
 
         Determinismo: quando temperature=0, force top_p=1.0 + top_k=1 (greedy
-        strict decoding). `thinking_budget=0` desliga o thinking mode; ausente =
+        strict decoding). `temperature=None` = padrão do modelo: a chamada não
+        leva temperature, top_p, top_k nem seed. `thinking_budget=0` desliga o thinking mode; ausente =
         default do modelo. MEDIDO: 3.5-flash pensa por default (até em "2+2");
         3.1-flash-lite NÃO pensa por default (mas suporta, via budget>0/-1).
         """
@@ -324,9 +325,16 @@ class GeminiProvider(BaseLLMProvider):
         # reais são ordens de magnitude menores). Clampar aqui cobre todo
         # caller (generate + agenerate) sem depender de literal por-agent.
         config_params: Dict[str, Any] = {
-            "temperature": temperature,
             "max_output_tokens": min(max_tokens, 65535),
         }
+        # `None` = o caller quer os parâmetros de amostragem no padrão do modelo.
+        # O Google pede isso no Gemini 3: temperature baixa pode causar laço e
+        # piorar o raciocínio. Por isso, com `None`, nada de amostragem sai daqui:
+        # nem temperature, nem top_p/top_k, nem seed (o seed só tem efeito junto
+        # da amostragem que o caller fixou).
+        padrao_do_modelo = temperature is None
+        if not padrao_do_modelo:
+            config_params["temperature"] = temperature
 
         # Structured output
         if response_schema is not None:
@@ -347,7 +355,9 @@ class GeminiProvider(BaseLLMProvider):
 
         # Greedy strict decoding quando temperature=0 (top_p=1, top_k=1).
         # Override possivel via kwargs.
-        if temperature == 0.0:
+        if padrao_do_modelo:
+            pass
+        elif temperature == 0.0:
             config_params["top_p"] = kwargs.get("top_p", 1.0)
             config_params["top_k"] = kwargs.get("top_k", 1)
         else:
@@ -384,7 +394,7 @@ class GeminiProvider(BaseLLMProvider):
 
         # Seed (opcional — fixa seed do sampler quando SDK suporta).
         seed = kwargs.get("seed")
-        if seed is not None:
+        if seed is not None and not padrao_do_modelo:
             try:
                 # SDK pode aceitar direto em GenerateContentConfig OR rejeitar.
                 config_params["seed"] = seed
@@ -402,7 +412,7 @@ class GeminiProvider(BaseLLMProvider):
         self,
         prompt: str,
         model: Optional[str] = None,
-        temperature: float = 0.1,
+        temperature: Optional[float] = 0.1,
         max_tokens: int = 16384,
         response_schema: Optional[Type] = None,
         **kwargs,
@@ -413,7 +423,8 @@ class GeminiProvider(BaseLLMProvider):
         Args:
             prompt: The text prompt.
             model: Model to use (defaults to DEFAULT_MODEL).
-            temperature: Sampling temperature.
+            temperature: Sampling temperature. `None` = padrão do modelo
+                (a chamada não leva temperature, top_p, top_k nem seed).
             max_tokens: Maximum output tokens.
             response_schema: Pydantic model for structured JSON output.
             **kwargs: Additional parameters.
@@ -467,7 +478,7 @@ class GeminiProvider(BaseLLMProvider):
         self,
         prompt: str,
         model: Optional[str] = None,
-        temperature: float = 0.1,
+        temperature: Optional[float] = 0.1,
         max_tokens: int = 16384,
         response_schema: Optional[Type] = None,
         **kwargs,
@@ -478,7 +489,8 @@ class GeminiProvider(BaseLLMProvider):
         Args:
             prompt: The text prompt.
             model: Model to use.
-            temperature: Sampling temperature.
+            temperature: Sampling temperature. `None` = padrão do modelo
+                (a chamada não leva temperature, top_p, top_k nem seed).
             max_tokens: Maximum output tokens.
             response_schema: Pydantic model for structured JSON output.
             **kwargs: Additional parameters. Reconhecidos p/ determinismo:

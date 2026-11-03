@@ -533,12 +533,13 @@ def test_injection_na_ficha_e_nos_alertas_nao_escapa():
     assert p.count(_FECHA_F) == 1
 
 
-def test_agente_usa_temperatura_zero_json_e_modelo_do_papel(monkeypatch):
+def test_agente_usa_temperatura_padrao_json_e_modelo_do_papel(monkeypatch):
     from garantis_shared.llm_models import model_for
     prov = _install(monkeypatch, _FakeProvider(_saida()))
     _rodar(auditar_ficha(_req()))
     kw = prov.chamadas[0]
-    assert kw["temperature"] == 0.0
+    assert kw["temperature"] is None  # R13: padrao do modelo
+    assert "seed" not in kw
     assert kw["response_mime_type"] == "application/json"
     assert kw["model"] == model_for("ficha_auditoria_texto")
 

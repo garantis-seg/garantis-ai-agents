@@ -59,7 +59,6 @@ from pydantic import ValidationError
 
 from ...providers import create_provider
 from ...utils.llm_json import parse_llm_json
-from .._utils.llm_seed import seed_for
 from .._utils.prompt_identity import versao_com_identidade
 from . import auditor as auditor_mod
 from . import dicionario_origem
@@ -176,9 +175,11 @@ async def qualificar_conexo(
                     budget_por_item=budget.max_por_item,
                 ),
                 model=DEFAULT_MODEL,
-                temperature=0.0,
+                # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+                # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+                # faz o provider omitir temperature, top_p, top_k e seed.
+                temperature=None,
                 max_tokens=2048,
-                seed=seed_for("qualificador_conexo", request.conexo_id, "A", turno),
             )
             chamadas_llm += 1
             custo += _custo(resp)
@@ -239,10 +240,12 @@ async def qualificar_conexo(
                 erros_anteriores=erros or None,
             ),
             model=DEFAULT_MODEL,
-            temperature=0.0,
+            # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+            # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+            # faz o provider omitir temperature, top_p, top_k e seed.
+            temperature=None,
             max_tokens=16384,
             response_mime_type="application/json",
-            seed=seed_for("qualificador_conexo", request.conexo_id, "B", rodada),
         )
         chamadas_llm += 1
         custo += _custo(resp)

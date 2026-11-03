@@ -819,14 +819,13 @@ async def navegar(
     autos: Autos,
     budget: BudgetNavegacao,
     prompt_de_decisao: PromptDeDecisao,
-    seed: Callable[[int], int],
     leitor_perguntar: Optional[Leitor] = None,
     leitor_resumir: Optional[Leitor] = None,
     rotulo: str = "FICHA",
 ) -> ResultadoNavegacao:
     """A fase A. Sem documento legível no índice, ela não chama o LLM.
 
-    `seed(turno)` dá o seed de cada turno (`_utils.llm_seed.seed_for`).
+    A chamada vai sem temperature e sem seed: parâmetros no padrão do modelo.
     """
     out = ResultadoNavegacao()
     if not autos.legiveis:
@@ -848,9 +847,11 @@ async def navegar(
                 out.achados, menu(breaker), budget.restante(), budget.max_por_doc,
             ),
             model=model,
-            temperature=0.0,
+            # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+            # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+            # faz o provider omitir temperature, top_p, top_k e seed.
+            temperature=None,
             max_tokens=2048,
-            seed=seed(turno),
         )
         out.chamadas_llm += 1
         out.custo_usd += custo_da_resposta(resp)

@@ -249,7 +249,10 @@ async def ocr_paginas(
             # SEM response_schema: transcrição literal não é decisão estruturada,
             # e o JSON obrigaria a escapar o texto que a citação referencia.
             response_schema=None,
-            temperature=0.0,
+            # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+            # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+            # faz o provider omitir temperature, top_p, top_k e seed.
+            temperature=None,
             thinking_budget=0,
         )
     except Exception as exc:
