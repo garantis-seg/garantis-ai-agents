@@ -182,8 +182,16 @@ class Prova(_Fechado):
 
 
 class Origem(_Fechado):
+    """O ato que abriu o caso.
+
+    `prova` é `Optional` no schema. No modo documentos, a regra dura do código
+    exige a prova com `tipo` não nulo, e o trecho tem de ter uma expressão do
+    dicionário fechado daquele tipo (`dicionario_origem`).
+    """
+
     tipo: Optional[TipoOrigem] = None
     data: Optional[DataISO] = None
+    prova: Optional[Prova] = None
 
 
 class Decisao(_Fechado):
