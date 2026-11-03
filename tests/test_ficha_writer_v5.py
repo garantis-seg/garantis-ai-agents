@@ -1207,3 +1207,27 @@ def test_13d_mesmo_erro_no_mesmo_slot_marca_repeticao():
     marcado = v5_mod._com_repeticao(e, {"merito.p2": e.erro})
     assert marcado.erro.startswith(e.erro)
     assert "mesma resposta" in marcado.erro
+
+
+def test_13e_no_laco_a_repeticao_so_marca_da_rodada_2_em_diante(monkeypatch):
+    """IRB, rodada 6: o mesmo texto longo 3 vezes. A rodada 1 reprova sem o aviso de
+    repetição. As rodadas 2 e 3 reprovam com o aviso, e o prompt do retry o leva."""
+    longo = _emissao(campos={**_CAMPOS, "merito.p1": "x" * 601})
+    prov = _Prov(_leituras(), [longo, longo, longo])
+    r = _rodar(prov, monkeypatch)
+    assert r.success is False and r.rodadas == 3
+    erros = [[e for e in d.erros if e.campo == "merito.p1"] for d in r.rodadas_detalhe]
+    assert all(len(x) == 1 for x in erros)
+    assert erros[0][0].erro.startswith("merito.p1 > 600 chars (tem 601).")
+    assert "mesma resposta" not in erros[0][0].erro
+    assert "mesma resposta" in erros[1][0].erro
+    assert "mesma resposta" in erros[2][0].erro
+    assert "mesma resposta" in prov.prompts("B")[2]
+    assert "mesma resposta" not in prov.prompts("B")[1]
+
+
+def test_13f_slot_vazio_nao_recebe_o_aviso_de_repeticao():
+    from src.agents.ficha_writer.schemas import ErroDeCampo
+
+    e = ErroDeCampo(campo="merito.p1", erro="merito.p1: slot obrigatório vazio")
+    assert v5_mod._com_repeticao(e, {"merito.p1": e.erro}) is e

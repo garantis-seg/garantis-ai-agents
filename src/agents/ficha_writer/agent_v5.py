@@ -408,6 +408,7 @@ async def write_v5(
                            rodada, e, raw[:200])
             erros = [ErroDeCampo(campo=CAMPO_SAIDA, erro=f"parse do JSON do LLM falhou: {e}")]
             erros_retry = erros
+            brutos = {}  # sem saída válida, não há repetição a detectar na próxima
             detalhe.append(RodadaDetalhe(rodada=rodada, erros=erros, slots_pedidos=pedidos))
             continue
         campos_llm = parsed.get("campos") if isinstance(parsed, dict) else None
@@ -444,9 +445,10 @@ async def write_v5(
         erros_campos = [_com_repeticao(e, brutos) for e in erros_campos]
         brutos = brutos_da_rodada
         erros_campos = [_com_motivo_anterior(e, rodada, motivos) for e in erros_campos]
-        for e in erros_campos:
-            if not any(g in e.erro for g in _ERROS_DE_SLOT_VAZIO):
-                motivos[e.campo] = e.erro
+        for campo, erro_bruto in brutos_da_rodada.items():
+            # O motivo guardado é o bruto: sem o sufixo de repetição (lente, 03/11/2026).
+            if not any(g in erro_bruto for g in _ERROS_DE_SLOT_VAZIO):
+                motivos[campo] = erro_bruto
         ok_alertas, erros_alertas = validar_alertas(parsed, pendentes_alertas)
         aprovados.update(ok)
         respondidos.update({a.codigo: a for a in ok_alertas})
