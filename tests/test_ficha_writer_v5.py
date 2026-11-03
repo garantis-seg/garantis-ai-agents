@@ -1155,3 +1155,79 @@ def test_12b_o_v4_aceita_a_resposta_sem_versao_e_sem_modo():
     assert r.versao is None and r.modo is None and r.rodadas_detalhe == []
     r4 = FichaWriteFieldsResponse(success=True, versao="ficha_writer_v4", modo="v4")
     assert r4.versao == "ficha_writer_v4" and r4.modo == "v4"
+
+
+# ── 13. Estouro de tamanho: alvo numérico e repetição (rodada 6 do IRB, 03/11/2026) ──
+
+
+def _slot_texto(nome: str, maximo: int):
+    from src.agents.ficha_writer.livro import SlotResolvido
+
+    return SlotResolvido(nome=nome, max=maximo, obrigatorio=True, guidance="",
+                         exemplos=[], proibicoes=[])
+
+
+def test_13a_estouro_da_um_alvo_abaixo_do_limite_e_quantos_cortar():
+    from src.agents.ficha_writer.validacao import validar_campos
+
+    texto = "x" * 253
+    ok, erros = validar_campos({"campos": {"ultima_decisao.texto": texto}},
+                               [_slot_texto("ultima_decisao.texto", 250)], None)
+    assert not ok and len(erros) == 1
+    e = erros[0].erro
+    # O prefixo é contrato com o `_ERRO_PARA_CAMPO` do shared.
+    assert e.startswith("ultima_decisao.texto > 250 chars (tem 253).")
+    assert "no máximo 225 caracteres" in e
+    assert "remova pelo menos 28 caracteres" in e
+
+
+def test_13b_alvo_tem_pelo_menos_10_a_menos_em_slot_curto():
+    from src.agents.ficha_writer.validacao import alvo_de_tamanho
+
+    assert alvo_de_tamanho(40) == 30
+    assert alvo_de_tamanho(250) == 225
+    assert alvo_de_tamanho(500) == 450
+
+
+def test_13c_espacos_repetidos_sao_compactados_antes_de_contar():
+    from src.agents.ficha_writer.validacao import validar_campos
+
+    ok, erros = validar_campos({"campos": {"observacao": "a  b\tc   d"}},
+                               [_slot_texto("observacao", 7)], None)
+    assert not erros
+    assert ok["observacao"] == "a b c d"
+
+
+def test_13d_mesmo_erro_no_mesmo_slot_marca_repeticao():
+    from src.agents.ficha_writer.schemas import ErroDeCampo
+
+    e = ErroDeCampo(campo="merito.p2", erro="merito.p2 > 400 chars (tem 410). X")
+    assert v5_mod._com_repeticao(e, {}) is e
+    assert v5_mod._com_repeticao(e, {"merito.p2": "outro erro"}) is e
+    marcado = v5_mod._com_repeticao(e, {"merito.p2": e.erro})
+    assert marcado.erro.startswith(e.erro)
+    assert "mesma resposta" in marcado.erro
+
+
+def test_13e_no_laco_a_repeticao_so_marca_da_rodada_2_em_diante(monkeypatch):
+    """IRB, rodada 6: o mesmo texto longo 3 vezes. A rodada 1 reprova sem o aviso de
+    repetição. As rodadas 2 e 3 reprovam com o aviso, e o prompt do retry o leva."""
+    longo = _emissao(campos={**_CAMPOS, "merito.p1": "x" * 601})
+    prov = _Prov(_leituras(), [longo, longo, longo])
+    r = _rodar(prov, monkeypatch)
+    assert r.success is False and r.rodadas == 3
+    erros = [[e for e in d.erros if e.campo == "merito.p1"] for d in r.rodadas_detalhe]
+    assert all(len(x) == 1 for x in erros)
+    assert erros[0][0].erro.startswith("merito.p1 > 600 chars (tem 601).")
+    assert "mesma resposta" not in erros[0][0].erro
+    assert "mesma resposta" in erros[1][0].erro
+    assert "mesma resposta" in erros[2][0].erro
+    assert "mesma resposta" in prov.prompts("B")[2]
+    assert "mesma resposta" not in prov.prompts("B")[1]
+
+
+def test_13f_slot_vazio_nao_recebe_o_aviso_de_repeticao():
+    from src.agents.ficha_writer.schemas import ErroDeCampo
+
+    e = ErroDeCampo(campo="merito.p1", erro="merito.p1: slot obrigatório vazio")
+    assert v5_mod._com_repeticao(e, {"merito.p1": e.erro}) is e
