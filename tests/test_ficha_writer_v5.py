@@ -1231,3 +1231,56 @@ def test_13f_slot_vazio_nao_recebe_o_aviso_de_repeticao():
 
     e = ErroDeCampo(campo="merito.p1", erro="merito.p1: slot obrigatório vazio")
     assert v5_mod._com_repeticao(e, {"merito.p1": e.erro}) is e
+
+
+# ── 14. A cronologia oficial do PA é um documento citável (rodada 8 do IRB, 03/11/2026) ──
+
+_ANDAMENTOS_META = {"andamentos_pa": {"fonte": "carf", "numero": "16327.721182/2019-21",
+                    "n_total": 2, "itens": [
+                        {"data": "2026-09-01", "indice": 28, "orgao": None,
+                         "descricao": "RESULTADO DE EXAME DE ADMISSIBILIDADE\nTipo de Recurso: "
+                                      "EMBARGOS DE DECLARAÇÃO\nResultado: NÃO ADMITIDO"},
+                        {"data": "2026-09-28", "indice": 31, "orgao": "1ªCÂMARA",
+                         "descricao": "INCLUSÃO DE RECURSO\nTipo de Recurso: RECURSO ESPECIAL DO "
+                                      "CONTRIBUINTE\nData de Entrada: 28/09/2026"}]}}
+
+
+def test_14a_os_andamentos_viram_um_documento_por_linha():
+    docs = ferr_mod.andamentos_como_documento(_ANDAMENTOS_META)
+    assert list(docs) == ["andamentos:16327721182201921"]
+    linhas = docs["andamentos:16327721182201921"].split("\n")
+    assert linhas[0] == ("01/09/2026: RESULTADO DE EXAME DE ADMISSIBILIDADE Tipo de Recurso: "
+                         "EMBARGOS DE DECLARAÇÃO Resultado: NÃO ADMITIDO")
+    assert linhas[1].endswith("Data de Entrada: 28/09/2026 (1ªCÂMARA)")
+    assert ferr_mod.andamentos_como_documento({}) == {}
+    assert ferr_mod.andamentos_como_documento({"andamentos_pa": {"itens": []}}) == {}
+    assert ferr_mod.andamentos_como_documento(None) == {}
+
+
+def test_14b_o_documento_de_andamentos_e_citavel_e_o_trecho_confere():
+    from src.agents.ficha_writer.schemas import Nucleo
+
+    n = Nucleo.model_validate({**_nucleo(), "metadados": _ANDAMENTOS_META})
+    autos = ferr_mod.Autos(n, [])
+    assert "andamentos:16327721182201921" in autos.citaveis()
+    ok = autos.verificar("andamentos:16327721182201921", [],
+                         "INCLUSÃO DE RECURSO Tipo de Recurso: RECURSO ESPECIAL DO CONTRIBUINTE "
+                         "Data de Entrada: 28/09/2026")
+    assert ok.erro is None
+    # O mesmo trecho no acórdão reprova: o andamento não está lá (rodada 8 do IRB).
+    assert autos.verificar("carf:acordao.pdf", [], "INCLUSÃO DE RECURSO Tipo de Recurso: "
+                           "RECURSO ESPECIAL DO CONTRIBUINTE").erro
+
+
+def test_14c_o_prompt_mostra_os_andamentos_como_documento_e_nao_nos_metadados():
+    from src.agents.ficha_writer.schemas import Nucleo
+
+    n = Nucleo.model_validate({**_nucleo(), "metadados": {**_ANDAMENTOS_META,
+                                                          "conexo_id": 1481420}})
+    out = ferr_mod.nucleo_legivel(n)
+    ids = [d["doc_id"] for d in out["documentos"]]
+    assert ids[-1] == "andamentos:16327721182201921"
+    assert out["documentos"][-1]["papel"] == "cronologia_oficial"
+    assert not any(linha.startswith("andamentos_pa") for linha in out["metadados"])
+    assert "conexo_id: 1481420" in out["metadados"]
+

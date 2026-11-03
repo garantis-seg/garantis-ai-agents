@@ -217,7 +217,9 @@ def _bloco_regras_trilha() -> str:
 1. Todo slot de mérito (merito.p1, merito.p2), ultima_decisao.texto, descricao_infracao e
    todo bullet com texto tem PELO MENOS UMA entrada em "trilha_leitura".
 2. `doc_id` é um item da lista DOCUMENTOS QUE VOCÊ PODE CITAR: um documento do NÚCLEO ou
-   um documento do ÍNDICE que você ABRIU com uma ferramenta.
+   um documento do ÍNDICE que você ABRIU com uma ferramenta. Fato de andamento (recurso
+   incluído, exame de admissibilidade, expedição, sorteio): cite o documento
+   `andamentos:<nº do PA>` do núcleo, a cronologia oficial. O acórdão não traz esses fatos.
 3. `trecho_apoio` é cópia LITERAL do documento. Copie uma frase curta, até
    {MAX_TRECHO_APOIO} caracteres: o código corta o resto. Use "..." para juntar 2 pedaços do
    mesmo documento. Não parafraseie.

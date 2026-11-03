@@ -433,6 +433,42 @@ def metadados_legiveis(meta: Any, prefixo: str = "", prof: int = 0) -> list[str]
     return linhas
 
 
+#: Prefixo do documento sintético da cronologia oficial do PA (03/11/2026).
+PREFIXO_ANDAMENTOS = "andamentos:"
+
+
+def _ddmmaaaa(data: Any) -> str:
+    """`2026-09-28` vira `28/09/2026`. Outra forma passa como veio."""
+    m = re.fullmatch(r"(\d{4})-(\d{2})-(\d{2})", str(data or "").strip())
+    return f"{m.group(3)}/{m.group(2)}/{m.group(1)}" if m else str(data or "").strip()
+
+
+def andamentos_como_documento(metadados: Any) -> dict[str, str]:
+    """`nucleo.metadados.andamentos_pa.itens` vira UM documento citável, `andamentos:<n>`.
+
+    Rodada 8 do IRB 1481420 (03/11/2026): o modelo citou um andamento ("INCLUSÃO DE
+    RECURSO ... 28/09/2026") com o doc_id do acórdão, porque a trilha só aceita doc_id e
+    os andamentos não tinham um. O trecho não estava no acórdão: 9 rodadas perdidas.
+    Agora a cronologia oficial é um documento do núcleo: entra nos citáveis, no texto de
+    fonte (regra 11) e na conferência do trecho. Uma linha por andamento, na ordem do
+    shared: `DD/MM/AAAA: <descrição numa linha> (<órgão>)`. Vazio quando não há itens.
+    """
+    pa = (metadados or {}).get("andamentos_pa") if isinstance(metadados, dict) else None
+    if not isinstance(pa, dict):
+        return {}
+    itens = [i for i in (pa.get("itens") or [])
+             if isinstance(i, dict) and str(i.get("descricao") or "").strip()]
+    if not itens:
+        return {}
+    numero = re.sub(r"\D", "", str(pa.get("numero") or "")) or "pa"
+    linhas = []
+    for i in itens:
+        desc = " ".join(str(i["descricao"]).split())
+        orgao = f" ({' '.join(str(i['orgao']).split())})" if i.get("orgao") else ""
+        linhas.append(f"{_ddmmaaaa(i.get('data'))}: {desc}{orgao}".strip(": "))
+    return {f"{PREFIXO_ANDAMENTOS}{numero}": "\n".join(linhas)}
+
+
 def nucleo_legivel(nucleo: Nucleo) -> dict[str, Any]:
     """O núcleo do prompt: uma seção por item.
 
@@ -446,14 +482,19 @@ def nucleo_legivel(nucleo: Nucleo) -> dict[str, Any]:
     docs = [d.model_dump(include={"doc_id", "nome", "tipo", "papel", "processo", "data",
                                   "marca", "texto"}, exclude_none=True)
             for d in nucleo.documentos()]
+    for doc_id, texto in andamentos_como_documento(nucleo.metadados).items():
+        docs.append({"doc_id": doc_id, "tipo": "andamentos", "papel": "cronologia_oficial",
+                     "nome": "Andamentos do PA (fonte oficial do tribunal)", "texto": texto})
     if docs:
         out["documentos"] = docs
     cdas = cdas_legiveis(nucleo.cdas)
     if cdas:
         out["cdas"] = cdas
     if nucleo.metadados:
+        # `andamentos_pa` já é o documento `andamentos:<n>` acima (03/11/2026).
         meta = {k: v for k, v in nucleo.metadados.items()
-                if not (k == "premissas_v3" and nucleo.premissas_v3 is not None)}
+                if not (k == "premissas_v3" and nucleo.premissas_v3 is not None)
+                and k != "andamentos_pa"}
         out["metadados"] = metadados_legiveis(meta)
     if nucleo.premissas_v3 is not None:
         out["premissas_v3"] = nucleo.premissas_v3
@@ -473,6 +514,8 @@ class Autos:
 
         self.nucleo = nucleo
         self.textos_nucleo: dict[str, str] = {d.doc_id: d.texto for d in nucleo.documentos()}
+        # A cronologia oficial do PA é citável como documento do núcleo (03/11/2026).
+        self.textos_nucleo.update(andamentos_como_documento(nucleo.metadados))
         self.indice: dict[str, ItemIndice] = {d.doc_id: d for d in indice}
         self.legiveis: dict[str, Any] = {}
         self.lidos: set[str] = set()
