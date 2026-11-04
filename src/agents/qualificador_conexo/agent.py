@@ -175,7 +175,7 @@ async def qualificar_conexo(
                     budget_por_item=budget.max_por_item,
                 ),
                 model=DEFAULT_MODEL,
-                # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+                # R13: parâmetros no padrão do modelo, conforme o Google
                 # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
                 # faz o provider omitir temperature, top_p, top_k e seed.
                 temperature=None,
@@ -240,7 +240,7 @@ async def qualificar_conexo(
                 erros_anteriores=erros or None,
             ),
             model=DEFAULT_MODEL,
-            # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+            # R13: parâmetros no padrão do modelo, conforme o Google
             # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
             # faz o provider omitir temperature, top_p, top_k e seed.
             temperature=None,

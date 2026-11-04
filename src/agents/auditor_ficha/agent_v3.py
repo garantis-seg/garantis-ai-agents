@@ -471,7 +471,7 @@ async def auditar_ficha_v3(
     erros: list[dict[str, Any]] = []
     saida: Optional[SaidaAuditorV3] = None
     for rodada in range(1, MAX_RODADAS + 1):
-        # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+        # R13: parâmetros no padrão do modelo, conforme o Google
         # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
         # faz o provider omitir temperature, top_p, top_k e seed.
         resp = await llm.agenerate(

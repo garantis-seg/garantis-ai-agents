@@ -284,7 +284,7 @@ async def auditar_ficha(
         response: LLMResponse = await llm_provider.agenerate(
             prompt=prompt,
             model=model,
-            # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+            # R13: parâmetros no padrão do modelo, conforme o Google
             # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
             # faz o provider omitir temperature, top_p, top_k e seed.
             temperature=None,

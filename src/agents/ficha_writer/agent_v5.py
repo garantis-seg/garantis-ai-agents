@@ -387,7 +387,7 @@ async def write_v5(
             achados=nav.achados, erros_retry=erros_retry, aprovados=aprovados,
             docs_citaveis=autos.citaveis(),
         )
-        # Alfredo, 03/11/2026, R13: parâmetros no padrão do modelo, conforme o Google
+        # R13: parâmetros no padrão do modelo, conforme o Google
         # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
         # faz o provider omitir temperature, top_p, top_k e seed.
         resp = await llm.agenerate(
