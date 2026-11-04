@@ -1,0 +1,21 @@
+{
+  "_doc": "Os casos de cita_dado. A S5 (validadores/apendice_a.py, A61) e o writer (garantis-ai-agents, validacao.cita_dado, regra 15) rodam a MESMA lista. A copia identica mora no ai-agents em tests/fixtures/cita_dado_casos.json. Mudou um caso: mude os 2 arquivos no mesmo par de PRs.",
+  "casos": [
+    {"texto": "em 17/06/2026", "datas": ["17/06/2026"], "numeros": [], "pa": null, "esperado": true},
+    {"texto": "em 06/2026", "datas": ["17/06/2026"], "numeros": [], "pa": null, "esperado": true},
+    {"texto": "sem dado", "datas": ["17/06/2026"], "numeros": ["3102-004.203"], "pa": null, "esperado": false},
+    {"texto": "acórdão 3102-004.203", "datas": [], "numeros": ["3102-004.203"], "pa": null, "esperado": true},
+    {"texto": "Lei 14.689/2023 — a multa pode cair.", "datas": [], "numeros": ["14.689/2023"], "pa": null, "esperado": true},
+    {"texto": "o acórdão 004.203 manteve a multa", "datas": [], "numeros": ["3102-004.203"], "pa": null, "esperado": true},
+    {"texto": "o processo 4203 manteve a multa", "datas": [], "numeros": ["3102-004.203"], "pa": null, "esperado": false},
+    {"texto": "CDA 80 6 10 010169-09 parcelada", "datas": [], "numeros": ["80 6 10 010169-09"], "pa": null, "esperado": true},
+    {"texto": "Acórdão de 2026 manteve a multa — o valor pode cair.", "datas": ["17/06/2026"], "numeros": ["3102-004.203", "14.689/2023", "16327.721182/2019-21"], "pa": "16327.721182/2019-21", "esperado": false},
+    {"texto": "Em 2019 houve autuação.", "datas": [], "numeros": ["16327.721182/2019-21"], "pa": "16327.721182/2019-21", "esperado": false},
+    {"texto": "O PA 16327.721182/2019-21 segue no CARF.", "datas": [], "numeros": ["16327.721182/2019-21"], "pa": "16327.721182/2019-21", "esperado": false},
+    {"texto": "O PA 16327.720083/2022-28 discute a mesma tese.", "datas": [], "numeros": ["16327.720083/2022-28", "16327.721182/2019-21"], "pa": "16327.721182/2019-21", "esperado": true},
+    {"texto": "qualquer data 01/01/2026", "datas": [], "numeros": [], "pa": null, "esperado": true},
+    {"texto": "um número 123456 sem data", "datas": [], "numeros": [], "pa": null, "esperado": true},
+    {"texto": "só o ano 2026", "datas": [], "numeros": [], "pa": null, "esperado": false},
+    {"texto": "sem nada", "datas": [], "numeros": [], "pa": null, "esperado": false}
+  ]
+}

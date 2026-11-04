@@ -1,0 +1,18 @@
+{
+  "_doc": "Os limites do schema Candidata do writer (garantis-ai-agents, src/agents/ficha_writer/schemas.py). O writer recusa a candidata fora deles (HTTP 422, extra=forbid), e a ficha cai. A copia identica mora no ai-agents em tests/fixtures/contrato_candidata_shared.json, e um teste de la compara a copia com o schema. Mudou o schema: mude os 2 arquivos no mesmo par de PRs.",
+  "extra_proibido": true,
+  "obrigatorios": ["codigo", "fato", "slot"],
+  "campos": {
+    "codigo": {"tipo": "string", "min": 1, "max": 64, "padrao": "^[a-z0-9_]+$"},
+    "slot": {"tipo": "string", "enum": ["alerta", "observacao"]},
+    "deteccao": {"tipo": "string", "enum": ["candidato", "codigo"]},
+    "titulo": {"tipo": "string|null", "max": 80},
+    "molde": {"tipo": "string", "max": 600},
+    "fato": {"tipo": "string", "min": 1, "max": 1200},
+    "datas": {"tipo": "lista_string"},
+    "numeros": {"tipo": "lista_string"},
+    "doc_ids": {"tipo": "lista_string"},
+    "fontes": {"tipo": "lista_string"},
+    "max_chars": {"tipo": "int", "gt": 0}
+  }
+}

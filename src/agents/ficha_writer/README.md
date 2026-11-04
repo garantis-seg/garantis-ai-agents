@@ -371,6 +371,56 @@ Fonte: o diagnóstico da ficha Claro (23/10/2026), achados 2 e 4.
 | O bullet 2 da renovação lê o bloco `renovacao`. Sem o bloco, o aviso `renovacao_sem_bloco` | O texto não pode inventar corretor |
 | `motivos_nao_aplicaveis` e `avisos` na saída | O caller sabe por que um slot não voltou e o que faltou no request |
 
+## As candidatas de alerta e observação (03/11/2026)
+
+Decisão do Alfredo: o código decide SE a ficha leva `alerta` ou `observacao`. O
+redator decide COMO, com a prova. O shared emite as candidatas pelos 15 gatilhos
+da lista fechada (`garantis_shared.fichas.recomendacoes`) e as manda em
+`recomendacoes_candidatas`.
+
+| Request | Regime |
+|---|---|
+| `recomendacoes_candidatas` ausente | Antigo. O shared de hoje. Nada muda no prompt nem na saída |
+| `recomendacoes_candidatas` presente | Novo. `alerta.texto` e `observacao` só nascem para uma candidata do slot, no molde, com 1 data ou 1 número da candidata. Cada candidata de um slot pedido recebe uma resposta |
+
+O shared manda a chave só com 1 candidata ou mais, e só com as candidatas dos
+slots pedidos na rodada. A candidata de um slot que o request não pede (a volta
+do S6) fica fora do prompt e não exige resposta (`agent.candidatas_pedidas`).
+
+Cada candidata leva `{codigo, slot, deteccao, titulo, molde, fato, datas,
+numeros, doc_ids, fontes, max_chars}`. `deteccao = codigo`: o código já provou
+o fato. `deteccao = candidato`: o modelo prova nos autos ou refuta.
+
+O prompt ganha o bloco `<recomendacoes>` no fim, com as outras instruções
+(`prompts_v4._bloco_recomendacoes`, que o v5 reusa). A saída ganha
+`recomendacoes_respondidas`: `[{codigo, resposta: redigida|refutada, motivo?,
+prova?}]`.
+
+As regras 13 a 17 de `validacao.validar_recomendacoes` valem só no regime novo:
+
+13. Cada candidata recebe uma resposta. `refutada` exige motivo. O erro volta
+    no slot da candidata, e o retry reescreve só esse slot.
+14. Slot com texto exige uma candidata `redigida` do slot. Uma candidata
+    `redigida` exige o texto do slot.
+15. O texto cita 1 das datas ou 1 dos números da candidata. O número do
+    próprio PA não conta, e o número vale inteiro ou por um trecho de 6
+    dígitos ou mais. O erro traz a lista. A A61 do shared tem a mesma regra:
+    os 2 repos rodam `tests/fixtures/cita_dado_casos.json`.
+16. A observação não pede ação (confira, confirme, verifique, solicite).
+17. O texto genérico "ainda dispõe de estratégias jurídicas" (e "dispõem")
+    reprova em todo slot.
+
+Regra do dono: nenhum alerta trava a ficha. Esgotadas as rodadas com erro só
+nos 2 slots (ou na lista de respostas), o agente responde `success=true` sem o
+slot, com o aviso `recomendacoes_descartadas:<campo>` (`agent.soltar_alertas`).
+
+O shared lê o schema `Candidata` por uma cópia:
+`tests/fixtures/contrato_candidata_shared.json`. Um teste compara a cópia com o
+schema. Mudou o schema: mude a cópia aqui e a do shared no mesmo par de PRs.
+
+Os números das candidatas entram nos processos citáveis (regra 6). Os testes
+estão em `tests/test_ficha_writer_recomendacoes.py`.
+
 ## v5 (agente): o redator lê os autos antes de escrever
 
 Card 869ffv22t. Decisão do Alfredo de 23/10/2026: "núcleo obrigatório + índice
