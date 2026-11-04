@@ -324,7 +324,7 @@ class TrilhaItem(BaseModel):
     model_config = _FORBID
 
 
-# ── As candidatas de `alerta` e `observacao` (decisão do Alfredo, 03/11/2026) ──
+# ── As candidatas de `alerta` e `observacao` (decisão do Alfredo) ──────────
 #
 # O shared (`garantis_shared.fichas.recomendacoes`) decide SE a ficha leva um
 # alerta ou uma observação: os 15 gatilhos da lista fechada. O redator decide
@@ -548,5 +548,5 @@ class FichaWriteFieldsResponse(BaseModel):
     modo: Optional[str] = None
     #: v5: o protocolo da fase A e as contagens dele. Aditivo: o v4 e o v3 omitem.
     fase_a_metricas: Optional[FaseAMetricas] = None
-    #: Regime das candidatas (03/11/2026): uma resposta por candidata do request.
+    #: Regime das candidatas: uma resposta por candidata do request.
     recomendacoes_respondidas: list[RecomendacaoRespondida] = Field(default_factory=list)

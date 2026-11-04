@@ -77,7 +77,12 @@ from pydantic import ValidationError
 from ...providers import create_provider
 from ...utils.llm_json import parse_llm_json
 from .._utils.prompt_identity import versao_com_identidade
-from .agent import _resolve_campos_alvo, aplicar_recomendacoes
+from .agent import (
+    _resolve_campos_alvo,
+    aplicar_recomendacoes,
+    candidatas_pedidas,
+    soltar_alertas,
+)
 from .fase_a_nativa import DecisorNativo, fase_a_nativa_ligada
 from .ferramentas import Autos, BudgetNavegacao, cortar_trecho, custo_da_resposta, navegar
 from .livro import SlotResolvido, chave_livro, motivos_nao_aplicaveis, resolver_slots
@@ -289,7 +294,7 @@ def fontes_do_redator(request: FichaWriteFieldsRequest, autos: Autos) -> FontesD
         estruturados=[
             _fatos_fixos(request), [a.model_dump() for a in request.alertas],
             nucleo_dados, indice, list(request.processos_citaveis or []),
-            # As datas e os números das candidatas são fonte (03/11/2026).
+            # As datas e os números das candidatas são fonte.
             [c.model_dump() for c in request.recomendacoes_candidatas or []],
         ],
         pipeline=request.esqueleto.pipeline if request.esqueleto else [],
@@ -344,7 +349,7 @@ async def write_v5(
         "avisos": avisos_req, "versao": VERSAO, "modo": MODO,
     }
 
-    candidatas = request.recomendacoes_candidatas
+    candidatas = candidatas_pedidas(request, [s.nome for s in slots])
     if not slots and not request.alertas and not candidatas:
         return FichaWriteFieldsResponse(success=True, model=model, **base)
 
@@ -464,7 +469,7 @@ async def write_v5(
             del ok[slot]
             trilha.pop(slot, None)
             erros_campos += e_slot
-        # Decisão do Alfredo (03/11/2026): alerta e observação só com candidata.
+        # Decisão do Alfredo: alerta e observação só com candidata.
         erros_campos += aplicar_recomendacoes(request, parsed, ok, aprovados,
                                               [s.nome for s in slots], respondidas_rec,
                                               com_erro=[e.campo for e in erros_campos])
@@ -500,6 +505,15 @@ async def write_v5(
         pendentes_alertas = [a for a in pendentes_alertas if a.codigo not in respondidos]
         erros_retry = erros
 
+    soltos = soltar_alertas(request, erros, aprovados, respondidas_rec)
+    if soltos is not None:
+        logger.warning("FICHA_WRITER_V5 slots de alerta soltos depois de %s rodadas: %s",
+                       rodada, soltos)
+        for campo in list(trilha):
+            if campo not in aprovados:
+                trilha.pop(campo, None)
+        avisos_codigo = [*avisos_codigo, *soltos]
+        erros = []
     if avisos_codigo:
         base["avisos"] = [*base["avisos"], *avisos_codigo]
     alertas_ordenados = [respondidos[a.codigo] for a in request.alertas if a.codigo in respondidos]

@@ -1,4 +1,4 @@
-"""As candidatas de `alerta` e `observacao` no redator (decisão do Alfredo, 03/11/2026).
+"""As candidatas de `alerta` e `observacao` no redator (decisão do Alfredo).
 
 O shared decide SE (os 15 gatilhos). O redator decide COMO, com a prova. Dois
 regimes no request: `recomendacoes_candidatas` AUSENTE (o shared de hoje, nada
@@ -190,8 +190,9 @@ def test_candidata_sem_resposta_reprova(monkeypatch):
     body = _req_v4([_CAND_ALERTA])
     ruim = _saida({"bullets[0]": _BULLET, "alerta.texto": _ALERTA_BOM, "observacao": ""}, [])
     r, prov = _roda_v4(monkeypatch, body, [ruim, ruim, ruim])
-    assert r.success is False
-    assert any("sem resposta" in e.erro for e in r.erros)
+    assert "sem resposta" in prov.prompts[1]
+    # Esgotado só no slot de alerta: o slot sai, e a ficha segue (regra do dono).
+    assert r.success is True and "alerta.texto" not in r.campos
 
 
 def test_refutada_exige_motivo_e_o_slot_fica_vazio(monkeypatch):
@@ -212,8 +213,8 @@ def test_redigida_com_slot_vazio_reprova(monkeypatch):
     ruim = _saida({"bullets[0]": _BULLET, "alerta.texto": "", "observacao": ""},
                   [{"codigo": "voto_qualidade_multa", "resposta": "redigida"}])
     r, prov = _roda_v4(monkeypatch, body, [ruim, ruim, ruim])
-    assert r.success is False
-    assert any("marcada redigida, mas o slot está vazio" in e.erro for e in r.erros)
+    assert "marcada redigida, mas o slot está vazio" in prov.prompts[1]
+    assert r.success is True and r.recomendacoes_respondidas == []
 
 
 def test_observacao_que_pede_acao_reprova(monkeypatch):

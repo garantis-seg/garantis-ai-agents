@@ -290,7 +290,7 @@ def build_prompt_escrita(
 ) -> str:
     """O turno de escrita. `slots` e `alertas` são os ALVO da rodada (no retry, só os
     que reprovaram). `docs_citaveis`: os doc_id que a trilha pode citar. `fence_token`
-    explícito só em teste. `candidatas` (03/11/2026): as candidatas de alerta e
+    explícito só em teste. `candidatas`: as candidatas de alerta e
     observação. `None` é o regime antigo, e o prompt não muda."""
     token = fence_token or gerar_fence_token()
     partes = [

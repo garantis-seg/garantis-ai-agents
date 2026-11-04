@@ -287,7 +287,7 @@ LIÇÕES VIVAS DESTA ETAPA:
 </regras_de_redacao>"""
 
 
-# ── As candidatas de alerta e observação (decisão do Alfredo, 03/11/2026) ──
+# ── As candidatas de alerta e observação (decisão do Alfredo) ──────────────
 
 
 def _bloco_recomendacoes(candidatas: list[Candidata]) -> str:
@@ -299,7 +299,7 @@ def _bloco_recomendacoes(candidatas: list[Candidata]) -> str:
     """
     linhas = [
         "<recomendacoes>",
-        "ALERTA E OBSERVAÇÃO SÓ COM CANDIDATA (regra do código, 03/11/2026).",
+        "ALERTA E OBSERVAÇÃO SÓ COM CANDIDATA (regra do código).",
         "O código conferiu o caso e emitiu as candidatas abaixo. Só elas podem virar texto em "
         '"alerta.texto" e em "observacao". Sem candidata para um slot, o slot fica "" (ou não '
         "é pedido).",
@@ -359,7 +359,7 @@ def build_prompt_v4(
     candidatas: Optional[list[Candidata]] = None,
 ) -> str:
     """Monta o prompt v4. `slots` e `alertas` são os ALVO da rodada (no retry, só os que
-    reprovaram). `fence_token` explícito só em teste. `candidatas` (03/11/2026): as
+    reprovaram). `fence_token` explícito só em teste. `candidatas`: as
     candidatas de alerta e observação; `None` é o regime antigo, e o prompt não muda."""
     token = fence_token or gerar_fence_token()
     partes = [
