@@ -19,18 +19,15 @@ from fastapi.testclient import TestClient
 from garantis_shared.llm_models import model_for
 from pydantic import ValidationError
 
-import src.agents.auditor_ficha.agent as agent_mod
 import src.agents.auditor_ficha.agent_v3 as v3_mod
 from src.agents.auditor_ficha import auditar_ficha
 from src.agents.auditor_ficha.agent_v3 import BUDGET_POR_FICHA, auditar_ficha_v3
-from src.agents.auditor_ficha.prompts import PROMPT_VERSION as PROMPT_V2
 from src.agents.auditor_ficha.schemas import (
     AuditarFichaRequest,
     FatoConferido,
     SaidaAuditorV3,
 )
 from src.api.routes.auditor_ficha import router
-from tests.test_auditor_ficha import _FakeProvider, _req
 from tests.test_ficha_writer_v5 import (
     _ACORDAO,
     _TRECHO_NUCLEO,
@@ -319,20 +316,19 @@ def test_6_budget_de_20_por_ficha(monkeypatch):
     assert r.success
 
 
-# ── (7) compatibilidade: o v2 segue igual com o request antigo ─────────────
+# ── (7) o corpo sem núcleo não é auditado ──────────────────────────────────
 
 
-def test_7_request_v2_segue_v2(monkeypatch):
-    prov = _FakeProvider(json.dumps({"balde1": [{"campo": "ultima_decisao.texto",
-                                                 "motivo": "data errada", "regra": "D-01"}]}))
-    monkeypatch.setattr(agent_mod, "create_provider", lambda p: prov)
-    r = asyncio.run(auditar_ficha(_req()))
-    assert r.success and r.prompt_version == PROMPT_V2
-    assert len(prov.chamadas) == 1
-    assert "response_mime_type" in prov.chamadas[0]
-    item = r.model_dump()["balde1"][0]
-    assert "prova" not in item and "sem_prova_no_doc" not in item
-    assert r.fatos_conferidos == [] and r.chamadas_ferramenta == 0
+def test_7_request_sem_nucleo_e_recusado(monkeypatch):
+    def sem_llm(*_a, **_k):
+        raise AssertionError("o corpo sem núcleo não chega ao LLM")
+
+    monkeypatch.setattr(v3_mod, "create_provider", sem_llm)
+    body = _body()
+    for k in ("nucleo", "indice_navegavel", "trilha_leitura"):
+        del body[k]
+    with pytest.raises(ValidationError, match="juntos"):
+        asyncio.run(auditar_ficha(body))
 
 
 def test_7b_saida_v2_com_prova_continua_recusada():
@@ -386,7 +382,7 @@ def test_contrato_nucleo_do_shared_1826_valida_sem_erro(caplog):
         req = AuditarFichaRequest(**_body(nucleo=real["nucleo"],
                                           indice_navegavel=real["indice_navegavel"]))
     assert "FICHA_NUCLEO_CHAVE_IGNORADA" not in caplog.text
-    assert req.modo_v3
+    assert req.nucleo is not None and req.indice_navegavel is not None
     assert req.nucleo.cdas.divida_ativa["data"] == "22/10/2026"
     assert req.nucleo.metadados["conexo_id"] == 1481420
     assert req.nucleo.documentos()[0].papel == "decisao_pa"

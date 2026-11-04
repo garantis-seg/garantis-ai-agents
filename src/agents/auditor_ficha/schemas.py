@@ -1,15 +1,13 @@
-"""Schemas do AUDITOR DE FICHA (S6), versao 2: dois baldes.
+"""Schemas do AUDITOR DE FICHA (S6): dois baldes, com prova de documento.
 
-Decisao de 22/10/2026 (plano "ficha por IA", Parte 3, S6): o auditor deixa de
-devolver so `reprovacoes` e passa a devolver o veredito do Livro da Ficha
-(§10.2, regra de dois baldes):
+O auditor devolve o veredito do Livro da Ficha (§10.2, regra de dois baldes):
 
     {"veredito": "aprovada" | "aprovada_com_correcoes" | "retida",
-     "balde1": [{campo, motivo, regra, correcao_sugerida}],
-     "balde2": [{campo, pendencia, grau, evidencia, recomendacao}],
+     "balde1": [{campo, motivo, regra, correcao_sugerida, prova | sem_prova_no_doc}],
+     "balde2": [{campo, pendencia, grau, evidencia, recomendacao, prova | sem_prova_no_doc}],
      "nao_confirmado": [str],
      "alertas_respondidos": [{codigo, resposta, motivo}],
-     "divergencias_gabarito": [{campo, ficha, gabarito, e_erro, motivo}]}
+     "fatos_conferidos": [{slot, doc_id, confere, motivo}]}
 
 - Balde 1: erro objetivo que o redator corrige. Volta ao S4.
 - Balde 2: juizo de substancia. NUNCA volta ao redator. Vai ao `meta` como
@@ -18,22 +16,14 @@ devolver so `reprovacoes` e passa a devolver o veredito do Livro da Ficha
 O CODIGO calcula o veredito (ver `agent.calcular_veredito`). O modelo nao
 decide o veredito.
 
-COMPATIBILIDADE COM O SHARED (22/10/2026). O cliente atual
-(`garantis_shared/fichas/auditor_ficha.py`) manda `{ficha_json, dossie: dict,
-tipo}` e le `aprovado`, `reprovacoes` e `pendencias`. Por isso:
+A ENTRADA exige `nucleo` e `indice_navegavel`: o auditor abre os autos e cada
+item dos baldes traz `prova: {doc_id, pagina, trecho}` ou `sem_prova_no_doc:
+true`. O corpo sem os 2 recebe 422 (ver `AuditarFichaRequest._contrato`). O
+auditor nunca recebe gabarito (Livro §10.2).
 
-1. A entrada aceita as 3 chaves antigas e as traduz (ver
-   `AuditarFichaRequest._aceitar_formato_v1`). Qualquer outra chave estranha
-   reprova (`extra="forbid"`).
-2. A saida mantem `aprovado` e `reprovacoes`, derivados:
-   `aprovado = veredito != "retida"` e `reprovacoes = balde1` (so as 3 chaves
-   do contrato). O shared migra para `veredito`/`balde1`/`balde2` na S6 do
-   worker. Depois disso, os campos derivados podem sair.
-
-V3 (23/10/2026, decisao do Alfredo). Com `nucleo`, `indice_navegavel` ou
-`trilha_leitura`, o auditor vira agente sobre os autos. Cada item dos baldes traz
-`prova: {doc_id, pagina, trecho}` ou `sem_prova_no_doc: true`. A saida ganha
-`fatos_conferidos`. O v3 nunca recebe gabarito (Livro §10.2).
+A SAIDA mantem `aprovado` e `reprovacoes`, derivados do veredito:
+`aprovado = veredito != "retida"` e `reprovacoes = balde1` (so as 3 chaves do
+contrato).
 """
 
 import json
@@ -91,7 +81,7 @@ class AvisoS5(BaseModel):
 
 
 class AuditarFichaRequest(BaseModel):
-    """Request do POST /ficha/auditar (v2).
+    """Request do POST /ficha/auditar.
 
     `ficha`, `dossie`, `gabarito`, `licoes` e os textos dos alertas sao DADO.
     O prompt cerca cada um com fence de boundary aleatorio (ver prompts.py).
@@ -125,8 +115,8 @@ class AuditarFichaRequest(BaseModel):
     gabarito: Optional[dict[str, Any]] = Field(
         default=None,
         description=(
-            "Opcional. A ficha local aprovada do mesmo processo. O auditor "
-            "compara FATOS com ela, nunca a redacao."
+            "Sempre recusado (Livro §10.2). O campo existe para o 422 dizer o "
+            "motivo, e nao so 'chave estranha'."
         ),
     )
     alertas: list[Alerta] = Field(
@@ -143,15 +133,15 @@ class AuditarFichaRequest(BaseModel):
     )
     nucleo: Optional[Nucleo] = Field(
         default=None,
-        description="v3: a leitura obrigatoria (o mesmo nucleo que o redator v5 leu).",
+        description="A leitura obrigatoria (o mesmo nucleo que o redator v5 leu).",
     )
     indice_navegavel: Optional[list[ItemIndice]] = Field(
         default=None,
-        description="v3: o que mais existe nos autos. O auditor abre com ferramenta.",
+        description="O que mais existe nos autos. O auditor abre com ferramenta.",
     )
     trilha_leitura: Optional[list[TrilhaItem]] = Field(
         default=None,
-        description="v3: o que o redator v5 leu para cada slot.",
+        description="O que o redator v5 leu para cada slot.",
     )
     provider: Optional[str] = None
     model: Optional[str] = Field(
@@ -162,53 +152,36 @@ class AuditarFichaRequest(BaseModel):
         ),
     )
 
-    @property
-    def modo_v3(self) -> bool:
-        return (self.nucleo is not None or self.indice_navegavel is not None
-                or self.trilha_leitura is not None)
-
     @model_validator(mode="after")
-    def _contrato_v3(self) -> "AuditarFichaRequest":
-        """Regras do v3 (23/10/2026).
+    def _contrato(self) -> "AuditarFichaRequest":
+        """O contrato da entrada.
 
-        - O v3 NUNCA recebe gabarito (Livro §10.2): o auditor que navega os autos
-          confere contra os documentos, nao contra a ficha local.
-        - O v3 exige `nucleo` e `indice_navegavel`. A `trilha_leitura` pode vir
-          vazia. Meio v3 e contrato quebrado (DECIDI-SOZINHO, classe A).
+        - O auditor NUNCA recebe gabarito (Livro §10.2): ele confere contra os
+          documentos, nao contra a ficha local.
+        - `nucleo` e `indice_navegavel` sao obrigatorios e vem juntos. A
+          `trilha_leitura` pode vir vazia. O corpo sem os 2 era o auditor sem
+          autos, e ele saiu: o 422 diz ao caller que o contrato quebrou.
         """
-        if not self.modo_v3:
-            return self
         if self.gabarito is not None:
-            raise ValueError("v3 nunca recebe gabarito (Livro §10.2)")
+            raise ValueError("o auditor nunca recebe gabarito (Livro §10.2)")
         if self.nucleo is None or self.indice_navegavel is None:
-            raise ValueError("v3 exige `nucleo` e `indice_navegavel` juntos")
+            raise ValueError("o auditor exige `nucleo` e `indice_navegavel` juntos")
         return self
 
     @model_validator(mode="before")
     @classmethod
-    def _aceitar_formato_v1(cls, data: Any) -> Any:
-        """Traduz o formato do cliente atual do shared para o formato v2.
+    def _normalizar_entrada(cls, data: Any) -> Any:
+        """Normaliza as formas que o caller manda.
 
-        Decisao de 22/10/2026: o shared manda `ficha_json`, `dossie` como dict
-        e `tipo`. Com `extra="forbid"` puro, a rota devolveria 422 para o
-        cliente de hoje. A traducao vale ate o shared migrar (S6 do worker).
-
-        Tambem aceita, por conveniencia do chamador:
-        - alerta como string simples. O codigo vira `AL1`, `AL2`, ...
+        - `dossie` como objeto (o shared manda o dossie congelado assim) vira
+          JSON em texto. `None` vira texto vazio.
+        - Alerta como string simples. O codigo vira `AL1`, `AL2`, ...
         - `relatorio_s5` como o objeto `Relatorio` serializado
           (`{"erros": [...], "avisos": [...]}`).
         """
         if not isinstance(data, dict):
             return data
         d = dict(data)
-        if "ficha_json" in d:
-            if "ficha" in d:
-                raise ValueError("mande `ficha` ou `ficha_json`, nunca as duas")
-            d["ficha"] = d.pop("ficha_json")
-        if "tipo" in d:
-            if "tipo_ficha" in d:
-                raise ValueError("mande `tipo_ficha` ou `tipo`, nunca as duas")
-            d["tipo_ficha"] = d.pop("tipo")
         dossie = d.get("dossie")
         if isinstance(dossie, (dict, list)):
             d["dossie"] = (
@@ -395,7 +368,7 @@ class Reprovacao(BaseModel):
 
 
 class AuditarFichaResponse(BaseModel):
-    """Response do POST /ficha/auditar: o envelope da casa + o veredito v2 +
+    """Response do POST /ficha/auditar: o envelope da casa + o veredito +
     os campos v1 derivados.
 
     Atencao: uma falha de chamada (`success=false`) NAO e aprovacao. Nesse
@@ -406,8 +379,8 @@ class AuditarFichaResponse(BaseModel):
 
     success: bool
     veredito: Optional[Veredito] = None
-    # SerializeAsAny: no v3 os itens levam `prova` e `sem_prova_no_doc`. No v2 a
-    # saida fica igual (os itens sao ItemBalde1/ItemBalde2).
+    # SerializeAsAny: os itens do v3 levam `prova` e `sem_prova_no_doc`, e a
+    # serializacao segue a classe real do item.
     balde1: list[SerializeAsAny[ItemBalde1]] = Field(default_factory=list)
     balde2: list[SerializeAsAny[ItemBalde2]] = Field(default_factory=list)
     nao_confirmado: list[str] = Field(default_factory=list)
