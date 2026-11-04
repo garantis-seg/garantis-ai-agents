@@ -144,9 +144,10 @@ async def auditar_ficha(
     provider: Optional[str] = None,
     model: Optional[str] = None,
 ) -> AuditarFichaResponse:
-    """Audita a ficha lendo os autos. Nunca levanta: toda falha vira `success=false`.
+    """Audita a ficha lendo os autos. A falha da auditoria vira `success=false`.
 
-    O schema ja recusou o corpo sem `nucleo` e `indice_navegavel` (422).
+    A rota valida o corpo antes e responde 422 sem `nucleo` ou `indice_navegavel`.
+    Um `dict` invalido passado direto aqui levanta `ValidationError`.
     """
     if isinstance(request, dict):
         request = AuditarFichaRequest(**request)

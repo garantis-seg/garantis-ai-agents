@@ -32,7 +32,12 @@ from tests.test_auditor_ficha_v3 import _body
 
 
 def _chaves_do_shared() -> tuple[str, ...]:
-    """`CHAVES_REQUEST_V2` do wheel pinado, lida por AST: o import do pacote puxa o dbos."""
+    """`CHAVES_REQUEST_V2` do wheel pinado, lida por AST: o import do pacote puxa o dbos.
+
+    Limite: o wheel e o do pin deste repo, nao o do worker que chama a S6. Uma chave nova
+    no shared so entra neste teste depois do bump do pin aqui. Sem o bump, o
+    `extra="forbid"` recusa a chave nova e toda S6 sai "nao auditada".
+    """
     spec = importlib.util.find_spec("garantis_shared")
     assert spec is not None and spec.origin
     fonte = pathlib.Path(spec.origin).parent / "fichas" / "auditor_ficha.py"
