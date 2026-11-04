@@ -45,13 +45,39 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable, Optional
 
 from .livro import SlotResolvido
-from .schemas import Alerta, AlertaRespondido, ErroDeCampo, FichaWriteFieldsRequest
+from .schemas import (
+    Alerta,
+    AlertaRespondido,
+    Candidata,
+    ErroDeCampo,
+    FichaWriteFieldsRequest,
+    RecomendacaoRespondida,
+)
 
 logger = logging.getLogger(__name__)
 
 #: Campo do erro que não é slot: o JSON inteiro ou a lista de alertas.
 CAMPO_SAIDA = "_saida"
 CAMPO_ALERTAS = "alertas_respondidos"
+#: A lista de respostas às candidatas de `alerta` e `observacao` (03/11/2026).
+CAMPO_RECOMENDACOES = "recomendacoes_respondidas"
+
+#: O slot da ficha de cada slot lógico das candidatas (o mesmo mapa do shared,
+#: `recomendacoes.CAMPO_DO_SLOT`).
+CAMPO_DO_SLOT = {"alerta": "alerta.texto", "observacao": "observacao"}
+
+#: A observação não pede ação (decisão do Alfredo, 03/11/2026). O mesmo padrão
+#: da A62 da S5.
+RE_ACAO_OBSERVACAO = re.compile(
+    r"\b(confira|confirme|verifique|solicite|exija|pe[çc]a|avalie|acompanhe|acione|providencie"
+    r"|recomenda-se|recomendamos|[ée] preciso|[ée] necess[áa]rio|dev(e|em|er[áa])\b"
+    r"|antes de (ofertar|emitir|seguir))",
+    re.I,
+)
+#: O texto genérico proibido (decisão do Alfredo, 03/11/2026).
+RE_TEXTO_GENERICO = re.compile(r"disp[õo]e de estrat[ée]gias", re.I)
+_RE_DATA_SLOT = re.compile(r"\b\d{2}/\d{2}/\d{4}\b|\b\d{2}/\d{4}\b")
+_RE_GRUPO_DIGITOS = re.compile(r"\d[\d./\s-]*\d")
 
 #: Igual a `_RE_A56` da S5 (garantis_shared/fichas/validadores/apendice_a.py).
 RE_CIFRA = re.compile(r"R\$\s*\d[\d.,]*(?:\s*(?:mil|milh[ãõ]o|milh[õo]es|bilh[ãõ]o|bilh[õo]es)\b)?")
@@ -100,6 +126,9 @@ def processos_citaveis(req: FichaWriteFieldsRequest) -> set[str]:
 def processos_citaveis_brutos(req: FichaWriteFieldsRequest) -> list[str]:
     """Os mesmos números, com a máscara original, para o prompt. Ordem estável."""
     nums: list[Any] = list(req.processos_citaveis or [])
+    # Os números das candidatas (03/11/2026): o código os emitiu, e o texto os cita.
+    for c in req.recomendacoes_candidatas or []:
+        nums.extend(c.numeros)
     e = req.esqueleto
     if e is not None:
         nums.append(e.processo_id)
@@ -643,6 +672,135 @@ class FontesDeFato:
         return erros
 
 
+# ── As candidatas de `alerta` e `observacao` (decisão do Alfredo, 03/11/2026) ──
+#
+# O shared decide SE (os 15 gatilhos). O redator decide COMO, com a prova. Estas
+# regras valem só no regime das candidatas (`request.recomendacoes_candidatas`
+# presente, mesmo vazia):
+#
+# 13. Cada candidata recebe UMA resposta `redigida|refutada`. `refutada` exige motivo.
+# 14. Slot `alerta.texto` ou `observacao` com texto exige uma candidata `redigida` do
+#     slot. Uma candidata `redigida` exige o texto do slot.
+# 15. O texto do slot cita 1 das datas (DD/MM/AAAA ou MM/AAAA) ou 1 dos números da
+#     candidata redigida. O erro traz a lista, como a regra 11.
+# 16. A observação não pede ação (verbo imperativo) e tem 1 frase.
+# 17. O texto genérico "ainda dispõe de estratégias jurídicas" reprova em todo slot.
+
+
+def cita_dado(texto: str, datas: Iterable[str], numeros: Iterable[str]) -> bool:
+    """O texto cita 1 das datas ou 1 dos números? Número por dígitos: um grupo de 4
+    dígitos ou mais do texto contido no número, ou o número contido no grupo. Sem
+    data e sem número na candidata: vale qualquer data ou grupo de 4 dígitos."""
+    datas = [str(d) for d in datas if d]
+    nums = [so_digitos(n) for n in numeros if so_digitos(n)]
+    grupos = [so_digitos(m.group(0)) for m in _RE_GRUPO_DIGITOS.finditer(texto or "")]
+    grupos = [g for g in grupos if len(g) >= 4]
+    if not datas and not nums:
+        return bool(_RE_DATA_SLOT.search(texto or "")) or bool(grupos)
+    if any(d in texto or d[3:] in texto for d in datas):
+        return True
+    return any(g in n or n in g for g in grupos for n in nums)
+
+
+def _erro_rec(campo: str, erro: str, valor: Any = None) -> ErroDeCampo:
+    return ErroDeCampo(campo=campo, erro=erro, valor_anterior=valor)
+
+
+def validar_recomendacoes(
+    parsed: Any, candidatas: list[Candidata], campos_ok: dict[str, str],
+    slots_pedidos: Iterable[str],
+    ja_respondidas: Optional[dict[str, RecomendacaoRespondida]] = None,
+) -> tuple[list[RecomendacaoRespondida], list[ErroDeCampo]]:
+    """`(respostas válidas, erros)` das regras 13 a 17. Só no regime das candidatas.
+
+    `campos_ok` são os slots APROVADOS no texto (os desta rodada e os das anteriores).
+    Um erro num slot tira o slot de `campos_ok` (o chamador faz isso): ele volta ao LLM
+    no retry. `ja_respondidas` são as respostas aceitas nas rodadas anteriores: o
+    modelo não precisa repeti-las.
+    """
+    pedidos = set(slots_pedidos)
+    brutas = parsed.get(CAMPO_RECOMENDACOES) if isinstance(parsed, dict) else None
+    if not isinstance(brutas, list):
+        brutas = []
+    por_codigo = {c.codigo: c for c in candidatas}
+    ok: dict[str, RecomendacaoRespondida] = {k: v for k, v in (ja_respondidas or {}).items()
+                                             if k in por_codigo}
+    erros: list[ErroDeCampo] = []
+    for b in brutas:
+        if not isinstance(b, dict):
+            continue
+        cod = str(b.get("codigo") or "")
+        if cod not in por_codigo:
+            logger.warning("FICHA_WRITER recomendação desconhecida descartada: %r", cod)
+            continue
+        resp = b.get("resposta")
+        motivo = str(b.get("motivo") or "").strip() or None
+        prova = str(b.get("prova") or "").strip() or None
+        if resp not in ("redigida", "refutada"):
+            erros.append(_erro_rec(CAMPO_RECOMENDACOES, (
+                f"candidata '{cod}': resposta {resp!r} fora de redigida|refutada"), b))
+            continue
+        if resp == "refutada" and not motivo:
+            erros.append(_erro_rec(CAMPO_RECOMENDACOES, (
+                f"candidata '{cod}': refutada sem motivo. Diga o que nos autos refuta o fato"), b))
+            continue
+        ok[cod] = RecomendacaoRespondida(codigo=cod, resposta=resp, motivo=motivo, prova=prova)
+    for c in candidatas:
+        if c.codigo not in ok and not any(e.valor_anterior is not None and isinstance(
+                e.valor_anterior, dict) and e.valor_anterior.get("codigo") == c.codigo for e in erros):
+            erros.append(_erro_rec(CAMPO_RECOMENDACOES, (
+                f"candidata '{c.codigo}' sem resposta: devolva redigida (e escreva o slot "
+                f"{CAMPO_DO_SLOT[c.slot]}) ou refutada (com o motivo)"), c.fato))
+
+    # Regras 14 a 16, por slot lógico.
+    for slot, campo in CAMPO_DO_SLOT.items():
+        texto = (campos_ok.get(campo) or "").strip()
+        do_slot = [c for c in candidatas if c.slot == slot]
+        redigidas = [c for c in do_slot if c.codigo in ok and ok[c.codigo].resposta == "redigida"]
+        if texto and not do_slot:
+            erros.append(_erro_rec(campo, (
+                f"{campo}: preenchido sem candidata do slot {slot}. O código não emitiu o "
+                'gatilho: devolva "" (decisão de 03/11/2026)'), texto))
+            continue
+        if texto and do_slot and not redigidas:
+            if all(c.codigo in ok for c in do_slot):
+                erros.append(_erro_rec(campo, (
+                    f"{campo}: toda candidata do slot {slot} foi refutada, mas o slot tem "
+                    'texto. Devolva "" ou marque uma candidata como redigida'), texto))
+            continue
+        if not texto and redigidas and campo in pedidos:
+            nomes = ", ".join(c.codigo for c in redigidas)
+            erros.append(_erro_rec(campo, (
+                f"{campo}: a candidata {nomes} foi marcada redigida, mas o slot está vazio. "
+                "Escreva o slot no molde ou refute a candidata"), texto))
+            continue
+        if not texto:
+            continue
+        datas = [d for c in redigidas for d in c.datas]
+        numeros = [n for c in redigidas for n in c.numeros]
+        if not cita_dado(texto, datas, numeros):
+            lista = ", ".join([*datas, *numeros]) or "uma data DD/MM/AAAA ou um número"
+            erros.append(_erro_rec(campo, (
+                f"{campo}: sem a data ou o número do gatilho. Cite 1 destes: {lista}. O "
+                'molde é "[fato, com data ou número] — [o que ele muda]" (decisão de 03/11/2026)'),
+                texto))
+            continue
+        if slot == "observacao":
+            m = RE_ACAO_OBSERVACAO.search(texto)
+            if m:
+                erros.append(_erro_rec(campo, (
+                    f'observacao: pede ação ("{m.group(0)}"). A observação informa um fato fora '
+                    "do processo principal, em 1 frase, e não pede ação"), texto))
+                continue
+    for campo, texto in campos_ok.items():
+        m = RE_TEXTO_GENERICO.search(texto or "")
+        if m:
+            erros.append(_erro_rec(campo, (
+                f'{campo}: texto genérico proibido ("{m.group(0)}"). Diga o fato, com a data ou '
+                "o número"), texto))
+    return [ok[c.codigo] for c in candidatas if c.codigo in ok], erros
+
+
 #: Os caminhos dos slots de texto na ficha (os mesmos de `prompts_v4._PATHS_SLOTS`).
 _PATHS_SLOTS_TEXTO: tuple[tuple[str, ...], ...] = (
     ("descricao_infracao",),
@@ -654,6 +812,7 @@ _PATHS_SLOTS_TEXTO: tuple[tuple[str, ...], ...] = (
     ("merito",),
     ("observacao",),
     ("divida_ativa", "detalhe"),
+    ("alerta", "texto"),
 )
 _CHAVES_FORA_DA_FONTE = ("metadata", "nota_interna", "alerta")
 
@@ -696,6 +855,8 @@ def sem_slots_de_texto(ficha: Any) -> Any:
 __all__ = [
     "AVISO_RENOVACAO_SEM_BLOCO",
     "CAMPO_ALERTAS",
+    "CAMPO_DO_SLOT",
+    "CAMPO_RECOMENDACOES",
     "CAMPO_SAIDA",
     "ERRO_ESGOTAMENTO_SEM_FONTE",
     "ERRO_FATO_SEM_FONTE",
@@ -708,6 +869,7 @@ __all__ = [
     "RE_VALOR_VARIAVEL",
     "avisos",
     "bloco_renovacao",
+    "cita_dado",
     "datas_no_texto",
     "ids_no_texto",
     "origem_valor",
@@ -721,5 +883,6 @@ __all__ = [
     "so_digitos",
     "validar_alertas",
     "validar_campos",
+    "validar_recomendacoes",
     "valores_no_texto",
 ]

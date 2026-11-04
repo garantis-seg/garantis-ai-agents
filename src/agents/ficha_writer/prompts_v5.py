@@ -36,12 +36,14 @@ from .prompts_v4 import (
     _bloco_alertas,
     _bloco_dossie,
     _bloco_fatos,
+    _bloco_recomendacoes,
     _bloco_regras,
     _bloco_retry,
     _bloco_slots,
     _persona,
+    _shape_recomendacoes,
 )
-from .schemas import MAX_TRECHO_APOIO, Alerta, ErroDeCampo, FichaWriteFieldsRequest
+from .schemas import MAX_TRECHO_APOIO, Alerta, Candidata, ErroDeCampo, FichaWriteFieldsRequest
 
 PROMPT_VERSION = "ficha_writer_v5"
 
@@ -207,22 +209,36 @@ Chamadas restantes na ficha: {budget_restante}. Teto por documento: {budget_por_
 # ── Fase B — escrita ────────────────────────────────────────────────────────
 
 
-def _bloco_formato_v5(slots: list[SlotResolvido], alertas: list[Alerta]) -> str:
+def _bloco_formato_v5(slots: list[SlotResolvido], alertas: list[Alerta],
+                      candidatas: Optional[list[Candidata]] = None) -> str:
     nomes = ", ".join(f"\"{_n(s.nome)}\"" for s in slots)
     campos = ",\n".join(f"    \"{_n(s.nome)}\": \"...\"" for s in slots)
     alrt = ",\n".join(
         f"    {{\"codigo\": \"{_n(a.codigo)}\", \"resposta\": \"acatado|refutado\", "
         "\"motivo\": \"...\"}" for a in alertas)
+    trilha = ("    {\"slot\": \"merito.p1\", \"doc_id\": \"<do núcleo ou do índice>\", "
+              "\"paginas\": [3], \"trecho_apoio\": \"<cópia literal>\"}")
+    if candidatas is None:
+        return (
+            "=== FORMATO DA SAÍDA (obrigatório) ===\n"
+            "Responda ESTRITAMENTE com UM objeto JSON com 3 chaves:\n"
+            f"- \"campos\": objeto PLANO slot → STRING simples, com EXATAMENTE estas chaves: {nomes}.\n"
+            "- \"alertas_respondidos\": lista com UMA entrada por alerta do código.\n"
+            "- \"trilha_leitura\": lista com o que você leu para cada slot que exige trilha.\n"
+            "Shape:\n{\n  \"campos\": {\n" + campos + "\n  },\n  \"alertas_respondidos\": [\n"
+            + alrt + "\n  ],\n  \"trilha_leitura\": [\n" + trilha + "\n  ]\n}"
+        )
     return (
         "=== FORMATO DA SAÍDA (obrigatório) ===\n"
-        "Responda ESTRITAMENTE com UM objeto JSON com 3 chaves:\n"
+        "Responda ESTRITAMENTE com UM objeto JSON com 4 chaves:\n"
         f"- \"campos\": objeto PLANO slot → STRING simples, com EXATAMENTE estas chaves: {nomes}.\n"
         "- \"alertas_respondidos\": lista com UMA entrada por alerta do código.\n"
         "- \"trilha_leitura\": lista com o que você leu para cada slot que exige trilha.\n"
+        "- \"recomendacoes_respondidas\": lista com UMA entrada por candidata de alerta ou "
+        "observação.\n"
         "Shape:\n{\n  \"campos\": {\n" + campos + "\n  },\n  \"alertas_respondidos\": [\n"
-        + alrt + "\n  ],\n  \"trilha_leitura\": [\n"
-        "    {\"slot\": \"merito.p1\", \"doc_id\": \"<do núcleo ou do índice>\", "
-        "\"paginas\": [3], \"trecho_apoio\": \"<cópia literal>\"}\n  ]\n}"
+        + alrt + "\n  ],\n  \"trilha_leitura\": [\n" + trilha + "\n  ],\n"
+        "  \"recomendacoes_respondidas\": [\n" + _shape_recomendacoes(candidatas) + "\n  ]\n}"
     )
 
 
@@ -270,10 +286,12 @@ def build_prompt_escrita(
     aprovados: Optional[dict[str, str]] = None,
     fence_token: Optional[str] = None,
     docs_citaveis: Optional[list[str]] = None,
+    candidatas: Optional[list[Candidata]] = None,
 ) -> str:
     """O turno de escrita. `slots` e `alertas` são os ALVO da rodada (no retry, só os
     que reprovaram). `docs_citaveis`: os doc_id que a trilha pode citar. `fence_token`
-    explícito só em teste."""
+    explícito só em teste. `candidatas` (03/11/2026): as candidatas de alerta e
+    observação. `None` é o regime antigo, e o prompt não muda."""
     token = fence_token or gerar_fence_token()
     partes = [
         _persona_v5(req, chave),
@@ -285,12 +303,14 @@ def build_prompt_escrita(
         _bloco_dossie(req.dossie, token),
         _bloco_slots(slots),
         _bloco_missao(slots),
-        _bloco_formato_v5(slots, alertas),
+        _bloco_formato_v5(slots, alertas, candidatas),
     ]
     if erros_retry:
         partes.append(_bloco_retry(erros_retry, aprovados or {}))
     if docs_citaveis is not None:
         partes.append(_bloco_docs_citaveis(docs_citaveis))
+    if candidatas is not None:
+        partes.append(_bloco_recomendacoes(candidatas))
     partes.append(_bloco_regras_trilha())
     partes.append(_bloco_regras(req.licoes))
     return "\n\n".join(partes)

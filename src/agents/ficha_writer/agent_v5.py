@@ -77,7 +77,7 @@ from pydantic import ValidationError
 from ...providers import create_provider
 from ...utils.llm_json import parse_llm_json
 from .._utils.prompt_identity import versao_com_identidade
-from .agent import _resolve_campos_alvo
+from .agent import _resolve_campos_alvo, aplicar_recomendacoes
 from .fase_a_nativa import DecisorNativo, fase_a_nativa_ligada
 from .ferramentas import Autos, BudgetNavegacao, cortar_trecho, custo_da_resposta, navegar
 from .livro import SlotResolvido, chave_livro, motivos_nao_aplicaveis, resolver_slots
@@ -96,6 +96,7 @@ from .schemas import (
     MAX_TRECHO_APOIO,
     FichaWriteFieldsResponse,
     Nucleo,
+    RecomendacaoRespondida,
     RodadaDetalhe,
     TrilhaItem,
 )
@@ -288,6 +289,8 @@ def fontes_do_redator(request: FichaWriteFieldsRequest, autos: Autos) -> FontesD
         estruturados=[
             _fatos_fixos(request), [a.model_dump() for a in request.alertas],
             nucleo_dados, indice, list(request.processos_citaveis or []),
+            # As datas e os números das candidatas são fonte (03/11/2026).
+            [c.model_dump() for c in request.recomendacoes_candidatas or []],
         ],
         pipeline=request.esqueleto.pipeline if request.esqueleto else [],
     )
@@ -341,7 +344,8 @@ async def write_v5(
         "avisos": avisos_req, "versao": VERSAO, "modo": MODO,
     }
 
-    if not slots and not request.alertas:
+    candidatas = request.recomendacoes_candidatas
+    if not slots and not request.alertas and not candidatas:
         return FichaWriteFieldsResponse(success=True, model=model, **base)
 
     autos = Autos(request.nucleo or Nucleo(), request.indice_navegavel or [])
@@ -396,6 +400,7 @@ async def write_v5(
     aprovados: dict[str, str] = {}
     trilha: dict[str, list[TrilhaItem]] = {}
     respondidos: dict[str, AlertaRespondido] = {}
+    respondidas_rec: dict[str, RecomendacaoRespondida] = {}
     erros: list[ErroDeCampo] = []
     used_model = model
     rodada = 0
@@ -407,7 +412,7 @@ async def write_v5(
             request, chave=chave, slots=pendentes_slots, alertas=pendentes_alertas,
             citaveis=citaveis_txt, nucleo=nucleo_llm, indice=indice_llm,
             achados=nav.achados, erros_retry=erros_retry, aprovados=aprovados,
-            docs_citaveis=autos.citaveis(),
+            docs_citaveis=autos.citaveis(), candidatas=candidatas,
         )
         # R13: parâmetros no padrão do modelo, conforme o Google
         # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
@@ -459,6 +464,10 @@ async def write_v5(
             del ok[slot]
             trilha.pop(slot, None)
             erros_campos += e_slot
+        # Decisão do Alfredo (03/11/2026): alerta e observação só com candidata.
+        erros_campos += aplicar_recomendacoes(request, parsed, ok, aprovados,
+                                              [s.nome for s in slots], respondidas_rec,
+                                              com_erro=[e.campo for e in erros_campos])
         # Erro de trilha de slot que já reprovou no texto: o erro do texto basta.
         # Erro de trilha sem slot: vai ao LLM como erro da saída.
         erros_campos += erros_trilha.pop(CAMPO_TRILHA, [])
@@ -486,7 +495,8 @@ async def write_v5(
         if CAMPO_SAIDA in com_erro or CAMPO_TRILHA in com_erro:
             pendentes_slots = [s for s in pendentes_slots if s.nome not in aprovados]
         else:
-            pendentes_slots = [s for s in pendentes_slots if s.nome in com_erro]
+            # Um slot aprovado antes pode voltar (regra 14: candidata redigida sem texto).
+            pendentes_slots = [s for s in slots if s.nome in com_erro]
         pendentes_alertas = [a for a in pendentes_alertas if a.codigo not in respondidos]
         erros_retry = erros
 
@@ -494,6 +504,8 @@ async def write_v5(
         base["avisos"] = [*base["avisos"], *avisos_codigo]
     alertas_ordenados = [respondidos[a.codigo] for a in request.alertas if a.codigo in respondidos]
     trilha_ordenada = [t for s in slots for t in trilha.get(s.nome, [])]
+    base["recomendacoes_respondidas"] = [respondidas_rec[c.codigo] for c in (candidatas or [])
+                                         if c.codigo in respondidas_rec]
     if erros:
         resumo = "; ".join(f"{e.campo}: {e.erro}" for e in erros)
         return FichaWriteFieldsResponse(

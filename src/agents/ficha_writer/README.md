@@ -371,6 +371,39 @@ Fonte: o diagnóstico da ficha Claro (23/10/2026), achados 2 e 4.
 | O bullet 2 da renovação lê o bloco `renovacao`. Sem o bloco, o aviso `renovacao_sem_bloco` | O texto não pode inventar corretor |
 | `motivos_nao_aplicaveis` e `avisos` na saída | O caller sabe por que um slot não voltou e o que faltou no request |
 
+## As candidatas de alerta e observação (03/11/2026)
+
+Decisão do Alfredo: o código decide SE a ficha leva `alerta` ou `observacao`. O
+redator decide COMO, com a prova. O shared emite as candidatas pelos 15 gatilhos
+da lista fechada (`garantis_shared.fichas.recomendacoes`) e as manda em
+`recomendacoes_candidatas`.
+
+| Request | Regime |
+|---|---|
+| `recomendacoes_candidatas` ausente | Antigo. O shared de hoje. Nada muda no prompt nem na saída |
+| `recomendacoes_candidatas` presente, mesmo `[]` | Novo. `alerta.texto` e `observacao` só nascem para uma candidata do slot, no molde, com 1 data ou 1 número da candidata. Cada candidata recebe uma resposta |
+
+Cada candidata leva `{codigo, slot, deteccao, titulo, molde, fato, datas,
+numeros, doc_ids, fontes, max_chars}`. `deteccao = codigo`: o código já provou
+o fato. `deteccao = candidato`: o modelo prova nos autos ou refuta.
+
+O prompt ganha o bloco `<recomendacoes>` no fim, com as outras instruções
+(`prompts_v4._bloco_recomendacoes`, que o v5 reusa). A saída ganha
+`recomendacoes_respondidas`: `[{codigo, resposta: redigida|refutada, motivo?,
+prova?}]`.
+
+As regras 13 a 17 de `validacao.validar_recomendacoes` valem só no regime novo:
+
+13. Cada candidata recebe uma resposta. `refutada` exige motivo.
+14. Slot com texto exige uma candidata `redigida` do slot. Uma candidata
+    `redigida` exige o texto do slot.
+15. O texto cita 1 das datas ou 1 dos números da candidata. O erro traz a lista.
+16. A observação não pede ação (confira, confirme, verifique, solicite).
+17. O texto genérico "ainda dispõe de estratégias jurídicas" reprova em todo slot.
+
+Os números das candidatas entram nos processos citáveis (regra 6). Os testes
+estão em `tests/test_ficha_writer_recomendacoes.py`.
+
 ## v5 (agente): o redator lê os autos antes de escrever
 
 Card 869ffv22t. Decisão do Alfredo de 23/10/2026: "núcleo obrigatório + índice

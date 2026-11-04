@@ -23,7 +23,7 @@ from .._utils.prompt_fence import gerar_fence_token
 from .._utils.prompt_fence import json_sanitizado
 from .._utils.prompt_fence import neutralizar as _n
 from .livro import SlotResolvido, descricao_tipo, proibicoes_globais
-from .schemas import Alerta, ErroDeCampo, FichaWriteFieldsRequest
+from .schemas import Candidata, Alerta, ErroDeCampo, FichaWriteFieldsRequest
 
 #: Caminhos dos 13 slots no esqueleto. Eles NÃO são fato fixo: são o texto que este
 #: passe escreve. Um texto velho de outra rodada não pode virar "fato".
@@ -183,19 +183,39 @@ def _bloco_slots(slots: list[SlotResolvido]) -> str:
 # ── Formato ───────────────────────────────────────────────────────────────
 
 
-def _bloco_formato(slots: list[SlotResolvido], alertas: list[Alerta]) -> str:
+def _shape_recomendacoes(candidatas: list[Candidata]) -> str:
+    """A chave `recomendacoes_respondidas` do shape, UMA entrada por candidata."""
+    return ",\n".join(
+        f"    {{\"codigo\": \"{_n(c.codigo)}\", \"resposta\": \"redigida|refutada\", "
+        "\"motivo\": \"...\", \"prova\": \"<doc_id ou trecho>\"}" for c in candidatas)
+
+
+def _bloco_formato(slots: list[SlotResolvido], alertas: list[Alerta],
+                   candidatas: Optional[list[Candidata]] = None) -> str:
     nomes = ", ".join(f"\"{_n(s.nome)}\"" for s in slots)
     campos = ",\n".join(f"    \"{_n(s.nome)}\": \"...\"" for s in slots)
     alrt = ",\n".join(
         f"    {{\"codigo\": \"{_n(a.codigo)}\", \"resposta\": \"acatado|refutado\", "
         "\"motivo\": \"...\"}" for a in alertas)
+    if candidatas is None:
+        return (
+            "=== FORMATO DA SAÍDA (obrigatório) ===\n"
+            "Responda ESTRITAMENTE com UM objeto JSON com 2 chaves:\n"
+            f"- \"campos\": objeto PLANO slot → STRING simples, com EXATAMENTE estas chaves: {nomes}.\n"
+            "- \"alertas_respondidos\": lista com UMA entrada por alerta do código.\n"
+            "Shape:\n{\n  \"campos\": {\n" + campos + "\n  },\n  \"alertas_respondidos\": [\n"
+            + alrt + "\n  ]\n}"
+        )
     return (
         "=== FORMATO DA SAÍDA (obrigatório) ===\n"
-        "Responda ESTRITAMENTE com UM objeto JSON com 2 chaves:\n"
+        "Responda ESTRITAMENTE com UM objeto JSON com 3 chaves:\n"
         f"- \"campos\": objeto PLANO slot → STRING simples, com EXATAMENTE estas chaves: {nomes}.\n"
         "- \"alertas_respondidos\": lista com UMA entrada por alerta do código.\n"
+        "- \"recomendacoes_respondidas\": lista com UMA entrada por candidata de alerta ou "
+        "observação.\n"
         "Shape:\n{\n  \"campos\": {\n" + campos + "\n  },\n  \"alertas_respondidos\": [\n"
-        + alrt + "\n  ]\n}"
+        + alrt + "\n  ],\n  \"recomendacoes_respondidas\": [\n"
+        + _shape_recomendacoes(candidatas) + "\n  ]\n}"
     )
 
 
@@ -267,6 +287,62 @@ LIÇÕES VIVAS DESTA ETAPA:
 </regras_de_redacao>"""
 
 
+# ── As candidatas de alerta e observação (decisão do Alfredo, 03/11/2026) ──
+
+
+def _bloco_recomendacoes(candidatas: list[Candidata]) -> str:
+    """O bloco `<recomendacoes>`: o molde dos 2 slots e cada candidata, com os dados.
+
+    Entra no fim do prompt, com as outras instruções (o Google recomenda a instrução
+    depois do contexto longo). O código decide SE a ficha leva alerta ou observação.
+    O modelo decide COMO dizer, com a prova. Sem candidata, os 2 slots ficam vazios.
+    """
+    linhas = [
+        "<recomendacoes>",
+        "ALERTA E OBSERVAÇÃO SÓ COM CANDIDATA (regra do código, 03/11/2026).",
+        "O código conferiu o caso e emitiu as candidatas abaixo. Só elas podem virar texto em "
+        '"alerta.texto" e em "observacao". Sem candidata para um slot, o slot fica "" (ou não '
+        "é pedido).",
+        "",
+        "Molde do ALERTA (slot alerta.texto, até 250 caracteres): um fato que muda a decisão de "
+        "ofertar ou dimensionar a garantia AGORA. O leitor age ou confere antes de seguir. Forma: "
+        '"[fato, com data ou número] — [o que ele muda para a garantia]". O título é do código: '
+        "não o escreva.",
+        "Molde da OBSERVAÇÃO (slot observacao, até 150 caracteres): 1 frase, com um número ou uma "
+        "data, sobre um fato verificável fora do processo principal. Ela ajuda a ler o caso e NÃO "
+        "muda a decisão agora. Nunca pede ação (sem confira, confirme, verifique, solicite).",
+        "",
+        "Para CADA candidata, devolva uma entrada em \"recomendacoes_respondidas\":",
+        "- \"redigida\": você escreveu o slot no molde, com 1 data ou 1 número da candidata, e "
+        "\"prova\" diz o doc_id (ou o trecho) que sustenta o fato.",
+        "- \"refutada\": os autos mostram que o fato não vale para este caso. O motivo cita a "
+        "prova. Sem prova em contrário, uma candidata deteccao=codigo é redigida.",
+        "- deteccao=codigo: o código já provou o fato. deteccao=candidato: o código achou um "
+        "indício; prove nos autos (núcleo, documentos lidos) ou refute.",
+        "- 2 candidatas do mesmo slot: 1 texto só, com o fato mais relevante para a garantia. As "
+        "outras ficam redigidas (se o texto as cobre) ou refutadas.",
+        "- Proibido o texto genérico \"ainda dispõe de estratégias jurídicas\" e qualquer frase sem "
+        "fato datado ou numerado.",
+        "",
+        "CANDIDATAS DESTA FICHA:" if candidatas else
+        "CANDIDATAS DESTA FICHA: nenhuma. Devolva \"recomendacoes_respondidas\": [] e não escreva "
+        "alerta nem observação.",
+    ]
+    for c in candidatas:
+        linhas.append(
+            f"- [{_n(c.codigo)}] slot={_n(c.slot)} deteccao={_n(c.deteccao)}"
+            + (f" titulo={_n(c.titulo)}" if c.titulo else "")
+            + f" max={c.max_chars}\n"
+            f"    fato: {_n(c.fato)}\n"
+            f"    molde: {_n(c.molde)}\n"
+            f"    datas: {json.dumps(c.datas, ensure_ascii=False)} | "
+            f"numeros: {json.dumps(c.numeros, ensure_ascii=False)} | "
+            f"doc_ids: {json.dumps(c.doc_ids, ensure_ascii=False)} | "
+            f"fontes: {json.dumps(c.fontes, ensure_ascii=False)}")
+    linhas.append("</recomendacoes>")
+    return "\n".join(linhas)
+
+
 # ── Montagem ──────────────────────────────────────────────────────────────
 
 
@@ -280,9 +356,11 @@ def build_prompt_v4(
     erros_retry: Optional[list[ErroDeCampo]] = None,
     aprovados: Optional[dict[str, str]] = None,
     fence_token: Optional[str] = None,
+    candidatas: Optional[list[Candidata]] = None,
 ) -> str:
     """Monta o prompt v4. `slots` e `alertas` são os ALVO da rodada (no retry, só os que
-    reprovaram). `fence_token` explícito só em teste."""
+    reprovaram). `fence_token` explícito só em teste. `candidatas` (03/11/2026): as
+    candidatas de alerta e observação; `None` é o regime antigo, e o prompt não muda."""
     token = fence_token or gerar_fence_token()
     partes = [
         _persona(req, chave),
@@ -290,10 +368,12 @@ def build_prompt_v4(
         _bloco_alertas(alertas),
         _bloco_dossie(req.dossie, token),
         _bloco_slots(slots),
-        _bloco_formato(slots, alertas),
+        _bloco_formato(slots, alertas, candidatas),
     ]
     if erros_retry:
         partes.append(_bloco_retry(erros_retry, aprovados or {}))
+    if candidatas is not None:
+        partes.append(_bloco_recomendacoes(candidatas))
     partes.append(_bloco_regras(req.licoes))
     return "\n\n".join(partes)
 

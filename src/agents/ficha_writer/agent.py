@@ -19,7 +19,7 @@ Três modos (ver `schemas.py`):
 """
 
 import logging
-from typing import Optional
+from typing import Iterable, Optional
 
 from garantis_shared.llm_models import model_for
 
@@ -35,9 +35,11 @@ from .schemas import (
     ErroDeCampo,
     FichaWriteFieldsRequest,
     FichaWriteFieldsResponse,
+    RecomendacaoRespondida,
 )
 from .validacao import (
     CAMPO_ALERTAS,
+    CAMPO_DO_SLOT,
     avisos,
     origem_valor,
     processos_citaveis,
@@ -45,6 +47,7 @@ from .validacao import (
     renovacao_sem_corretor,
     validar_alertas,
     validar_campos,
+    validar_recomendacoes,
 )
 
 logger = logging.getLogger(__name__)
@@ -109,6 +112,32 @@ async def _chamar(llm_provider, prompt: str, model: str) -> LLMResponse:
 
 def _custo(response: LLMResponse) -> float:
     return float(response.metadata.get("cost_usd", 0.0)) if response.metadata else 0.0
+
+
+def aplicar_recomendacoes(
+    request: FichaWriteFieldsRequest, parsed: dict, ok: dict[str, str], aprovados: dict[str, str],
+    pedidos: list[str], respondidas: dict[str, RecomendacaoRespondida],
+    com_erro: Iterable[str] = (),
+) -> list[ErroDeCampo]:
+    """As regras 13 a 17 (`validar_recomendacoes`) sobre a rodada. Regime das candidatas.
+
+    Um erro num slot tira o slot de `ok`: ele volta ao LLM. As respostas válidas entram
+    em `respondidas`. `com_erro` são os slots que já reprovaram no texto nesta rodada: a
+    regra 14 não os acusa de novo. No regime antigo (`recomendacoes_candidatas`
+    ausente), nada muda.
+    """
+    if not request.regime_candidatas:
+        return []
+    falhos = set(com_erro)
+    ok_rec, erros = validar_recomendacoes(
+        parsed, request.recomendacoes_candidatas or [], {**aprovados, **ok},
+        [p for p in pedidos if p not in falhos], ja_respondidas=respondidas)
+    respondidas.update({r.codigo: r for r in ok_rec})
+    for e in erros:
+        if e.campo in CAMPO_DO_SLOT.values():
+            ok.pop(e.campo, None)
+            aprovados.pop(e.campo, None)
+    return erros
 
 
 # ── v3 (compat) ───────────────────────────────────────────────────────────
@@ -179,12 +208,14 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
     pendentes_alertas = list(request.alertas)
     aprovados: dict[str, str] = {}
     respondidos: dict[str, AlertaRespondido] = {}
+    respondidas_rec: dict[str, RecomendacaoRespondida] = {}
     erros: list[ErroDeCampo] = []
     cost_total = 0.0
     used_model = model
     rodada = 0
+    candidatas = request.recomendacoes_candidatas
 
-    if not slots and not pendentes_alertas:
+    if not slots and not pendentes_alertas and not candidatas:
         return FichaWriteFieldsResponse(
             success=True, model=model, prompt_version=PROMPT_VERSION, tipo_livro=chave,
             campos_nao_aplicaveis=nao_aplicaveis, motivos_nao_aplicaveis=motivos,
@@ -196,6 +227,7 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
         prompt = build_prompt_v4(
             request, chave=chave, slots=pendentes_slots, alertas=pendentes_alertas,
             citaveis=citaveis_txt, erros_retry=erros_retry, aprovados=aprovados,
+            candidatas=candidatas,
         )
         response: LLMResponse = await _chamar(llm_provider, prompt, model)
         used_model = response.model or used_model
@@ -212,6 +244,10 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
 
         ok, erros_campos = validar_campos(parsed, pendentes_slots, citaveis,
                                           origem_valor=origem, sem_corretor=sem_corretor)
+        # Decisão do Alfredo (03/11/2026): alerta e observação só com candidata.
+        erros_campos += aplicar_recomendacoes(request, parsed, ok, aprovados,
+                                              [s.nome for s in slots], respondidas_rec,
+                                              com_erro=[e.campo for e in erros_campos])
         ok_alertas, erros_alertas = validar_alertas(parsed, pendentes_alertas)
         aprovados.update(ok)
         respondidos.update({a.codigo: a for a in ok_alertas})
@@ -223,11 +259,13 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
         if "_saida" in com_erro:
             pendentes_slots = [s for s in pendentes_slots if s.nome not in ok]
         else:
-            pendentes_slots = [s for s in pendentes_slots if s.nome in com_erro]
+            pendentes_slots = [s for s in slots if s.nome in com_erro]
         pendentes_alertas = [a for a in pendentes_alertas if a.codigo not in respondidos]
         erros_retry = erros
 
     alertas_ordenados = [respondidos[a.codigo] for a in request.alertas if a.codigo in respondidos]
+    rec_ordenadas = [respondidas_rec[c.codigo] for c in (candidatas or [])
+                     if c.codigo in respondidas_rec]
     if erros:
         resumo = "; ".join(f"{e.campo}: {e.erro}" for e in erros)
         return FichaWriteFieldsResponse(
@@ -236,7 +274,7 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
             prompt_version=PROMPT_VERSION, tipo_livro=chave,
             alertas_respondidos=alertas_ordenados, erros=erros, rodadas=rodada,
             campos_nao_aplicaveis=nao_aplicaveis, motivos_nao_aplicaveis=motivos,
-            avisos=avisos_req,
+            avisos=avisos_req, recomendacoes_respondidas=rec_ordenadas,
         )
     # Os slots ficam na ordem do request.
     campos = {s.nome: aprovados[s.nome] for s in slots if s.nome in aprovados}
@@ -245,7 +283,7 @@ async def _write_v4(request: FichaWriteFieldsRequest, provider: str, model: str)
         prompt_version=PROMPT_VERSION, tipo_livro=chave,
         alertas_respondidos=alertas_ordenados, rodadas=rodada,
         campos_nao_aplicaveis=nao_aplicaveis, motivos_nao_aplicaveis=motivos,
-        avisos=avisos_req,
+        avisos=avisos_req, recomendacoes_respondidas=rec_ordenadas,
     )
 
 

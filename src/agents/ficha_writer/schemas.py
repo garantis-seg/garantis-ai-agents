@@ -324,6 +324,52 @@ class TrilhaItem(BaseModel):
     model_config = _FORBID
 
 
+# ── As candidatas de `alerta` e `observacao` (decisão do Alfredo, 03/11/2026) ──
+#
+# O shared (`garantis_shared.fichas.recomendacoes`) decide SE a ficha leva um
+# alerta ou uma observação: os 15 gatilhos da lista fechada. O redator decide
+# COMO dizer, com a prova. `recomendacoes_candidatas` AUSENTE no request = regime
+# antigo (o shared de hoje). PRESENTE, mesmo vazia = regime novo: os slots
+# `alerta.texto` e `observacao` só nascem para uma candidata, no molde, com a
+# data ou o número do gatilho, e cada candidata recebe uma resposta.
+
+SlotRecomendacao = Literal["alerta", "observacao"]
+DeteccaoRecomendacao = Literal["codigo", "candidato"]
+
+
+class Candidata(BaseModel):
+    """Um gatilho que o código emitiu para esta ficha.
+
+    `deteccao = "codigo"`: o código já provou o fato. Escreva no molde.
+    `deteccao = "candidato"`: o código achou um indício. Prove nos autos, ou refute.
+    `datas` (DD/MM/AAAA) e `numeros` são os dados do fato: o texto cita 1 deles.
+    """
+
+    codigo: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9_]+$")
+    slot: SlotRecomendacao
+    deteccao: DeteccaoRecomendacao = "codigo"
+    titulo: Optional[str] = Field(default=None, max_length=80)
+    molde: str = Field(default="", max_length=600)
+    fato: str = Field(min_length=1, max_length=1200)
+    datas: list[str] = Field(default_factory=list)
+    numeros: list[str] = Field(default_factory=list)
+    doc_ids: list[str] = Field(default_factory=list)
+    fontes: list[str] = Field(default_factory=list)
+    max_chars: int = Field(default=250, gt=0)
+
+    model_config = _FORBID
+
+
+class RecomendacaoRespondida(BaseModel):
+    """A resposta do redator a uma candidata."""
+
+    codigo: str
+    resposta: Literal["redigida", "refutada"]
+    motivo: Optional[str] = None
+    #: O doc_id ou o trecho que prova o fato (ou que o refuta).
+    prova: Optional[str] = None
+
+
 class FichaWriteFieldsRequest(BaseModel):
     """Request do POST /ficha/write-fields."""
 
@@ -351,6 +397,13 @@ class FichaWriteFieldsRequest(BaseModel):
         default=None, description="v5: a leitura obrigatória. Com `indice_navegavel` = v5.")
     indice_navegavel: Optional[list[ItemIndice]] = Field(
         default=None, description="v5: o que mais existe nos autos. Com `nucleo` = v5.")
+    recomendacoes_candidatas: Optional[list[Candidata]] = Field(
+        default=None,
+        description=(
+            "Os gatilhos de `alerta` e `observacao` que o código emitiu. Ausente = regime "
+            "antigo. Presente (mesmo vazia) = os 2 slots só nascem para uma candidata."
+        ),
+    )
     provider: Optional[str] = Field(default=None, description="LLM provider override.")
     model: Optional[str] = Field(default=None, description="Model override.")
 
@@ -364,6 +417,12 @@ class FichaWriteFieldsRequest(BaseModel):
     def modo_v5(self) -> bool:
         return self.nucleo is not None and self.indice_navegavel is not None
 
+    @property
+    def regime_candidatas(self) -> bool:
+        """`recomendacoes_candidatas` presente (mesmo vazia): os slots `alerta.texto`
+        e `observacao` só nascem para uma candidata."""
+        return self.recomendacoes_candidatas is not None
+
     @model_validator(mode="after")
     def _contrato_v4(self) -> "FichaWriteFieldsRequest":
         codigos = [a.codigo for a in self.alertas]
@@ -373,6 +432,9 @@ class FichaWriteFieldsRequest(BaseModel):
         # v4 em silêncio jogaria fora a leitura que o shared mandou.
         if (self.nucleo is None) != (self.indice_navegavel is None):
             raise ValueError("v5 exige `nucleo` e `indice_navegavel` juntos")
+        cods = [c.codigo for c in self.recomendacoes_candidatas or []]
+        if len(cods) != len(set(cods)):
+            raise ValueError("recomendacoes_candidatas: código repetido")
         if self.modo_v5:
             if self.esqueleto is None:
                 raise ValueError("v5 (nucleo + indice_navegavel) exige esqueleto")
@@ -486,3 +548,5 @@ class FichaWriteFieldsResponse(BaseModel):
     modo: Optional[str] = None
     #: v5: o protocolo da fase A e as contagens dele. Aditivo: o v4 e o v3 omitem.
     fase_a_metricas: Optional[FaseAMetricas] = None
+    #: Regime das candidatas (03/11/2026): uma resposta por candidata do request.
+    recomendacoes_respondidas: list[RecomendacaoRespondida] = Field(default_factory=list)
