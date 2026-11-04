@@ -1,28 +1,16 @@
-"""Prompt do AUDITOR DE FICHA (S6), versao 2: dois baldes.
+"""Os blocos do prompt do AUDITOR DE FICHA (S6) e o prompt de correcao.
 
-Persona ESTREITA, de proposito: "voce confere, nao reescreve". Um auditor que
-reescreve vira um 2o redator. A saida dele deixa de ser um veredito.
+`prompts_v3.py` monta o prompt com estes blocos. Persona ESTREITA, de
+proposito: "voce confere, nao reescreve". Um auditor que reescreve vira um 2o
+redator. A saida dele deixa de ser um veredito.
 
-O que mudou do v1 para o v2 (22/10/2026):
-1. Dois baldes (Livro §10.2). Balde 1 volta ao redator. Balde 2 vira pendencia.
-2. O checklist inteiro do compilado, por bloco, com ID (ver checklist.py).
-3. O ESQUELETO da S3b entra como verdade fixa.
-4. O GABARITO entra como "fatos esperados". O auditor diverge so em fato.
-5. Os ALERTAS do codigo: o auditor responde cada um.
-6. O relatorio da S5 entra para o auditor NAO repetir a S5.
-7. As LICOES da etapa entram no fim.
-
-O QUE ESTE PROMPT NAO PEDE: limite de caracteres, enum, formato de data, DV de
+O QUE O PROMPT NAO PEDE: limite de caracteres, enum, formato de data, DV de
 CNPJ, lista negra literal. A S5 ja rodou isso. Um LLM que reconta caracteres
 conta errado e reprova ficha certa.
 
-SEM FERRAMENTA, de proposito (PESQUISA-AGENTE-INVESTIGADOR-2026-08 §4): o
-verificador com ferramenta deu 5x mais falso-positivo. O modelo recebe tudo
-no contexto e julga o que le.
-
-Anti prompt-injection (2 camadas, QA-B1 achado B-3): dossie, esqueleto,
-gabarito, ficha, alertas e licoes vao cercados por fence com BOUNDARY
-ALEATORIO por request. Tudo isso e dado, nao instrucao.
+Anti prompt-injection (2 camadas, QA-B1 achado B-3): dossie, esqueleto, ficha,
+alertas e licoes vao cercados por fence com BOUNDARY ALEATORIO por request.
+Tudo isso e dado, nao instrucao.
 """
 
 import json
@@ -33,8 +21,6 @@ from .._utils.prompt_fence import json_sanitizado as _json_sanitizado
 from .._utils.prompt_fence import neutralizar as _neutralizar
 from .checklist import checklist_texto
 from .schemas import MAX_CORRECAO_SUGERIDA, AuditarFichaRequest
-
-PROMPT_VERSION = "auditor_ficha_v2"
 
 
 # ── Persona ────────────────────────────────────────────────────────────────
@@ -100,19 +86,6 @@ def _build_esqueleto_block(esqueleto: dict[str, Any], token: str) -> str:
         "esqueleto esta errado diante do dossie, isso vai ao BALDE 2, nunca ao "
         "balde 1. " + _AVISO_DADO,
         _json_sanitizado(esqueleto),
-        token,
-    )
-
-
-def _build_gabarito_block(gabarito: dict[str, Any], token: str) -> str:
-    return _fence(
-        "gabarito",
-        "GABARITO (FATOS ESPERADOS: ficha local aprovada do mesmo processo)",
-        "Compare FATOS: datas, valor, etapa, fase, quem recorreu, numero do "
-        "acordao. NUNCA compare redacao. Texto diferente com o mesmo fato NAO "
-        "e erro (e_erro=false). O gabarito pode estar velho: se o dossie mostra "
-        "um fato posterior, o dossie vence. " + _AVISO_DADO,
-        _json_sanitizado(gabarito),
         token,
     )
 
@@ -285,88 +258,7 @@ balde 2, no mesmo campo, com a regra [F-04] ou o ID do fato.
 </regra_de_decisao>"""
 
 
-def _build_output_shape() -> str:
-    return """=== FORMATO DA SAIDA (obrigatorio) ===
-Responda ESTRITAMENTE com UM objeto JSON com estas chaves e nenhuma outra:
-
-{
-  "veredito": "aprovada | aprovada_com_correcoes | retida",
-  "balde1": [
-    {"campo": "<slot achatado: merito.p1 | bullets[0] | ultima_decisao.texto>",
-     "motivo": "<UMA frase: o que esta errado e o que o dossie diz>",
-     "regra": "<ID do checklist, ex.: D-01>",
-     "correcao_sugerida": "<o fato certo, curto>"}
-  ],
-  "balde2": [
-    {"campo": "<slot>", "pendencia": "<afirmacao em disputa>",
-     "grau": "alta | media | baixa", "evidencia": "<citacao + fonte>",
-     "recomendacao": "<acao acionavel>"}
-  ],
-  "nao_confirmado": ["<o que nao deu para conferir e por que>"],
-  "alertas_respondidos": [
-    {"codigo": "<codigo do alerta>", "resposta": "confirmado | refutado",
-     "motivo": "<prova>"}
-  ],
-  "divergencias_gabarito": [
-    {"campo": "<slot>", "ficha": "<o que a ficha diz>",
-     "gabarito": "<o que o gabarito diz>", "e_erro": true,
-     "motivo": "<fato ou so redacao>"}
-  ]
-}
-
-Ficha sem defeito: balde1 e balde2 vazios. `campo` usa o caminho ACHATADO do
-slot (ponto para objeto, [i] para lista). NAO escreva texto fora do JSON."""
-
-
-# ── Montagem ───────────────────────────────────────────────────────────────
-
-
-def build_auditar_ficha_prompt(
-    req: AuditarFichaRequest,
-    fence_token: str | None = None,
-) -> str:
-    """Monta o prompt.
-
-    Ordem: persona, dossie, esqueleto, ficha, gabarito, contexto, S5, alertas,
-    licoes, formato, checklist, baldes, regra de decisao. A regra de decisao
-    fica por ULTIMO (recency anchor, como no ficha_writer).
-
-    O gabarito vem DEPOIS da ficha: a leitura cega confere a ficha antes de
-    ver os fatos esperados.
-
-    `fence_token`: boundary de todos os fences. Default: token novo por
-    chamada. Passe um token fixo so em teste.
-    """
-    token = fence_token or gerar_fence_token()
-    parts = [
-        _build_persona(),
-        "",
-        _build_dossie_block(req.dossie, token),
-        "",
-        _build_esqueleto_block(req.esqueleto, token),
-        "",
-        _build_ficha_block(req.ficha, token),
-    ]
-    if req.gabarito:
-        parts += ["", _build_gabarito_block(req.gabarito, token)]
-    parts += ["", _build_contexto(req)]
-    if req.relatorio_s5:
-        parts += ["", _build_relatorio_s5(req, token)]
-    if req.alertas:
-        parts += ["", _build_alertas(req, token)]
-    if req.licoes:
-        parts += ["", _build_licoes(req, token)]
-    parts += [
-        "",
-        _build_output_shape(),
-        "",
-        _build_checklist(),
-        "",
-        _build_baldes(),
-        "",
-        _build_regra_de_decisao(),
-    ]
-    return "\n".join(parts)
+# ── Correcao ───────────────────────────────────────────────────────────────
 
 
 def build_prompt_de_correcao(
@@ -393,8 +285,6 @@ def build_prompt_de_correcao(
 
 
 __all__ = [
-    "build_auditar_ficha_prompt",
     "build_prompt_de_correcao",
     "gerar_fence_token",
-    "PROMPT_VERSION",
 ]

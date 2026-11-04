@@ -194,7 +194,7 @@ _CHAMADAS_AO_MODELO = {"agenerate", "generate", "call_vision_l1"}
 
 
 def _modulos_da_ficha():
-    from src.agents.auditor_ficha import agent as auditor_v2
+    from src.agents.auditor_ficha import agent as auditor
     from src.agents.auditor_ficha import agent_v3 as auditor_v3
     from src.agents.doc_indexer import ocr
     from src.agents.ficha_writer import agent as writer
@@ -204,7 +204,7 @@ def _modulos_da_ficha():
     from src.agents.qualificador_conexo import agent as qualificador
     from src.agents.qualificador_conexo import auditor as qualificador_auditor
 
-    return [writer, writer_v5, ferramentas, fase_a_nativa, auditor_v2, auditor_v3,
+    return [writer, writer_v5, ferramentas, fase_a_nativa, auditor, auditor_v3,
             qualificador, qualificador_auditor, ocr]
 
 
@@ -239,7 +239,7 @@ def test_gate_modulos_da_ficha_chamam_o_modelo_no_padrao():
     for mod in _modulos_da_ficha():
         total += len(_chamadas(mod))
         assert _problemas(mod) == []
-    # 1 writer v3/v4 + 1 v5 + 1 navegar + 1 auditor v2 + 1 v3 + 2 qualificador
+    # 1 writer v3/v4 + 1 v5 + 1 navegar + 1 fase A nativa + 1 auditor v3 + 2 qualificador
     # + 1 auditor do qualificador + 1 OCR. Menos que isso = o gate ficou cego.
     assert total >= 9, total
 

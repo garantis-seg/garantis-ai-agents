@@ -1,9 +1,9 @@
-"""auditor_ficha: o AUDITOR CEGO da ficha (etapa S6), versao 2.
+"""auditor_ficha: o AUDITOR da ficha (etapa S6).
 
 Ultimo portao antes de a ficha ser persistida. Confere a ficha (S4, ja
-aprovada na S5) contra o dossie, o esqueleto da S3b e o gabarito, com o
-checklist do Livro da Ficha por bloco. Devolve o veredito em dois baldes
-(Livro §10.2):
+aprovada na S5) contra os autos (o `nucleo` e o `indice_navegavel` do
+request), o dossie e o esqueleto da S3b, com o checklist do Livro da Ficha por
+bloco. Devolve o veredito em dois baldes (Livro §10.2):
 
 - balde 1: erro objetivo. Volta ao redator (S4).
 - balde 2: juizo de substancia. Vira pendencia no `meta`. Nunca vai ao redator.
