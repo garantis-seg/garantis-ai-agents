@@ -477,6 +477,20 @@ Budget esgotado encerra a leitura. O agente escreve com o que leu, e as regras
 duras continuam a valer. Sem nenhum documento legível no índice, a fase A não
 chama o LLM.
 
+#### O protocolo do turno de decisão (R11, em medição)
+
+A flag de ambiente `FICHA_FASE_A_NATIVA` escolhe o protocolo da fase A:
+
+- Desligada (o default): o LLM responde um JSON, e `parse_chamada` o lê.
+- Ligada: o LLM chama uma função declarada no SDK (`fase_a_nativa.py`). As 3
+  ferramentas e a função `terminar_leitura` entram em `tools`, com `tool_config`
+  no modo `ANY`.
+
+O budget, o circuit breaker, a validação dos argumentos e a fase B são os mesmos
+nos 2 modos. A resposta traz `fase_a_metricas` (`modo`, `chamadas`, `invalidas`,
+`custo_usd`), e o log `FICHA_WRITER_V5_FASE_A` repete os números. A comparação
+decide se o protocolo nativo substitui o texto.
+
 ### Saída: o v4 mais 4 chaves
 
 ```json

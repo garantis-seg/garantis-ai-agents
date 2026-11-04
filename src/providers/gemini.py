@@ -236,6 +236,21 @@ def _gemini_finish_reason(response: Any) -> Optional[str]:
         return None
 
 
+def _gemini_function_calls(response: Any) -> list[Dict[str, Any]]:
+    """As chamadas de funcao do 1o candidate, como `[{name, args}]`. Defensivo:
+    resposta sem parts, sem o atributo ou com SDK antigo devolve `[]`."""
+    try:
+        calls = getattr(response, "function_calls", None) or []
+        out: list[Dict[str, Any]] = []
+        for fc in calls:
+            nome = getattr(fc, "name", None)
+            args = getattr(fc, "args", None)
+            out.append({"name": nome, "args": dict(args) if isinstance(args, dict) else args})
+        return out
+    except Exception:
+        return []
+
+
 def _gemini_text_and_finish(response: Any, model: str) -> tuple[str, Optional[str]]:
     """Extrai (text, finish_reason) e LOGA terminação anormal (prefix grepável
     GEMINI_ABNORMAL_FINISH, p/ alert policy). text='' se response.text levantar
@@ -353,6 +368,23 @@ class GeminiProvider(BaseLLMProvider):
         if kwargs.get("system_instruction"):
             config_params["system_instruction"] = kwargs["system_instruction"]
 
+        # Function calling nativo (opt-in). `tools` e uma lista de declaracoes
+        # `{name, description, parameters}` (JSON Schema em dict) e `tool_config` e
+        # `{mode, allowed_function_names}`. O caller le as chamadas em
+        # `LLMResponse.metadata["function_calls"]`. Sem os 2 kwargs, nada muda.
+        if kwargs.get("tools"):
+            config_params["tools"] = [self._types.Tool(function_declarations=[
+                self._types.FunctionDeclaration(**d) for d in kwargs["tools"]
+            ])]
+        if kwargs.get("tool_config"):
+            tc = dict(kwargs["tool_config"])
+            config_params["tool_config"] = self._types.ToolConfig(
+                function_calling_config=self._types.FunctionCallingConfig(
+                    mode=tc.get("mode", "AUTO"),
+                    allowed_function_names=tc.get("allowed_function_names"),
+                ),
+            )
+
         # Greedy strict decoding quando temperature=0 (top_p=1, top_k=1).
         # Override possivel via kwargs.
         if padrao_do_modelo:
@@ -468,6 +500,7 @@ class GeminiProvider(BaseLLMProvider):
             metadata={
                 "provider": "gemini",
                 "finish_reason": finish_reason,
+                "function_calls": _gemini_function_calls(response),
                 "cost_usd": self.calculate_cost(
                     model, input_tokens, output_tokens, cached_tokens
                 ),
@@ -567,6 +600,7 @@ class GeminiProvider(BaseLLMProvider):
             metadata={
                 "provider": "gemini",
                 "finish_reason": finish_reason,
+                "function_calls": _gemini_function_calls(response),
                 "cost_usd": self.calculate_cost(
                     model, input_tokens, output_tokens, cached_tokens
                 ),

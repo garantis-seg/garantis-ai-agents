@@ -199,11 +199,12 @@ def _modulos_da_ficha():
     from src.agents.doc_indexer import ocr
     from src.agents.ficha_writer import agent as writer
     from src.agents.ficha_writer import agent_v5 as writer_v5
+    from src.agents.ficha_writer import fase_a_nativa
     from src.agents.ficha_writer import ferramentas
     from src.agents.qualificador_conexo import agent as qualificador
     from src.agents.qualificador_conexo import auditor as qualificador_auditor
 
-    return [writer, writer_v5, ferramentas, auditor_v2, auditor_v3,
+    return [writer, writer_v5, ferramentas, fase_a_nativa, auditor_v2, auditor_v3,
             qualificador, qualificador_auditor, ocr]
 
 
