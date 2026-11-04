@@ -249,10 +249,11 @@ def test_happy_path_returns_all_fields_and_cost(monkeypatch):
     assert out.campos["bullets[0]"] == "Decisao de 1o grau desfavoravel."
     assert out.cost_usd == 0.0123
     assert out.model == "gemini-2.5-flash"
-    # JSON mode SEM schema estatico + determinismo
+    # JSON mode SEM schema estatico. R13: amostragem no padrao do modelo.
     assert prov.last_kwargs.get("response_mime_type") == "application/json"
     assert prov.last_kwargs.get("response_schema") is None
-    assert prov.last_kwargs.get("temperature") == 0.0
+    assert "temperature" in prov.last_kwargs and prov.last_kwargs["temperature"] is None
+    assert "seed" not in prov.last_kwargs
 
 
 # ── Agent: slot faltando / nao-string -> success=false ─────────────────────
@@ -643,7 +644,8 @@ def test_v4_happy_path(monkeypatch):
     assert out.prompt_version == PROMPT_VERSION and out.tipo_livro == "nova_apolice@carf"
     assert [a.codigo for a in out.alertas_respondidos] == ["valor_estimado"]
     assert out.rodadas == 1 and len(prov.prompts) == 1
-    assert prov.last_kwargs["temperature"] == 0.0
+    assert prov.last_kwargs["temperature"] is None  # R13: padrao do modelo
+    assert "seed" not in prov.last_kwargs
     assert prov.last_kwargs["response_mime_type"] == "application/json"
 
 

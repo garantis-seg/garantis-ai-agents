@@ -70,7 +70,6 @@ from pydantic import ValidationError
 
 from ...providers import create_provider
 from ...utils.llm_json import parse_llm_json
-from .._utils.llm_seed import seed_for
 from .._utils.prompt_identity import versao_com_identidade
 from .agent import _resolve_campos_alvo
 from .ferramentas import Autos, BudgetNavegacao, cortar_trecho, custo_da_resposta, navegar
@@ -340,7 +339,6 @@ async def write_v5(
     autos = Autos(request.nucleo or Nucleo(), request.indice_navegavel or [])
     nucleo_llm = autos.nucleo_para_llm()
     indice_llm = autos.indice_para_llm()
-    chave_seed = request.esqueleto.processo_id if request.esqueleto else ""
     llm = create_provider(provider)
 
     # ── Fase A — navegação ──────────────────────────────────────────────────
@@ -352,7 +350,6 @@ async def write_v5(
             indice=indice_llm, achados=achados, menu=menu, budget_restante=restante,
             budget_por_doc=por_doc,
         ),
-        seed=lambda turno: seed_for("ficha_writer_v5", chave_seed, "A", turno),
         leitor_perguntar=leitor_perguntar, leitor_resumir=leitor_resumir,
         rotulo="FICHA_WRITER_V5",
     )
@@ -390,10 +387,12 @@ async def write_v5(
             achados=nav.achados, erros_retry=erros_retry, aprovados=aprovados,
             docs_citaveis=autos.citaveis(),
         )
+        # R13: parâmetros no padrão do modelo, conforme o Google
+        # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+        # faz o provider omitir temperature, top_p, top_k e seed.
         resp = await llm.agenerate(
-            prompt=prompt, model=model, temperature=0.0,
+            prompt=prompt, model=model, temperature=None,
             response_mime_type="application/json", thinking_budget=0, max_tokens=16384,
-            seed=seed_for("ficha_writer_v5", chave_seed, "B", rodada),
         )
         used_model = resp.model or used_model
         cost_total += custo_da_resposta(resp)

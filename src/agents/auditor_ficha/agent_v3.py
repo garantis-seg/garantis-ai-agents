@@ -68,7 +68,6 @@ from pydantic import ValidationError
 
 from ...providers import create_provider
 from ...utils.llm_json import parse_llm_json
-from .._utils.llm_seed import seed_for
 from .._utils.prompt_identity import versao_com_identidade
 from ..ficha_writer.ferramentas import (
     Autos,
@@ -444,8 +443,6 @@ async def auditar_ficha_v3(
     d_fonte = achados_d_fonte(request, fontes_do_auditor(request, autos))
     nucleo_llm = autos.nucleo_para_llm()
     indice_llm = autos.indice_para_llm()
-    chave_seed = str((request.esqueleto or {}).get("processo_id")
-                     or (request.ficha or {}).get("processo_id") or "")
     llm = create_provider(provider)
 
     # ── Fase A — navegacao ─────────────────────────────────────────────────
@@ -456,7 +453,6 @@ async def auditar_ficha_v3(
             request, nucleo=nucleo_llm, indice=indice_llm, achados=achados, menu=menu,
             budget_restante=restante, budget_por_doc=por_doc,
         ),
-        seed=lambda turno: seed_for("auditor_ficha_v3", chave_seed, "A", turno),
         leitor_perguntar=leitor_perguntar, leitor_resumir=leitor_resumir,
         rotulo="AUDITOR_FICHA_V3",
     )
@@ -475,10 +471,12 @@ async def auditar_ficha_v3(
     erros: list[dict[str, Any]] = []
     saida: Optional[SaidaAuditorV3] = None
     for rodada in range(1, MAX_RODADAS + 1):
+        # R13: parâmetros no padrão do modelo, conforme o Google
+        # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+        # faz o provider omitir temperature, top_p, top_k e seed.
         resp = await llm.agenerate(
-            prompt=prompt, model=model, temperature=0.0,
+            prompt=prompt, model=model, temperature=None,
             response_mime_type="application/json", max_tokens=16384,
-            seed=seed_for("auditor_ficha_v3", chave_seed, "B", rodada),
         )
         raw = resp.text or ""
         used_model = resp.model or model

@@ -221,7 +221,7 @@ async def call_vision_l1(
     prompt: str,
     pdf_bytes_list: list[bytes],
     response_schema=None,
-    temperature: float = 0.0,
+    temperature: float | None = 0.0,
     thinking_budget: int = 0,
     max_tokens: int | None = None,
     gate_out: Optional[dict] = None,
@@ -241,6 +241,9 @@ async def call_vision_l1(
     thinking_config acima) precisa ser fiado aqui explicitamente. `None` = no-op
     (Gemini sorteia), que é o contrato do `_utils/llm_seed.py::seed_for` com a
     flag OFF.
+
+    `temperature` `None` = padrão do modelo: o config não leva temperature nem
+    seed (a mesma regra do `GeminiProvider._build_config_params`).
     """
     if not pdf_bytes_list:
         raise ValueError("call_vision_l1 requires at least 1 PDF")
@@ -251,7 +254,9 @@ async def call_vision_l1(
     pdf_parts = _build_pdf_parts(types, pdf_bytes_list, gate_out)
     parts = pdf_parts + [types.Part.from_text(text=prompt)]
 
-    config_kwargs: dict[str, Any] = {"temperature": temperature}
+    config_kwargs: dict[str, Any] = {}
+    if temperature is not None:
+        config_kwargs["temperature"] = temperature
     if response_schema is not None:
         config_kwargs["response_mime_type"] = "application/json"
         config_kwargs["response_schema"] = response_schema
@@ -262,7 +267,7 @@ async def call_vision_l1(
             config_kwargs["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
         except Exception:
             pass
-    if seed is not None:
+    if seed is not None and temperature is not None:
         config_kwargs["seed"] = seed
     # Labels de cobranca (so Vertex): este caminho monta o config A MAO, entao o que
     # o `_build_config_params` poe sozinho tem de ser fiado aqui (como o seed acima).

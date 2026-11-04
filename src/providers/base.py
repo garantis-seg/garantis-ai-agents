@@ -71,7 +71,7 @@ class BaseLLMProvider(ABC):
         self,
         prompt: str,
         model: Optional[str] = None,
-        temperature: float = 0.1,
+        temperature: Optional[float] = 0.1,
         max_tokens: int = 16384,
         response_schema: Optional[Type] = None,
         **kwargs,
@@ -82,7 +82,8 @@ class BaseLLMProvider(ABC):
         Args:
             prompt: The text prompt to send to the LLM.
             model: Specific model to use (uses provider default if None).
-            temperature: Sampling temperature (0.0 to 1.0).
+            temperature: Sampling temperature (0.0 to 1.0). `None` = padrão
+                do modelo: o provider não envia parâmetro de amostragem.
             max_tokens: Maximum tokens to generate.
             response_schema: Optional Pydantic model for structured output.
             **kwargs: Additional provider-specific parameters.
@@ -100,7 +101,7 @@ class BaseLLMProvider(ABC):
         self,
         prompt: str,
         model: Optional[str] = None,
-        temperature: float = 0.1,
+        temperature: Optional[float] = 0.1,
         max_tokens: int = 16384,
         response_schema: Optional[Type] = None,
         **kwargs,
@@ -111,7 +112,8 @@ class BaseLLMProvider(ABC):
         Args:
             prompt: The text prompt to send to the LLM.
             model: Specific model to use (uses provider default if None).
-            temperature: Sampling temperature (0.0 to 1.0).
+            temperature: Sampling temperature (0.0 to 1.0). `None` = padrão
+                do modelo: o provider não envia parâmetro de amostragem.
             max_tokens: Maximum tokens to generate.
             response_schema: Optional Pydantic model for structured output.
             **kwargs: Additional provider-specific parameters.

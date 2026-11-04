@@ -307,7 +307,9 @@ numa rodada e `null` na outra.
 | B — emissão | O LLM emite a resposta fechada. O código valida | `response_mime_type=application/json` |
 | Auditor | Um segundo modelo tenta refutar cada prova | JSON fechado |
 
-Todas as chamadas usam `temperature=0` e `seed` fixo por conexo, fase e turno.
+As chamadas não enviam temperature, top_p, top_k nem seed. Os parâmetros ficam no
+padrão do modelo, como o Google pede para o Gemini 3 (decisão R13 do Alfredo).
+O determinismo vem das regras e dos validadores.
 
 ### Ferramentas da fase A
 

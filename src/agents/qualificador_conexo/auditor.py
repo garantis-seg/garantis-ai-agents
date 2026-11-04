@@ -27,7 +27,6 @@ from garantis_shared.llm_models import model_for
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from ...utils.llm_json import parse_llm_json
-from .._utils.llm_seed import seed_for
 from .prompts import build_auditor_prompt
 from .schemas import MAX_MOTIVO
 
@@ -84,10 +83,12 @@ async def auditar(
         resp = await llm.agenerate(
             prompt=build_auditor_prompt(afirmacoes),
             model=DEFAULT_MODEL,
-            temperature=0.0,
+            # R13: parâmetros no padrão do modelo, conforme o Google
+            # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+            # faz o provider omitir temperature, top_p, top_k e seed.
+            temperature=None,
             max_tokens=4096,
             response_mime_type="application/json",
-            seed=seed_for("qualificador_conexo_auditor", conexo_id, tentativa),
         )
         chamadas += 1
         custo += float((resp.metadata or {}).get("cost_usd", 0.0) or 0.0)
