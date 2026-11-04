@@ -430,6 +430,20 @@ class RodadaDetalhe(BaseModel):
     avisos: list[str] = Field(default_factory=list)
 
 
+class FaseAMetricas(BaseModel):
+    """As métricas da fase A do v5, para comparar o protocolo em texto e o nativo.
+
+    `modo` diz qual protocolo rodou (`FICHA_FASE_A_NATIVA`). `chamadas` conta os turnos
+    do modelo na fase A. `invalidas` conta os turnos sem chamada válida. `custo_usd` é
+    o custo da fase A: os turnos do modelo e as leituras do Leitor.
+    """
+
+    modo: Literal["texto", "nativo"]
+    chamadas: int = 0
+    invalidas: int = 0
+    custo_usd: float = 0.0
+
+
 class FichaWriteFieldsResponse(BaseModel):
     """Response do POST /ficha/write-fields.
 
@@ -470,3 +484,5 @@ class FichaWriteFieldsResponse(BaseModel):
     versao: Optional[str] = None
     #: O modo do request: "v5" ou "v4". O v3 omite (24/10/2026).
     modo: Optional[str] = None
+    #: v5: o protocolo da fase A e as contagens dele. Aditivo: o v4 e o v3 omitem.
+    fase_a_metricas: Optional[FaseAMetricas] = None

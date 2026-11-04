@@ -57,6 +57,12 @@ via administrativa" em 4 slots, e a data não existe em fonte nenhuma. Agora:
   concluída no esqueleto ou com a decisão literal nos documentos.
 - Falhou: erro estruturado para o retry, com a lista das datas e dos números
   permitidos. Na última rodada, `success=false`.
+
+Protocolo da fase A (R11, medir antes de trocar). A flag de ambiente
+`FICHA_FASE_A_NATIVA` escolhe o turno de decisão: desligada, o modelo responde um
+JSON (o protocolo em texto, sem mudança). Ligada, o modelo chama uma função declarada
+no SDK (`fase_a_nativa.py`). Budget, breaker, validação e fase B são os mesmos. A
+resposta traz `fase_a_metricas` nos 2 modos, para a comparação.
 """
 
 from __future__ import annotations
@@ -72,6 +78,7 @@ from ...providers import create_provider
 from ...utils.llm_json import parse_llm_json
 from .._utils.prompt_identity import versao_com_identidade
 from .agent import _resolve_campos_alvo
+from .fase_a_nativa import DecisorNativo, fase_a_nativa_ligada
 from .ferramentas import Autos, BudgetNavegacao, cortar_trecho, custo_da_resposta, navegar
 from .livro import SlotResolvido, chave_livro, motivos_nao_aplicaveis, resolver_slots
 from .prompts_v4 import _fatos_fixos
@@ -84,6 +91,7 @@ from .prompts_v5 import (
 from .schemas import (
     AlertaRespondido,
     ErroDeCampo,
+    FaseAMetricas,
     FichaWriteFieldsRequest,
     MAX_TRECHO_APOIO,
     FichaWriteFieldsResponse,
@@ -342,21 +350,35 @@ async def write_v5(
     llm = create_provider(provider)
 
     # ── Fase A — navegação ──────────────────────────────────────────────────
+    # A flag escolhe o protocolo do turno de decisão. Sem a flag, o decisor é o do
+    # texto (default de `navegar`), e o prompt é o mesmo de antes.
+    nativo = fase_a_nativa_ligada()
     budget = BudgetNavegacao(max_por_ficha=BUDGET_POR_FICHA, max_por_doc=BUDGET_POR_DOC)
     nav = await navegar(
         llm=llm, model=model, autos=autos, budget=budget,
         prompt_de_decisao=lambda achados, menu, restante, por_doc: build_prompt_navegacao(
             request, chave=chave, slots=slots, citaveis=citaveis_txt, nucleo=nucleo_llm,
             indice=indice_llm, achados=achados, menu=menu, budget_restante=restante,
-            budget_por_doc=por_doc,
+            budget_por_doc=por_doc, nativo=nativo,
         ),
         leitor_perguntar=leitor_perguntar, leitor_resumir=leitor_resumir,
         rotulo="FICHA_WRITER_V5",
+        decisor=DecisorNativo(llm, model) if nativo else None,
     )
     cost_total = nav.custo_usd
+    metricas = FaseAMetricas(
+        modo=nav.modo, chamadas=nav.chamadas_llm, invalidas=nav.chamadas_invalidas,
+        custo_usd=round(nav.custo_usd, 6),
+    )
+    logger.info(
+        "FICHA_WRITER_V5_FASE_A modo=%s chamadas=%d invalidas=%d chamadas_ferramenta=%d "
+        "documentos_lidos=%d budget_esgotado=%s custo_usd=%.6f",
+        metricas.modo, metricas.chamadas, metricas.invalidas, budget.chamadas,
+        len(autos.lidos), nav.budget_esgotado, metricas.custo_usd,
+    )
     nav_info = {
         "documentos_lidos": sorted(autos.lidos), "chamadas_ferramenta": budget.chamadas,
-        "budget_esgotado": nav.budget_esgotado,
+        "budget_esgotado": nav.budget_esgotado, "fase_a_metricas": metricas,
     }
 
     # ── Fase B — escrita com validação ──────────────────────────────────────

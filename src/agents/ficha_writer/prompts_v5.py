@@ -145,9 +145,15 @@ def build_prompt_navegacao(
     budget_restante: int,
     budget_por_doc: int,
     fence_token: Optional[str] = None,
+    nativo: bool = False,
 ) -> str:
-    """O turno de decisão: UMA ferramenta por turno, ou o fim da leitura."""
+    """O turno de decisão: UMA ferramenta por turno, ou o fim da leitura.
+
+    `nativo=True` troca só o bloco `<ferramentas>`: o modelo chama uma função declarada
+    no SDK (`fase_a_nativa.py`) em vez de responder um JSON. O resto do prompt é o mesmo.
+    """
     token = fence_token or gerar_fence_token()
+    bloco = _bloco_ferramentas_nativo if nativo else _bloco_ferramentas_texto
     return "\n\n".join([
         _persona_v5(req, chave),
         _bloco_fatos(req, token, citaveis),
@@ -156,7 +162,13 @@ def build_prompt_navegacao(
         _bloco_slots(slots),
         _bloco_missao(slots),
         _bloco_leituras(achados, token),
-        f"""<ferramentas>
+        bloco(menu, budget_restante, budget_por_doc),
+    ])
+
+
+def _bloco_ferramentas_texto(menu: list[str], budget_restante: int, budget_por_doc: int) -> str:
+    """O protocolo em texto: a chamada é um JSON na resposta."""
+    return f"""<ferramentas>
 AGORA VOCÊ SÓ LÊ. Você escreve os slots depois, em outro turno.
 Escolha UMA ação por turno. Responda SÓ com um JSON:
 
@@ -173,8 +185,23 @@ Escolha UMA ação por turno. Responda SÓ com um JSON:
 `slot` diz para qual slot a leitura serve.
 Ferramentas disponíveis agora: {json.dumps(menu, ensure_ascii=False)}.
 Chamadas restantes na ficha: {budget_restante}. Teto por documento: {budget_por_doc}.
-</ferramentas>""",
-    ])
+</ferramentas>"""
+
+
+def _bloco_ferramentas_nativo(menu: list[str], budget_restante: int, budget_por_doc: int) -> str:
+    """O protocolo nativo: a chamada é uma função do SDK. As descrições das funções
+    ficam na declaração (`fase_a_nativa.declaracoes`), não aqui."""
+    return f"""<ferramentas>
+AGORA VOCÊ SÓ LÊ. Você escreve os slots depois, em outro turno.
+Chame UMA função por turno: `resumir_com_missao`, `perguntar_ao_documento` ou
+`pedir_pagina`. Quando o núcleo e o que você leu bastam para escrever todos os slots,
+chame `terminar_leitura`. Não responda em texto.
+
+`doc_id` é um item do ÍNDICE com legivel=true. O núcleo não precisa de ferramenta.
+`slot` diz para qual slot a leitura serve.
+Ferramentas disponíveis agora: {json.dumps(menu, ensure_ascii=False)}.
+Chamadas restantes na ficha: {budget_restante}. Teto por documento: {budget_por_doc}.
+</ferramentas>"""
 
 
 # ── Fase B — escrita ────────────────────────────────────────────────────────

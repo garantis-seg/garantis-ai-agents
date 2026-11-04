@@ -806,10 +806,48 @@ class ResultadoNavegacao:
     chamadas_llm: int = 0
     custo_usd: float = 0.0
     budget_esgotado: bool = False
+    #: Turnos do modelo sem chamada válida (nos 2 protocolos).
+    chamadas_invalidas: int = 0
+    #: O protocolo da fase A: `texto` (JSON na resposta) ou `nativo` (função do SDK).
+    modo: str = "texto"
 
 
 #: `(achados, menu, budget_restante, budget_por_doc) -> prompt`.
 PromptDeDecisao = Callable[[list[dict[str, Any]], list[str], int, int], str]
+
+#: O turno de decisão: `(prompt, menu) -> (resposta do provider, chamada ou None)`.
+#: A chamada tem a forma de `parse_chamada`: `{"tool", "args"}` ou `{"fim": True}`.
+Decisor = Callable[[str, list[str]], Awaitable[tuple[Any, Optional[dict[str, Any]]]]]
+
+#: O achado de um turno sem chamada legível, no protocolo em texto.
+ERRO_PROTOCOLO_TEXTO = "resposta sem chamada JSON válida. Responda um JSON só."
+
+
+class DecisorTexto:
+    """O protocolo em texto: o modelo responde um JSON, e `parse_chamada` o lê.
+
+    A chamada vai sem temperature e sem seed: parâmetros no padrão do modelo.
+    A fase A NUNCA leva response_mime_type (ver tests/test_duas_fases.py).
+    """
+
+    modo = "texto"
+    erro_protocolo = ERRO_PROTOCOLO_TEXTO
+
+    def __init__(self, llm: Any, model: str):
+        self.llm = llm
+        self.model = model
+
+    async def __call__(self, prompt: str, menu: list[str]) -> tuple[Any, Optional[dict]]:
+        resp = await self.llm.agenerate(
+            prompt=prompt,
+            model=self.model,
+            # R13: parâmetros no padrão do modelo, conforme o Google
+            # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
+            # faz o provider omitir temperature, top_p, top_k e seed.
+            temperature=None,
+            max_tokens=2048,
+        )
+        return resp, parse_chamada(resp.text or "")
 
 
 async def navegar(
@@ -822,12 +860,19 @@ async def navegar(
     leitor_perguntar: Optional[Leitor] = None,
     leitor_resumir: Optional[Leitor] = None,
     rotulo: str = "FICHA",
+    decisor: Optional[Decisor] = None,
 ) -> ResultadoNavegacao:
     """A fase A. Sem documento legível no índice, ela não chama o LLM.
 
-    A chamada vai sem temperature e sem seed: parâmetros no padrão do modelo.
+    `decisor` é o protocolo do turno de decisão. O default é `DecisorTexto`. O budget,
+    o circuit breaker, a execução e a validação dos argumentos são os mesmos nos 2
+    protocolos: só o turno de decisão muda.
     """
     out = ResultadoNavegacao()
+    if decisor is None:
+        decisor = DecisorTexto(llm, model)
+    out.modo = str(getattr(decisor, "modo", "texto"))
+    erro_protocolo = str(getattr(decisor, "erro_protocolo", ERRO_PROTOCOLO_TEXTO))
     if not autos.legiveis:
         return out
     perguntar = leitor_perguntar or perguntar_via_doc_reader
@@ -841,26 +886,20 @@ async def navegar(
             logger.warning("%s_BUDGET chamadas=%d", rotulo, budget.chamadas)
             break
         turno += 1
-        # A fase A NUNCA leva response_mime_type (ver tests/test_duas_fases.py).
-        resp = await llm.agenerate(
-            prompt=prompt_de_decisao(
-                out.achados, menu(breaker), budget.restante(), budget.max_por_doc,
-            ),
-            model=model,
-            # R13: parâmetros no padrão do modelo, conforme o Google
-            # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
-            # faz o provider omitir temperature, top_p, top_k e seed.
-            temperature=None,
-            max_tokens=2048,
+        resp, chamada = await decisor(
+            prompt_de_decisao(out.achados, menu(breaker), budget.restante(), budget.max_por_doc),
+            menu(breaker),
         )
         out.chamadas_llm += 1
         out.custo_usd += custo_da_resposta(resp)
 
-        chamada = parse_chamada(resp.text or "")
         if chamada is None:
             falhas_protocolo += 1
-            out.achados.append({"erro": "resposta sem chamada JSON válida. Responda um JSON só."})
+            out.chamadas_invalidas += 1
+            out.achados.append({"erro": erro_protocolo})
             if falhas_protocolo >= MAX_FALHAS_DE_PROTOCOLO:
+                logger.warning("%s_PROTOCOLO modo=%s falhas=%d: fase A encerrada",
+                               rotulo, out.modo, falhas_protocolo)
                 break
             continue
         falhas_protocolo = 0
@@ -911,6 +950,9 @@ __all__ = [
     "CircuitBreaker",
     "Conferencia",
     "ResultadoNavegacao",
+    "Decisor",
+    "DecisorTexto",
+    "ERRO_PROTOCOLO_TEXTO",
     "cortar_trecho",
     "custo_da_resposta",
     "navegar",
