@@ -45,6 +45,13 @@ class TestONomeDaParte:
         for termo in ("NOME", "COPIADO", "'; '", "null", "papel", "CONTEXTO DO PROCESSO", POLO):
             assert termo in desc, termo
 
+    def test_mon07_120_7_a_intimacao_com_uma_parte_sem_nome_sai_sem_nome(self):
+        """'Intimem-se a executada e o sócio JOÃO': com só o JOÃO no campo, o frontend-api leria
+        'outra parte' e tiraria o E10 do Tomador. Sem o nome, vale o polo."""
+        desc = MovFactSheetCardV4.model_fields[CAMPO].description
+        assert "alguma fica sem nome" in desc
+        assert "alguma das\n  partes intimadas fica sem nome" in _REGRAS_CRUS
+
     def test_o_prompt_repete_a_regra(self):
         assert f"- {CAMPO}:" in _REGRAS_CRUS
 
@@ -84,6 +91,17 @@ class TestAPecaChunkada:
     def test_sem_o_nome_em_pedaco_nenhum_o_reduce_da_None(self):
         assert reduce_peca_cards(self._cards(2))[CAMPO] is None
 
+    def test_mon07_120_7_o_pedaco_que_intima_sem_nomear_tira_o_nome_do_card(self):
+        """O pedaço 1 intima a executada sem nome, e o 2 intima o sócio pelo nome. Com só o nome do
+        sócio, o frontend-api leria 'outra parte' e tiraria o E10 do Tomador."""
+        cards = self._cards(2)
+        cards[0][POLO] = "passivo"
+        cards[1][POLO] = "passivo"
+        cards[1][CAMPO] = "JOAO DA SILVA"
+        assert reduce_peca_cards(cards)[CAMPO] is None
+        cards[0][CAMPO] = "ACME S.A."   # controle: os 2 pedaços nomeiam
+        assert reduce_peca_cards(cards)[CAMPO] == "ACME S.A.; JOAO DA SILVA"
+
 
 class TestOL2NaoMuda:
     def test_o_prompt_do_L2_e_BYTE_IDENTICO_com_e_sem_o_nome(self):
@@ -118,8 +136,12 @@ class TestADecisaoAdministrativaJuntada:
         assert orgao in _linha("prova_anexa")
         assert orgao in MovFactSheetCardV4.model_fields["tipo_doc"].description
 
-    def test_o_acordao_e_so_o_do_tribunal_judicial(self):
-        assert "JUDICIAL" in _linha("acordao")
+    @pytest.mark.parametrize("tipo", ["acordao", "voto"])
+    def test_o_acordao_e_o_voto_sao_so_os_do_tribunal_judicial(self, tipo):
+        """O voto do conselheiro do CARF tem forma de voto: a linha da `prova_anexa` o nomeia."""
+        assert "JUDICIAL" in _linha(tipo)
+        assert tipo in _linha("prova_anexa")
+        assert f"'{tipo}'" in MovFactSheetCardV4.model_fields["tipo_doc"].description
 
     def test_a_taxonomia_segue_com_os_34_tipos_do_schema(self):
         """CONTROLE: a prosa mudou, e a lista de tipos não. Cada tipo do Literal abre 1 linha."""

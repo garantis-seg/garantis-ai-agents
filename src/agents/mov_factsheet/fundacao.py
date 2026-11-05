@@ -144,7 +144,7 @@ TAXONOMIA_TIPO_DOC = """tipo_doc — classifique em UMA destas opcoes (use 'outr
                                decidir nada de fundo. Na DUVIDA entre despacho e decisao_interlocutoria:
                                se ha qualquer determinacao de conteudo (valor, direito, garantia) =>
                                decisao_interlocutoria.
-  voto                       — voto de relator/revisor que compoe um acordao
+  voto                       — voto de relator/revisor que compoe um acordao JUDICIAL
   peticao_inicial            — peca que inaugura a acao: narra fatos, fundamenta e pede
   peticao                    — manifestacao de parte no curso do processo (intercorrente)
   contestacao                — defesa do reu contra o pedido inicial
@@ -174,7 +174,7 @@ TAXONOMIA_TIPO_DOC = """tipo_doc — classifique em UMA destas opcoes (use 'outr
   prova_anexa                — documento juntado como PROVA/anexo sem ato proprio. Inclui a DECISAO
                                de orgao ADMINISTRATIVO juntada aos autos (acordao do CARF/CSRF,
                                decisao da DRJ, do TIT ou de conselho de contribuintes): ela nao e
-                               ato deste processo, mesmo com forma de acordao ou sentenca.
+                               ato deste processo, mesmo com forma de acordao, voto ou sentenca.
   ilegivel                  — documento sem texto util / OCR corrompido / so carimbo de assinatura
   outros                     — nao se encaixa em nenhum tipo acima"""
 

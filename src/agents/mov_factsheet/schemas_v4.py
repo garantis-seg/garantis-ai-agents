@@ -258,8 +258,8 @@ class MovFactSheetCardV4(BaseModel):
     )
     tipo_doc: TIPO_DOC = Field(description=(
         "Tipo da peça/documento — UM da taxonomia (34 valores). A decisão de órgão "
-        "ADMINISTRATIVO juntada aos autos (acórdão do CARF/CSRF, decisão da DRJ ou do TIT) é "
-        "'prova_anexa', e não 'acordao': ela não é ato deste processo."
+        "ADMINISTRATIVO juntada aos autos (acórdão ou voto do CARF/CSRF, decisão da DRJ ou do "
+        "TIT) é 'prova_anexa', e não 'acordao' nem 'voto': ela não é ato deste processo."
     ))
     relevancia_merito: Literal["alta", "media", "baixa", "ruido"] = Field(
         description=(
@@ -312,8 +312,10 @@ class MovFactSheetCardV4(BaseModel):
             "pagar, COPIADO do ato como ele o escreve ('intime-se a executada GERDAU AÇOS LONGOS "
             "S.A. para pagar' -> 'GERDAU AÇOS LONGOS S.A.'). Mais de uma parte: os nomes "
             "separados por '; '. ⛔ null quando o ato não NOMEIA a parte ('intime-se a "
-            "executada'): não escreva o papel no lugar do nome e não tire o nome do CONTEXTO DO "
-            "PROCESSO. null sempre que `intimacao_pagamento_polo` for null."
+            "executada'), e null quando ele intima mais de uma parte e alguma fica sem nome "
+            "('intimem-se a executada e o sócio JOÃO DA SILVA'): não escreva o papel no lugar do "
+            "nome e não tire o nome do CONTEXTO DO PROCESSO. null sempre que "
+            "`intimacao_pagamento_polo` for null."
         ),
     )
 

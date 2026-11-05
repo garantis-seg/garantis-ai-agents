@@ -95,6 +95,16 @@ def _union_admin(cards: list[dict]) -> list[dict]:
     return out
 
 
+def _nomes_intimados(cards: list[dict]) -> str | None:
+    """Os nomes intimados de TODOS os pedaços: o coexecutado num pedaço e o Tomador noutro. O
+    pedaço que intima sem nomear deixa o card sem nome: a parte sem nome pode ser o Tomador, e
+    o polo decide."""
+    if any(c.get("intimacao_pagamento_polo") and not c.get("intimacao_pagamento_parte") for c in cards):
+        return None
+    return "; ".join(dict.fromkeys(
+        c["intimacao_pagamento_parte"] for c in cards if c.get("intimacao_pagamento_parte"))) or None
+
+
 def reduce_peca_cards(cards: list[dict]) -> dict:
     """Combina N cards (built MovFactSheetCardV4 dicts) de chunks de UM doc → 1 card base.
 
@@ -156,9 +166,7 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
         # Fora do reduce, a peça chunkada perderia o campo do E10 em silêncio.
         "intimacao_pagamento_polo": next(
             (c.get("intimacao_pagamento_polo") for c in cards if c.get("intimacao_pagamento_polo")), None),
-        # Os nomes de TODOS os pedaços: o coexecutado num pedaço e o Tomador noutro.
-        "intimacao_pagamento_parte": "; ".join(dict.fromkeys(
-            c["intimacao_pagamento_parte"] for c in cards if c.get("intimacao_pagamento_parte"))) or None,
+        "intimacao_pagamento_parte": _nomes_intimados(cards),
     }
     if cards[0].get("data"):
         out["data"] = cards[0]["data"]

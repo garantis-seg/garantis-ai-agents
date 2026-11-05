@@ -266,8 +266,8 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
   quando a cobrança é só de custas, taxa ou honorários, na citação inicial para pagar ou
   garantir, e na peça de parte que só PEDE a intimação.
 - intimacao_pagamento_parte: com o polo acima, o NOME dessa parte COPIADO do ato ('A; B' quando
-  são várias). null quando o ato não nomeia a parte ("intime-se a executada"): não escreva o
-  papel e não tire o nome do contexto do processo."""
+  são várias). null quando o ato não nomeia a parte ("intime-se a executada") e quando alguma das
+  partes intimadas fica sem nome: não escreva o papel e não tire o nome do contexto do processo."""
 
 
 def _build_orfao_prompt_v4(
