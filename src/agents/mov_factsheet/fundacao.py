@@ -136,7 +136,7 @@ def familia_block(processo: Any) -> str:
 # ── taxonomia tipo_doc (34) + relevante_garantia — prosa pro prompt ───────────
 TAXONOMIA_TIPO_DOC = """tipo_doc — classifique em UMA destas opcoes (use 'outros' so se nada se encaixar):
   sentenca                   — decisao que julga o merito e encerra a fase de conhecimento em 1o grau
-  acordao                    — decisao colegiada de tribunal (2o grau ou superior)
+  acordao                    — decisao colegiada de tribunal JUDICIAL (2o grau ou superior)
   decisao_interlocutoria     — decisao que RESOLVE/DETERMINA algo com conteudo decisorio sem encerrar
                                o feito. Se o ato DECIDE/DETERMINA (nao so encaminha) e assinado por
                                JUIZ/RELATOR => decisao_interlocutoria, NAO despacho.
@@ -144,7 +144,7 @@ TAXONOMIA_TIPO_DOC = """tipo_doc — classifique em UMA destas opcoes (use 'outr
                                decidir nada de fundo. Na DUVIDA entre despacho e decisao_interlocutoria:
                                se ha qualquer determinacao de conteudo (valor, direito, garantia) =>
                                decisao_interlocutoria.
-  voto                       — voto de relator/revisor que compoe um acordao
+  voto                       — voto de relator/revisor que compoe um acordao JUDICIAL
   peticao_inicial            — peca que inaugura a acao: narra fatos, fundamenta e pede
   peticao                    — manifestacao de parte no curso do processo (intercorrente)
   contestacao                — defesa do reu contra o pedido inicial
@@ -171,8 +171,11 @@ TAXONOMIA_TIPO_DOC = """tipo_doc — classifique em UMA destas opcoes (use 'outr
   planilha_calculo           — memoria/planilha de calculo de valores
   parecer                    — manifestacao tecnica/opinativa (MP, juridico, contabil)
   laudo_pericial             — laudo de pericia tecnica produzida nos autos
-  prova_anexa                — documento juntado como PROVA/anexo sem ato proprio
-  ilegivel                   — documento sem texto util / OCR corrompido / so carimbo de assinatura
+  prova_anexa                — documento juntado como PROVA/anexo sem ato proprio. Inclui a DECISAO
+                               de orgao ADMINISTRATIVO juntada aos autos (acordao do CARF/CSRF,
+                               decisao da DRJ, do TIT ou de conselho de contribuintes): ela nao e
+                               ato deste processo, mesmo com forma de acordao, voto ou sentenca.
+  ilegivel                  — documento sem texto util / OCR corrompido / so carimbo de assinatura
   outros                     — nao se encaixa em nenhum tipo acima"""
 
 RELEVANTE_GARANTIA = (

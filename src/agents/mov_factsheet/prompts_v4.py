@@ -264,7 +264,10 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
   PAGAR ou DEPOSITAR a dívida em prazo ("intime-se a executada para pagar o débito em 15
   dias"). null quando o ato não manda pagar, quando só a garantidora é intimada (acionamento),
   quando a cobrança é só de custas, taxa ou honorários, na citação inicial para pagar ou
-  garantir, e na peça de parte que só PEDE a intimação."""
+  garantir, e na peça de parte que só PEDE a intimação.
+- intimacao_pagamento_parte: com o polo acima, o NOME dessa parte COPIADO do ato ('A; B' quando
+  são várias). null quando o ato não nomeia a parte ("intime-se a executada") e quando alguma das
+  partes intimadas fica sem nome: não escreva o papel e não tire o nome do contexto do processo."""
 
 
 def _build_orfao_prompt_v4(
@@ -414,7 +417,8 @@ confie nisso). Sua missão tem DUAS partes:
 PARTE 1 — FactSheet da peça (campos do card):
 - tipo_doc='peticao_inicial'. tem_decisao=false e decisao toda null (petição é pedido da
   parte, não decisão judicial).
-- intimacao_pagamento_polo=null: a petição PEDE a intimação, e o pedido não é o ato.
+- intimacao_pagamento_polo=null e intimacao_pagamento_parte=null: a petição PEDE a intimação,
+  e o pedido não é o ato.
 - resumo_ato: a TESE e o PEDIDO da inicial em até ~150 palavras (quem pede, o quê, com
   que fundamento principal).
 - evento_garantia: SÓ se a petição OFERECE garantia (seguro garantia/fiança/depósito) —

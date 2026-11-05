@@ -183,7 +183,7 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
     if classe == "peticao":
         # A peticao inicial e peca de PARTE: ela PEDE a intimacao, e o pedido nao e o ato. O
         # campo vem herdado do card, e o prompt do 1P nao traz a regra dele (`_REGRAS_CRUS`).
-        card_data["intimacao_pagamento_polo"] = None
+        card_data["intimacao_pagamento_polo"] = card_data["intimacao_pagamento_parte"] = None
     aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
     return card_data
 
