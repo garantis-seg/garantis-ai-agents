@@ -206,7 +206,10 @@ class EventoGarantiaV4(BaseModel):
             "Evento envolvendo a garantia/apólice: 'apresentacao'/'aceitacao'/'recusa'/"
             "'levantamento'(restituição AO privado)/'substituicao'/'reforco'; "
             "'acionamento'=ordem de EXECUTAR/converter a garantia em pagamento (intime-se a "
-            "garantidora a pagar/depositar); 'nenhum' quando a mov não trata de garantia."
+            "garantidora a pagar/depositar); 'nenhum' quando a mov não trata de garantia. "
+            "⛔ A intimação de uma PARTE (executado, devedor, exequente) para pagar ou depositar "
+            "a dívida NÃO é 'acionamento': ela vai em `intimacao_pagamento_polo`. 'acionamento' "
+            "é só a ordem dirigida à GARANTIDORA ou a que converte a garantia em pagamento."
         ),
     )
     motivo: Optional[str] = Field(
@@ -271,6 +274,28 @@ class MovFactSheetCardV4(BaseModel):
             "10/03/2024'), SOMENTE quando diferir da data de publicação da mov E houver "
             "data explícita no texto. É inferência da LLM, não dado autoritativo. "
             "null em todos os outros casos (NÃO repita a data da publicação)."
+        ),
+    )
+    # Consumido por NOME de chave no garantis-shared (`card_to_row`, coluna própria na tipada)
+    # e no frontend-api (o evento E10 da lista da Daycoval, `services/monit_eventos.py`).
+    # Neutro como o `recorrente_polo`: a LLM diz o POLO, e quem decide se ele é o do Tomador é
+    # o código, pelo mesmo `lado` do sentido on-read. Sem bump de versão: card sem a chave =
+    # "não medido", nunca "o ato não manda pagar".
+    # ⚠️ ÚLTIMO campo de propósito: sob constrained decoding a ordem dos campos é a ordem da
+    # saída, então os campos antigos saem como antes.
+    intimacao_pagamento_polo: Optional[Literal["ativo", "passivo"]] = Field(
+        default=None,
+        description=(
+            "Quando o ATO do juízo ou da secretaria manda INTIMAR uma PARTE para PAGAR ou "
+            "DEPOSITAR a DÍVIDA cobrada em prazo (ex.: 'intime-se a executada para pagar o "
+            "débito em 15 dias', 'intime-se a devedora para efetuar o pagamento da quantia "
+            "devida'): o POLO dessa parte ('ativo' OU 'passivo', neutro). Ache no CONTEXTO DO "
+            "PROCESSO em qual polo ela está. "
+            "⛔ null quando: o ato não manda pagar; só a GARANTIDORA/seguradora é intimada a "
+            "pagar (isso é evento_garantia.tipo='acionamento'); a cobrança é só de custas, "
+            "taxa judiciária, despesas ou honorários; é a CITAÇÃO inicial para pagar ou "
+            "garantir a execução; o documento é peça de PARTE que PEDE a intimação (o pedido "
+            "não é o ato). ⛔ Não invente: sem o trecho que manda a parte pagar, null."
         ),
     )
 

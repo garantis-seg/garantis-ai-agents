@@ -151,7 +151,7 @@ def _sem_dispositivo(card_data: dict) -> bool:
 
 
 def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
-                   sem_corpo: bool = False) -> dict:
+                   sem_corpo: bool = False, classe: Optional[str] = None) -> dict:
     """Caminho v4 (fatos neutros): valida o card, injeta identidade pos-parse (mov_id/data
     NAO sao emitidos pela LLM — ficam fora do response_schema) e aplica os derivados
     sujeito-INDEPENDENTES no ponto comum G6 (categoria/status_garantia/relevante/peca_pivo).
@@ -180,6 +180,10 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
             card_data.get("tipo_doc"),
         )
         _zerar_decisao(card_data)                # idem — a ancora e a outra metade
+    if classe == "peticao":
+        # A peticao inicial e peca de PARTE: ela PEDE a intimacao, e o pedido nao e o ato. O
+        # campo vem herdado do card, e o prompt do 1P nao traz a regra dele (`_REGRAS_CRUS`).
+        card_data["intimacao_pagamento_polo"] = None
     aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
     return card_data
 
@@ -376,6 +380,7 @@ async def classify_mov_factsheet(
             parsed, mov,
             card_cls=response_schema if classe in ("peticao", "doc_incerto") else None,
             sem_corpo=_sem_corpo(mov, docs_typed),
+            classe=classe,
         )
     except (json.JSONDecodeError, Exception) as e:
         # L1_PARSE_FAIL diag: finish_reason distingue MAX_TOKENS / STOP-
