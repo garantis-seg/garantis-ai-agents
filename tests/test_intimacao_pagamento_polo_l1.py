@@ -53,6 +53,21 @@ class TestOSchemaDoL1:
             assert termo in desc, termo
 
 
+class TestAPeticaoInicial:
+    def test_a_peticao_inicial_sai_sem_o_campo_mesmo_quando_a_leitura_o_preenche(self):
+        """A inicial PEDE a intimação: o pedido não é o ato. O prompt do 1P não traz a regra do
+        campo, então o card da petição o zera no código."""
+        from src.agents.mov_factsheet.agent import _build_card_v4
+        from src.agents.mov_factsheet.schemas import MovInput
+
+        parsed = {"resumo_ato": "Requer a intimação da executada para pagar.",
+                  "tipo_doc": "peticao_inicial", "relevancia_merito": "media", CAMPO: "passivo"}
+        mov = MovInput(mov_id="peticao-x", texto="")
+        assert _build_card_v4(parsed, mov, card_cls=PeticaoExtractCardV4, classe="peticao")[CAMPO] is None
+        # controle: o ramo da movimentação guarda o polo que a leitura deu
+        assert _build_card_v4({**parsed, "tipo_doc": "despacho"}, mov)[CAMPO] == "passivo"
+
+
 class TestOAcionamento:
     def test_mon07_120_2_o_acionamento_exclui_a_intimacao_de_uma_parte(self):
         """A descrição do `acionamento` manda a intimação de uma PARTE para o campo novo. Sem

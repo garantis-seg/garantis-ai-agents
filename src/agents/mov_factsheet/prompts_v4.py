@@ -414,6 +414,7 @@ confie nisso). Sua missão tem DUAS partes:
 PARTE 1 — FactSheet da peça (campos do card):
 - tipo_doc='peticao_inicial'. tem_decisao=false e decisao toda null (petição é pedido da
   parte, não decisão judicial).
+- intimacao_pagamento_polo=null: a petição PEDE a intimação, e o pedido não é o ato.
 - resumo_ato: a TESE e o PEDIDO da inicial em até ~150 palavras (quem pede, o quê, com
   que fundamento principal).
 - evento_garantia: SÓ se a petição OFERECE garantia (seguro garantia/fiança/depósito) —
