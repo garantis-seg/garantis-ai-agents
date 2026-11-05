@@ -258,7 +258,13 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
 - efeito_suspensivo: true se o recurso/decisão suspende os efeitos da decisão recorrida.
 - evento_garantia.tipo='acionamento' = ordem de EXECUTAR/converter a garantia em pagamento
   (intime-se a garantidora a pagar/depositar). Distinga de 'levantamento' (restituição da
-  garantia AO depositante)."""
+  garantia AO depositante). ⛔ Intimar uma PARTE (executado, devedor) a pagar a dívida NÃO é
+  acionamento: é o campo abaixo.
+- intimacao_pagamento_polo: o POLO ('ativo'/'passivo') da PARTE que o ato manda intimar para
+  PAGAR ou DEPOSITAR a dívida em prazo ("intime-se a executada para pagar o débito em 15
+  dias"). null quando o ato não manda pagar, quando só a garantidora é intimada (acionamento),
+  quando a cobrança é só de custas, taxa ou honorários, na citação inicial para pagar ou
+  garantir, e na peça de parte que só PEDE a intimação."""
 
 
 def _build_orfao_prompt_v4(

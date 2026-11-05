@@ -153,6 +153,9 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
             "valor_garantia": vmax("valor_garantia"),
         },
         "data_inferida_ato": next((c.get("data_inferida_ato") for c in cards if c.get("data_inferida_ato")), None),
+        # Fora do reduce, a peça chunkada perderia o campo do E10 em silêncio.
+        "intimacao_pagamento_polo": next(
+            (c.get("intimacao_pagamento_polo") for c in cards if c.get("intimacao_pagamento_polo")), None),
     }
     if cards[0].get("data"):
         out["data"] = cards[0]["data"]
