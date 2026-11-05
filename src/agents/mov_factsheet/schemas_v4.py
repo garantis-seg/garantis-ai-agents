@@ -256,7 +256,11 @@ class MovFactSheetCardV4(BaseModel):
             "se houver substância. Técnico-jurídico, neutro. NÃO repita o resumo do processo."
         ),
     )
-    tipo_doc: TIPO_DOC = Field(description="Tipo da peça/documento — UM da taxonomia (34 valores).")
+    tipo_doc: TIPO_DOC = Field(description=(
+        "Tipo da peça/documento — UM da taxonomia (34 valores). A decisão de órgão "
+        "ADMINISTRATIVO juntada aos autos (acórdão do CARF/CSRF, decisão da DRJ ou do TIT) é "
+        "'prova_anexa', e não 'acordao': ela não é ato deste processo."
+    ))
     relevancia_merito: Literal["alta", "media", "baixa", "ruido"] = Field(
         description=(
             "Quanto este ato influencia a TESE/MÉRITO: 'alta'=decisão/sentença/acórdão/evento "
@@ -296,6 +300,20 @@ class MovFactSheetCardV4(BaseModel):
             "taxa judiciária, despesas ou honorários; é a CITAÇÃO inicial para pagar ou "
             "garantir a execução; o documento é peça de PARTE que PEDE a intimação (o pedido "
             "não é o ato). ⛔ Não invente: sem o trecho que manda a parte pagar, null."
+        ),
+    )
+    # O NOME separa o Tomador de outra parte no polo dele (o coexecutado, o sócio redirecionado):
+    # o frontend-api o compara com o do Tomador (garantis-shared `parte_e_o_tomador`) e, sem ele,
+    # cai no polo. Copiado do ATO, nunca dos polos: com 2 executados, o nome dos polos é palpite.
+    intimacao_pagamento_parte: Optional[str] = Field(
+        default=None,
+        description=(
+            "Com o `intimacao_pagamento_polo`: o NOME da parte que o ato manda intimar para "
+            "pagar, COPIADO do ato como ele o escreve ('intime-se a executada GERDAU AÇOS LONGOS "
+            "S.A. para pagar' -> 'GERDAU AÇOS LONGOS S.A.'). Mais de uma parte: os nomes "
+            "separados por '; '. ⛔ null quando o ato não NOMEIA a parte ('intime-se a "
+            "executada'): não escreva o papel no lugar do nome e não tire o nome do CONTEXTO DO "
+            "PROCESSO. null sempre que `intimacao_pagamento_polo` for null."
         ),
     )
 

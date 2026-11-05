@@ -156,6 +156,9 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
         # Fora do reduce, a peça chunkada perderia o campo do E10 em silêncio.
         "intimacao_pagamento_polo": next(
             (c.get("intimacao_pagamento_polo") for c in cards if c.get("intimacao_pagamento_polo")), None),
+        # Os nomes de TODOS os pedaços: o coexecutado num pedaço e o Tomador noutro.
+        "intimacao_pagamento_parte": "; ".join(dict.fromkeys(
+            c["intimacao_pagamento_parte"] for c in cards if c.get("intimacao_pagamento_parte"))) or None,
     }
     if cards[0].get("data"):
         out["data"] = cards[0]["data"]

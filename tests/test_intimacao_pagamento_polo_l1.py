@@ -37,10 +37,10 @@ class TestOSchemaDoL1:
         valores = set(typing.get_args(typing.get_args(f.annotation)[0]))
         assert valores == {"ativo", "passivo"}
 
-    def test_o_campo_e_o_ULTIMO_do_card(self):
+    def test_os_campos_do_e10_sao_os_ULTIMOS_do_card(self):
         """Sob constrained decoding a ordem dos campos é a ordem da saída: no fim, os campos
-        antigos saem como antes."""
-        assert list(MovFactSheetCardV4.model_fields)[-1] == CAMPO
+        antigos saem como antes. O nome da parte vem logo depois do polo."""
+        assert list(MovFactSheetCardV4.model_fields)[-2:] == [CAMPO, "intimacao_pagamento_parte"]
 
     def test_a_peticao_herda_o_campo_vazio(self):
         """O schema da petição herda o do card: a peça de parte não intima ninguém, e o campo
