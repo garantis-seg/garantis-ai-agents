@@ -3,7 +3,8 @@
 # transport + socket_options) ser HONRADO — <1.11 ignora o kwarg em silencio e o
 # keepalive fix (models/factory.py) viraria no-op. Deployed hoje = 2.10.0 (por
 # sorte do cache Kaniko, nao pelo pin antigo >=0.8.0). NAO baixar o floor.
-google-genai>=1.46.0
+# O teto: a 3.0.0 troca o httpx pelo httpx2, e o transporte com keepalive de `models/factory.py` usa o httpx.
+google-genai>=1.46.0,<3.0.0
 # httpx agora e dep DIRETA (models/factory.py importa pro transport keepalive).
 # Antes vinha so transitivo via google-genai.
 httpx>=0.28.0
