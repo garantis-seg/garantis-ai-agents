@@ -23,6 +23,7 @@ def processo():
         polo_ativo="ESTADO DE SAO PAULO",
         polo_passivo="ACME COMERCIO LTDA",
         materia="Tributário",
+        familia="fiscal",
     )
 
 

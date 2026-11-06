@@ -35,7 +35,7 @@ def test_l1_completo_mantem_o_resumo_do_llm(monkeypatch):
     monkeypatch.setattr(l1, "create_provider", lambda p: object())
     monkeypatch.setenv("L1_NEUTRAL_ENABLED", "true")
 
-    out = asyncio.run(l1.classify_mov_factsheet(processo={"cnj": "0"}, mov=MOV))
+    out = asyncio.run(l1.classify_mov_factsheet(processo={"cnj": "0", "familia": "civel"}, mov=MOV))
     assert "error" not in out["card"]
     assert out["card"]["resumo_ato"] == DEGENERADO
 
@@ -48,6 +48,6 @@ def test_triagem_mantem_o_resumo_do_llm(monkeypatch):
 
     monkeypatch.setattr(triagem, "create_provider", lambda p: _Provider())
 
-    out = asyncio.run(triagem.classify_mov_triage(processo={"cnj": "0"}, mov=MOV))
+    out = asyncio.run(triagem.classify_mov_triage(processo={"cnj": "0", "familia": "civel"}, mov=MOV))
     assert "error" not in out["card"]
     assert out["card"]["resumo_ato"] == DEGENERADO

@@ -207,7 +207,7 @@ def _classify(monkeypatch, *, documentos_anexados, documentos_gate, chunk=False,
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
     asyncio.run(A.classify_mov_factsheet(
-        processo={"cnj": "10121509520268260224"},
+        processo={"cnj": "10121509520268260224", "familia": "civel"},
         mov={"mov_id": "peticao-10121509520268260224", "texto": ""},
         documentos_anexados=documentos_anexados,
         documentos_gate=documentos_gate,
@@ -278,7 +278,7 @@ def test_o_CHUNKING_nao_pode_engolir_o_documentos_gate(monkeypatch):
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
     asyncio.run(A.classify_mov_factsheet(
-        processo={"cnj": "10121509520268260224"},
+        processo={"cnj": "10121509520268260224", "familia": "civel"},
         mov={"mov_id": "peticao-x", "texto": ""},
         documentos_anexados=gigante, documentos_gate=_GATE_POR_DOC, classe="peticao",
     ))
@@ -323,7 +323,7 @@ def test_o_CHUNKING_devolve_o_VEREDITO_da_variante_0(monkeypatch):
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
     out = asyncio.run(A.classify_mov_factsheet(
-        processo={"cnj": "10121509520268260224"},
+        processo={"cnj": "10121509520268260224", "familia": "civel"},
         mov={"mov_id": "peticao-x", "texto": ""},
         documentos_anexados=gigante, documentos_gate=_GATE_POR_DOC, classe="peticao",
     ))

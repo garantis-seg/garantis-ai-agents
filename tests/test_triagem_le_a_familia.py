@@ -40,11 +40,10 @@ def test_a_triagem_e_o_l1_v4_leem_a_mesma_familia(familia):
     assert VOCAB_FAMILIA[familia] in build_mov_factsheet_prompt_v4(proc, _MOV)
 
 
-def test_payload_sem_familia_cai_no_mesmo_fallback_do_l1(caplog):
-    """Sem a `familia` no payload, as 2 leituras caem no fallback DB-less do L1 v4, que
-    conta a queda (FALLBACK_DISPAROU): a triagem nao tem fallback proprio."""
+def test_payload_sem_familia_da_erro_nas_2_leituras():
+    """Sem a `familia` no payload, o prompt nao sai. A materia nao substitui a familia."""
     proc = _proc(materia="Tributário")
-    with caplog.at_level("WARNING"):
-        prompt = build_mov_triage_prompt(proc, _MOV)
-    assert _BLOCO["fiscal"] in prompt
-    assert "FALLBACK_DISPAROU familia=materia_familia_sem_payload" in caplog.text
+    with pytest.raises(ValueError, match="payload sem familia"):
+        build_mov_triage_prompt(proc, _MOV)
+    with pytest.raises(ValueError, match="payload sem familia"):
+        build_mov_factsheet_prompt_v4(proc, _MOV)

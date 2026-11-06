@@ -61,6 +61,7 @@ def _ctx():
         polo_ativo="ACME COMERCIO LTDA",
         polo_passivo="ESTADO DE MINAS GERAIS",
         materia="Tributario",
+        familia="fiscal",
     )
 
 

@@ -31,7 +31,7 @@ from src.agents.mov_factsheet.schemas_v4 import PeticaoExtractCardV4
 def _ctx():
     return ProcessoContext(cnj="5026352-10.2026.4.03.6100", classe="Procedimento Comum Civel",
                            polo_ativo="NESTLE BRASIL LTDA", polo_passivo="UNIAO FEDERAL",
-                           materia="Tributario")
+                           materia="Tributario", familia="fiscal")
 
 
 @pytest.fixture

@@ -22,15 +22,12 @@ response_schema (`schemas_v4` descriptions).
 """
 from __future__ import annotations
 
-import logging
 import re
 from typing import Any
 
 from .fundacao import TAXONOMIA_TIPO_DOC
 from .prompts import _summarize_doc
 from .schemas import DocAnexado, MovInput, ProcessoContext
-
-logger = logging.getLogger(__name__)
 
 # ── Caps v4.4 (decisão do Elton: "SEM LIMITE primeiro — qualidade > custo") ──
 # Sem cap de docs/mov nem por doc (o v3.1 tinha): TODOS os docs entram, governados por um
@@ -156,40 +153,14 @@ def _get(processo: Any, campo: str):
 def _familia_key(processo: Any) -> str:
     """Família da mov — escolhe qual bloco de VOCAB_FAMILIA instrui o extrator.
 
-    ⭐ DELEGA pra `garantis_shared.materia.classificar_materia`. ⛔ Não volte a casar
-    SUBSTRING sobre `materia + classe`: erra pelos dois lados —
-
-    - processo puramente TRIBUTÁRIO vira `trabalhista`, porque o cabeçalho da árvore
-      CNJ contém a palavra TRABALHO ("1208 - PROCESSO CÍVEL E DO TRABALHO - ...");
-    - processo fiscal vira `civel` quando o `assunto` não chega aqui — o
-      `ProcessoContext` tem de declará-lo, senão o pydantic o descarta.
-
-    ⚠️ `materia` (o texto da linha `Matéria:` do prompt) CONTINUA vindo de
-    `resolve_materia`, que responde outra pergunta e mantém a apólice na frente.
-    Aqui ela entra só como o último degrau da escada.
-
-    ⛔ `classe_cnj_code` NÃO é passado adiante DE PROPÓSITO: o degrau da curadoria
-    lê `ref.cnj_classes` no banco, e este serviço roda com `uses_cloud_sql: false`
-    (services.yaml) — a chamada levantaria e derrubaria TODO prompt do L1. Quem
-    tem banco é o shared, e ele já manda a resposta pronta no campo `familia`
-    (`fetch_processo_context`); o caminho local é só o fallback DB-less pra
-    payload antigo, teste e chamada direta da API.
+    A família vem pronta do shared (`fetch_processo_context`), que lê a curadoria no
+    banco. Este serviço não tem banco (`uses_cloud_sql: false`) e não classifica. Sem a
+    família, o prompt não sai: um erro aqui é melhor que um card gravado com outra família.
     """
     familia = _get(processo, "familia")
-    if familia in VOCAB_FAMILIA:
-        return familia
-
-    # Contador: o engine manda a `familia` pronta. Quem cai aqui e payload sem ela.
-    logger.warning("FALLBACK_DISPAROU familia=%s cnj=%s familia_recebida=%r",
-                   "materia_familia_sem_payload", _get(processo, "cnj"), familia)
-    from garantis_shared.materia import classificar_materia
-
-    return classificar_materia(
-        processo_numero=_get(processo, "cnj"),
-        assunto=_get(processo, "assunto"),
-        classe=_get(processo, "classe"),
-        apolice_materia=_get(processo, "materia"),
-    ).familia
+    if familia not in VOCAB_FAMILIA:
+        raise ValueError(f"payload sem familia: cnj={_get(processo, 'cnj')} familia={familia!r}")
+    return familia
 
 
 def _contexto_processo_block(processo: ProcessoContext) -> str:

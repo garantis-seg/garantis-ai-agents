@@ -30,7 +30,7 @@ from src.agents.mov_factsheet.prompts_v4 import (
 )
 from src.agents.mov_factsheet.schemas import DocAnexado, MovInput, ProcessoContext
 
-_PROC = ProcessoContext(cnj="10121509520268260224", classe="Mandado de Seguranca Civel")
+_PROC = ProcessoContext(cnj="10121509520268260224", classe="Mandado de Seguranca Civel", familia="civel")
 _MOV = MovInput(mov_id="peticao-10121509520268260224", texto="")
 _DOC = DocAnexado(
     doc_key="jb-867158", tipo="1", titulo="PETICAO INICIAL",

@@ -31,7 +31,7 @@ def resposta_vazia(monkeypatch):
 
 @pytest.mark.parametrize("classe", [None, "peticao"])
 def test_resposta_vazia_vira_card_de_erro(resposta_vazia, classe):
-    out = asyncio.run(l1.classify_mov_factsheet(processo={"cnj": "0"}, mov=MOV, classe=classe))
+    out = asyncio.run(l1.classify_mov_factsheet(processo={"cnj": "0", "familia": "civel"}, mov=MOV, classe=classe))
     assert out["card"]["error"] == repr(ValueError("empty LLM response"))
     assert "relevancia_merito" not in out["card"]
     # A chamada paga fica registrada.
@@ -43,7 +43,7 @@ def test_a_rota_devolve_500_como_no_parse_fail(resposta_vazia):
     app = FastAPI()
     app.include_router(router)
     resp = TestClient(app).post("/mov-factsheet/classify", json={
-        "processo": {"cnj": "0"}, "mov": MOV,
+        "processo": {"cnj": "0", "familia": "civel"}, "mov": MOV,
     })
     assert resp.status_code == 500
     assert "empty LLM response" in resp.json()["detail"]
