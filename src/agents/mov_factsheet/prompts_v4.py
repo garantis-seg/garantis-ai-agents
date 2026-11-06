@@ -245,6 +245,11 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
 - recorrente_parte: com o provido, o NOME de quem recorreu COPIADO do ato ('A; B' quando são
   vários). null quando o ato não nomeia quem recorreu ("o recurso da executada") e quando
   algum recorrente fica sem nome: não escreva o papel e não tire o nome do contexto do processo.
+- pedido_parte: com a natureza procedente ou improcedente, o NOME de quem fez o
+  pedido que ESTE ato julga, COPIADO do ato: o autor, o embargante, o impetrante, o requerente ('A; B'
+  quando são vários). Nos embargos à execução, é o embargante, e não o exequente. null quando o ato
+  não nomeia quem pediu ("julgo improcedentes os embargos") e quando algum fica sem nome: não
+  escreva o papel e não tire o nome do contexto do processo. null com qualquer outra natureza.
 - instrumento_cautelar: marque 'suspensao_seguranca' SÓ se for o incidente da Lei 8.437/12.016
   (requerido pelo ENTE PÚBLICO à PRESIDÊNCIA do tribunal pra sustar liminar). Liminar/MS comum
   => null. Precisão aqui é crítica. NÃO marque instrumento_cautelar numa SENTENÇA FINAL
