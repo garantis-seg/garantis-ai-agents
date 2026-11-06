@@ -184,6 +184,10 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
         # A peticao inicial e peca de PARTE: ela PEDE a intimacao, e o pedido nao e o ato. O
         # campo vem herdado do card, e o prompt do 1P nao traz a regra dele (`_REGRAS_CRUS`).
         card_data["intimacao_pagamento_polo"] = card_data["intimacao_pagamento_parte"] = None
+    if not (card_data.get("decisao") or {}).get("provido"):
+        # O nome só vale com o resultado do recurso: as 2 travas acima zeram o `provido`, e a
+        # petição não tem recurso.
+        card_data["recorrente_parte"] = None
     aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
     return card_data
 

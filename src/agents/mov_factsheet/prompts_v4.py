@@ -242,6 +242,9 @@ _REGRAS_CRUS = """=== REGRAS DOS CAMPOS CRUS (relate, NÃO julgue) ===
   agravante/recorrente), ache em qual polo ele está ('ativo'/'passivo'), e o resultado
   (provido/negado/parcial/não-conhecido). Se não der pra identificar o recorrente =>
   recorrente_polo=null. NÃO diga se foi bom/ruim pra alguém.
+- recorrente_parte: com o provido, o NOME de quem recorreu COPIADO do ato ('A; B' quando são
+  vários). null quando o ato não nomeia quem recorreu ("o recurso da executada") e quando
+  algum recorrente fica sem nome: não escreva o papel e não tire o nome do contexto do processo.
 - instrumento_cautelar: marque 'suspensao_seguranca' SÓ se for o incidente da Lei 8.437/12.016
   (requerido pelo ENTE PÚBLICO à PRESIDÊNCIA do tribunal pra sustar liminar). Liminar/MS comum
   => null. Precisão aqui é crítica. NÃO marque instrumento_cautelar numa SENTENÇA FINAL

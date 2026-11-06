@@ -110,7 +110,7 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
 
     Semântica por campo:
       relevancia = max; tipo_doc = do chunk mais relevante (evita 'outros');
-      decisao = chunk com sinal mais forte (transito > natureza > tem_decisao);
+      decisao e recorrente_parte = chunk com sinal mais forte (transito > natureza > tem_decisao);
       evento_garantia = 1o chunk com evento != nenhum; valores = max não-null/campo;
       resumo = concat não-ruido (dedup); cdas/citados = union;
       admin citados = union com o PAPEL consolidado sobre os chunks (`_union_admin`);
@@ -167,6 +167,9 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
         "intimacao_pagamento_polo": next(
             (c.get("intimacao_pagamento_polo") for c in cards if c.get("intimacao_pagamento_polo")), None),
         "intimacao_pagamento_parte": _nomes_intimados(cards),
+        # O `provido` vem do pedaço que decide, e o nome de quem recorreu anda com ele: o nome de
+        # outro pedaço pode ser o de outro recurso, citado no relatório.
+        "recorrente_parte": best_dec.get("recorrente_parte"),
     }
     if cards[0].get("data"):
         out["data"] = cards[0]["data"]

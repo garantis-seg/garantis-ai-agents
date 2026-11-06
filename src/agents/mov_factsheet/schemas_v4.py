@@ -318,6 +318,22 @@ class MovFactSheetCardV4(BaseModel):
             "`intimacao_pagamento_polo` for null."
         ),
     )
+    # O NOME decide de que lado está quem recorreu: o sentido do recurso o compara com o do Tomador
+    # (garantis-shared `recorrente_pelo_nome`). O `recorrente_polo` da leitura e o polo do Tomador
+    # não saem da mesma fonte, e aí o sentido inverte. Sem o nome, vale o que valia antes.
+    # Copiado do ATO, nunca dos polos. No fim do card, como os campos do E10.
+    recorrente_parte: Optional[str] = Field(
+        default=None,
+        description=(
+            "Com o `provido`: o NOME de quem recorreu, COPIADO do ato como ele o escreve ('Conhecido "
+            "o recurso de ACME S.A. e não provido' -> 'ACME S.A.', 'APELANTE: ESTADO DE MINAS "
+            "GERAIS' -> 'ESTADO DE MINAS GERAIS'). Mais de um recorrente: os nomes separados por "
+            "'; '. ⛔ null quando o ato não NOMEIA quem recorreu ('nego provimento ao recurso da "
+            "executada'), e null quando ele julga mais de um recurso e algum recorrente fica sem "
+            "nome: não escreva o papel no lugar do nome e não tire o nome do CONTEXTO DO PROCESSO. "
+            "null sempre que `provido` for null."
+        ),
+    )
 
     @field_validator("decisao", "evento_garantia", "valores", mode="before")
     @classmethod
