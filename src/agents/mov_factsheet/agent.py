@@ -100,6 +100,12 @@ _CAMPOS_DA_DECISAO = (
 )
 
 
+# As naturezas em que o sentido depende de quem pediu. A parcial, a homologatória e a interlocutória
+# não leem o `pedido_parte` (`derivar_sentido`, garantis-shared). A extinção também não: nela, quem
+# pediu (o executado na exceção de pré-executividade) não é o autor da ação extinta.
+_NATUREZAS_COM_PEDIDO = ("procedente", "improcedente")
+
+
 def _zerar_decisao(card_data: dict) -> None:
     """Zera o bloco `decisao` in-place. Roda ANTES de `aplicar_derivados_sujeito_indep`
     pra que categoria/peca_pivo/relevante saiam coerentes com tem_decisao=false.
@@ -184,6 +190,13 @@ def _build_card_v4(parsed: dict, mov: "MovInput", card_cls=None, *,
         # A peticao inicial e peca de PARTE: ela PEDE a intimacao, e o pedido nao e o ato. O
         # campo vem herdado do card, e o prompt do 1P nao traz a regra dele (`_REGRAS_CRUS`).
         card_data["intimacao_pagamento_polo"] = card_data["intimacao_pagamento_parte"] = None
+    # Os 2 nomes só valem com o que eles explicam: o resultado do recurso e o pedido julgado. As 2
+    # travas acima zeram os 2 campos da decisão, e a petição não tem nenhum deles.
+    decisao = card_data.get("decisao") or {}
+    if not decisao.get("provido"):
+        card_data["recorrente_parte"] = None
+    if decisao.get("natureza") not in _NATUREZAS_COM_PEDIDO:
+        card_data["pedido_parte"] = None
     aplicar_derivados_sujeito_indep(card_data)   # G6: categoria/status/relevante/peca_pivo (in-place)
     return card_data
 

@@ -318,6 +318,39 @@ class MovFactSheetCardV4(BaseModel):
             "`intimacao_pagamento_polo` for null."
         ),
     )
+    # O NOME decide de que lado está quem recorreu: o sentido do recurso o compara com o do Tomador
+    # (garantis-shared `recorrente_pelo_nome`). O `recorrente_polo` da leitura e o polo do Tomador
+    # não saem da mesma fonte, e aí o sentido inverte. Sem o nome, vale o que valia antes.
+    # Copiado do ATO, nunca dos polos. No fim do card, como os campos do E10.
+    recorrente_parte: Optional[str] = Field(
+        default=None,
+        description=(
+            "Com o `provido`: o NOME de quem recorreu, COPIADO do ato como ele o escreve ('Conhecido "
+            "o recurso de ACME S.A. e não provido' -> 'ACME S.A.', 'APELANTE: ESTADO DE MINAS "
+            "GERAIS' -> 'ESTADO DE MINAS GERAIS'). Mais de um recorrente: os nomes separados por "
+            "'; '. ⛔ null quando o ato não NOMEIA quem recorreu ('nego provimento ao recurso da "
+            "executada'), e null quando ele julga mais de um recurso e algum recorrente fica sem "
+            "nome: não escreva o papel no lugar do nome e não tire o nome do CONTEXTO DO PROCESSO. "
+            "null sempre que `provido` for null."
+        ),
+    )
+    # O NOME diz de quem é o pedido que o ato julga, e o sentido da sentença o compara com o do
+    # Tomador pela mesma régua do recurso. ⛔ Não diz a ação por um polo deste processo: o embargante de
+    # terceiro não tem polo, e nos autos dos próprios embargos a resposta viraria. Aqui não há polo: é
+    # o nome copiado do ato, e sem o nome vale o `lado`, como antes.
+    pedido_parte: Optional[str] = Field(
+        default=None,
+        description=(
+            "Com a `natureza` 'procedente' ou 'improcedente': o NOME de quem "
+            "fez o pedido que ESTE ato julga, COPIADO do ato como ele o escreve: o autor, o "
+            "embargante, o impetrante ou o requerente ('Julgo improcedentes os embargos opostos por "
+            "ACME S.A.' -> 'ACME S.A.'). Mais de um: os nomes separados por '; '. Nos embargos à "
+            "execução, é o embargante, e não o exequente. ⛔ null quando o ato não NOMEIA quem pediu "
+            "('julgo improcedentes os embargos'), e null quando ele julga mais de um pedido e algum "
+            "fica sem nome: não escreva o papel no lugar do nome e não tire o nome do CONTEXTO DO "
+            "PROCESSO. null com qualquer outra `natureza`."
+        ),
+    )
 
     @field_validator("decisao", "evento_garantia", "valores", mode="before")
     @classmethod
