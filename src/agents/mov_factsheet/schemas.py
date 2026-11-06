@@ -44,10 +44,6 @@ class ProcessoContext(BaseModel):
     materia: Optional[str] = None
     nm_tomador: Optional[str] = None
     cnpj_tomador: Optional[str] = None
-    # ⛔ MESMA armadilha do docstring acima: o shared manda `assunto`, e pydantic o
-    # DESCARTA se não estiver declarado — o L1 escolheria a família de leitura sem
-    # nunca ver o assunto do processo.
-    assunto: Optional[str] = None
     # Família já RESOLVIDA pelo shared (garantis_shared.materia). Vem pronta porque
     # o degrau da curadoria lê ref.cnj_classes e este serviço não tem banco
     # (`uses_cloud_sql: false`). Mesmo padrão do `tipo_judicial` do L2.

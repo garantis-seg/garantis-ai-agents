@@ -44,7 +44,7 @@ def _post(client, monkeypatch, texto: str):
     fake = _Fake(texto)
     monkeypatch.setattr(triage_mod, "create_provider", lambda *_a, **_k: fake)
     resp = client.post("/mov-factsheet/triage", json={
-        "processo": {"cnj": "0001234-56.2020.4.02.5101"},
+        "processo": {"cnj": "0001234-56.2020.4.02.5101", "familia": "fiscal"},
         "mov": {"mov_id": "m-1", "texto": "Juntada de peticao"},
     })
     return resp, fake

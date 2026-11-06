@@ -27,7 +27,7 @@ from src.agents.mov_factsheet.schemas_v4 import PeticaoExtractCardV4
 def _ctx():
     return ProcessoContext(cnj="1055745-25.2024.4.01.3400", classe="Mandado de Seguranca Civel",
                            polo_ativo="VOLKSWAGEN DO BRASIL", polo_passivo="UNIAO FEDERAL",
-                           materia="Tributario")
+                           materia="Tributario", familia="fiscal")
 
 
 @pytest.fixture

@@ -120,7 +120,7 @@ def test_travar_tolera_card_sem_bloco_decisao():
 # ── o anticorpo estetico saiu do prompt ──────────────────────────────────────
 def _prompt() -> str:
     return build_mov_factsheet_prompt_v4(
-        ProcessoContext(cnj="1002058-77.2022.8.26.0053"),
+        ProcessoContext(cnj="1002058-77.2022.8.26.0053", familia="civel"),
         _mov(ROTULO),
         documentos_anexados=[],
     )

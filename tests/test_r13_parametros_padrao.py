@@ -181,7 +181,7 @@ def test_controle_triagem_fora_da_ficha_ainda_manda_temperature_zero(monkeypatch
 
     monkeypatch.setattr(triagem, "create_provider", lambda p: _Prov())
     asyncio.run(triagem.classify_mov_triage(
-        processo={"cnj": "0"},
+        processo={"cnj": "0", "familia": "civel"},
         mov={"mov_id": "m-1", "data": "2024-01-01", "texto": "Juntada de peticao."},
     ))
     [kw] = chamadas

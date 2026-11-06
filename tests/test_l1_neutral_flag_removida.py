@@ -36,7 +36,7 @@ def test_o_agent_usa_o_v4_com_a_env_morta_em_qualquer_valor(monkeypatch, env):
         monkeypatch.setenv("L1_NEUTRAL_ENABLED", env)
 
     out = asyncio.run(A.classify_mov_factsheet(
-        processo={"cnj": "01688863120164025101"},
+        processo={"cnj": "01688863120164025101", "familia": "civel"},
         mov={"mov_id": "11111111-1111-1111-1111-111111111111", "texto": "Despacho de mero expediente."},
     ))
 

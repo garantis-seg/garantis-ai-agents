@@ -469,7 +469,7 @@ def _classify_com_lotes(monkeypatch, textos: list[str], *, classe=None,
     monkeypatch.setattr(A, "call_l1_with_vision_fallback", _fake_fallback)
     monkeypatch.setattr(A, "create_provider", lambda p: object())
     return asyncio.run(A.classify_mov_factsheet(
-        processo={"cnj": "00000000000000000000"},
+        processo={"cnj": "00000000000000000000", "familia": "civel"},
         mov={"mov_id": "m-1", "texto": "Juntada de documento"},
         documentos_anexados=[{"doc_key": "d1", "tipo": "1", "text_content": "",
                               "gcs_url": "gs://b/scan.pdf"}],
@@ -569,7 +569,7 @@ def test_a_emenda_que_cabe_vence_a_inicial_lida_em_lotes(monkeypatch):
     monkeypatch.setenv("VISION_L1_ENABLED", "true")
 
     out = asyncio.run(A.classify_mov_factsheet(
-        processo={"cnj": "00000000000000000000"},
+        processo={"cnj": "00000000000000000000", "familia": "civel"},
         mov={"mov_id": "peticao-x", "texto": "Peticao inicial"},
         documentos_anexados=[{"doc_key": "conjunto", "text_content": "(capa)"}],
         documentos_gate=[{"text_content": "", "gcs_url": "gs://b/inicial.pdf"},

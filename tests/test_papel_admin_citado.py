@@ -32,7 +32,7 @@ from src.agents.mov_factsheet.schemas_v4 import PeticaoExtractCardV4, ProcessoAd
 def _ctx():
     return ProcessoContext(cnj="5010094-75.2024.4.03.6105", classe="Mandado de Seguranca Civel",
                            polo_ativo="WESTROCK", polo_passivo="UNIAO FEDERAL",
-                           materia="Tributario")
+                           materia="Tributario", familia="fiscal")
 
 
 @pytest.fixture

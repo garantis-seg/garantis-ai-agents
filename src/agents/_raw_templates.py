@@ -41,6 +41,8 @@ def _mov_factsheet_template() -> str:
         classe="{{classe}}",
         polo_ativo="{{polo_ativo}}",
         polo_passivo="{{polo_passivo}}",
+        # Renderiza a variante 'civel', como o tipo_judicial do L2 abaixo.
+        familia="civel",
     )
     mov = MovInput(
         mov_id="{{mov_id}}",
