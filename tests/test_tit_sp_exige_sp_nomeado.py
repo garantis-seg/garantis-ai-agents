@@ -105,6 +105,26 @@ def test_tit_sp_exige_SAO_PAULO_NOMEADO_nas_DUAS_prompts(_ctx, _doc, build):
 
 
 @pytest.mark.parametrize("build", [_prompt_1p, _prompt_1x], ids=["1P", "1X"])
+def test_o_auto_da_PREFEITURA_tem_rotulo_proprio_nas_DUAS_prompts(_ctx, _doc, build):
+    """⛔ MUTANTE: tirar o bullet de `pa_municipal` de uma das prompts.
+
+    O AII da Prefeitura de Sao Paulo (o conexo 1485752) tem a mascara N.NNN.NNN-D do AIIM, e o
+    texto nomeia "Sao Paulo": sem rotulo para a esfera municipal, a LLM o lia como `tit_sp`. A
+    regra deterministica mora no shared (`conserta_tit_municipal`); aqui fica o que a prompt
+    tem de dizer, nos 2 ramos, porque o schema e COMPARTILHADO."""
+    p = build(_ctx, _doc)
+    assert "'pa_municipal'" in p
+    assert "Prefeitura" in p and "AII" in p
+    assert "nunca é 'tit_sp'" in p
+    assert "pa_municipal" in _enum_values(ProcessoAdminCitado, "tipo")
+    # As 2 guardas do `conserta_tit_municipal`: a Prefeitura de passagem nao basta, e o fisco
+    # estadual no mesmo trecho proibe. No shared, 1 claim municipal sem prova do TIT vence o
+    # `tit_sp` do numero. ⛔ MUTANTE: tirar a guarda de uma das prompts.
+    assert "citada de passagem" in p
+    assert "fisco estadual" in p and "lavrou o auto" in p
+
+
+@pytest.mark.parametrize("build", [_prompt_1p, _prompt_1x], ids=["1P", "1X"])
 def test_a_uf_e_pedida_com_EVIDENCIA_e_PROIBIDA_de_derivar(_ctx, _doc, build):
     """As duas metades da regra da UF, nas duas prompts.
 
