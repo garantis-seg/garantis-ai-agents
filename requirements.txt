@@ -107,7 +107,11 @@ pypdf>=4.0.0
 # ROLES tem o par redator x auditor de texto INVERTIDO em relacao a prod.
 # 1.730.0: llm_models_guarda (tests/test_modelo_vem_do_papel.py) e os papeis
 # peticao_confirmador / apolice_ciclo_de_vida.
-garantis-shared==1.939.0
+# 1.960.0 (garantis-shared#874): o `ADMIN_TIPO_TO_NO` ganha o `pa_municipal`, e o
+# `tests/test_enum_contrato_sink.py` cruza o mapa com o `Literal` deste PR nos 2 sentidos.
+# Versao lida do LOG do publish (`[version] computed 1.960.0`, build e525be20).
+# ⚠️ Bump ATOMICO com o `pa_municipal` do `ProcessoAdminCitado` deste PR.
+garantis-shared==1.960.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
