@@ -385,8 +385,14 @@ class MovFactSheetCardV4(BaseModel):
 # aresta sozinho. O prompt so reduz o ruido (formato CNJ obrigatorio, "so o que esta NO
 # DOCUMENTO", artigo de lei nao e CDA, sem esticar RE/AREsp/ADI pra 20 digitos).
 # ⛔ Nao afirmar o que nao sabe (decisao do Elton): `pa` (esfera INDETERMINADA) e o DEFAULT;
-# `paf`/`tit_sp`/`pa_estadual` sao AFIRMACOES, so com sinal no texto (orgao nomeado ou
-# mascara). `pa` mapeia em (esfera NULL, uf NULL) no ADMIN_TIPO_TO_NO => badge "A
+# `paf`/`tit_sp`/`pa_estadual`/`pa_municipal` sao AFIRMACOES, so com sinal no texto (orgao
+# nomeado ou mascara).
+# ⭐ `pa_municipal` (o auto ou o processo da Prefeitura) nasceu SEM bump de versao, como o
+# `papel`: o bump armaria a releitura paga do acervo, e o estoque gravado como `tit_sp` sai
+# por migracao no fe-api. A regra que o protege e DETERMINISTICA e mora no shared
+# (`peticao_sink.conserta_tit_municipal`: o orgao municipal nomeado no trecho tira o
+# `tit_sp`), entao o card antigo relido tambem a recebe. O preco e o mesmo do `papel`: card
+# sem item admin nao separa "antes" de "depois". `pa` mapeia em (esfera NULL, uf NULL) no ADMIN_TIPO_TO_NO => badge "A
 # classificar", nao "Adm. Fed.".
 # ⭐ Rotulo sem nome pro caso FORCA o rotulo errado: com `tit_sp` como UNICO nome do enum pra
 # "auto de infracao estadual", a LLM o usava mesmo lendo outro estado no documento inteiro —
@@ -498,7 +504,7 @@ class ProcessoAdminCitado(BaseModel):
     """
 
     numero: str = Field(description="Número LITERAL do processo administrativo como aparece no texto.")
-    tipo: Literal["pa", "paf", "tit_sp", "pa_estadual"] = Field(
+    tipo: Literal["pa", "paf", "tit_sp", "pa_estadual", "pa_municipal"] = Field(
         default="pa",
         description=(
             "'pa'=processo administrativo cuja ESFERA o documento não deixa clara — é o "
@@ -513,7 +519,11 @@ class ProcessoAdminCitado(BaseModel):
             "'pa_estadual'=processo administrativo de fisco ESTADUAL (Secretaria da Fazenda "
             "de um estado; verificação fiscal, defesa/recurso administrativo) — o PROCESSO, "
             "não o auto: se o número é do AIIM PAULISTA use 'tit_sp'. Só marque quando o "
-            "texto disser o ÓRGÃO estadual."
+            "texto disser o ÓRGÃO estadual. 'pa_municipal'=processo ou auto de infração do "
+            "fisco MUNICIPAL: o texto nomeia a Prefeitura, a Secretaria ou a Fazenda do "
+            "Município, ou o auto é o AII (Auto de Infração e Intimação). ⛔ O auto da "
+            "PREFEITURA nunca é 'tit_sp', mesmo com São Paulo nomeado e o número na máscara "
+            "N.NNN.NNN-D: São Paulo é também o nome da cidade."
         ),
     )
     contexto: Optional[str] = Field(

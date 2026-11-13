@@ -175,7 +175,7 @@ def test_todo_valor_do_enum_admin_e_explicado_nos_dois_ramos(processo, mov):
     from src.agents.mov_factsheet.schemas_v4 import ProcessoAdminCitado
 
     valores = get_args(ProcessoAdminCitado.model_fields["tipo"].annotation)
-    assert set(valores) == {"pa", "paf", "tit_sp", "pa_estadual"}, valores
+    assert set(valores) == {"pa", "paf", "tit_sp", "pa_estadual", "pa_municipal"}, valores
     for prompt in _os_dois_ramos(processo, mov):
         for v in valores:
             assert f"'{v}'" in prompt, f"{v} esta no schema mas nao na prompt"

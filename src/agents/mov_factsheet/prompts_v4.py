@@ -460,7 +460,7 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
   um com o número do PA, outro com o número do AIIM (tipo='tit_sp') — e em CADA um preencha
   `par_numero` com o número LITERAL do outro. Nunca descarte o número do parêntese. Se o
   número aparece sozinho, par_numero=null.
-  `tipo` — 'pa' é o DEFAULT; os outros três são AFIRMAÇÕES sobre a ESFERA e só valem com
+  `tipo` — 'pa' é o DEFAULT; os outros quatro são AFIRMAÇÕES sobre a ESFERA e só valem com
   sinal no texto:
   · 'pa' — processo administrativo cuja esfera o documento NÃO deixa clara. É o DEFAULT:
     na dúvida sobre o órgão, use 'pa'. ⛔ NÃO afirme federal só porque o número "parece" um
@@ -478,6 +478,11 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
     (Secretaria da Fazenda de um estado, SEFAZ, verificação fiscal estadual, defesa/recurso
     administrativo estadual). É o PROCESSO, não o auto — se o número que você está extraindo
     é o do AIIM PAULISTA, ele é 'tit_sp'.
+  · 'pa_municipal' — processo ou auto de infração do fisco MUNICIPAL: o texto nomeia a
+    Prefeitura, a Secretaria ou a Fazenda do Município, ou o auto é o AII (Auto de Infração e
+    Intimação). ⛔ O auto da PREFEITURA nunca é 'tit_sp', mesmo com "São Paulo" nomeado e o
+    número na máscara N.NNN.NNN-D: São Paulo é também o nome da cidade, e o AII tem a mesma
+    máscara do AIIM estadual.
   NÃO são processo administrativo: CDA/inscrição em dívida ativa (=> cdas[]), processo
   JUDICIAL/CNJ (=> processos_citados[]), artigo de lei, e o número de ACÓRDÃO — 'Acórdão nº
   NNNN-NNN.NNN' identifica a DECISÃO, não o processo: se a citação traz também o 'Processo
@@ -485,7 +490,9 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
   `uf` — a sigla do ESTADO do órgão que instaurou/lavrou o processo, e SÓ quando o texto
   NOMEIA o estado ou o órgão estadual ('SEF/MG', 'SEFAZ-SP', 'Secretaria de Estado de
-  Fazenda de Minas Gerais'). Quando preencher `uf`, copie em `uf_evidencia` o trecho
+  Fazenda de Minas Gerais'). No 'pa_municipal', é o estado do município, quando o texto o
+  nomeia ('Prefeitura do Município de São Paulo' -> 'SP'). Quando preencher `uf`, copie em
+  `uf_evidencia` o trecho
   (~120 chars) onde o estado é NOMEADO — uf sem esse trecho é DESCARTADA pela integração.
   ⛔ NUNCA derive a `uf` do tribunal onde o processo JUDICIAL tramita, nem do `tipo` que
   você escolheu: onde o auto está sendo discutido não diz de que fisco ele É. Na dúvida,
@@ -630,12 +637,16 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
   Paulo); ⛔ auto estadual de outro estado, ou sem o estado nomeado, NÃO é 'tit_sp' mesmo na
   máscara — use 'pa_estadual' ou 'pa'; 'pa_estadual'=processo administrativo
   de fisco ESTADUAL quando o texto NOMEIA o órgão (Secretaria da Fazenda estadual/SEFAZ,
-  verificação fiscal) — é o PROCESSO, não o auto.
+  verificação fiscal) — é o PROCESSO, não o auto; 'pa_municipal'=processo ou auto de
+  infração do fisco MUNICIPAL (o texto nomeia a Prefeitura, a Secretaria ou a Fazenda do
+  Município, ou o auto é o AII) — ⛔ o auto da PREFEITURA nunca é 'tit_sp', mesmo com "São
+  Paulo" nomeado e o número na máscara N.NNN.NNN-D.
   ⚠️ PAR "Processo Administrativo nº X (AIIM nº Y)": emita os DOIS como itens SEPARADOS,
   cada um com `par_numero` = o número LITERAL do outro. Nunca descarte o do parêntese.
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).
   `uf` — sigla do ESTADO do órgão que instaurou/lavrou, SÓ quando o texto NOMEIA o estado ou
-  o órgão estadual ('SEF/MG', 'SEFAZ-SP'); copie em `uf_evidencia` o trecho (~120 chars) que
+  o órgão estadual ('SEF/MG', 'SEFAZ-SP'), e no 'pa_municipal' o estado do município quando o
+  texto o nomeia ('Prefeitura do Município de São Paulo' -> 'SP'); copie em `uf_evidencia` o trecho (~120 chars) que
   o nomeia — uf sem esse trecho é DESCARTADA. ⛔ NUNCA derive a uf do tribunal onde o
   processo JUDICIAL tramita nem do `tipo` escolhido. Na dúvida, uf=null.
   `papel` — o PAPEL do PA NESTE processo, pelo contexto: 'discutido'=o PA que este processo
