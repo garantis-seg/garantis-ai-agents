@@ -482,7 +482,11 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
     Prefeitura, a Secretaria ou a Fazenda do Município, ou o auto é o AII (Auto de Infração e
     Intimação). ⛔ O auto da PREFEITURA nunca é 'tit_sp', mesmo com "São Paulo" nomeado e o
     número na máscara N.NNN.NNN-D: São Paulo é também o nome da cidade, e o AII tem a mesma
-    máscara do AIIM estadual.
+    máscara do AIIM estadual. Use 'pa_municipal' só quando o órgão municipal lavrou o auto ou
+    conduz o processo: a Prefeitura citada de passagem (o alvará, o IPTU, o endereço) não
+    basta, e a cidade sozinha ("Município de São Paulo") também não. ⛔ Se o trecho nomeia
+    também o fisco estadual (SEFAZ, TIT, Secretaria da Fazenda do Estado), não use
+    'pa_municipal'.
   NÃO são processo administrativo: CDA/inscrição em dívida ativa (=> cdas[]), processo
   JUDICIAL/CNJ (=> processos_citados[]), artigo de lei, e o número de ACÓRDÃO — 'Acórdão nº
   NNNN-NNN.NNN' identifica a DECISÃO, não o processo: se a citação traz também o 'Processo
@@ -640,7 +644,9 @@ PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
   verificação fiscal) — é o PROCESSO, não o auto; 'pa_municipal'=processo ou auto de
   infração do fisco MUNICIPAL (o texto nomeia a Prefeitura, a Secretaria ou a Fazenda do
   Município, ou o auto é o AII) — ⛔ o auto da PREFEITURA nunca é 'tit_sp', mesmo com "São
-  Paulo" nomeado e o número na máscara N.NNN.NNN-D.
+  Paulo" nomeado e o número na máscara N.NNN.NNN-D; 'pa_municipal' só quando o órgão
+  municipal lavrou o auto ou conduz o processo (a Prefeitura citada de passagem, como no
+  alvará, ou a cidade sozinha não bastam), e nunca com o fisco estadual nomeado no mesmo trecho.
   ⚠️ PAR "Processo Administrativo nº X (AIIM nº Y)": emita os DOIS como itens SEPARADOS,
   cada um com `par_numero` = o número LITERAL do outro. Nunca descarte o do parêntese.
   Em TODOS: copie ~120 chars de contexto ao redor da citação (campo `contexto`).

@@ -523,7 +523,10 @@ class ProcessoAdminCitado(BaseModel):
             "fisco MUNICIPAL: o texto nomeia a Prefeitura, a Secretaria ou a Fazenda do "
             "Município, ou o auto é o AII (Auto de Infração e Intimação). ⛔ O auto da "
             "PREFEITURA nunca é 'tit_sp', mesmo com São Paulo nomeado e o número na máscara "
-            "N.NNN.NNN-D: São Paulo é também o nome da cidade."
+            "N.NNN.NNN-D: São Paulo é também o nome da cidade. Use 'pa_municipal' só quando "
+            "o órgão municipal lavrou o auto ou conduz o processo: a Prefeitura citada de "
+            "passagem ou a cidade sozinha não bastam, e o fisco estadual nomeado no mesmo "
+            "trecho o proíbe."
         ),
     )
     contexto: Optional[str] = Field(
