@@ -109,9 +109,10 @@ pypdf>=4.0.0
 # peticao_confirmador / apolice_ciclo_de_vida.
 # 1.960.0 (garantis-shared#874): o `ADMIN_TIPO_TO_NO` ganha o `pa_municipal`, e o
 # `tests/test_enum_contrato_sink.py` cruza o mapa com o `Literal` deste PR nos 2 sentidos.
-# Versao lida do LOG do publish (`[version] computed 1.960.0`, build e525be20).
+# 1.961.0 (garantis-shared#875): o TIT provado vence a claim `pa_municipal` do mesmo numero.
+# Versao lida do LOG do publish (`[version] computed 1.961.0`, build b87af854).
 # ⚠️ Bump ATOMICO com o `pa_municipal` do `ProcessoAdminCitado` deste PR.
-garantis-shared==1.960.0
+garantis-shared==1.961.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
