@@ -112,7 +112,7 @@ pypdf>=4.0.0
 # 1.961.0 (garantis-shared#875): o TIT provado vence a claim `pa_municipal` do mesmo numero.
 # Versao lida do LOG do publish (`[version] computed 1.961.0`, build b87af854).
 # ⚠️ Bump ATOMICO com o `pa_municipal` do `ProcessoAdminCitado` deste PR.
-garantis-shared==1.961.0
+garantis-shared==1.966.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
