@@ -422,9 +422,16 @@ async def write_v5(
         # R13: parâmetros no padrão do modelo, conforme o Google
         # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
         # faz o provider omitir temperature, top_p, top_k e seed.
+        # Raciocínio LIGADO (sem `thinking_budget`): decisão do Alfredo, dono do
+        # produto, em 13/11/2026 (CADERNO da ficha, item 65). O redator lê um acórdão
+        # de 50 a 127 páginas e decide quem fez o quê. Com `thinking_budget=0` no
+        # flash-lite, 3 fichas da UOL saíram com 17 erros de leitura, e o auditor as
+        # aprovou. O papel `ficha_redacao` aponta para o `gemini-3.1-pro-preview`,
+        # que pensa por padrão. O `max_tokens` sobe para 32768: o Gemini conta os
+        # tokens de raciocínio dentro do teto de saída.
         resp = await llm.agenerate(
             prompt=prompt, model=model, temperature=None,
-            response_mime_type="application/json", thinking_budget=0, max_tokens=16384,
+            response_mime_type="application/json", max_tokens=32768,
         )
         used_model = resp.model or used_model
         cost_total += custo_da_resposta(resp)
