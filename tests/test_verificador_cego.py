@@ -635,15 +635,23 @@ def test_verificador_usa_modelo_diferente_do_calculador():
     assert model_for("ficha_auditoria_evidencias") != model_for("ficha_calculo")
 
 
+#: O unico `-preview` que responde no Vertex `global` e tem preco de FATURA no catalogo.
+#: Desde 17/11/2026 (CADERNO da ficha, item 68) os auditores da ficha rodam nele, com
+#: raciocinio. O redator rodou nele em prod de 13 a 17/11/2026, sem 404.
+_PREVIEW_QUE_RESPONDE_NO_VERTEX = {"gemini-3.1-pro-preview"}
+
+
 def test_modelo_do_verificador_esta_no_catalogo_e_nao_e_preview():
     """Fora de `MODELS` o preco sai 0/0 e o gasto some do ledger EM SILENCIO —
     o mecanismo que ja escondeu US$ 97,61 em 39.309 calls. E `-preview` 404a no
-    Vertex, que e o backend de todos os cloudbuilds da casa."""
+    Vertex, que e o backend de todos os cloudbuilds da casa. A excecao e a lista
+    fechada `_PREVIEW_QUE_RESPONDE_NO_VERTEX`."""
     from garantis_shared.llm_models import MODELS, model_for
 
     modelo = model_for("ficha_auditoria_evidencias")
     assert modelo in MODELS, f"{modelo} fora do catalogo => preco 0/0 => custo invisivel"
-    assert "preview" not in modelo, f"{modelo} e preview — 404 no Vertex"
+    assert "preview" not in modelo or modelo in _PREVIEW_QUE_RESPONDE_NO_VERTEX, (
+        f"{modelo} e preview — 404 no Vertex")
     spec = MODELS[modelo]
     assert spec.input_usd_per_1m > 0 and spec.output_usd_per_1m > 0
 
