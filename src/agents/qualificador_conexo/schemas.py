@@ -180,6 +180,15 @@ class Prova(_Fechado):
     pagina: int = Field(ge=1)
     trecho: str = Field(min_length=1, max_length=MAX_TRECHO)
 
+    # 17/11/2026 (loop de fichas, rodada 3): o trecho com mais de 300 caracteres
+    # derrubava a qualificação INTEIRA (HTTP 422). O corte fica com o início do
+    # trecho, que continua literal do documento. Orientação do Alfredo: a restrição
+    # que mais atrapalha do que ajuda sai.
+    @field_validator("trecho", mode="before")
+    @classmethod
+    def _corta_o_trecho(cls, v: object) -> object:
+        return v[:MAX_TRECHO] if isinstance(v, str) else v
+
 
 class Origem(_Fechado):
     """O ato que abriu o caso.
@@ -203,7 +212,12 @@ class Decisao(_Fechado):
 
     etapa: EtapaDecisao
     resultado: ResultadoDecisao
-    data: DataISO
+    # 17/11/2026 (loop de fichas, rodada 3): `data` era obrigatória. Em 12 de 78
+    # fichas o modelo devolveu `data: null` numa decisão provada sem data legível, e
+    # o schema recusou a qualificação INTEIRA (HTTP 422, "Input should be a valid
+    # string"). A ficha saiu sem o estado das garantias, com o custo pago. A decisão
+    # sem data fica: a S3b do shared pega a data do andamento par.
+    data: Optional[DataISO] = None
     acordao: Optional[str] = Field(default=None, max_length=80)
     prova: Optional[Prova] = None
 

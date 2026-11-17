@@ -550,7 +550,7 @@ def _validar_estado(
                                "via_esgotada=true exige esgotada_em", None))
         else:
             # Data ISO: a comparação de texto é a comparação de data.
-            datas = [d.data for d in ep.decisoes]
+            datas = [d.data for d in ep.decisoes if d.data]
             if adm is not None and adm.data:
                 datas.append(adm.data)
             if not any(x <= ep.esgotada_em for x in datas):
@@ -865,7 +865,8 @@ def _afirmacoes_auditaveis(out: dict[str, Any]) -> list[dict[str, Any]]:
                 "alvo_tipo": "estado_processual", "alvo": p.numero,
                 "codigo": f"decisoes[{j}]",
                 "afirmacao": (
-                    f"No processo {p.numero}, a etapa {d.etapa} decidiu em {d.data}"
+                    f"No processo {p.numero}, a etapa {d.etapa} decidiu"
+                    f"{' em ' + d.data if d.data else ''}"
                     f"{acordao}, com resultado {d.resultado} para o contribuinte."
                 ),
                 "prova": d.prova.model_dump(),
