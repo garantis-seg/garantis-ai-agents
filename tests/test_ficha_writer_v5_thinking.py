@@ -31,10 +31,12 @@ def test_a_fase_b_do_redator_tem_teto_de_saida_para_o_raciocinio(monkeypatch):
         assert kw.get("max_tokens", 0) >= 32768, kw.get("max_tokens")
 
 
-def test_o_papel_do_redator_pensa_por_padrao():
-    """Guarda do shared: se o papel voltar a um modelo que não pensa, este teste
-    avisa antes do deploy. A política de pensar é do papel, não do código."""
+def test_o_papel_do_redator_e_o_argon_ou_pensa_por_padrao():
+    """Guarda do shared: o redator roda no modelo mais forte do catálogo. Desde
+    17/11/2026 (CADERNO, item 68) é o `gemini-4-argon`, que não aceita
+    `thinking_config`. Se o papel voltar a um modelo que não é o argon e não
+    pensa, este teste avisa antes do deploy. A política é do papel, não do código."""
     from garantis_shared import llm_models
 
     modelo = llm_models.model_for("ficha_redacao")
-    assert llm_models.MODELS[modelo].thinks_by_default, modelo
+    assert modelo == "gemini-4-argon" or llm_models.MODELS[modelo].thinks_by_default, modelo
