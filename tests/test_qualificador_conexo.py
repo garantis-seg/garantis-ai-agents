@@ -514,11 +514,13 @@ def test_7b_chave_extra_na_emissao_volta_como_erro_de_campo(monkeypatch):
     assert any(x.campo == "processos.0.nota" for x in exc.value.body.erros)
 
 
-def test_7c_trecho_acima_de_300_e_erro():
+def test_7c_trecho_acima_de_300_e_cortado():
+    """17/11/2026 (loop de fichas, rodada 3): o trecho longo é cortado em 300. Antes ele
+    derrubava a qualificação inteira com HTTP 422."""
     e = _emissao_valida()
     e["processos"][1]["prova"]["trecho"] = "x" * 301
-    with pytest.raises(ValidationError):
-        QualificacaoLLM.model_validate(e)
+    q = QualificacaoLLM.model_validate(e)
+    assert len(q.processos[1].prova.trecho) == 300
 
 
 # ── (8) model_for, sem modelo escrito à mão ─────────────────────────────────
@@ -968,10 +970,7 @@ def test_10s_schema_do_estado_rejeita_chave_extra():
     estado["decisoes"][0]["etapa"] = "TRF3"                       # enum fechado
     with pytest.raises(ValidationError):
         QualificacaoLLM.model_validate(_emissao_carf(estado))
-    estado = _estado_irb()
-    estado["decisoes"][0]["prova"]["trecho"] = "x" * 301
-    with pytest.raises(ValidationError):
-        QualificacaoLLM.model_validate(_emissao_carf(estado))
+    # 17/11/2026: o trecho longo é cortado, não recusado (test_7c).
 
 
 def test_10t_processo_sem_documento_proprio_gera_alerta_de_processo(monkeypatch):
