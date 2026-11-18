@@ -379,6 +379,8 @@ _MULT = {
 _RE_ESGOTAMENTO_ADM = re.compile(
     r"esgotad|encerr\w*\s+(?:a\s+)?(?:via|esfera|instancia)\s+administrativa|"
     r"encerrando\s+a\s+via|nao\s+(?:foi\s+)?admitid|inadmitid|nao\s+(?:foi\s+)?conhecid")
+#: Regra 12. A frase do resultado do exame, que o subtítulo do pipeline pode lastrear.
+_RE_RESULTADO_DO_EXAME = re.compile(r"nao\s+(?:foi\s+)?admitid|inadmitid|nao\s+(?:foi\s+)?conhecid")
 _RE_TRANSITO = re.compile(r"\btransit(?:o|ou|ad[oa])\b")
 #: Regra 12. A decisão nas fontes de documento (literal, sem acento).
 _RE_DECISAO_ADM = re.compile(
@@ -505,6 +507,9 @@ class FontesDeFato:
     valores: list[float] = field(default_factory=list)
     texto_docs: str = ""
     pipeline: list[tuple[str, str]] = field(default_factory=list)
+    #: Os subtítulos do pipeline, sem acento. O código do shared os escreve a partir dos
+    #: andamentos oficiais: "RE não admitido (25/09/2026)" é fonte da regra 12.
+    subtitulos_pipeline: str = ""
     #: Para o erro do retry: a máscara de cada data, número e valor citável.
     ids_com_mascara: dict[str, str] = field(default_factory=dict)
     cifras: list[str] = field(default_factory=list)
@@ -523,6 +528,9 @@ class FontesDeFato:
             etapa = e.get("etapa") if isinstance(e, dict) else getattr(e, "etapa", "")
             status = e.get("status") if isinstance(e, dict) else getattr(e, "status", "")
             f.pipeline.append((sem_acento(etapa), sem_acento(status)))
+            sub = e.get("subtitulo") if isinstance(e, dict) else getattr(e, "subtitulo", "")
+            if sub:
+                f.subtitulos_pipeline += sem_acento(sub) + "\n"
         return f
 
     # ── leitura das fontes ────────────────────────────────────────────────
@@ -642,7 +650,15 @@ class FontesDeFato:
         if adm:
             etapas = self._etapas_adm()
             concluido = bool(etapas) and all(s.startswith("concluid") for _e, s in etapas)
+            # 18/11/2026 (rodada 9, jobs 770 e 781): o validador A63 do shared manda dizer o
+            # resultado do exame ("RE não admitido (25/09/2026)" no subtítulo da CSRF), e esta
+            # regra recusava a mesma frase, porque só lia os documentos. O redator ficava preso
+            # entre as 2 regras, e a ficha morria. O subtítulo vem do código: é fonte.
+            # Só a frase do resultado ("não admitido") passa por esta via. "Via esgotada" ainda
+            # pede a etapa concluída ou a decisão nos documentos: o agravo pode estar aberto.
             if not concluido and not _RE_DECISAO_ADM.search(self.texto_docs):
+                if _RE_DECISAO_ADM.search(self.subtitulos_pipeline):
+                    adm = [x for x in adm if not _RE_RESULTADO_DO_EXAME.match(x)]
                 fora += adm
         trans = [m.group(0) for m in _RE_TRANSITO.finditer(t)]
         if trans:

@@ -1108,6 +1108,13 @@ def test_11f_esgotamento_vale_com_a_etapa_concluida_ou_com_a_decisao():
     decisao = FontesDeFato.montar(pipeline=aberto,
                                   textos_docs=["Nego seguimento ao recurso especial."])
     assert decisao.esgotamento_sem_fonte(texto) == []
+    # 18/11/2026 (rodada 9): o subtítulo "RE não admitido (data)" lastreia o resultado, e
+    # só ele. "Esgotada" continua a pedir a etapa concluída ou a decisão.
+    com_sub = [{"etapa": "CARF", "status": "concluido_desfavoravel"},
+               {"etapa": "CSRF", "status": "em_andamento", "subtitulo": "RE não admitido (25/09/2026)"}]
+    assert FontesDeFato.montar(pipeline=com_sub).esgotamento_sem_fonte(
+        "O recurso especial não foi admitido em 25/09/2026.") == []
+    assert FontesDeFato.montar(pipeline=com_sub).esgotamento_sem_fonte(texto) == ["esgotad"]
     # 18/11/2026: as 6 etapas da timeline Judicial Fiscal não são administrativas.
     judicial = [{"etapa": "Origem", "status": "concluido"},
                 {"etapa": "Ajuizamento", "status": "concluido"},
