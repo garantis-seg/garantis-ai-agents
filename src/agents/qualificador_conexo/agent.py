@@ -94,6 +94,10 @@ DEFAULT_MODEL = model_for("ficha_calculo")
 
 #: Rodadas de correção da fase B, depois da 1ª emissão (pedido de 22/10/2026).
 RODADAS_DE_CORRECAO = 2
+#: O teto da resposta da emissão. Com 16.384 tokens, a resposta de um conexo grande era
+#: cortada no meio e virava "JSON ilegível" nas 2 rodadas (loop de fichas, 18/11/2026,
+#: conexo 1481286: corte em 39 mil caracteres, US$ 4,59 gastos e nenhuma qualificação).
+MAX_TOKENS_DA_EMISSAO = 65535
 #: Quantas vezes o código anula campos rejeitados e valida de novo, depois das rodadas.
 PASSADAS_DE_ANULACAO = 3
 
@@ -246,7 +250,7 @@ async def qualificar_conexo(
             # para Gemini 3. Determinismo pelas regras e validadores. `temperature=None`
             # faz o provider omitir temperature, top_p, top_k e seed.
             temperature=None,
-            max_tokens=16384,
+            max_tokens=MAX_TOKENS_DA_EMISSAO,
             response_mime_type="application/json",
         )
         chamadas_llm += 1
