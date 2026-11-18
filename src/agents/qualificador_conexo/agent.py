@@ -39,7 +39,7 @@ Regras duras da pergunta 3, estado processual (23/10/2026, S2c v2):
 13. `origem.tipo` não nulo exige `origem.prova`. O trecho tem de provar AQUELE
     tipo pelo dicionário fechado (`dicionario_origem.tipo_do_trecho`). Depois
     das rodadas de correção, um erro que é só da origem não vira 422: o código
-    anula `origem.tipo` (ver `_anular_origens_rejeitadas`).
+    anula `origem.tipo` (ver `_anular_campos_rejeitados`).
 
 Exceção das regras 1, 2, 4, 6, 7, 11 e 13 (modo capa): o item não tem documento
 para citar. Ver `_Contexto.processo_tem_documentos`.
@@ -94,6 +94,8 @@ DEFAULT_MODEL = model_for("ficha_calculo")
 
 #: Rodadas de correção da fase B, depois da 1ª emissão (pedido de 22/10/2026).
 RODADAS_DE_CORRECAO = 2
+#: Quantas vezes o código anula campos rejeitados e valida de novo, depois das rodadas.
+PASSADAS_DE_ANULACAO = 3
 
 #: Turnos seguidos sem chamada legível antes de encerrar a fase A.
 _MAX_FALHAS_DE_PROTOCOLO = 3
@@ -261,14 +263,22 @@ async def qualificar_conexo(
         logger.info("QUALIFICADOR_EMISSAO_REJEITADA conexo=%s rodada=%d erros=%d",
                     request.conexo_id, rodada, len(erros))
 
-    # Regra 13 esgotada: a origem sai null, e o resto da resposta fica.
-    anulado = _anular_origens_rejeitadas(parsed, erros) if erros else None
-    if anulado is not None:
+    # Regras esgotadas: o campo rejeitado do estado processual sai null, e o resto da
+    # resposta fica. Anular 1 campo pode expor outro erro (a admissibilidade que sai leva o
+    # `cabe_agravo`): o laço repete, com teto.
+    atual = parsed
+    for _ in range(PASSADAS_DE_ANULACAO):
+        anulado = _anular_campos_rejeitados(atual, erros) if erros else None
+        if anulado is None:
+            break
+        campos = [e["campo"] for e in erros]
         q_anulada, erros_anulada = validar_qualificacao(anulado, ctx)
-        if not erros_anulada:
-            logger.warning("QUALIFICADOR_ORIGEM_ANULADA conexo=%s campos=%s",
-                           request.conexo_id, [e["campo"] for e in erros])
-            qualificacao, erros = q_anulada, []
+        logger.warning("QUALIFICADOR_CAMPO_ANULADO conexo=%s campos=%s restam=%d",
+                       request.conexo_id, campos, len(erros_anulada))
+        atual, erros = anulado, erros_anulada
+        if not erros:
+            qualificacao = q_anulada
+            break
 
     if erros or qualificacao is None:
         raise QualificacaoInvalidaError(QualificacaoInvalidaBody(
@@ -622,34 +632,53 @@ def _validar_origem(
 
 
 #: O campo de um erro da regra 13 (a origem de um processo).
-_CAMPO_DA_ORIGEM = re.compile(r"^processos\[(\d+)\]\.estado_processual\.origem(\.|$)")
+_CAMPO_DO_ESTADO = re.compile(r"^processos\[(\d+)\]\.estado_processual\.(\w+)")
+
+#: Os campos do estado processual que o código sabe anular, 1 por 1.
+_ANULAVEIS = ("origem", "esgotada_em", "via_esgotada", "cabe_agravo")
 
 
-def _anular_origens_rejeitadas(
+def _anular_campos_rejeitados(
     parsed: Any, erros: list[dict[str, Any]],
 ) -> Optional[Any]:
-    """Depois da última rodada: anula a origem rejeitada, se só ela falhou.
+    """Depois da última rodada: anula só o campo rejeitado e guarda o resto. Pura.
 
-    Decisão do Alfredo, 03/11/2026: na dúvida, `origem.tipo` fica null. O
-    código nunca chuta o tipo. Por isso, um erro que é SÓ da origem não derruba
-    o conexo inteiro num 422. O código põe `tipo` e `prova` em null e mantém o
-    resto. Com outro erro junto, a função devolve None, e o 422 continua.
+    Decisão do Alfredo, 03/11/2026, para a origem: na dúvida, o campo fica null, e o código
+    nunca chuta. Em 17/11/2026 a regra passou a valer para todo campo do estado processual
+    (loop de fichas, rodada 5: 2 conexos ficaram sem qualificação nenhuma por 1 campo, com
+    `via_esgotada=true` sem `esgotada_em` e com `cabe_agravo` sem admissibilidade). Um campo
+    ruim não derruba a resposta inteira num 422.
+
+    O que cada erro anula:
+      - `origem`: `tipo` e `prova` ficam null.
+      - `esgotada_em` e `via_esgotada`: os 2 ficam null (não se sabe se a via esgotou).
+      - `cabe_agravo`: fica null.
+
+    Estes campos são conclusões que o shared sabe tirar sozinho dos fatos (a S3b e a
+    leitura dos andamentos). A decisão e a admissibilidade sem prova continuam a dar 422:
+    elas são os fatos, e o fato sem prova não entra. Com um erro fora dos campos acima, a
+    função devolve None, e o 422 continua.
     """
-    if not erros or not isinstance(parsed, dict):
+    if not erros or not isinstance(parsed, dict) or not isinstance(parsed.get("processos"), list):
         return None
-    indices = set()
-    for e in erros:
-        m = _CAMPO_DA_ORIGEM.match(str(e.get("campo") or ""))
-        if m is None:
-            return None
-        indices.add(int(m.group(1)))
     novo = copy.deepcopy(parsed)
-    processos = novo.get("processos")
-    for i in indices:
-        ep = processos[i].get("estado_processual") if isinstance(processos, list) else None
-        if not isinstance(ep, dict) or not isinstance(ep.get("origem"), dict):
+    processos = novo["processos"]
+    for e in erros:
+        m = _CAMPO_DO_ESTADO.match(str(e.get("campo") or ""))
+        if m is None or m.group(2) not in _ANULAVEIS:
             return None
-        ep["origem"] = {**ep["origem"], "tipo": None, "prova": None}
+        i, campo = int(m.group(1)), m.group(2)
+        ep = processos[i].get("estado_processual") if i < len(processos) and isinstance(processos[i], dict) else None
+        if not isinstance(ep, dict):
+            return None
+        if campo == "origem":
+            if not isinstance(ep.get("origem"), dict):
+                return None
+            ep["origem"] = {**ep["origem"], "tipo": None, "prova": None}
+        elif campo in ("esgotada_em", "via_esgotada"):
+            ep["via_esgotada"], ep["esgotada_em"] = None, None
+        elif campo == "cabe_agravo":
+            ep["cabe_agravo"] = None
     return novo
 
 
