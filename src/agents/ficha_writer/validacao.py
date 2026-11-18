@@ -386,10 +386,18 @@ _RE_DECISAO_ADM = re.compile(
     r"nao\s+(?:se\s+)?conhec(?:o|eu|ido|ida|er)\b|esgotad")
 _RE_DECISAO_TRANSITO = re.compile(r"transit\w*\s+em\s+julgado")
 #: Etapas do pipeline que não são do contencioso administrativo.
+#: 18/11/2026: a timeline Judicial Fiscal do shared tem 6 etapas (Origem, Ajuizamento, Garantia,
+#: Julgamento, Recursos, Encerramento), iguais na execução fiscal e na ação do contribuinte.
+#: Nenhuma delas é do contencioso administrativo. Sem os nomes aqui, a regra 12 contaria as 6
+#: como etapas administrativas e acusaria "esgotamento sem fonte" em toda ficha judicial.
+_ETAPAS_JUDICIAL_FISCAL = ("origem", "ajuizamento", "garantia", "julgamento", "recursos", "encerramento")
 _ETAPAS_NAO_ADM = ("cobranca", "judicial", "execucao", "divida", "inscricao", "embargo",
-                   "apelacao", "sentenca", "tribunal", "acao", "stj", "stf", "trf")
+                   "apelacao", "sentenca", "tribunal", "acao", "stj", "stf", "trf",
+                   *_ETAPAS_JUDICIAL_FISCAL)
+#: O trânsito em julgado pede uma etapa de decisão judicial concluída: a Origem, o Ajuizamento e
+#: a Garantia não são decisão.
 _ETAPAS_JUDICIAIS = ("judicial", "execucao", "embargo", "apelacao", "sentenca", "tribunal",
-                     "acao", "stj", "stf", "trf")
+                     "acao", "stj", "stf", "trf", "julgamento", "recursos", "encerramento")
 
 #: Teto da lista de permitidos no erro do retry.
 _MAX_PERMITIDOS = 60
