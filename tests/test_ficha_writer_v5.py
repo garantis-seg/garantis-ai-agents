@@ -1108,6 +1108,16 @@ def test_11f_esgotamento_vale_com_a_etapa_concluida_ou_com_a_decisao():
     decisao = FontesDeFato.montar(pipeline=aberto,
                                   textos_docs=["Nego seguimento ao recurso especial."])
     assert decisao.esgotamento_sem_fonte(texto) == []
+    # 18/11/2026: as 6 etapas da timeline Judicial Fiscal não são administrativas.
+    judicial = [{"etapa": "Origem", "status": "concluido"},
+                {"etapa": "Ajuizamento", "status": "concluido"},
+                {"etapa": "Garantia", "status": "em_andamento"},
+                {"etapa": "Julgamento", "status": "futuro"}]
+    assert FontesDeFato.montar(pipeline=judicial)._etapas_adm() == []
+    assert FontesDeFato.montar(pipeline=judicial).esgotamento_sem_fonte("Houve trânsito.")
+    julgado = [{"etapa": "Julgamento", "status": "concluido_desfavoravel"},
+               {"etapa": "Recursos", "status": "em_andamento"}]
+    assert FontesDeFato.montar(pipeline=julgado).esgotamento_sem_fonte("Houve trânsito.") == []
     # Trânsito: só com a etapa judicial concluída ou com "transitado em julgado".
     assert FontesDeFato.montar(pipeline=fechado).esgotamento_sem_fonte("Houve trânsito.")
     assert FontesDeFato.montar(
