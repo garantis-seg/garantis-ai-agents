@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from garantis_shared.logging_setup import setup_logging
 
-from .middleware import GeminiCallTimeoutMiddleware
+from .middleware import CorpoGzipMiddleware, GeminiCallTimeoutMiddleware
 # Nao ha classificador de estado por LLM aqui: o estado de court_presentation e o REGEX
 # de execucao-fiscal/frontend-api/services/court_presentation_inference_service.py.
 # Decisao do Elton: caminho de LLM para derivar FATO ESTRUTURAL do processo (tribunal,
@@ -48,6 +48,10 @@ app = FastAPI(
 
 # Per-call Gemini timeout do engine (header X-Gemini-Timeout-Ms -> ContextVar)
 app.add_middleware(GeminiCallTimeoutMiddleware)
+
+# O corpo do pedido comprimido (Content-Encoding: gzip): o dossiê de um conexo grande
+# passa do limite de 32 MiB do Cloud Run.
+app.add_middleware(CorpoGzipMiddleware)
 
 # Configurar CORS
 app.add_middleware(
