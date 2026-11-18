@@ -161,8 +161,11 @@ steps:
       # era "demora": o Cloud Run cortava a request no meio (504) com o custo do
       # LLM JÁ PAGO e sem resposta para o cliente. O teto passa a ser o maior
       # timeout de cliente (900s = o do indexador, §8.3 do desenho).
+      # 1800s (17/11/2026): o qualificador do conexo (S2c da ficha) passou de 900 s em 2
+      # conexos grandes da rodada 4 do loop de fichas. O Cloud Run cortou com 504, e a
+      # ficha saiu sem a qualificação. O cliente do shared espera 1700 s.
       - '--timeout'
-      - '900'
+      - '1800'
       - '--set-env-vars'
       # PR7.3 (2026-05-31): JURISPRUDENCIA_BLOCK_ENABLED + PARADIGMAS_BLOCK_ENABLED
       # dropados (zero callers Python pos-PR7.2 — blocos internos removidos).
