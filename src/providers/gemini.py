@@ -37,6 +37,19 @@ _GEMINI_RATE = float(os.getenv("GEMINI_RATE_LIMIT_RPS", "5.0"))
 _GEMINI_BURST = int(os.getenv("GEMINI_RATE_LIMIT_BURST", "10"))
 _GEMINI_ACQUIRE_TIMEOUT_S = float(os.getenv("GEMINI_RATE_LIMIT_TIMEOUT_S", "60.0"))
 
+# ── Nova tentativa depois do 429 do Vertex ────────────────────────────────────
+#: As esperas, em segundos, entre as tentativas depois de um 429 (limite de tokens por
+#: minuto). A soma padrão é 210 s: cabe com folga no prazo de 1.800 s das rotas da ficha.
+#: `GEMINI_429_ESPERAS_S="15,45"` troca a lista sem deploy de código. Vazio desliga.
+_ESPERAS_APOS_429_S: tuple[float, ...] = tuple(
+    float(x) for x in os.getenv("GEMINI_429_ESPERAS_S", "20,40,60,90").split(",") if x.strip())
+
+
+def _e_limite_do_vertex(exc: BaseException) -> bool:
+    """O erro é o 429 do Vertex (RESOURCE_EXHAUSTED)? Outro erro não volta ao laço."""
+    return getattr(exc, "code", None) == 429 or "RESOURCE_EXHAUSTED" in str(exc)[:400]
+
+
 # ── Per-call timeout do generate_content ──────────────────────────────────────
 # O generate_content NAO tem timeout proprio: quando o Gemini stalla, a call
 # pendura ate o teto de-facto do SDK muito depois de o engine ter desistido
@@ -559,15 +572,31 @@ class GeminiProvider(BaseLLMProvider):
         # X-Gemini-Timeout-Ms (engine read-timeout - buffer); ausente -> backstop.
         # wait_for cancela a coroutine no estouro -> aborta a chamada orfa.
         _call_timeout_s = gemini_call_timeout_cv.get() or _GEMINI_CALL_TIMEOUT_BACKSTOP_S
+        # 18/11/2026 (loop de fichas, rodada 8): com a fila de fichas a 24, o Vertex devolveu
+        # "429 RESOURCE_EXHAUSTED. TPM quota exhausted" ao redator, e 4 fichas de 82 morreram
+        # no `redigir_v4_step`, porque ninguém tentava de novo. O Google pede espera crescente
+        # depois do 429. A espera só vale na chamada SEM o header de timeout do engine: a rota
+        # com header tem prazo curto, e o caller dela já tenta de novo.
+        esperas = _ESPERAS_APOS_429_S if gemini_call_timeout_cv.get() is None else ()
         try:
-            response = await asyncio.wait_for(
-                self._client.aio.models.generate_content(
-                    model=model,
-                    contents=prompt,
-                    config=config,
-                ),
-                timeout=_call_timeout_s,
-            )
+            for tentativa in range(len(esperas) + 1):
+                try:
+                    response = await asyncio.wait_for(
+                        self._client.aio.models.generate_content(
+                            model=model,
+                            contents=prompt,
+                            config=config,
+                        ),
+                        timeout=_call_timeout_s,
+                    )
+                    break
+                except Exception as exc:  # noqa: BLE001 — só o 429 volta ao laço
+                    if not _e_limite_do_vertex(exc) or tentativa >= len(esperas):
+                        raise
+                    logger.warning(
+                        "GEMINI_429_NOVA_TENTATIVA model=%s rota=%s tentativa=%d espera=%.0fs",
+                        model, gemini_rota_cv.get(), tentativa + 1, esperas[tentativa])
+                    await asyncio.sleep(esperas[tentativa])
         except asyncio.TimeoutError:
             logger.warning(
                 "GEMINI_CALL_TIMEOUT model=%s timeout=%.0fs prompt_chars=%d — "
