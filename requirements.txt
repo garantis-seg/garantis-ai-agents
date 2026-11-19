@@ -117,7 +117,7 @@ pypdf>=4.0.0
 # `ficha_auditoria_evidencias` no gemini-3.5-flash. Versao lida do LOG do deploy
 # (`wheel 1.972.0 publicado em 2026-11-16T14:35:08Z`). Bump junto com o writer v5
 # que deixa o Pro pensar (`tests/test_ficha_writer_v5_thinking.py`).
-garantis-shared==1.992.0
+garantis-shared==1.1041.0
 
 # Dev dependencies (optional)
 # pytest>=8.0.0
