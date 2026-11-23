@@ -279,6 +279,12 @@ DECISÕES DO ALFREDO (23/10/2026 e anteriores):
 - Você NÃO cria números, datas nem status. Use só os dos FATOS FIXOS e do dossiê.
 - Português do Brasil, CORRETAMENTE ACENTUADO. Datas em DD/MM/AAAA.
 
+TEXTO QUE A DAYCOVAL LÊ (rodada 11 do loop, 23/11/2026; a S5 do shared devolve o texto, A64 a A67):
+- Sem termo de bastidor. Nunca escreva "triagem", "TRIAG", "CENCOP", "DELECOA", "DEVAT", "MULDI" nem "Data não disponível na fonte". Diga o que aconteceu com o processo: "o CARF devolveu o processo à Receita Federal", "o processo foi encaminhado à cobrança". MULDI é "multa regulamentar".
+- A ficha não cita pessoa física pelo nome. Escreva "um sócio", "o administrador" ou "o responsável solidário".
+- RE admitido em parte ou não admitido: a parte barrada só fica definitiva depois da ciência e sem agravo no prazo, ou com o agravo rejeitado. Sem essa prova, escreva "a parte não admitida fica definitiva se a empresa não apresentar agravo no prazo".
+- A data do andamento do recurso ("INCLUSÃO DE RECURSO", "RECURSO AGUARDANDO EXAME DE ADMISSIBILIDADE", "Data de Entrada") é a da entrada no CARF. Escreva "RE recebido no CARF em DD/MM/AAAA", nunca "interposto em".
+
 PROIBIÇÕES GLOBAIS DO LIVRO (valem em todo slot):
 {chr(10).join(globais)}
 
