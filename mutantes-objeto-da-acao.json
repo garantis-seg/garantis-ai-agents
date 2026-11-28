@@ -52,5 +52,29 @@
   "    objeto_da_acao: Optional[Literal[",
   "    objeto_acao: Optional[Literal[",
   "B9 a resposta sai com outro nome, que o frontend-api nao le"
+ ],
+ [
+  "src/agents/mov_factsheet/prompts_v4.py",
+  "  · 'incerto' — a peça não deixa dizer. Na dúvida, 'incerto'.",
+  "  · 'incerto' — a peça não deixa dizer.",
+  "B10 o bloco do 1P perde o 'na duvida, incerto' (o freio do 'outro')"
+ ],
+ [
+  "src/agents/mov_factsheet/prompts_v4.py",
+  "fiscal; 'incerto' = a peça não deixa dizer, e na dúvida 'incerto'. Copie em",
+  "fiscal; 'incerto' = a peça não deixa dizer. Copie em",
+  "B11 o bloco do 1X perde o 'na duvida, incerto' (o freio do 'outro')"
+ ],
+ [
+  "src/agents/mov_factsheet/chunking.py",
+  "_OA_RANK = {\"fiscal\": 3, \"incerto\": 2, \"outro\": 1}",
+  "_OA_RANK = {\"fiscal\": 2, \"incerto\": 3, \"outro\": 1}",
+  "B12 o 'incerto' vence o 'fiscal' no reduce"
+ ],
+ [
+  "src/agents/mov_factsheet/chunking.py",
+  "        oa = max(cards, key=lambda c: (_OA_RANK.get(c.get(\"objeto_da_acao\"), 0),\n                                       bool((c.get(\"objeto_da_acao_evidencia\") or \"\").strip())))",
+  "        oa = max(cards, key=lambda c: _OA_RANK.get(c.get(\"objeto_da_acao\"), 0))",
+  "B13 o reduce perde o desempate pela evidencia"
  ]
 ]

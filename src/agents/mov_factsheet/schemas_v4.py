@@ -668,9 +668,10 @@ class PeticaoExtractCardV4(MovFactSheetCardV4):
         ),
     )
     # Consumidos por NOME de chave no frontend-api (`conexos_resolve.funil._objeto_fiscal`): o
-    # 'outro' com evidência tira o `objeto_fiscal` do membro no callback ao parceiro, e renomear
-    # aqui cala esse veto lá, sem erro. Aditivos e sem bump de versão, como o par do débito: card
-    # sem eles = "não medido", e o `objeto_fiscal` segue a regra das citações.
+    # 'outro' tira o `objeto_fiscal` do membro no callback ao parceiro, e renomear aqui cala esse
+    # veto lá, sem erro. O veto não exige a evidência: o leitor a omite em parte das respostas
+    # certas, e ela fica no card para a auditoria. Aditivos e sem bump de versão, como o par do
+    # débito: card sem eles = "não medido", e o `objeto_fiscal` segue a regra das citações.
     # ⭐ Existe porque a CITAÇÃO não prova a matéria: o processo da agência, do IBAMA ou da
     # licitação vem como PA `discutido`, e a ação civil pública vem como `originario`.
     # ⚠️ A evidência vem ANTES da resposta, pela razão do par do débito. ⛔ O texto do 'outro' foi

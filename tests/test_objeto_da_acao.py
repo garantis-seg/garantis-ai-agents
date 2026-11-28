@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """A petição inicial diz se a MATÉRIA da ação é FISCAL (`objeto_da_acao`).
 
-O consumidor é o frontend-api (`conexos_resolve.funil._objeto_fiscal`): o 'outro' com evidência tira
-o `objeto_fiscal` do membro no callback ao parceiro. ⚠️ Guarda FRACA por natureza: quem decide é a
-LLM. Aqui trava-se o que dá pra travar, como no par do débito (`test_debito_ou_credito.py`):
+O consumidor é o frontend-api (`conexos_resolve.funil._objeto_fiscal`): o 'outro' tira o
+`objeto_fiscal` do membro no callback ao parceiro, com ou sem a evidência (ela fica para a
+auditoria). ⚠️ Guarda FRACA por natureza: quem decide é a LLM. Aqui trava-se o que dá pra travar,
+como no par do débito (`test_debito_ou_credito.py`):
 
   · o pedido ESTÁ nas DUAS prompts (o `PeticaoExtractCardV4` é COMPARTILHADO entre o 1P e o 1X);
   · a CITAÇÃO não decide: o PA da agência e a ação de origem citados não tornam a ação fiscal;
@@ -62,13 +63,20 @@ def _texto(s: str) -> str:
     return " ".join(s.split()).lower()
 
 
+def _bloco(p: str) -> str:
+    """O bloco do campo na prompt: de `- objeto_da_acao:` até a PARTE 2. ⛔ A prompt inteira tem
+    'na dúvida' em outros blocos (o papel, o tipo e a UF do PA): só o bloco prova a frase do campo."""
+    return p.split("- objeto_da_acao:", 1)[1].split("parte 2", 1)[0]
+
+
 @pytest.mark.parametrize("build", [_prompt_1p, _prompt_1x], ids=["1P", "1X"])
 def test_as_DUAS_prompts_pedem_a_resposta_COM_evidencia_e_as_2_regras(_ctx, _doc, build):
-    p = _texto(build(_ctx, _doc))
-    assert "objeto_da_acao" in p and "objeto_da_acao_evidencia" in p
-    assert all(r in p for r in _REGRAS), [r for r in _REGRAS if r not in p]
+    """⛔ MUTANTES: tirar o "na dúvida, 'incerto'" do bloco do 1P ou do 1X."""
+    b = _bloco(_texto(build(_ctx, _doc)))
+    assert "objeto_da_acao_evidencia" in b
+    assert all(r in b for r in _REGRAS), [r for r in _REGRAS if r not in b]
     # O 'outro' é o erro caro: na dúvida, a resposta é 'incerto'.
-    assert "na dúvida" in p
+    assert "na dúvida" in b
 
 
 def test_a_description_do_schema_diz_a_MESMA_regra_das_prompts():
@@ -111,10 +119,15 @@ def _oa(resposta, evidencia):
      [_oa("outro", "do pedido"), _oa("incerto", None)], ("incerto", None)),
     ("todo pedaco disse 'outro'", [_oa("outro", "do pedido"), _oa("outro", None)],
      ("outro", "do pedido")),
+    ("o 'fiscal' vence o 'incerto'", [_oa("fiscal", "do ICMS"), _oa("incerto", None)],
+     ("fiscal", "do ICMS")),
+    ("no empate, o pedaco COM evidencia, mesmo em 2o", [_oa("outro", None), _oa("outro", "do pedido")],
+     ("outro", "do pedido")),
     ("nenhum pedaco respondeu", [dict(_BASE), dict(_BASE)], (None, None)),
 ])
 def test_a_peca_CHUNKADA_so_da_outro_quando_nenhum_pedaco_disse_outra_coisa(caso, cards, esperado):
     """⛔ MUTANTES: tirar o par do `reduce_peca_cards` (a lista de campos dele é FECHADA); o 'outro'
-    vencer o 'incerto'; pegar o ÚLTIMO pedaço."""
+    vencer o 'incerto'; o 'incerto' vencer o 'fiscal'; pegar o ÚLTIMO pedaço; tirar o desempate pela
+    evidência."""
     out = reduce_peca_cards(cards)
     assert (out["objeto_da_acao"], out["objeto_da_acao_evidencia"]) == esperado, caso
