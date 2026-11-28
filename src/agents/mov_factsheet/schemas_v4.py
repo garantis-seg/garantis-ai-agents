@@ -667,3 +667,40 @@ class PeticaoExtractCardV4(MovFactSheetCardV4):
             "pelo resultado provável. null se o documento não é a petição inicial."
         ),
     )
+    # Consumidos por NOME de chave no frontend-api (`conexos_resolve.funil._objeto_fiscal`): o
+    # 'outro' tira o `objeto_fiscal` do membro no callback ao parceiro, e renomear aqui cala esse
+    # veto lá, sem erro. O veto não exige a evidência: o leitor a omite em parte das respostas
+    # certas, e ela fica no card para a auditoria. Aditivos e sem bump de versão, como o par do
+    # débito: card sem eles = "não medido", e o `objeto_fiscal` segue a regra das citações.
+    # ⭐ Existe porque a CITAÇÃO não prova a matéria: o processo da agência, do IBAMA ou da
+    # licitação vem como PA `discutido`, e a ação civil pública vem como `originario`.
+    # ⚠️ A evidência vem ANTES da resposta, pela razão do par do débito. ⛔ O texto do 'outro' foi
+    # medido contra ações de tributo (o erro caro): as variantes "pela regra do órgão" e "com o nome
+    # do órgão antes" leram o mandado de segurança contra o CARF como 'outro' ou perderam os casos
+    # que abriram o campo. Mudar o texto pede a mesma medida.
+    objeto_da_acao_evidencia: Optional[str] = Field(
+        default=None,
+        description=(
+            "Trecho LITERAL (~200 chars) do PEDIDO ou da causa de pedir da petição inicial, "
+            "copiado do texto, que sustenta `objeto_da_acao`. Obrigatório quando ele for 'fiscal' "
+            "ou 'outro'. null quando ele for 'incerto' ou null."
+        ),
+    )
+    objeto_da_acao: Optional[Literal["fiscal", "outro", "incerto"]] = Field(
+        default=None,
+        description=(
+            "A MATÉRIA desta ação é FISCAL? 'fiscal' = a ação discute TRIBUTO ou ato do FISCO: "
+            "imposto, taxa ou contribuição (inclusive a previdenciária), o lançamento, o auto de "
+            "infração e a multa do fisco (inclusive a isolada e a aduaneira), a dívida ativa e a "
+            "CDA, a compensação, a restituição ou o ressarcimento de tributo, o processo "
+            "administrativo na Receita Federal, no CARF, na PGFN, na SEFAZ, no TIT ou na Fazenda "
+            "municipal, a certidão de regularidade fiscal, o despacho aduaneiro. 'outro' = a ação "
+            "discute OUTRA matéria: indenização, contrato, licitação, concessão, imóvel público "
+            "(foro, laudêmio, taxa de ocupação), a multa ou a sanção de órgão que NÃO é o fisco "
+            "(IBAMA, agência reguladora, ANM, TCU, CADE, Procon), meio ambiente, consumidor, "
+            "trabalho. O processo administrativo ou o processo de origem que a peça CITA não torna "
+            "a ação fiscal. 'incerto' = a peça não deixa dizer; na dúvida, 'incerto'. Responda "
+            "pelo PEDIDO e pela causa de pedir DESTA ação. null se o documento não é a petição "
+            "inicial."
+        ),
+    )
