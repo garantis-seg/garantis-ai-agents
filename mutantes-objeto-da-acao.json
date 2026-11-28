@@ -1,0 +1,56 @@
+[
+ [
+  "src/agents/mov_factsheet/chunking.py",
+  "        out[\"objeto_da_acao\"] = oa.get(\"objeto_da_acao\")\n        out[\"objeto_da_acao_evidencia\"] = oa.get(\"objeto_da_acao_evidencia\")\n",
+  "",
+  "B1 a peca chunkada perde o par"
+ ],
+ [
+  "src/agents/mov_factsheet/chunking.py",
+  "_OA_RANK = {\"fiscal\": 3, \"incerto\": 2, \"outro\": 1}",
+  "_OA_RANK = {\"fiscal\": 3, \"incerto\": 1, \"outro\": 2}",
+  "B2 o 'outro' vence o 'incerto' no reduce"
+ ],
+ [
+  "src/agents/mov_factsheet/chunking.py",
+  "        oa = max(cards, key=lambda c: (_OA_RANK.get(c.get(\"objeto_da_acao\"), 0),\n                                       bool((c.get(\"objeto_da_acao_evidencia\") or \"\").strip())))",
+  "        oa = next((c for c in reversed(cards) if c.get(\"objeto_da_acao\") is not None), {})",
+  "B3 o reduce pega o ULTIMO pedaco que respondeu"
+ ],
+ [
+  "src/agents/mov_factsheet/prompts_v4.py",
+  "- objeto_da_acao: SÓ se o documento for a PETIÇÃO INICIAL (ou a emenda dela).",
+  "- objeto_da_acao: se o documento for a PETIÇÃO INICIAL (ou a emenda dela).",
+  "B4 o 1X responde em qualquer documento"
+ ],
+ [
+  "src/agents/mov_factsheet/schemas_v4.py",
+  "    objeto_da_acao: Optional[Literal[\"fiscal\", \"outro\", \"incerto\"]] = Field(",
+  "    objeto_da_acao: Optional[Literal[\"fiscal\", \"outro\"]] = Field(",
+  "B5 o enum perde o incerto"
+ ],
+ [
+  "src/agents/mov_factsheet/schemas_v4.py",
+  "\"trabalho. O processo administrativo ou o processo de origem que a peça CITA não torna \"",
+  "\"trabalho. O processo administrativo ou o processo de origem que a peça CITA \"",
+  "B6 o schema perde a regra da citacao (o 1P e o schema divergem)"
+ ],
+ [
+  "src/agents/mov_factsheet/prompts_v4.py",
+  "    ⚠️ O processo administrativo ou o processo de origem que a peça CITA não torna a ação\n    fiscal:",
+  "    ⚠️ Atenção:",
+  "B7 o 1P perde a regra da citacao (os 4 casos do Kelveng voltam a sair fiscais)"
+ ],
+ [
+  "src/agents/mov_factsheet/schemas_v4.py",
+  "    objeto_da_acao_evidencia: Optional[str] = Field(",
+  "    objeto_acao_evidencia: Optional[str] = Field(",
+  "B8 a evidencia sai com outro nome"
+ ],
+ [
+  "src/agents/mov_factsheet/schemas_v4.py",
+  "    objeto_da_acao: Optional[Literal[",
+  "    objeto_acao: Optional[Literal[",
+  "B9 a resposta sai com outro nome, que o frontend-api nao le"
+ ]
+]

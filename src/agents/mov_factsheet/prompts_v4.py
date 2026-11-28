@@ -425,6 +425,22 @@ PARTE 1 — FactSheet da peça (campos do card):
   · 'incerto' — a peça não deixa dizer.
   ⚠️ 'crédito tributário' é o crédito do FISCO, ou seja, o DÉBITO da parte privada. Responda
   pelo PEDIDO da inicial, nunca pelo resultado provável.
+- objeto_da_acao: a MATÉRIA desta ação é FISCAL? Copie em `objeto_da_acao_evidencia` o trecho
+  LITERAL (~200 chars) do PEDIDO ou da causa de pedir que sustenta a resposta — a integração
+  audita a resposta por esse trecho.
+  · 'fiscal' — a ação discute TRIBUTO ou ato do FISCO: imposto, taxa ou contribuição (inclusive
+    a previdenciária), o lançamento, o auto de infração e a multa do fisco (inclusive a isolada
+    e a aduaneira), a dívida ativa e a CDA, a compensação, a restituição ou o ressarcimento de
+    tributo, o processo administrativo na Receita Federal, no CARF, na PGFN, na SEFAZ, no TIT ou
+    na Fazenda municipal, a certidão de regularidade fiscal, o despacho aduaneiro.
+  · 'outro' — a ação discute OUTRA matéria: indenização, contrato, licitação, concessão, imóvel
+    público (foro, laudêmio, taxa de ocupação), a multa ou a sanção de órgão que NÃO é o fisco
+    (IBAMA, agência reguladora, ANM, TCU, CADE, Procon), meio ambiente, consumidor, trabalho.
+    ⚠️ O processo administrativo ou o processo de origem que a peça CITA não torna a ação
+    fiscal: o processo da licitação, da agência ou do IBAMA e a ação civil pública de origem
+    são de outra matéria.
+  · 'incerto' — a peça não deixa dizer. Na dúvida, 'incerto'.
+  Responda pelo PEDIDO e pela causa de pedir DESTA ação, nunca pelo processo que ela cita.
 
 PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (o motivo deste passe):
 - cdas[]: TODOS os números de CDA/inscrição em dívida ativa que ESTE processo executa ou
@@ -607,6 +623,18 @@ PARTE 1 — CLASSIFICAR e produzir o FactSheet:
   deixa dizer. ⚠️ 'crédito tributário' é o DÉBITO da parte privada. Copie em
   `debito_ou_credito_evidencia` o trecho LITERAL (~200 chars) do PEDIDO — sem ele a resposta é
   DESCARTADA pela integração.
+- objeto_da_acao: SÓ se o documento for a PETIÇÃO INICIAL (ou a emenda dela). Em QUALQUER outro
+  tipo, null, e `objeto_da_acao_evidencia` null. Na inicial: a MATÉRIA desta ação é FISCAL?
+  'fiscal' = a ação discute TRIBUTO ou ato do FISCO (imposto, taxa ou contribuição, o lançamento,
+  o auto de infração e a multa do fisco, a dívida ativa e a CDA, a compensação ou a restituição de
+  tributo, o processo na Receita, no CARF, na PGFN, na SEFAZ, no TIT ou na Fazenda municipal, a
+  certidão de regularidade fiscal, o despacho aduaneiro); 'outro' = a ação discute OUTRA matéria
+  (indenização, contrato, licitação, concessão, imóvel público, a multa ou a sanção de órgão que
+  NÃO é o fisco, como IBAMA, agência reguladora, ANM, TCU, CADE e Procon, meio ambiente,
+  consumidor, trabalho) — o processo administrativo ou de origem que a peça CITA não torna a ação
+  fiscal; 'incerto' = a peça não deixa dizer, e na dúvida 'incerto'. Copie em
+  `objeto_da_acao_evidencia` o trecho LITERAL (~200 chars) do PEDIDO ou da causa de pedir — a
+  integração audita a resposta por ele.
 
 PARTE 2 — EXTRAÇÃO DIRIGIDA dos CONECTORES (independe do tipo classificado):
 - cdas[]: TODOS os números de CDA/inscrição em dívida ativa que ESTE processo executa ou

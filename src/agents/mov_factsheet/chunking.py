@@ -34,6 +34,9 @@ CHUNK_SIZE = 180_000   # < 200k (margem pro marcador + mov + outros docs no prom
 _RESUMO_CAP = 3000
 _REL = {"alta": 3, "media": 2, "baixa": 1, "ruido": 0}
 _DC_RANK = {"debito": 3, "credito": 2, "incerto": 1}
+#: A ordem do custo: o 'outro' tira o `objeto_fiscal` no frontend-api (o erro CARO), e sai só quando
+#: nenhum pedaço disse 'fiscal' nem 'incerto'.
+_OA_RANK = {"fiscal": 3, "incerto": 2, "outro": 1}
 
 
 def split_large_peca_variants(docs: list[DocAnexado]) -> list[list[DocAnexado]] | None:
@@ -117,7 +120,8 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
       admin citados = union com o PAPEL consolidado sobre os chunks (`_union_admin`);
       valor_causa_declarado/evidencia = o PAR do último chunk que declarou;
       debito_ou_credito/evidencia = o PAR do chunk de resposta mais forte (debito > credito >
-      incerto), não o último.
+      incerto), não o último;
+      objeto_da_acao/evidencia = o PAR do chunk de resposta mais forte (fiscal > incerto > outro).
     Derivados (categoria/status/...) NÃO são reduzidos — re-derive no caller.
     """
     assert cards, "reduce sem cards"
@@ -197,4 +201,9 @@ def reduce_peca_cards(cards: list[dict]) -> dict:
                                        bool((c.get("debito_ou_credito_evidencia") or "").strip())))
         out["debito_ou_credito"] = dc.get("debito_ou_credito")
         out["debito_ou_credito_evidencia"] = dc.get("debito_ou_credito_evidencia")
+        # O objeto da ação: a mesma regra por conteúdo, na ordem do `_OA_RANK`.
+        oa = max(cards, key=lambda c: (_OA_RANK.get(c.get("objeto_da_acao"), 0),
+                                       bool((c.get("objeto_da_acao_evidencia") or "").strip())))
+        out["objeto_da_acao"] = oa.get("objeto_da_acao")
+        out["objeto_da_acao_evidencia"] = oa.get("objeto_da_acao_evidencia")
     return out
